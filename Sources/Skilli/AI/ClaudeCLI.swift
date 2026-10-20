@@ -111,20 +111,43 @@ enum ClaudeCLI {
 }
 
 /// `Process` is not Sendable; it is only touched before launch and through
-/// `terminate`, which Foundation makes safe from any thread.
+/// `terminate`, its state and its id, which Foundation makes safe from any
+/// thread.
 final class ChildProcess: @unchecked Sendable {
     let process = Process()
+    private let lock = NSLock()
+    /// Its output read to the end.
+    private var outputClosed = false
 
     func terminate() {
         if process.isRunning { process.terminate() }
     }
 
+    /// It and what it started: `Process` makes it its own process group's
+    /// leader. While it runs, while something it started holds its output
+    /// open, or while a member runs on with its output closed (`kill(-pid,
+    /// 0)` answers): a group with a live member keeps its id, no one else's.
+    func terminateGroup(_ signal: Int32 = SIGTERM) {
+        lock.withLock {
+            let pid = process.processIdentifier
+            guard pid > 0, process.isRunning || !outputClosed || kill(-pid, 0) == 0 else { return }
+            kill(-pid, signal)
+        }
+    }
+
+    private func closedOutput() {
+        lock.withLock { outputClosed = true }
+    }
+
     /// Runs it with skil.li's PATH (and `environment` on top, `unset` taken
     /// out): what it printed (output and errors together, or the output
     /// alone without `withErrors`) and its exit status. Stopped after
-    /// `timeout`.
+    /// `timeout`; with `stopsGroup`, with what it started (a skillie's
+    /// `Skilli call`, a process left in the background: either would keep
+    /// its output open), killed 3 s later if SIGTERM did not stop them.
     static func run(_ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String] = [:],
-                    unset: [String] = [], withErrors: Bool = true, timeout: TimeInterval) async throws -> (output: String, status: Int32) {
+                    unset: [String] = [], withErrors: Bool = true, stopsGroup: Bool = false,
+                    timeout: TimeInterval) async throws -> (output: String, status: Int32) {
         let child = ChildProcess()
         child.process.executableURL = executable
         child.process.arguments = arguments
@@ -144,8 +167,13 @@ final class ChildProcess: @unchecked Sendable {
                     continuation.resume(throwing: error)
                     return
                 }
-                DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { child.terminate() }
+                DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+                    guard stopsGroup else { return child.terminate() }
+                    child.terminateGroup()
+                    DispatchQueue.global().asyncAfter(deadline: .now() + 3) { child.terminateGroup(SIGKILL) }
+                }
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                child.closedOutput()
                 child.process.waitUntilExit()
                 continuation.resume(returning: (String(decoding: data, as: UTF8.self), child.process.terminationStatus))
             }

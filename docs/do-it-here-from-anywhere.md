@@ -4,6 +4,8 @@ Status: built and measured on the mini, 2026-10-19. Asked by JB
 the same day, after the Chess demo (PR #11): the demo was only a showcase
 of skil.li acting in any app; what does it unlock, for skillies for a
 start? Branch `claude/elastic-wu-f6a44e`, self-test scope `doit`.
+Skillies that wait for a step (5): 2026-10-20, branch
+`claude/stoic-goldberg-09a557`.
 
 ## What was out of reach
 
@@ -131,18 +133,103 @@ open "skilli://do?app=Finder&goal=ouvre%20le%20dossier%20Documents"
 
 It ends at once (nothing printed: no card of its own); skil.li runs the
 two steps one after the other, each asked first until trusted with
-Always. A skillie that needs the outcome to branch on is not served by
-this step (see Not now).
+Always. A skillie that needs the outcome to branch on waits for its step
+instead (5).
+
+### 5. A skillie that waits for its step: `$SKILLI_CLI`
+
+JB, 2026-10-20 (docs/showcase-next.md, item 4): a skillie should react to
+a step's result, not fire and forget.
+
+```bash
+#!/bin/bash
+# @skilli.schemaVersion 1
+# @skilli.title Export or Say Why
+# @skilli.mode compact
+if said=$("$SKILLI_CLI" call do_in_app app=TextEdit goal="exporte en PDF dans mes documents" 2>&1); then
+  if "$SKILLI_CLI" call do_in_app app=Finder goal="ouvre le dossier Documents" > /dev/null 2>&1; then
+    echo "Exported, Documents open."
+  else
+    echo "Exported."
+  fi
+else
+  echo "Not exported: ${said%%$'\n'*}"
+fi
+```
+
+- **What a skillie is told**: skil.li runs every skillie with three
+  variables (`SkillieEnvironment`):
+  - `SKILLI_CLI`: the path of the skil.li binary running it
+    (`…/skil.li.app/Contents/MacOS/Skilli`), its command line.
+    `"$SKILLI_CLI" call <tool> …` calls one of skil.li's tools and waits
+    for the answer.
+  - `SKILLI_SOCKET`: where that skil.li's tools listen. `Skilli call` and
+    `Skilli mcp` use it when no `--socket` is given, so a skillie reaches
+    the skil.li running it (the self-test's, a Debug build), never
+    another; skil.li is not started for it.
+  - `SKILLI_SKILLIE`: this run's id. `Skilli call` and `Skilli mcp` send it
+    in their first line: the card names the skillie, and its calls show
+    in its own card. It grants nothing (Approvals).
+  None of them when skil.li's tools do not listen (benchmark mode): a call
+  would reach another skil.li.
+- **A step**: `"$SKILLI_CLI" call do_in_app app=TextEdit goal="…"`. The
+  arguments as `key=value` words (each value a string, quoted by the
+  shell: a skillie's own argument in a goal cannot break the call), or one
+  JSON object as before.
+- **What comes back**: the exit status says how it ended. 0: done. 1: not
+  done (stopped, esc, declined in the card, refused by a rule, blocked,
+  no such app, skil.li not running). 2: the call is written wrong (no
+  tool, arguments neither JSON nor `key=value`). Done prints on standard
+  output "Done in TextEdit in 3.5 s · 2 steps:" then a line a step; not
+  done prints on standard error why, first line ("Stopped in TextEdit:
+  Nothing in TextEdit does that here.", "The user stopped it in
+  TextEdit.", "The user declined “Do it in an app”…"), then "Steps
+  done:" and those steps. The first line is the one to show; `2>&1`
+  keeps both. What the skillie prints is its own output, shown as its
+  mode says (compact: its last line).
+- **Approvals: nothing skipped.** The tool server only checks the
+  caller is the user (`getpeereid`): a skillie's call is a call from
+  outside skil.li, as a terminal's. `do_in_app`'s right (Screen
+  Controls, changes) asks in the card ("Do it in an app": goal, app)
+  unless the user made it Always (per tool, as today) or a rule says
+  otherwise; then `ScreenControl`'s guards ask what each step needs.
+  `needsConfirmation` still asks before the skillie runs, and the step's
+  right after it: the first allows the script, the second what it does
+  in an app. A skillie run by an Act command's agent (`run_skillie`)
+  calls within that command's run: its tools only, its card. Copying
+  `SKILLI_SKILLIE` gives a process no right, only that skillie's card
+  while it runs. A skillie never sees an Act command's `--run` id.
+- **The card**: a skillie run from the launcher, a shortcut, Ask or a
+  link holds the card ("Running “Export or Say Why”…") until it ends.
+  Its own calls take that card at once (waiting for it would wait for
+  the skillie, which waits for them), one at a time, and give it back:
+  the step's approval, its steps live, then "Running…" again, then the
+  skillie's last line. Esc answers the call in front (declines it, or
+  stops the do it here): the card goes back to the skillie, which reads
+  exit 1; esc again closes it. Another process's calls wait for the
+  card as before.
+- **Time**: 120 s for the whole skillie, as for every skillie (a step
+  measured 3.5–7 s; Opus planning a move, about 8 s). At the limit the
+  script stops with what it started (its process group: a `Skilli call`,
+  or anything left in the background, would keep its output open),
+  SIGTERM then SIGKILL 3 s later, even when the script itself already
+  ended. A call of it still in the card is stopped as esc would (its
+  approval declined, its do it here stopped), as when a skillie ends with
+  a call left running. The card then says the skillie failed with the
+  script's own status: “Wait Forever” failed (exit 15), 15 being
+  SIGTERM. No script reads that status: `Skilli call` only exits 0, 1 or
+  2, and one stopped with its script returns nothing to anyone.
+- **Checked by** `selftest doit`: two skillies run as from the launcher,
+  their step asked in the card; the first allowed (↩), done, its next
+  step taken; the second declined (esc), its other branch taken, nothing
+  exported. A third left unanswered, stopped at its limit (6 s there):
+  its `Skilli call` gone, the approval gone, the card says it failed.
 
 ## Not now
 
 - **No button** anywhere (no "Copy Link" for an Ask, no Catalog row): JB
   has not tried it yet (no untested entry points). Links and the tool are
   reached by those who write them.
-- **A blocking call for skillies**: `Skilli call do_in_app '{…}'` already
-  waits and exits non-zero on a stop, but skillies are not told where the
-  `Skilli` binary is. An environment variable in `ScriptLibrary.run`
-  would do it, once a skillie needs to branch on a step.
 - **Several goals in one link** (`goal=…&goal=…`): one link a step keeps
   each step asked and trusted on its own.
 - **Drags, canvas scrolling**: as in click-what-you-see.md.
@@ -184,3 +271,31 @@ What the rows say:
 - **Nothing more was asked than the caller's own approval** (the tool's
   ↩, the links' trust): both goals went through `ScreenControl`'s guards
   like a typed one, and exporting to Documents trips none of them.
+
+## Measures: skillies that wait (mini, 2026-10-20)
+
+`remote doit`, 4 of 4 passing (12:52), the three checks above again and
+the skillies of 5: two skillies run as from the launcher (`runScript`),
+each calling `"$SKILLI_CLI" call do_in_app app=TextEdit goal="exporte en
+PDF dans mes documents"` and branching on its exit.
+
+| What | Result | Time |
+|---|---|---|
+| Variables told | `SKILLI_CLI` the self-test's own binary, `SKILLI_SOCKET` its scratch socket (not the usual one), `SKILLI_SKILLIE` an id | — |
+| Step allowed (↩) | asked in the skillie's card (“Export Then Say”: Allow “Do it in an app”? goal, app); Fichier › Exporter au format PDF…, Enregistrer; exit 0, the then-branch; the card ends on “Exported: Done in TextEdit in 3.7 s · 2 steps:” | 5.2 s from the skillie's start |
+| Step declined (esc) | asked the same way; the card back to the skillie; exit 1, the other branch; nothing exported; “Not exported: The user declined “Do it in an app”…” | — |
+
+The earlier rows held: links 5.1 s / 6.8 s, `Skilli call` 3.7 s, the
+Act agent 6 s.
+
+Run 2 (13:15), 5 of 5, after the time limit stopped a skillie's process
+group: the same results (done in 5.1 s), and a skillie left unanswered at
+a 6 s limit ended 6.3 s after its start, its `Skilli call` gone, the
+approval gone, the card “Wait Forever” failed (exit 15): the script's own
+status, killed by SIGTERM, not one of `Skilli call`'s.
+
+Run 3 (17:42), 5 of 5, once the limit also stopped what a script left
+behind: a script that ended at once, leaving a process that held its
+output and ignored SIGTERM, returned 5.2 s after its start at a 2 s
+limit (SIGKILL 3 s after SIGTERM), that process gone. The rest as in
+run 2.

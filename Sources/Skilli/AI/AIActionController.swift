@@ -51,6 +51,21 @@ final class AIActionController {
     /// The card shows a question or approval for an agent outside a command:
     /// Esc answers it instead of cancelling a command.
     private var servesOutsideAgent = false
+    /// A skillie's run holding the card with its working line: its own
+    /// calls (`SkillieCall`) borrow it rather than wait for its end.
+    private var lentCard: LentCard?
+    private struct LentCard {
+        let skillie: String
+        let caller: String
+        let working: String
+        /// Its calls holding the card now (one at a time).
+        var calls = 0
+    }
+    /// Skillie runs that ended (done, stopped, at their time limit): a call
+    /// of theirs still on its way (its app being brought forward, between
+    /// two turns with the card) is refused before it asks or acts.
+    /// Forgotten after 10 minutes.
+    private var endedSkillies: Set<String> = []
     /// The Act command's agent and what the card shows of it.
     private var agent: AgentRun?
     private var steps: [AIPopover.Step] = []
@@ -1222,6 +1237,7 @@ final class AIActionController {
         answerQuestion(nil)
         answerApproval(.deny)
         servesOutsideAgent = false
+        lentCard = nil
         close()
     }
 
@@ -1258,7 +1274,10 @@ final class AIActionController {
         outsideControl = nil
         answerQuestion(nil)
         answerApproval(.deny)
+        // A skillie's call answered: the card goes back to the skillie.
+        if lentCard?.calls ?? 0 > 0 { return }
         servesOutsideAgent = false
+        lentCard = nil
         close()
     }
 
@@ -2687,15 +2706,28 @@ extension AIActionController: ToolPresenter {
     /// and the caller says it (an agent). Esc stops it.
     func doItHere(_ goal: String, pid: pid_t, caller: String, run: AgentContext?, saysStop: Bool) async -> ControlReport {
         let app = NSRunningApplication(processIdentifier: pid)?.localizedName ?? "the app"
+        if let skillie = SkillieCall.id, endedSkillies.contains(skillie) {
+            return ControlReport(app: app, outcome: .stopped("Its skillie ended."), steps: [], took: .zero)
+        }
         let inRun = run != nil && run?.background != true && agent != nil
         if !inRun {
             // Not while the user types: its keys would land among theirs.
             await untilTypingPauses()
             await takeCardForOutsideAgent(caller)
+            // It may have ended while the card was busy.
+            if let skillie = SkillieCall.id, endedSkillies.contains(skillie) {
+                releaseCardForOutsideAgent()
+                return ControlReport(app: app, outcome: .stopped("Its skillie ended."), steps: [], took: .zero)
+            }
             unpromptedSince = .now
         }
         let writer = ai.writer(for: library.command(PromptLibrary.askID)?.model)
         let control = await makeControl(goal, writer: writer)
+        // Last look before acting: it may have ended while this was made.
+        if let skillie = SkillieCall.id, endedSkillies.contains(skillie) {
+            if !inRun { releaseCardForOutsideAgent() }
+            return ControlReport(app: app, outcome: .stopped("Its skillie ended."), steps: [], took: .zero)
+        }
         popover.activity([], text: "", status: "Looking…")
         let started = ContinuousClock.now
         let job = Task { await control.run(goal: goal, pid: pid) }
@@ -2824,8 +2856,19 @@ extension AIActionController: ToolPresenter {
     }
 
     /// For an agent outside a command: waits until no command uses the
-    /// card, then shows it near the pointer.
+    /// card, then shows it near the pointer. A call of the skillie holding
+    /// the card borrows it at once (waiting would wait for the skillie,
+    /// which waits for the call), one call at a time.
     private func takeCardForOutsideAgent(_ caller: String) async {
+        if let skillie = SkillieCall.id, lentCard?.skillie == skillie {
+            while let lent = lentCard, lent.skillie == skillie, lent.calls > 0 {
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+            if lentCard?.skillie == skillie, servesOutsideAgent {
+                lentCard?.calls += 1
+                return
+            }
+        }
         while task != nil && popover.isVisible || servesOutsideAgent {
             try? await Task.sleep(for: .milliseconds(200))
         }
@@ -2845,6 +2888,15 @@ extension AIActionController: ToolPresenter {
     }
 
     private func releaseCardForOutsideAgent() {
+        // A skillie's call done: the card back to the skillie, its line to come.
+        if let skillie = SkillieCall.id, var lent = lentCard, lent.skillie == skillie, lent.calls > 0 {
+            lent.calls -= 1
+            lentCard = lent
+            noteText = lent.working
+            popover.present(title: lent.caller, at: nearSelection())
+            popover.fail(lent.working, status: lent.caller, hints: [("Close", "esc")])
+            return
+        }
         guard servesOutsideAgent else { return }
         servesOutsideAgent = false
         close()
@@ -2865,11 +2917,18 @@ extension AIActionController: ToolPresenter {
     /// `verb`: the question says what it does ("Restart?", ↩ Restart).
     func approve(_ title: String, detail: String, caller: String, run: AgentContext?, once: Bool = false,
                  reason: String? = nil, verb: String? = nil, fromUser: Bool) async -> ToolApproval {
+        // A call of a skillie that ended asks nothing.
+        if let skillie = SkillieCall.id, endedSkillies.contains(skillie) { return .deny }
         // A run out of sight (an ask on a schedule) asks as an agent outside a command.
         let outside = run == nil || run?.background == true
         if outside {
             if !fromUser { await untilTypingPauses() }
             await takeCardForOutsideAgent(caller)
+            // It may have ended while the card was busy.
+            if let skillie = SkillieCall.id, endedSkillies.contains(skillie) {
+                releaseCardForOutsideAgent()
+                return .deny
+            }
             if !fromUser { unpromptedSince = .now }
         }
         if let reason { lastRuleLine = reason }
@@ -3340,18 +3399,40 @@ extension AIActionController: ToolPresenter {
 
     /// A card that says `working`, then what `work` returns (or its error),
     /// in place, for `seconds` (and `perLine` more for each line past the
-    /// first, to read a list). Esc closes it early.
-    func notify(caller: String, working: String, seconds: Double, perLine: Double = 0,
+    /// first, to read a list). Esc closes it early. `skillie`: the run
+    /// `work` is, whose own tool calls borrow the card meanwhile.
+    func notify(caller: String, working: String, seconds: Double, perLine: Double = 0, skillie: String? = nil,
                 _ work: @escaping @MainActor () async throws -> String) {
         Task {
             await takeCardForOutsideAgent(caller)
             noteText = working
             popover.fail(working, status: caller, hints: [("Close", "esc")])
+            if let skillie { lentCard = LentCard(skillie: skillie, caller: caller, working: working) }
             let message: String
             do {
                 message = try await work()
             } catch {
                 message = error.localizedDescription
+            }
+            if let skillie {
+                endedSkillies.insert(skillie)
+                Task { try? await Task.sleep(for: .seconds(600)); endedSkillies.remove(skillie) }
+            }
+            if let skillie, lentCard?.skillie == skillie {
+                // Its calls end with it (stopped at its time limit, one left
+                // running in the background): what they wait for is
+                // stopped, and the card comes back before its line.
+                if lentCard?.calls ?? 0 > 0 {
+                    outsideControl?.cancel()
+                    outsideControl = nil
+                    answerQuestion(nil)
+                    answerApproval(.deny)
+                    let deadline = ContinuousClock.now + .seconds(10)
+                    while lentCard?.skillie == skillie, lentCard?.calls ?? 0 > 0, ContinuousClock.now < deadline {
+                        try? await Task.sleep(for: .milliseconds(200))
+                    }
+                }
+                lentCard = nil
             }
             // Closed meanwhile, or nothing to say: done, the card is free.
             guard popover.isVisible, popover.shownText == working, !message.isEmpty else {
