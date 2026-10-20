@@ -893,10 +893,12 @@ final class LauncherController: NSObject {
         // run by the editor, through `control(_:textView:doCommandBy:)` as
         // the other keys. Its keyDown, handed the tap's event, ran none of
         // them. An input method composing keeps its keys.
-        if keyEvent.modifierFlags.contains(.command), let editor = searchField.currentEditor() as? NSTextView, !editor.hasMarkedText(),
-           let command = KeyBindings.command(for: keyEvent) {
-            editor.doCommand(by: command)
-            return true
+        if keyEvent.modifierFlags.contains(.command), let editor = searchField.currentEditor() as? NSTextView, !editor.hasMarkedText() {
+            let commands = KeyBindings.commands(for: keyEvent)
+            if !commands.isEmpty {
+                commands.forEach { editor.doCommand(by: $0) }
+                return true
+            }
         }
         // Arrows, Return and Escape come back through
         // `control(_:textView:doCommandBy:)`; characters are inserted.

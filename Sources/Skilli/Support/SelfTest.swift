@@ -2875,8 +2875,6 @@ final class SelfTest {
                    + "typed after, ↑ leaves the field: \(typedStays); “s”: ↑ moves the rows: \(rowsMove); launcher-recent-light/-dark.png", nil)
     }
 
-    /// ⌃N and ⌃P move like ↓ and ↑: in the rows, in ⌘K's list, and ⌃P
-    /// in the empty field brings back the newest search acted on.
     /// The keys of any Mac text field, pressed as a keyboard does (the
     /// modifiers' own key-downs, arrows with the keypad and fn flags), one
     /// after the other from the end of "hello world again": the caret and
@@ -2885,6 +2883,7 @@ final class SelfTest {
     /// line (← held repeats there too). ↑↓ still move the launcher's rows;
     /// ⌘↓ moves only the caret.
     private func caretKeysEditEverywhere() async {
+        guard !aborted else { return }
         let name = "Caret keys as in any Mac text field (⌘← ⌘→ ⌥← ⌥→, ⇧ selects, ⌘↑ ⌘↓, ⌃A ⌃E, ⌥⌫ ⌘⌫, typing over a selection)"
         let text = "hello world again"
         let left = kVK_LeftArrow, right = kVK_RightArrow, up = kVK_UpArrow, downArrow = kVK_DownArrow
@@ -3004,6 +3003,7 @@ final class SelfTest {
                "keys: \(launcherResult); rows: \(rows)", nil)
 
         // Settings: the search field, then a SwiftUI field (Ask → On a Schedule's new ask).
+        guard !aborted else { return }
         let settings = context.settings
         var searchResult = "Settings did not come forward"
         var fieldResult = "not tried"
@@ -3094,6 +3094,8 @@ final class SelfTest {
         record("\(name): the Ask card's answer line", cardResult == "ok", "\(cardResult)\(caretAt)", nil)
     }
 
+    /// ⌃N and ⌃P move like ↓ and ↑: in the rows, in ⌘K's list, and ⌃P
+    /// in the empty field brings back the newest search acted on.
     private func controlKeysMoveLikeArrows() async {
         let name = "Keyboard: ⌃N / ⌃P move like ↓ / ↑ in the results and in ⌘K's list; ⌃P in the empty field brings back the last search"
         let launcher = context.launcher

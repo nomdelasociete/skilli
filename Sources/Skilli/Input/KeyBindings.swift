@@ -10,10 +10,10 @@ enum KeyBindings {
     /// straight to the key bindings, no input method in between, and the
     /// command found lands here.
     private final class Reader: NSResponder {
-        var command: Selector?
+        var commands: [Selector] = []
 
         override func doCommand(by selector: Selector) {
-            command = selector
+            commands.append(selector)
         }
 
         override func insertText(_ insertString: Any) {}
@@ -22,14 +22,14 @@ enum KeyBindings {
     private static let reader = Reader()
     private static let noop = NSSelectorFromString("noop:")
 
-    /// The command `event` names; nil when it types text or names nothing
-    /// (⌘K is `noop:`).
-    static func command(for event: NSEvent) -> Selector? {
-        reader.command = nil
+    /// The commands `event` names, in order (a user's DefaultKeyBinding.dict
+    /// can bind one key to several); none when it types text or names
+    /// nothing (⌘K is `noop:`).
+    static func commands(for event: NSEvent) -> [Selector] {
+        reader.commands = []
         reader.interpretKeyEvents([event])
-        defer { reader.command = nil }
-        guard let command = reader.command, command != noop else { return nil }
-        return command
+        defer { reader.commands = [] }
+        return reader.commands.filter { $0 != noop }
     }
 }
 

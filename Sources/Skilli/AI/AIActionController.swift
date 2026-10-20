@@ -1045,8 +1045,8 @@ final class AIActionController {
         var line = Self.line(of: current)
         if modifiers == .command, key == .character("v") {
             line = LineEditor.insert(NSPasteboard.general.string(forType: .string)?.replacingOccurrences(of: "\n", with: " ") ?? "", into: line)
-        } else if let command = editCommand(modifiers, event) {
-            line = LineEditor.run(command, on: line)
+        } else if let commands = editCommands(modifiers, event) {
+            line = commands.reduce(line) { LineEditor.run($1, on: $0) }
             current.deadKeyState = 0
         } else if !modifiers.intersection([.command, .control]).isEmpty {
             dismiss()
@@ -1064,18 +1064,19 @@ final class AIActionController {
     /// field (the tap swallows the repeats of a key the card took).
     func repeatKey(_ event: CGEvent) -> Bool {
         guard popover.isVisible, var current = question, current.prompt.options.isEmpty, !current.listening,
-              let command = editCommand(Modifiers(event.flags), event) else { return false }
-        show(LineEditor.run(command, on: Self.line(of: current)), in: &current)
+              let commands = editCommands(Modifiers(event.flags), event) else { return false }
+        show(commands.reduce(Self.line(of: current)) { LineEditor.run($1, on: $0) }, in: &current)
         return true
     }
 
-    /// The edit a key names in the answer line (←→, ⌥ and ⌘ with them, ⇧
-    /// to select, ⌫ ⌥⌫ ⌘⌫, ⌃A ⌃E…), from macOS's key bindings; never for
-    /// a Hyper chord.
-    private func editCommand(_ modifiers: Modifiers, _ event: CGEvent?) -> Selector? {
-        guard !modifiers.isSuperset(of: .hyper), let typed = event.flatMap(NSEvent.init(cgEvent:)),
-              let command = KeyBindings.command(for: typed), LineEditor.edits(command) else { return nil }
-        return command
+    /// The edits a key names in the answer line (←→, ⌥ and ⌘ with them, ⇧
+    /// to select, ⌫ ⌥⌫ ⌘⌫, ⌃A ⌃E…), from macOS's key bindings, in order;
+    /// only when every one edits the line; never for a Hyper chord.
+    private func editCommands(_ modifiers: Modifiers, _ event: CGEvent?) -> [Selector]? {
+        guard !modifiers.isSuperset(of: .hyper), let typed = event.flatMap(NSEvent.init(cgEvent:)) else { return nil }
+        let commands = KeyBindings.commands(for: typed)
+        guard !commands.isEmpty, commands.allSatisfy({ LineEditor.edits($0) }) else { return nil }
+        return commands
     }
 
     private static func line(of question: Question) -> LineEditor.Line {
