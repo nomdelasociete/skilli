@@ -53,7 +53,7 @@ final class AIPopover {
     /// A purpose-made view in place of the text (`showContent`).
     private var custom: CardContent?
     /// While asking: what `QuestionView` shows.
-    private var asked: (question: PromptQuestion, selected: Int, typed: String, context: String?)?
+    private var asked: (question: PromptQuestion, selected: Int, typed: String, selection: NSRange?, context: String?)?
     /// Re-applied in `layout`: `HintBar` places keys from its current width.
     private var currentHints: [(label: String, key: String)] = []
     private var placement: Placement = .selection(.zero)
@@ -86,6 +86,8 @@ final class AIPopover {
     var shownQuestion: (text: String, selected: Int, typed: String)? {
         asked.map { ($0.question.question, $0.selected, $0.typed) }
     }
+    /// Self-test hook: the answer's caret or selection (nil: at its end).
+    var shownAnswerSelection: NSRange? { asked?.selection }
     /// Self-test hook: the options the question offers.
     var shownOptions: [String] { asked?.question.options ?? [] }
     /// Self-test hook: what the question follows on from, above it.
@@ -123,12 +125,12 @@ final class AIPopover {
     }
 
     /// A question from the command: options as numbered chips with
-    /// `selected` filled, or the text typed so far. `position` is
-    /// (number, total).
+    /// `selected` filled, or the text typed so far, `selection` in it (nil:
+    /// the caret at its end). `position` is (number, total).
     /// `context`: what the question follows on from, dimmed above it.
     /// `returnTitle`: what Return does when it is not Run or Next
     /// (Dictate: "Insert").
-    func ask(_ question: PromptQuestion, position: (Int, Int), selected: Int, typed: String, context: String? = nil,
+    func ask(_ question: PromptQuestion, position: (Int, Int), selected: Int, typed: String, selection: NSRange? = nil, context: String? = nil,
              returnTitle: String? = nil) {
         let statusText = position.1 > 1 ? "\(position.0) of \(position.1)" : ""
         // A key typed: only the answer line changes, the card keeps its
@@ -136,10 +138,11 @@ final class AIPopover {
         if phase == .asking, let current = asked, current.question == question, current.selected == selected,
            current.context == context, status.stringValue == statusText, question.options.isEmpty {
             asked?.typed = typed
-            questionView.showTyped(typed)
+            asked?.selection = selection
+            questionView.showTyped(typed, selection: selection)
             return
         }
-        asked = (question, selected, typed, context)
+        asked = (question, selected, typed, selection, context)
         dropContent()
         setPhase(.asking, status: statusText)
         let isLast = position.0 == position.1
@@ -457,8 +460,8 @@ final class AIPopover {
         let textWidth = width - 2 * Layout.padding
         let bodyHeight: CGFloat
         if let asked {
-            bodyHeight = questionView.update(question: asked.question, selected: asked.selected, typed: asked.typed, context: asked.context,
-                                             width: textWidth)
+            bodyHeight = questionView.update(question: asked.question, selected: asked.selected, typed: asked.typed, selection: asked.selection,
+                                             context: asked.context, width: textWidth)
         } else if let custom {
             bodyHeight = min(maxBodyHeight, max(Layout.minBodyHeight, custom.height(forWidth: textWidth)))
         } else {

@@ -208,7 +208,8 @@ final class SelfTest {
         /// what is Off in Settings dimmed, captured light and dark (keys).
         case catalog
         /// Only the root search: ↑ recent searches, Pin from ⌘K, Opens on,
-        /// Starts again empty, Settings → Launcher (keys).
+        /// Starts again empty, Settings → Launcher, the caret keys in the
+        /// launcher, Settings' fields and the Ask card (keys).
         case rootsearch
         /// Only the linked apps (CleanShot X): ✦K C, the launcher's rows,
         /// ⌘K's captures, the front window's frame; nothing captured (keys).
@@ -551,6 +552,7 @@ final class SelfTest {
             await opensOnTheChosenScreen()
             await launcherSettingsShown()
             await controlKeysMoveLikeArrows()
+            await caretKeysEditEverywhere()
             await quicklinkTakesTheSelection()
             await typesInEnglishWhileOpen()
             return finish()
@@ -2875,6 +2877,223 @@ final class SelfTest {
 
     /// ⌃N and ⌃P move like ↓ and ↑: in the rows, in ⌘K's list, and ⌃P
     /// in the empty field brings back the newest search acted on.
+    /// The keys of any Mac text field, pressed as a keyboard does (the
+    /// modifiers' own key-downs, arrows with the keypad and fn flags), one
+    /// after the other from the end of "hello world again": the caret and
+    /// the selection after each, in the launcher over another app, Settings'
+    /// search field and a SwiftUI field there, and the Ask card's answer
+    /// line (← held repeats there too). ↑↓ still move the launcher's rows;
+    /// ⌘↓ moves only the caret.
+    private func caretKeysEditEverywhere() async {
+        let name = "Caret keys as in any Mac text field (⌘← ⌘→ ⌥← ⌥→, ⇧ selects, ⌘↑ ⌘↓, ⌃A ⌃E, ⌥⌫ ⌘⌫, typing over a selection)"
+        let text = "hello world again"
+        let left = kVK_LeftArrow, right = kVK_RightArrow, up = kVK_UpArrow, downArrow = kVK_DownArrow
+        let after = "hello world x"
+        /// Keys (nil: type "x"), then the text and the selection they leave.
+        let steps: [(keys: String, flags: CGEventFlags, code: Int?, text: String, selection: NSRange)] = [
+            ("⌘←", .maskCommand, left, text, NSRange(location: 0, length: 0)),
+            ("⌥→", .maskAlternate, right, text, NSRange(location: 5, length: 0)),
+            ("⌥→", .maskAlternate, right, text, NSRange(location: 11, length: 0)),
+            ("⌥←", .maskAlternate, left, text, NSRange(location: 6, length: 0)),
+            ("→", [], right, text, NSRange(location: 7, length: 0)),
+            ("←", [], left, text, NSRange(location: 6, length: 0)),
+            ("⇧⌥→", [.maskShift, .maskAlternate], right, text, NSRange(location: 6, length: 5)),
+            ("⌘→", .maskCommand, right, text, NSRange(location: 17, length: 0)),
+            ("⇧⌘←", [.maskShift, .maskCommand], left, text, NSRange(location: 0, length: 17)),
+            ("→", [], right, text, NSRange(location: 17, length: 0)),
+            ("⌃A", .maskControl, keyCode("a").map(Int.init), text, NSRange(location: 0, length: 0)),
+            ("⌃E", .maskControl, keyCode("e").map(Int.init), text, NSRange(location: 17, length: 0)),
+            ("⌘↑", .maskCommand, up, text, NSRange(location: 0, length: 0)),
+            ("⌘↓", .maskCommand, downArrow, text, NSRange(location: 17, length: 0)),
+            ("⇧⌥←", [.maskShift, .maskAlternate], left, text, NSRange(location: 12, length: 5)),
+            ("x", [], nil, after, NSRange(location: 13, length: 0)),
+            ("⌥⌫", .maskAlternate, kVK_Delete, "hello world ", NSRange(location: 12, length: 0)),
+            ("⌘⌫", .maskCommand, kVK_Delete, "", NSRange(location: 0, length: 0))
+        ]
+        func press(_ flags: CGEventFlags, _ code: Int) async {
+            let held = Self.modifierKeys.filter { flags.contains($0.flag) }
+            var down: CGEventFlags = []
+            for modifier in held {
+                down.insert(modifier.flag)
+                postKey(modifier.code, down: true, flags: down)
+                await pause(10)
+            }
+            let arrow = [left, right, up, downArrow].contains(code)
+            let keyFlags = arrow ? down.union([.maskNumericPad, .maskSecondaryFn]) : down
+            postKey(CGKeyCode(code), down: true, flags: keyFlags)
+            await pause(12)
+            postKey(CGKeyCode(code), down: false, flags: keyFlags)
+            await pause(12)
+            for modifier in held.reversed() {
+                down.remove(modifier.flag)
+                postKey(modifier.code, down: false, flags: down)
+                await pause(10)
+            }
+        }
+        /// The steps in one input; nil when all went as in a text field,
+        /// else where it went wrong.
+        func walk(_ read: () -> (text: String, selection: NSRange)?, still: () -> Bool) async -> String? {
+            for step in steps {
+                guard still() else { return "\(step.keys): the input went away" }
+                if let code = step.code { await press(step.flags, code) } else { await pressKey("x") }
+                let done = await waitUntil(timeout: 0.5) {
+                    guard let seen = read() else { return false }
+                    return seen.text == step.text && seen.selection == step.selection
+                } != nil
+                if !done {
+                    let seen = read().map { "“\($0.text)” \($0.selection.location),\($0.selection.length)" } ?? "nothing"
+                    return "\(step.keys): \(seen), not “\(step.text)” \(step.selection.location),\(step.selection.length)"
+                }
+            }
+            return nil
+        }
+        func type(_ typed: String) async {
+            for character in typed { await pressKey(character) }
+        }
+
+        // The launcher over TextEdit: skil.li not the app in front.
+        let launcher = context.launcher
+        let bundleID = "com.apple.TextEdit"
+        var launcherResult = "TextEdit missing"
+        var rows = "not tried"
+        var rowsMove = false
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-caret-\(getpid()).txt")
+            try? "caret".write(to: file, atomically: true, encoding: .utf8)
+            defer { try? FileManager.default.removeItem(at: file) }
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            if let pid = (try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration))?.processIdentifier {
+                Self.makeFrontmost(pid: pid)
+                if await waitUntil(timeout: 4, { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }) != nil {
+                    _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+                    if await waitUntil(timeout: 1, { launcher.isVisible }) != nil {
+                        await type(text)
+                        _ = await waitUntil(timeout: 1) { launcher.query == text }
+                        launcherResult = await walk({ launcher.fieldSelection.map { (launcher.query, $0) } }, still: { launcher.isVisible }) ?? "ok"
+                        // ↓ and ↑ still move the rows; ⌘↓ only the caret.
+                        await pressKey("s")
+                        _ = await waitUntil(timeout: 1) { launcher.resultTitles.count > 3 }
+                        let titles = launcher.resultTitles
+                        await press([], downArrow)
+                        let second = launcher.selectedResultTitle
+                        await press(.maskCommand, downArrow)
+                        let still = launcher.selectedResultTitle
+                        await press([], up)
+                        let first = launcher.selectedResultTitle
+                        rowsMove = titles.count > 3 && second == titles[1] && still == titles[1] && first == titles[0]
+                        rows = "↓ → \(second ?? "none"), ⌘↓ → \(still ?? "none"), ↑ → \(first ?? "none") (rows \(titles.prefix(2)))"
+                        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                        _ = await waitUntil(timeout: 1) { !launcher.isVisible }
+                        if launcher.isVisible { await closeLauncher() }
+                    } else {
+                        launcherResult = "the launcher did not open over TextEdit"
+                    }
+                    Self.makeFrontmost(pid: pid)
+                    _ = await waitUntil(timeout: 2) { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }
+                } else {
+                    launcherResult = "TextEdit never came to front"
+                }
+                await cleanUp(bundleID: bundleID, wasRunning: wasRunning)
+            } else {
+                launcherResult = "could not open TextEdit"
+            }
+        }
+        record("\(name): the launcher over another app; ↑↓ still move its rows", launcherResult == "ok" && rowsMove,
+               "keys: \(launcherResult); rows: \(rows)", nil)
+
+        // Settings: the search field, then a SwiftUI field (Ask → On a Schedule's new ask).
+        let settings = context.settings
+        var searchResult = "Settings did not come forward"
+        var fieldResult = "not tried"
+        settings.show(pane: .general)
+        if await waitUntil(timeout: 2, { settings.isVisible && settings.isKey }) != nil {
+            await pause(400)
+            await pressKey("f", flags: .maskCommand)
+            if await waitUntil(timeout: 1, { settings.searchFieldFocused }) != nil {
+                await type(text)
+                _ = await waitUntil(timeout: 1) { settings.editedText?.string == text }
+                searchResult = await walk({ settings.editedText.map { ($0.string, $0.selectedRange()) } }, still: { settings.isKey }) ?? "ok"
+                settings.search.clear()
+            } else {
+                searchResult = "⌘F did not reach the search field"
+            }
+            settings.show(pane: .ask)
+            await pause(600)
+            if settings.focusField(placeholder: "every Monday") {
+                await pause(200)
+                await type(text)
+                _ = await waitUntil(timeout: 1) { settings.editedText?.string == text }
+                fieldResult = await walk({ settings.editedText.map { ($0.string, $0.selectedRange()) } }, still: { settings.isKey }) ?? "ok"
+            } else {
+                fieldResult = "no field for a new scheduled ask"
+            }
+            await closeSettings()
+        }
+        record("\(name): Settings' search field and a SwiftUI field", searchResult == "ok" && fieldResult == "ok",
+               "search: \(searchResult); Ask → On a Schedule: \(fieldResult)", nil)
+
+        // The Ask card's answer line (✦A), drawn by skil.li: its keys come from the tap.
+        let popover = context.aiActions.popover
+        context.ai.testEngine = FakeTextEngine(chunks: ["ok"], delay: .milliseconds(5))
+        defer {
+            context.ai.testEngine = nil
+            textView.string = ""
+        }
+        var cardResult = "the test window did not take the focus"
+        var caretAt = ""
+        if await focusTestWindow() {
+            window.makeFirstResponder(textView)
+            textView.string = "Bonjour"
+            textView.selectAll(nil)
+            await pause(60)
+            _ = await hyperChord(["a"], trigger: Self.ownTriggerKeyCode)
+            if await waitUntil(timeout: 2, { popover.isVisible && popover.phase == .asking }) != nil {
+                await type(text)
+                _ = await waitUntil(timeout: 1) { popover.shownQuestion?.typed == text }
+                cardResult = await walk({
+                    guard popover.isVisible, let typed = popover.shownQuestion?.typed else { return nil }
+                    return (typed, popover.shownAnswerSelection ?? NSRange(location: (typed as NSString).length, length: 0))
+                }, still: { popover.isVisible && popover.phase == .asking }) ?? "ok"
+                // The caret drawn where it is: after "hello" once ⌥→ moved it there.
+                if cardResult == "ok" {
+                    await type("hello world")
+                    await press(.maskCommand, left)
+                    await press(.maskAlternate, right)
+                    let caret = popover.answerCaret
+                    let afterHello = popover.shownAnswerSelection == NSRange(location: 5, length: 0) && caret.caret < caret.textEnd - 20
+                    caretAt = afterHello ? "" : "; caret at \(Int(caret.caret)) for a text ending at \(Int(caret.textEnd))"
+                    if !afterHello { cardResult = "the caret is not drawn after “hello”" }
+                    // ← held: its repeats move on, 5 → 2.
+                    let arrowFlags: CGEventFlags = [.maskNumericPad, .maskSecondaryFn]
+                    postKey(CGKeyCode(left), down: true, flags: arrowFlags)
+                    for _ in 0..<2 {
+                        await pause(40)
+                        let source = CGEventSource(stateID: .hidSystemState)
+                        if let repeated = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(left), keyDown: true) {
+                            repeated.flags = arrowFlags
+                            repeated.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+                            repeated.post(tap: .cghidEventTap)
+                        }
+                    }
+                    await pause(40)
+                    postKey(CGKeyCode(left), down: false, flags: arrowFlags)
+                    let held = await waitUntil(timeout: 0.5) { popover.shownAnswerSelection == NSRange(location: 2, length: 0) } != nil
+                    if afterHello, !held {
+                        cardResult = "← held stopped at \(popover.shownAnswerSelection.map { "\($0.location)" } ?? "the end"), not 2"
+                    }
+                }
+                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                _ = await waitUntil(timeout: 1) { !popover.isVisible }
+            } else {
+                cardResult = "no question in the card (phase \(popover.phase))"
+                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            }
+        }
+        record("\(name): the Ask card's answer line", cardResult == "ok", "\(cardResult)\(caretAt)", nil)
+    }
+
     private func controlKeysMoveLikeArrows() async {
         let name = "Keyboard: ⌃N / ⌃P move like ↓ / ↑ in the results and in ⌘K's list; ⌃P in the empty field brings back the last search"
         let launcher = context.launcher

@@ -505,6 +505,12 @@ struct SettingsSearchField: NSViewRepresentable {
                 model.move(-1)
             case #selector(NSResponder.moveDown(_:)):
                 model.move(1)
+            // ⌘↓ to the end, as ⌘↑ goes to the start: a search field
+            // ignores it on its own.
+            case #selector(NSResponder.moveToEndOfDocument(_:)):
+                textView.moveToEndOfLine(nil)
+            case #selector(NSResponder.moveToEndOfDocumentAndModifySelection(_:)):
+                textView.moveToEndOfLineAndModifySelection(nil)
             case #selector(NSResponder.insertNewline(_:)):
                 guard model.isSearching else { return false }
                 model.openSelected()

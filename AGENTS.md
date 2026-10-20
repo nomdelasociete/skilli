@@ -277,6 +277,7 @@ SkilliCore (framework + SwiftPM library, no AppKit)
 | `Sources/Skilli/Input/KeyRouter.swift` | All key handling decisions; swallow/pass rules |
 | `Sources/Skilli/Input/EventTap.swift` | Tap lifecycle, re-enable on timeout, synthetic-event bypass |
 | `Sources/Skilli/Input/HyperKeyRemapper.swift` | Coexistence with other Hyper tools |
+| `Sources/Skilli/Input/KeyBindings.swift` | `KeyBindings` (the command macOS's key bindings give a key), `LineEditor` (a line skil.li draws, edited as a text field) |
 | `Sources/Skilli/Launcher/LauncherController.swift` | Launcher UI and show path |
 | `Sources/Skilli/Design/Theme.swift` | Radii, type, semantic colors, brand images, `KeycapView`, `HintBar` |
 | `Sources/Skilli/Resources/Assets.xcassets` | App icon, menu bar template, brand mark, glass S, accent color |
@@ -362,6 +363,8 @@ per-show work.
   every row view away and built them again (most of a key's time).
 - A key typed in the card is handled inside the event tap: it only updates
   the answer line (`AIPopover.ask` fast path), never lays the card out again.
+  Its caret keys too (`LineEditor`, measured on the mini in Release: median
+  0.6 ms a key, p95 0.7 ms, bound 2 ms).
 - Extensions, when they come, run out of process and are started on demand.
   Their memory must never count against the core app.
 - Idle memory: nothing that only shows later is made at launch (the
@@ -1260,6 +1263,24 @@ the launcher and the self-test call:
   Caps Lock → F13–F24 mapping (Raycast uses F20); install Caps Lock → F18 only
   when no mapping exists at all; otherwise leave Caps Lock alone. Remove only
   a mapping skil.li installed, and do it on quit.
+- The keys of any Mac text field work in every text input of skil.li
+  (JB 2026-10-20: ⌘← and ⌥← did nothing): ← → with ⌥ or ⌘, ⇧ to select,
+  ⌘↑ ⌘↓, ⌃A ⌃E, ⌥⌫ ⌘⌫. What a key does is macOS's own key bindings'
+  (`KeyBindings`: Cocoa's standard ones and the user's
+  DefaultKeyBinding.dict), never a list written here. The launcher's
+  field gets the tap's events in its editor's `keyDown`
+  (`LauncherController.deliver`), which ran no ⌘ key: a ⌘ key the
+  bindings name is run as the editor's command, through
+  `control(_:textView:doCommandBy:)` as the others (↑↓ stay the rows',
+  ⌘↑ ⌘↓ move the caret). The card's answer line, drawn by skil.li, has a
+  caret and a selection: the command runs on a text view never shown
+  (`LineEditor`), typing and ⌘V go in at the caret, ← and ⌫ held repeat
+  (`KeyRouter.repeatForAI`); any other ⌘ or ⌃ key still closes the card
+  and goes on. Settings' search field takes ⌘↓ to the end (an
+  NSSearchField ignores it). ⌘K's filter stays type-to-filter, without a
+  caret (JB 2026-10-20). `rootsearch` presses them all as a keyboard does
+  (`caretKeysEditEverywhere`): launcher over another app, Settings' search
+  and a SwiftUI field, the card.
 - ⌃N / ⌃P are ↓ / ↑ in every launcher list and in ⌘K's
   (`LauncherController.controlStep`: N and P by what they type, by their
   place on a layout without Latin letters; an input method composing keeps
