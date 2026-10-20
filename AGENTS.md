@@ -1622,7 +1622,9 @@ re-investigating.
   Unix socket in its own folder (`MCPSocketServer`: 0600, same user only via
   `getpeereid`, newline-delimited JSON-RPC). `Skilli mcp` (the app binary,
   `MCPBridge`, before any AppKit) bridges stdio to it for any agent and
-  starts skil.li if needed; `Skilli call <tool> '<json>'` calls one tool.
+  starts skil.li if needed; `Skilli call <tool> '<json>'` (or `name=value`
+  words) calls one tool: exit 0 its answer, 1 its error, 2 written wrong.
+  Both reach `SKILLI_SOCKET` when set (a skillie's skil.li, never started).
   Tools (`SkilliTools`) are grouped (`ToolGroup`); each has a `ToolRisk`.
   `ToolSettings` (`tools.json`): `ApprovalMode` (ask / auto = ask before
   changes / always), a choice per tool, connected MCP servers. Approvals,
@@ -2279,8 +2281,10 @@ re-investigating.
   where a model points, and a picture would leave under a read right.
   `selftest doit`: the links dry (asked, esc, a chain dropped, Always per
   goal and app, no goal), a skillie's two `open` lines through macOS
-  (TextEdit exports to Documents, then Finder opens Documents), and
-  `do_in_app` from `Skilli call` and from a real Act agent (Haiku).
+  (TextEdit exports to Documents, then Finder opens Documents),
+  `do_in_app` from `Skilli call` and from a real Act agent (Haiku), and
+  two skillies waiting for their step (`"$SKILLI_CLI" call do_in_app`):
+  allowed and done, then its next branch; declined, its other branch.
 - Forms from a card (`FormProfile` in SkilliCore, Settings → Your Details): "do
   it here" types the details of whom the request is for ("remplis ça pour
   Margot": the one or two words after "pour"/"for"), else the user's own
@@ -2892,14 +2896,28 @@ re-investigating.
   description, language bash / zsh / python / node / swift / ruby, code,
   mode, text arguments, needs_confirmation; a title taken refused); its
   description says a skillie acts in apps with one `open
-  "skilli://do?app=…&goal=…"` line a step.
+  "skilli://do?app=…&goal=…"` line a step, or waits for one to branch on.
   Read again when the folder changed. The launcher lists them by title
   (emoji or image icon, "Skillie"); one with arguments turns the launcher
   into a Skillie chip asking each in turn (a dropdown's choices as rows;
   Return: Next, then Run; a password shows as dots in its row, not in the
   field). Run: the file itself, or its shebang without the executable bit;
   skil.li's PATH with Homebrew; output and errors together, ANSI colors
-  out; 120 s at most (`ChildProcess.run`). Nothing printed: the working
+  out; 120 s at most (`ChildProcess.run`). Told `SKILLI_CLI` (skil.li's
+  own binary), `SKILLI_SOCKET` (its tool server, which `Skilli call` and
+  `Skilli mcp` then reach instead of the usual one) and `SKILLI_SKILLIE`
+  (this run's id, sent in their first line), `SkillieEnvironment`: a step
+  that waits, `"$SKILLI_CLI" call do_in_app app=TextEdit goal="…"`
+  (`name=value` words, or one JSON object), exits 0 done, 1 not done (why
+  on its first line), 2 written wrong (docs/do-it-here-from-anywhere.md,
+  5). Its call is an outside agent's: the tool's right asks in the card,
+  needsConfirmation still asks first; one run by an Act command's agent
+  calls within that command's run (`ScriptLibrary.running`). The id lends
+  the call the skillie's own card (`SkillieCall`, a task-local while
+  `MCPService` handles it; `AIActionController.lentCard`): taken at once
+  rather than waited for (the skillie waits for the call), one call at a
+  time, then "Running…" again; esc answers that call alone. It grants no
+  right. Nothing printed: the working
   card goes, nothing said. silent: the last line 2 s;
   compact: the last line; fullOutput: all of it in the card (scrolls,
   20 s); inline: the row shows the last line, read again when the launcher

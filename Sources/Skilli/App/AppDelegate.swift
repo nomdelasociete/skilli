@@ -611,6 +611,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.refreshInlineScripts = { [scriptLibrary] done in scriptLibrary.refreshInline(done: done) }
         launcher.onRunScript = { [weak self] command, arguments in self?.runScript(command, arguments: arguments) }
         toolServer.tools.scripts = scriptLibrary
+        scriptLibrary.toolSocket = { [toolServer] in toolServer.socketPath }
         aiActions.scriptCommands = { [scriptLibrary] in scriptLibrary.all() }
         aiActions.runScript = { [weak self] command, askFirst in self?.runScript(command, arguments: [], askFirst: askFirst) }
         launcher.emojiSearch = { [emojiLibrary] text in emojiLibrary.search(text) }
@@ -1048,8 +1049,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard await systemCommands.confirm?("Run “\(command.title)”?", detail, "Run") == true else { return }
             }
             let seconds: Double = command.mode == .fullOutput ? 20 : command.mode == .silent ? 2 : 4
-            aiActions.notify(caller: command.title, working: "Running “\(command.title)”…", seconds: seconds) { [scriptLibrary] in
-                let run = try await scriptLibrary.run(command, arguments: arguments)
+            // Its own tool calls (`"$SKILLI_CLI" call do_in_app …`) borrow its card.
+            let id = UUID().uuidString
+            aiActions.notify(caller: command.title, working: "Running “\(command.title)”…", seconds: seconds, skillie: id) { [scriptLibrary] in
+                let run = try await scriptLibrary.run(command, arguments: arguments, id: id)
                 let text = command.mode == .fullOutput ? run.output.trimmingCharacters(in: .whitespacesAndNewlines) : ScriptCommand.lastLine(run.output)
                 guard run.succeeded else {
                     throw ScriptLibrary.Failure(message: text.isEmpty ? "“\(command.title)” failed (exit \(run.status))." : text)

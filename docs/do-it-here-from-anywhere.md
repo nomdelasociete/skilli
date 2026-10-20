@@ -4,6 +4,8 @@ Status: built and measured on the mini, 2026-10-19. Asked by JB
 the same day, after the Chess demo (PR #11): the demo was only a showcase
 of skil.li acting in any app; what does it unlock, for skillies for a
 start? Branch `claude/elastic-wu-f6a44e`, self-test scope `doit`.
+Skillies that wait for a step (5): 2026-10-20, branch
+`claude/stoic-goldberg-09a557`.
 
 ## What was out of reach
 
@@ -131,18 +133,96 @@ open "skilli://do?app=Finder&goal=ouvre%20le%20dossier%20Documents"
 
 It ends at once (nothing printed: no card of its own); skil.li runs the
 two steps one after the other, each asked first until trusted with
-Always. A skillie that needs the outcome to branch on is not served by
-this step (see Not now).
+Always. A skillie that needs the outcome to branch on waits for its step
+instead (5).
+
+### 5. A skillie that waits for its step: `$SKILLI_CLI`
+
+JB, 2026-10-20 (docs/showcase-next.md, item 4): a skillie should react to
+a step's result, not fire and forget.
+
+```bash
+#!/bin/bash
+# @skilli.schemaVersion 1
+# @skilli.title Export or Say Why
+# @skilli.mode compact
+if said=$("$SKILLI_CLI" call do_in_app app=TextEdit goal="exporte en PDF dans mes documents" 2>&1); then
+  if "$SKILLI_CLI" call do_in_app app=Finder goal="ouvre le dossier Documents" > /dev/null 2>&1; then
+    echo "Exported, Documents open."
+  else
+    echo "Exported."
+  fi
+else
+  echo "Not exported: ${said%%$'\n'*}"
+fi
+```
+
+- **What a skillie is told**: skil.li runs every skillie with three
+  variables (`SkillieEnvironment`):
+  - `SKILLI_CLI`: the path of the skil.li binary running it
+    (`…/skil.li.app/Contents/MacOS/Skilli`), its command line.
+    `"$SKILLI_CLI" call <tool> …` calls one of skil.li's tools and waits
+    for the answer.
+  - `SKILLI_SOCKET`: where that skil.li's tools listen. `Skilli call` and
+    `Skilli mcp` use it when no `--socket` is given, so a skillie reaches
+    the skil.li running it (the self-test's, a Debug build), never
+    another; skil.li is not started for it.
+  - `SKILLI_SKILLIE`: this run's id. `Skilli call` and `Skilli mcp` send it
+    in their first line: the card names the skillie, and its calls show
+    in its own card. It grants nothing (Approvals).
+  None of them when skil.li's tools do not listen (benchmark mode): a call
+  would reach another skil.li.
+- **A step**: `"$SKILLI_CLI" call do_in_app app=TextEdit goal="…"`. The
+  arguments as `key=value` words (each value a string, quoted by the
+  shell: a skillie's own argument in a goal cannot break the call), or one
+  JSON object as before.
+- **What comes back**: the exit status says how it ended. 0: done. 1: not
+  done (stopped, esc, declined in the card, refused by a rule, blocked,
+  no such app, skil.li not running). 2: the call is written wrong (no
+  tool, arguments neither JSON nor `key=value`). Done prints on standard
+  output "Done in TextEdit in 3.5 s · 2 steps:" then a line a step; not
+  done prints on standard error why, first line ("Stopped in TextEdit:
+  Nothing in TextEdit does that here.", "The user stopped it in
+  TextEdit.", "The user declined “Do it in an app”…"), then "Steps
+  done:" and those steps. The first line is the one to show; `2>&1`
+  keeps both. What the skillie prints is its own output, shown as its
+  mode says (compact: its last line).
+- **Approvals: nothing skipped.** The tool server only checks the
+  caller is the user (`getpeereid`): a skillie's call is a call from
+  outside skil.li, as a terminal's. `do_in_app`'s right (Screen
+  Controls, changes) asks in the card ("Do it in an app": goal, app)
+  unless the user made it Always (per tool, as today) or a rule says
+  otherwise; then `ScreenControl`'s guards ask what each step needs.
+  `needsConfirmation` still asks before the skillie runs, and the step's
+  right after it: the first allows the script, the second what it does
+  in an app. A skillie run by an Act command's agent (`run_skillie`)
+  calls within that command's run: its tools only, its card. Copying
+  `SKILLI_SKILLIE` gives a process no right, only that skillie's card
+  while it runs. A skillie never sees an Act command's `--run` id.
+- **The card**: a skillie run from the launcher, a shortcut, Ask or a
+  link holds the card ("Running “Export or Say Why”…") until it ends.
+  Its own calls take that card at once (waiting for it would wait for
+  the skillie, which waits for them), one at a time, and give it back:
+  the step's approval, its steps live, then "Running…" again, then the
+  skillie's last line. Esc answers the call in front (declines it, or
+  stops the do it here): the card goes back to the skillie, which reads
+  exit 1; esc again closes it. Another process's calls wait for the
+  card as before.
+- **Time**: 120 s for the whole skillie, as for every skillie (a step
+  measured 3.5–7 s; Opus planning a move, about 8 s).
+- **Checked by** `selftest doit`: two skillies run as from the launcher,
+  their step asked in the card; the first allowed (↩), done, its next
+  step taken; the second declined (esc), its other branch taken, nothing
+  exported.
 
 ## Not now
 
 - **No button** anywhere (no "Copy Link" for an Ask, no Catalog row): JB
   has not tried it yet (no untested entry points). Links and the tool are
   reached by those who write them.
-- **A blocking call for skillies**: `Skilli call do_in_app '{…}'` already
-  waits and exits non-zero on a stop, but skillies are not told where the
-  `Skilli` binary is. An environment variable in `ScriptLibrary.run`
-  would do it, once a skillie needs to branch on a step.
+- **A step that outlives its skillie**: at 120 s the script is stopped,
+  not a `Skilli call` it started: that step goes on to its end. Stopping
+  the call with its script would need the script's whole process group.
 - **Several goals in one link** (`goal=…&goal=…`): one link a step keeps
   each step asked and trusted on its own.
 - **Drags, canvas scrolling**: as in click-what-you-see.md.

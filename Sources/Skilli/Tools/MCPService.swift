@@ -40,6 +40,8 @@ final class MCPService {
         /// "Claude Code", "Terminal"…
         var client = "An agent"
         var runID: String?
+        /// The skillie run whose process calls (`SKILLI_SKILLIE`).
+        var skillie: String?
     }
 
     let tools: SkilliTools
@@ -125,6 +127,7 @@ final class MCPService {
         if let hello = message["skilli"] as? [String: Any] {
             var session = sessions[connection.id] ?? Session()
             session.runID = hello["run"] as? String
+            session.skillie = hello["skillie"] as? String
             sessions[connection.id] = session
             return
         }
@@ -133,7 +136,11 @@ final class MCPService {
         guard let id = message["id"] else { return }
         let params = message["params"] as? [String: Any] ?? [:]
         var session = sessions[connection.id] ?? Session()
-        let run = session.runID.flatMap { runs[$0] }
+        // A skillie's calls go by its name, within the run of the Act
+        // command whose agent started it; while it runs only. Its id lends
+        // it its own card, never a right.
+        let skillie = session.skillie.flatMap { tools.scripts?.running[$0] }
+        let run = session.runID.flatMap { runs[$0] } ?? skillie?.agentRun.flatMap { runs[$0.id] }
 
         switch method {
         case "initialize":
@@ -181,8 +188,10 @@ final class MCPService {
         case "tools/call":
             let name = params["name"] as? String ?? ""
             let arguments = params["arguments"] as? [String: Any] ?? [:]
-            let caller = run?.title ?? session.client
-            let reply = await call(name, arguments: arguments, caller: caller, run: run)
+            let caller = run?.title ?? skillie?.command.title ?? session.client
+            let reply = await SkillieCall.$id.withValue(skillie == nil ? nil : session.skillie) {
+                await call(name, arguments: arguments, caller: caller, run: run)
+            }
             send(result(id, reply), to: connection)
         default:
             send(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "Method not found: \(method)"]], to: connection)

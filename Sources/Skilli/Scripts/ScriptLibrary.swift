@@ -26,6 +26,14 @@ final class ScriptLibrary {
 
     /// The folders scanned; the first one is where new skillies go.
     var folders: () -> [URL]
+    /// skil.li's tool server, told to each skillie with skil.li's own
+    /// binary (`SkillieEnvironment`): `"$SKILLI_CLI" call do_in_app …`
+    /// waits for a step.
+    var toolSocket: () -> String? = { nil }
+    /// The skillies running now, by the id their process was told
+    /// (`SKILLI_SKILLIE`): its tool calls go by its name, within the run of
+    /// the Act command whose agent started it (`run_skillie`).
+    private(set) var running: [String: (command: ScriptCommand, agentRun: AgentContext?)] = [:]
     private var cached: (stamp: [String: Date], commands: [ScriptCommand])?
     /// Inline commands' last line and when it was read.
     private var inline: [String: (line: String, date: Date)] = [:]
@@ -76,8 +84,10 @@ final class ScriptLibrary {
     // MARK: - Running
 
     /// Runs it with the arguments' values; its output (and errors) and exit
-    /// status. Stopped after `timeout`.
-    func run(_ command: ScriptCommand, arguments: [String], timeout: TimeInterval = 120) async throws -> Run {
+    /// status. Stopped after `timeout`. `id`: this run, told to its process
+    /// (`SKILLI_SKILLIE`); `agentRun`: the Act command whose agent runs it.
+    func run(_ command: ScriptCommand, arguments: [String], timeout: TimeInterval = 120, id: String = UUID().uuidString,
+             agentRun: AgentContext? = nil) async throws -> Run {
         let url = URL(fileURLWithPath: command.path)
         let executable: URL
         let all: [String]
@@ -94,7 +104,10 @@ final class ScriptLibrary {
         }
         let directory = command.directory.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) } ?? url.deletingLastPathComponent()
         Log.trace("Skillie “\(command.title)” run")
-        let (output, status) = try await ChildProcess.run(executable, all, directory: directory, timeout: timeout)
+        running[id] = (command, agentRun)
+        defer { running[id] = nil }
+        let environment = SkillieEnvironment.variables(cli: Bundle.main.executablePath, socket: toolSocket(), run: id)
+        let (output, status) = try await ChildProcess.run(executable, all, directory: directory, environment: environment, timeout: timeout)
         return Run(output: ScriptCommand.plain(output), status: status)
     }
 
@@ -199,4 +212,11 @@ final class ScriptLibrary {
             }
         }
     }
+}
+
+/// The skillie run a tool call comes from (`SKILLI_SKILLIE`, sent by
+/// `Skilli call`), while skil.li handles that call: the card its run holds
+/// is lent to it (`AIActionController.takeCardForOutsideAgent`).
+enum SkillieCall {
+    @TaskLocal static var id: String?
 }

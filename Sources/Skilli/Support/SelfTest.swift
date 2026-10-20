@@ -168,8 +168,9 @@ final class SelfTest {
         /// Only "do it here" from outside Ask (docs/do-it-here-from-anywhere.md):
         /// `skilli://do` links asked, denied, trusted, chained; a skillie's
         /// two links through macOS (TextEdit then Finder); `do_in_app` for
-        /// a real agent and from a terminal (the user's decision key,
-        /// Claude; mouse and keys).
+        /// a real agent and from a terminal; skillies that wait for their
+        /// step and branch on it (the user's decision key, Claude; mouse
+        /// and keys).
         case doit
         /// Only Chess, "do it here" in any app (docs/click-what-you-see.md):
         /// spots picked on its board seen as a picture only, moves chosen
@@ -434,6 +435,7 @@ final class SelfTest {
             await doLinksAskTrustAndChain()
             await doLinksChainTwoApps()
             await doInAppForAgents()
+            await skilliesWaitForTheirStep()
             return finish()
         }
         if scope == .sight {
@@ -10789,6 +10791,148 @@ final class SelfTest {
         }
         record(name, refusedRight && terminalDone && terminalFreed && (agentDone || context.ai.subscription.binary == nil),
                "unknown app: \(refusedRight) “\(refused.prefix(160))”; terminal: \(terminal); agent: \(agent)", nil)
+    }
+
+    /// Skillies that wait for their step (docs/do-it-here-from-anywhere.md,
+    /// 5): two skillies run as from the launcher, each calling
+    /// `"$SKILLI_CLI" call do_in_app` and branching on its exit. The first's
+    /// step asked in the skillie's own card, allowed (↩), done: its next
+    /// branch taken, the PDF in Documents, its last line in the card. The
+    /// second's declined (esc): the card goes back to the skillie, its other
+    /// branch taken, nothing exported. Ask Before Changes, `do_in_app` not
+    /// made Always. A scratch document; its PDF removed after.
+    private func skilliesWaitForTheirStep() async {
+        let name = "Skillies wait for their step: `$SKILLI_CLI call do_in_app` asked in the skillie's card; done → its next branch, declined → its other branch"
+        let keys = userDecisionKeys
+        guard !keys.isEmpty else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "no decision key saved in Settings", latencyMs: nil))
+            return
+        }
+        guard let socket = context.tools.socketPath else {
+            record(name, false, "no tool server", nil)
+            return
+        }
+        let export = "exporte en PDF dans mes documents"
+        let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit").isEmpty
+        let stem = "skilli-test-\(UUID().uuidString.prefix(8))"
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(stem)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let source = folder.appendingPathComponent(stem + ".rtf")
+        try? Data("{\\rtf1\\ansi Bonjour, ceci est un document de test de skil.li.}".utf8).write(to: source)
+        let pdf = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/\(stem).pdf")
+        let branch = folder.appendingPathComponent("branch.txt")
+        let told = folder.appendingPathComponent("told.txt")
+        let popover = context.aiActions.popover
+        let settings = context.tools.settings
+        let mode = settings.mode
+        let right = settings.override(for: SkilliTools.doInApp)
+        settings.mode = .auto
+        settings.setOverride(nil, for: SkilliTools.doInApp)
+        context.aiActions.decisionKeysOverride = keys
+        await context.ai.refresh()
+        defer {
+            settings.mode = mode
+            settings.setOverride(right, for: SkilliTools.doInApp)
+            context.aiActions.decisionKeysOverride = nil
+            try? FileManager.default.removeItem(at: folder)
+            try? FileManager.default.removeItem(at: pdf)
+            if !wasRunning { NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit").forEach { $0.forceTerminate() } }
+        }
+        guard (try? await NSWorkspace.shared.open([source], withApplicationAt: URL(fileURLWithPath: "/System/Applications/TextEdit.app"),
+                                                  configuration: NSWorkspace.OpenConfiguration())) != nil else {
+            record(name, false, "TextEdit did not open the document", nil)
+            return
+        }
+        func textEditInFront() async -> Bool {
+            await waitUntil(timeout: 30) {
+                guard let running = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit").first else { return false }
+                Self.makeFrontmost(pid: running.processIdentifier)
+                return NSWorkspace.shared.frontmostApplication?.processIdentifier == running.processIdentifier
+                    && UIReader.snapshot(pid: running.processIdentifier).window.contains(stem)
+            } != nil
+        }
+        // A skillie as a contributor writes it: the step, then a branch on its exit.
+        func skillie(_ title: String) -> ScriptCommand? {
+            let file = folder.appendingPathComponent(title.lowercased().replacingOccurrences(of: " ", with: "-") + ".sh")
+            let text = """
+            #!/bin/bash
+            # @skilli.schemaVersion 1
+            # @skilli.title \(title)
+            # @skilli.mode compact
+            printf '%s\\n' "$SKILLI_CLI" "$SKILLI_SOCKET" "$SKILLI_SKILLIE" > '\(told.path)'
+            if said=$("$SKILLI_CLI" call do_in_app app=TextEdit goal="\(export)" 2>&1); then
+              echo next > '\(branch.path)'
+              echo "Exported: ${said%%$'\\n'*}"
+            else
+              echo other > '\(branch.path)'
+              echo "Not exported: ${said%%$'\\n'*}"
+            fi
+            """
+            try? text.write(to: file, atomically: true, encoding: .utf8)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+            return ScriptCommand.parse(text, path: file.path)
+        }
+        struct Run {
+            var asked = "never"
+            var branch = "none"
+            var card = ""
+            var title = ""
+            var steps: [String] = []
+        }
+        /// Runs it as the launcher does, answers its step's card with `key`
+        /// once (after the half second an unprompted card leaves to the
+        /// app), then waits for its last line in the card.
+        func run(_ command: ScriptCommand, answering key: Int, line: String) async -> Run {
+            var result = Run()
+            try? FileManager.default.removeItem(at: branch)
+            guard await textEditInFront() else {
+                result.card = "TextEdit's window did not come forward"
+                return result
+            }
+            context.aiActions.runScript?(command, false)
+            var seen: ContinuousClock.Instant?
+            var answered = false
+            _ = await waitUntil(timeout: 100) {
+                if !answered, popover.isVisible, popover.phase == .approving {
+                    if seen == nil {
+                        seen = .now
+                        result.asked = "“\(popover.shownTitle)”: \(popover.shownText.prefix(160))"
+                    } else if let seen, .now - seen > .milliseconds(900) {
+                        answered = true
+                        Task { await self.pressKey(nil, code: CGKeyCode(key)) }
+                    }
+                }
+                return FileManager.default.fileExists(atPath: branch.path) && popover.isVisible && popover.shownText.hasPrefix(line)
+            }
+            result.branch = (try? String(contentsOf: branch, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "none"
+            result.card = popover.isVisible ? "\(popover.shownStatus) — \(popover.shownText.prefix(300))" : "gone"
+            result.title = popover.shownTitle
+            result.steps = context.aiActions.lastControl?.history ?? []
+            if popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+            _ = await waitUntil(timeout: 3) { !popover.isVisible }
+            return result
+        }
+
+        guard let allowed = skillie("Export Then Say"), let declined = skillie("Decline Then Say") else {
+            record(name, false, "the skillies could not be read", nil)
+            return
+        }
+        let start = ContinuousClock.now
+        let done = await run(allowed, answering: kVK_Return, line: "Exported: Done in TextEdit")
+        let took = ContinuousClock.now - start
+        let exported = FileManager.default.fileExists(atPath: pdf.path)
+        let variables = ((try? String(contentsOf: told, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init)
+        try? FileManager.default.removeItem(at: pdf)
+        let stopped = await run(declined, answering: kVK_Escape, line: "Not exported: The user declined")
+        let notExported = !FileManager.default.fileExists(atPath: pdf.path)
+        // Told the binary running it and its own tool server, never another.
+        let toldRight = variables.count == 3 && variables[0] == Bundle.main.executablePath && variables[1] == socket && !variables[2].isEmpty
+        let doneRight = done.branch == "next" && exported && done.asked.hasPrefix("“Export Then Say”") && done.title == "Export Then Say"
+        let stoppedRight = stopped.branch == "other" && notExported && stopped.asked.hasPrefix("“Decline Then Say”") && stopped.title == "Decline Then Say"
+        record(name, toldRight && doneRight && stoppedRight,
+               "told: \(toldRight) \(variables.map { $0.prefix(80) }); done in \(Int(took.milliseconds)) ms: asked \(done.asked), branch \(done.branch), PDF \(exported), "
+                   + "steps \(done.steps), card \(done.card); declined: asked \(stopped.asked), branch \(stopped.branch), nothing exported \(notExported), card \(stopped.card)",
+               took.milliseconds)
     }
 
     /// Finder's window on Documents: "⁨Documents⁩ — Local" on macOS 27

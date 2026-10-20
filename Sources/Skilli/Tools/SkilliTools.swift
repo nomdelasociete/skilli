@@ -385,7 +385,7 @@ final class SkilliTools {
                        parameters: [.init(name: "title", description: "Its title, as list_skillies gives it."),
                                     .init(name: "arguments", description: "Its arguments' values, in order.", isArray: true, isRequired: false)]),
         ToolDefinition(name: "create_skillie", title: "Create a skillie",
-                       description: "Writes a new skillie: a script the user then finds in skil.li's launcher by its title, Ask can run and you can run with run_skillie. Give the code without a shebang; it receives its arguments as $1, $2… (argv). To act in apps, it opens one skil.li link a step, done in order, each asked first: open \"skilli://do?app=TextEdit&goal=exporte%20en%20PDF%20dans%20mes%20documents\" (the goal as the user would ask it, percent-encoded; app optional). Keep it small and safe; it runs on the user's Mac.",
+                       description: "Writes a new skillie: a script the user then finds in skil.li's launcher by its title, Ask can run and you can run with run_skillie. Give the code without a shebang; it receives its arguments as $1, $2… (argv). To act in apps, it opens one skil.li link a step, done in order, each asked first: open \"skilli://do?app=TextEdit&goal=exporte%20en%20PDF%20dans%20mes%20documents\" (the goal as the user would ask it, percent-encoded; app optional). When what follows depends on whether a step worked, wait for it instead: \"$SKILLI_CLI\" call do_in_app app=TextEdit goal=\"exporte en PDF dans mes documents\" exits 0 when done, 1 otherwise, its first line saying how it ended (asked in the card like any agent's call). Keep it small and safe; it runs on the user's Mac.",
                        group: .actions, risk: .changes,
                        parameters: [.init(name: "title", description: "Short, as the user would type it: “Flush DNS”."),
                                     .init(name: "description", description: "What it does, one sentence.", isRequired: false),
@@ -934,9 +934,10 @@ final class SkilliTools {
             if command.needsConfirmation, await confirm?("Run “\(command.title)”?", "Its script asks before it runs.", "Run", name, run, false) == .deny {
                 throw Failure(message: "Not run: the user declined.")
             }
-            let run = try await scripts.run(command, arguments: values)
-            let output = run.output.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard run.succeeded else { throw Failure(message: "“\(command.title)” failed (exit \(run.status)): \(output.suffix(2_000))") }
+            // Its own tool calls stay within this command's run.
+            let ran = try await scripts.run(command, arguments: values, agentRun: run)
+            let output = ran.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard ran.succeeded else { throw Failure(message: "“\(command.title)” failed (exit \(ran.status)): \(output.suffix(2_000))") }
             return output.isEmpty ? "Done." : String(output.suffix(8_000))
 
         case "list_projects":

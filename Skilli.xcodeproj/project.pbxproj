@@ -250,6 +250,7 @@
 		CBAFA5BE3CC36D3776FBFD26 /* SearchNarrowing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0A5338C5E10B0F81C2D977 /* SearchNarrowing.swift */; };
 		CC37162DDE0BFD3B34653CF7 /* MCPServerImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C705923EE4CFF8A97B7BCC /* MCPServerImporter.swift */; };
 		CC7C2D4B082AD7F5C12DE109 /* MenuBarSkillies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DF855C181119E9A4FFA2AC /* MenuBarSkillies.swift */; };
+		CE2C31E6575DD75556295640 /* SkillieEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1652A2C8726A9428E6EDCBA2 /* SkillieEnvironment.swift */; };
 		CF69A58D5DE3C7E6193DE53E /* ClipboardRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CAA8284FAB4B0E13B42626 /* ClipboardRules.swift */; };
 		CF9D2511DC34F623FB2281F0 /* PasteCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2BE8AC7ABCBB95696CCC88 /* PasteCheck.swift */; };
 		CFB77934FE109E56BF935AE2 /* BrowserTabReuse.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C1A2A8F02B651FD0E3DF92 /* BrowserTabReuse.swift */; };
@@ -367,6 +368,7 @@
 		133FC9BC883F7262C3BBED4E /* KeyRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyRouter.swift; sourceTree = "<group>"; };
 		137FCEB6B269DC65B055F5DF /* RecentSearchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentSearchStore.swift; sourceTree = "<group>"; };
 		14AB222399F43877F4FA1C20 /* TextEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEngine.swift; sourceTree = "<group>"; };
+		1652A2C8726A9428E6EDCBA2 /* SkillieEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillieEnvironment.swift; sourceTree = "<group>"; };
 		16C9CA103DE65AAADAFA3C65 /* SymbolTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymbolTable.swift; sourceTree = "<group>"; };
 		16F367F68B8C4F05D8ACE25A /* MenuSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuSearch.swift; sourceTree = "<group>"; };
 		17CA719FDF2960E0469124F9 /* MCPSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPSocketServer.swift; sourceTree = "<group>"; };
@@ -761,6 +763,7 @@
 				A9FD96BC2FD37AA111FC3E09 /* SettingsSearch.swift */,
 				B50C5D5CE27307D006CE5F16 /* SettingsSkill.swift */,
 				CFAC4F714AD1BD0682334E74 /* SettingsTable.swift */,
+				1652A2C8726A9428E6EDCBA2 /* SkillieEnvironment.swift */,
 				41179504621E163F41E02EA3 /* SkilliLink.swift */,
 				011CE45E11A95270E98D3DB4 /* Snippet.swift */,
 				4237B38F08280AB88DB3C3D6 /* SpokenWhen.swift */,
@@ -1386,6 +1389,7 @@
 				FFD4379375EB754AE39CB39D /* SettingsSkill.swift in Sources */,
 				B4125951A88CEB67DDAE15DF /* SettingsTable.swift in Sources */,
 				AF377114BB38FDC39AEB9A2C /* SkilliLink.swift in Sources */,
+				CE2C31E6575DD75556295640 /* SkillieEnvironment.swift in Sources */,
 				4171B7A302A73C280DBF4DFE /* Snippet.swift in Sources */,
 				50DF5659AD6507AB3926CED6 /* SpokenWhen.swift in Sources */,
 				C2AA678DFBF20650F948A4D4 /* SymbolTable.swift in Sources */,
