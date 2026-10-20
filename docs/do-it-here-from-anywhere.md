@@ -283,3 +283,8 @@ PDF dans mes documents"` and branching on its exit.
 
 The earlier rows held: links 5.1 s / 6.8 s, `Skilli call` 3.7 s, the
 Act agent 6 s.
+
+Run 2 (13:15), 5 of 5, after the time limit stopped a skillie's process
+group: the same results (done in 5.1 s), and a skillie left unanswered at
+a 6 s limit ended 6.3 s after its start, its `Skilli call` gone, the
+approval gone, the card “Wait Forever” failed (exit 15).
