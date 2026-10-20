@@ -2905,7 +2905,8 @@ re-investigating.
   field). Run: the file itself, or its shebang without the executable bit;
   skil.li's PATH with Homebrew; output and errors together, ANSI colors
   out; 120 s at most (`ChildProcess.run`, with what it started: its
-  process group, `stopsGroup`). Told `SKILLI_CLI` (skil.li's
+  process group, `stopsGroup`, SIGTERM then SIGKILL 3 s on, even once
+  the script itself ended). Told `SKILLI_CLI` (skil.li's
   own binary), `SKILLI_SOCKET` (its tool server, which `Skilli call` and
   `Skilli mcp` then reach instead of the usual one) and `SKILLI_SKILLIE`
   (this run's id, sent in their first line), `SkillieEnvironment`: a step

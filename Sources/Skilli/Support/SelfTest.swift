@@ -10940,8 +10940,10 @@ final class SelfTest {
     /// (docs/do-it-here-from-anywhere.md, 5): its `do_in_app` left
     /// unanswered in its card, the limit (6 s here) ends the script and its
     /// `Skilli call` together (their process group), the approval goes and
-    /// the card says the skillie failed. Nothing gets past the approval: no
-    /// decision key needed, no app touched.
+    /// the card says the skillie failed. Then a script that ends at once,
+    /// leaving behind a process that holds its output and ignores SIGTERM:
+    /// killed at its limit (2 s) and 3 s more. Nothing gets past the
+    /// approval: no decision key needed, no app touched.
     private func skillieStopsWithItsStep() async {
         let name = "A skillie stopped at its time limit stops its step: its `Skilli call` ends with it, the unanswered approval goes, the card says it failed"
         guard let library = context.tools.tools.scripts else {
@@ -10992,12 +10994,40 @@ final class SelfTest {
         let took = ContinuousClock.now - start
         let card = popover.isVisible ? "\(popover.shownTitle) — \(popover.shownText.prefix(200))" : "gone"
         let pid = (try? String(contentsOf: callPID, encoding: .utf8)).flatMap { pid_t($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        // Gone with its script, not left waiting for an answer.
-        let callGone = pid.map { kill($0, 0) != 0 } ?? false
+        // Gone with its script, not left waiting for an answer (the signal
+        // may still be on its way when the card says it failed).
+        var callGone = false
+        if let pid { callGone = await waitUntil(timeout: 3) { kill(pid, 0) != 0 } != nil }
         if popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
         _ = await waitUntil(timeout: 3) { !popover.isVisible }
-        record(name, asked && ended != nil && callGone && took < .seconds(15),
-               "asked: \(asked) “\(askedText)”; ended after \(Int(took.milliseconds)) ms (limit 6 s); call \(pid.map(String.init) ?? "none") gone: \(callGone); card \(card)",
+
+        // A script that ended at once, leaving behind what holds its output
+        // and ignores SIGTERM: stopped at the limit all the same, killed 3 s on.
+        let stubborn = folder.appendingPathComponent("leave-behind.sh")
+        let leftPID = folder.appendingPathComponent("left.pid")
+        let leaving = """
+        #!/bin/bash
+        # @skilli.schemaVersion 1
+        # @skilli.title Leave Behind
+        # @skilli.mode compact
+        trap '' TERM
+        sleep 60 &
+        echo $! > '\(leftPID.path)'
+        """
+        try? leaving.write(to: stubborn, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stubborn.path)
+        var leftTook = Duration.zero
+        var leftGone = false
+        if let left = ScriptCommand.parse(leaving, path: stubborn.path) {
+            let leftStart = ContinuousClock.now
+            _ = try? await library.run(left, arguments: [], timeout: 2)
+            leftTook = ContinuousClock.now - leftStart
+            let leftover = (try? String(contentsOf: leftPID, encoding: .utf8)).flatMap { pid_t($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            if let leftover { leftGone = await waitUntil(timeout: 3) { kill(leftover, 0) != 0 } != nil }
+        }
+        record(name, asked && ended != nil && callGone && took < .seconds(15) && leftGone && leftTook < .seconds(10),
+               "asked: \(asked) “\(askedText)”; ended after \(Int(took.milliseconds)) ms (limit 6 s); call \(pid.map(String.init) ?? "none") gone: \(callGone); card \(card); "
+                   + "left behind, ignoring SIGTERM: run returned after \(Int(leftTook.milliseconds)) ms (limit 2 s), gone: \(leftGone)",
                took.milliseconds)
     }
 

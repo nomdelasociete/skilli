@@ -210,11 +210,15 @@ fi
   card as before.
 - **Time**: 120 s for the whole skillie, as for every skillie (a step
   measured 3.5–7 s; Opus planning a move, about 8 s). At the limit the
-  script stops with what it started (its process group: a `Skilli call`
-  would keep its output open), and a call of it still in the card is
-  stopped as esc would (its approval declined, its do it here stopped),
-  as when a skillie ends with a call left running; then the card says
-  the skillie failed.
+  script stops with what it started (its process group: a `Skilli call`,
+  or anything left in the background, would keep its output open),
+  SIGTERM then SIGKILL 3 s later, even when the script itself already
+  ended. A call of it still in the card is stopped as esc would (its
+  approval declined, its do it here stopped), as when a skillie ends with
+  a call left running. The card then says the skillie failed with the
+  script's own status: “Wait Forever” failed (exit 15), 15 being
+  SIGTERM. No script reads that status: `Skilli call` only exits 0, 1 or
+  2, and one stopped with its script returns nothing to anyone.
 - **Checked by** `selftest doit`: two skillies run as from the launcher,
   their step asked in the card; the first allowed (↩), done, its next
   step taken; the second declined (esc), its other branch taken, nothing
@@ -287,4 +291,5 @@ Act agent 6 s.
 Run 2 (13:15), 5 of 5, after the time limit stopped a skillie's process
 group: the same results (done in 5.1 s), and a skillie left unanswered at
 a 6 s limit ended 6.3 s after its start, its `Skilli call` gone, the
-approval gone, the card “Wait Forever” failed (exit 15).
+approval gone, the card “Wait Forever” failed (exit 15): the script's own
+status, killed by SIGTERM, not one of `Skilli call`'s.
