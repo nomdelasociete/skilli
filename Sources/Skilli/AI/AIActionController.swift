@@ -61,6 +61,11 @@ final class AIActionController {
         /// Its calls holding the card now (one at a time).
         var calls = 0
     }
+    /// Skillie runs that ended (done, stopped, at their time limit): a call
+    /// of theirs still on its way (its app being brought forward, between
+    /// two turns with the card) is refused before it asks or acts.
+    /// Forgotten after 10 minutes.
+    private var endedSkillies: Set<String> = []
     /// The Act command's agent and what the card shows of it.
     private var agent: AgentRun?
     private var steps: [AIPopover.Step] = []
@@ -2669,6 +2674,9 @@ extension AIActionController: ToolPresenter {
     /// and the caller says it (an agent). Esc stops it.
     func doItHere(_ goal: String, pid: pid_t, caller: String, run: AgentContext?, saysStop: Bool) async -> ControlReport {
         let app = NSRunningApplication(processIdentifier: pid)?.localizedName ?? "the app"
+        if let skillie = SkillieCall.id, endedSkillies.contains(skillie) {
+            return ControlReport(app: app, outcome: .stopped("Its skillie ended."), steps: [], took: .zero)
+        }
         let inRun = run != nil && run?.background != true && agent != nil
         if !inRun {
             // Not while the user types: its keys would land among theirs.
@@ -2867,6 +2875,8 @@ extension AIActionController: ToolPresenter {
     /// `verb`: the question says what it does ("Restart?", ↩ Restart).
     func approve(_ title: String, detail: String, caller: String, run: AgentContext?, once: Bool = false,
                  reason: String? = nil, verb: String? = nil, fromUser: Bool) async -> ToolApproval {
+        // A call of a skillie that ended asks nothing.
+        if let skillie = SkillieCall.id, endedSkillies.contains(skillie) { return .deny }
         // A run out of sight (an ask on a schedule) asks as an agent outside a command.
         let outside = run == nil || run?.background == true
         if outside {
@@ -3356,6 +3366,10 @@ extension AIActionController: ToolPresenter {
                 message = try await work()
             } catch {
                 message = error.localizedDescription
+            }
+            if let skillie {
+                endedSkillies.insert(skillie)
+                Task { try? await Task.sleep(for: .seconds(600)); endedSkillies.remove(skillie) }
             }
             if let skillie, lentCard?.skillie == skillie {
                 // Its calls end with it (stopped at its time limit, one left

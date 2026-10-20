@@ -124,13 +124,13 @@ final class ChildProcess: @unchecked Sendable {
     }
 
     /// It and what it started: `Process` makes it its own process group's
-    /// leader. While it runs, or once it ended while something it started
-    /// still holds its output open: the group lives on then, so its id is
-    /// no one else's.
+    /// leader. While it runs, while something it started holds its output
+    /// open, or while a member runs on with its output closed (`kill(-pid,
+    /// 0)` answers): a group with a live member keeps its id, no one else's.
     func terminateGroup(_ signal: Int32 = SIGTERM) {
         lock.withLock {
             let pid = process.processIdentifier
-            guard pid > 0, process.isRunning || !outputClosed else { return }
+            guard pid > 0, process.isRunning || !outputClosed || kill(-pid, 0) == 0 else { return }
             kill(-pid, signal)
         }
     }

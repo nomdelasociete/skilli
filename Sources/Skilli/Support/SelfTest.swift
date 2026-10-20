@@ -10531,7 +10531,7 @@ final class SelfTest {
         let declined = first.log == ["asked do \(export)", "declined do \(export)"]
         // A chain: the second link waits, then is dropped, never asked.
         guard await focusTestWindow() else { return }
-        let reveal = "ouvre le dossier Documents"
+        let reveal = "ouvre le dossier Documents depuis le menu Aller"
         let chain = await open([url(export, app: "TextEdit"), url(reveal, app: "Finder")], press: nil)
         let dropped = chain.log == ["asked do \(export)", "declined do \(export)", "dropped do \(reveal)"]
         // Always: that goal in that app, at once from then on.
@@ -10583,7 +10583,7 @@ final class SelfTest {
             return
         }
         let export = "exporte en PDF dans mes documents"
-        let reveal = "ouvre le dossier Documents"
+        let reveal = "ouvre le dossier Documents depuis le menu Aller"
         let tools = context.tools.settings
         let saved = tools.linkTrust.links
         let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit").isEmpty

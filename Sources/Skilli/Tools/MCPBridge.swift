@@ -29,7 +29,17 @@ enum MCPBridge {
             var rest: [String] = []
             var words = Array(arguments.dropFirst(2))[...]
             while let word = words.popFirst() {
-                if ["--socket", "--run"].contains(word) { _ = words.popFirst() } else if !word.hasPrefix("--") { rest.append(word) }
+                if ["--socket", "--run"].contains(word) {
+                    guard let value = words.popFirst(), !value.hasPrefix("--") else {
+                        FileHandle.standardError.write(Data("\(word) needs a value\n".utf8))
+                        return 2
+                    }
+                } else if word.hasPrefix("--") {
+                    FileHandle.standardError.write(Data("unknown option: \(word)\n".utf8))
+                    return 2
+                } else {
+                    rest.append(word)
+                }
             }
             guard let tool = rest.first else {
                 FileHandle.standardError.write(Data("usage: Skilli call <tool> [<json arguments> | <name>=<value>…]\n".utf8))
