@@ -37,7 +37,7 @@ targets:
         PRODUCT_NAME: SkilliCore
         PRODUCT_BUNDLE_IDENTIFIER: com.nomdelasociete.Skilli.core
         GENERATE_INFOPLIST_FILE: YES
-        MARKETING_VERSION: "0.2.1"
+        MARKETING_VERSION: "0.2.2"
         CURRENT_PROJECT_VERSION: "1"
         SKIP_INSTALL: YES
 
@@ -78,7 +78,7 @@ targets:
         INFOPLIST_KEY_NSHumanReadableCopyright: "© Nom de la société"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        MARKETING_VERSION: "0.2.1"
+        MARKETING_VERSION: "0.2.2"
         CURRENT_PROJECT_VERSION: "1"
         # Event taps, Accessibility and synthetic keys are not allowed in the
         # App Sandbox. Distribution is Developer ID + notarization (like dsmn).
