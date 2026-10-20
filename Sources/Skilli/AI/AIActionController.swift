@@ -2682,6 +2682,11 @@ extension AIActionController: ToolPresenter {
             // Not while the user types: its keys would land among theirs.
             await untilTypingPauses()
             await takeCardForOutsideAgent(caller)
+            // It may have ended while the card was busy.
+            if let skillie = SkillieCall.id, endedSkillies.contains(skillie) {
+                releaseCardForOutsideAgent()
+                return ControlReport(app: app, outcome: .stopped("Its skillie ended."), steps: [], took: .zero)
+            }
             unpromptedSince = .now
         }
         let writer = ai.writer(for: library.command(PromptLibrary.askID)?.model)
@@ -2882,6 +2887,11 @@ extension AIActionController: ToolPresenter {
         if outside {
             if !fromUser { await untilTypingPauses() }
             await takeCardForOutsideAgent(caller)
+            // It may have ended while the card was busy.
+            if let skillie = SkillieCall.id, endedSkillies.contains(skillie) {
+                releaseCardForOutsideAgent()
+                return .deny
+            }
             if !fromUser { unpromptedSince = .now }
         }
         if let reason { lastRuleLine = reason }
