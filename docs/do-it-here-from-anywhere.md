@@ -264,3 +264,19 @@ What the rows say:
 - **Nothing more was asked than the caller's own approval** (the tool's
   ↩, the links' trust): both goals went through `ScreenControl`'s guards
   like a typed one, and exporting to Documents trips none of them.
+
+## Measures: skillies that wait (mini, 2026-10-20)
+
+`remote doit`, 4 of 4 passing (12:52), the three checks above again and
+the skillies of 5: two skillies run as from the launcher (`runScript`),
+each calling `"$SKILLI_CLI" call do_in_app app=TextEdit goal="exporte en
+PDF dans mes documents"` and branching on its exit.
+
+| What | Result | Time |
+|---|---|---|
+| Variables told | `SKILLI_CLI` the self-test's own binary, `SKILLI_SOCKET` its scratch socket (not the usual one), `SKILLI_SKILLIE` an id | — |
+| Step allowed (↩) | asked in the skillie's card (“Export Then Say”: Allow “Do it in an app”? goal, app); Fichier › Exporter au format PDF…, Enregistrer; exit 0, the then-branch; the card ends on “Exported: Done in TextEdit in 3.7 s · 2 steps:” | 5.2 s from the skillie's start |
+| Step declined (esc) | asked the same way; the card back to the skillie; exit 1, the other branch; nothing exported; “Not exported: The user declined “Do it in an app”…” | — |
+
+The earlier rows held: links 5.1 s / 6.8 s, `Skilli call` 3.7 s, the
+Act agent 6 s.
