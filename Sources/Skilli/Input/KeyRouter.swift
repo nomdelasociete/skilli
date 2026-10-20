@@ -87,6 +87,10 @@ final class KeyRouter {
     /// see every other key.
     var interceptForAI: ((Key?, Modifiers, CGKeyCode, CGEvent) -> Bool)?
 
+    /// A held key the AI card took repeating (← or ⌫ held in its answer
+    /// line): `true` when it used it. The repeat is swallowed either way.
+    var repeatForAI: ((CGEvent) -> Bool)?
+
     /// Keys going on to the app in front, typed without Hyper: snippets
     /// watch them for their keywords. True holds the key back (↩ that
     /// ends a keyword: a chat would send it first).
@@ -138,7 +142,10 @@ final class KeyRouter {
         }
 
         if isRepeat {
-            if swallowedKeyCodes.contains(keyCode) || engine.isPending { return .swallow }
+            if swallowedKeyCodes.contains(keyCode) || engine.isPending {
+                if !engine.isPending { _ = repeatForAI?(event) }
+                return .swallow
+            }
             // Held keys repeat in the launcher (⌫ held), not in the app behind it.
             if forwardToLauncher?(event) == true { return .swallow }
             if !hyper.isHeld, onTypedKey?(event) == true { return .swallow }

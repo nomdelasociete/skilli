@@ -573,6 +573,8 @@ final class LauncherController: NSObject {
     func pretendClosed(for duration: Duration) {
         kept?.closedAt = .now - duration
     }
+    /// Self-test hook: the field's caret, or what is selected in it.
+    var fieldSelection: NSRange? { searchField.currentEditor()?.selectedRange }
     /// Self-test hook: the field's words all selected (kept ones are).
     var fieldTextSelected: Bool {
         !searchField.stringValue.isEmpty && searchField.currentEditor()?.selectedRange == NSRange(location: 0, length: (searchField.stringValue as NSString).length)
@@ -885,6 +887,18 @@ final class LauncherController: NSObject {
         }
         if searchField.currentEditor() == nil {
             panel.makeFirstResponder(searchField)
+        }
+        // ⌘ with an arrow or ⌫: the command macOS's key bindings name (⌘←
+        // to the start, ⇧⌘→ selects to the end, ⌘⌫ erases to the start),
+        // run by the editor, through `control(_:textView:doCommandBy:)` as
+        // the other keys. Its keyDown, handed the tap's event, ran none of
+        // them. An input method composing keeps its keys.
+        if keyEvent.modifierFlags.contains(.command), let editor = searchField.currentEditor() as? NSTextView, !editor.hasMarkedText() {
+            let commands = KeyBindings.commands(for: keyEvent)
+            if !commands.isEmpty {
+                commands.forEach { editor.doCommand(by: $0) }
+                return true
+            }
         }
         // Arrows, Return and Escape come back through
         // `control(_:textView:doCommandBy:)`; characters are inserted.

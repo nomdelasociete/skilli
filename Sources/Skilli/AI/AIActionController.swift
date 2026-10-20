@@ -79,6 +79,8 @@ final class AIActionController {
         let position: (Int, Int)
         var selected: Int
         var typed = ""
+        /// The caret or what is selected in `typed`; nil: after it.
+        var selection: NSRange?
         var deadKeyState: UInt32 = 0
         /// Ask by Voice: what is heard fills `typed` until the user types.
         var listening = false
@@ -659,6 +661,7 @@ final class AIActionController {
         input.onText = { [weak self] text in
             guard let self, var current = self.question, current.listening else { return }
             current.typed = text
+            current.selection = nil
             self.question = current
             self.refreshQuestion()
         }
@@ -702,8 +705,8 @@ final class AIActionController {
 
     private func refreshQuestion() {
         guard let question else { return }
-        popover.ask(question.prompt, position: question.position, selected: question.selected, typed: question.typed, context: question.context,
-                    returnTitle: question.dictating ? "Insert" : nil)
+        popover.ask(question.prompt, position: question.position, selected: question.selected, typed: question.typed, selection: question.selection,
+                    context: question.context, returnTitle: question.dictating ? "Insert" : nil)
     }
 
     // MARK: - Dictate
@@ -863,7 +866,7 @@ final class AIActionController {
     /// Keys while the card is up; `true` when the key was used. Any key
     /// without a role here closes the card and goes on to the app or the
     /// shortcuts: the user moved on.
-    func handleKey(_ key: Key?, _ modifiers: Modifiers, _ keyCode: CGKeyCode, flags: CGEventFlags = []) -> Bool {
+    func handleKey(_ key: Key?, _ modifiers: Modifiers, _ keyCode: CGKeyCode, flags: CGEventFlags = [], event: CGEvent? = nil) -> Bool {
         guard popover.isVisible else { return false }
         let code = Int(keyCode)
         // A note (a reading, what happened out of sight) never takes keys
@@ -905,7 +908,7 @@ final class AIActionController {
             return true
         }
         if question != nil {
-            return handleAnswerKey(key, modifiers, code, flags: flags)
+            return handleAnswerKey(key, modifiers, code, flags: flags, event: event)
         }
         if modifiers == .command, code == kVK_Return || code == kVK_ANSI_KeypadEnter, popover.phase == .done, addedReminder != nil {
             addedReminder = nil
@@ -983,9 +986,11 @@ final class AIActionController {
     }
 
     /// While a question is up: digits pick an option, arrows and Tab move,
-    /// Return answers; with no options, typing fills the answer (⌫ erases,
-    /// ⌘V pastes). A shortcut with ⌘, ⌃ or Hyper closes the card and goes on.
-    private func handleAnswerKey(_ key: Key?, _ modifiers: Modifiers, _ code: Int, flags: CGEventFlags) -> Bool {
+    /// Return answers; with no options, typing fills the answer at the caret
+    /// (⌘V pastes there) and the keys of any Mac text field edit it (←→, ⌥
+    /// and ⌘ with them, ⇧ to select, ⌫ ⌥⌫ ⌘⌫, ⌃A ⌃E: `LineEditor`). Another
+    /// shortcut with ⌘, ⌃ or Hyper closes the card and goes on.
+    private func handleAnswerKey(_ key: Key?, _ modifiers: Modifiers, _ code: Int, flags: CGEventFlags, event: CGEvent?) -> Bool {
         guard var current = question else { return false }
         // Inside the event tap: every key of the Mac waits for this.
         let start = ContinuousClock.now
@@ -1037,27 +1042,54 @@ final class AIActionController {
             return false
         }
         stopListeningToEdit(&current)
+        var line = Self.line(of: current)
         if modifiers == .command, key == .character("v") {
-            current.typed += NSPasteboard.general.string(forType: .string)?
-                .replacingOccurrences(of: "\n", with: " ") ?? ""
+            line = LineEditor.insert(NSPasteboard.general.string(forType: .string)?.replacingOccurrences(of: "\n", with: " ") ?? "", into: line)
+        } else if let commands = editCommands(modifiers, event) {
+            line = commands.reduce(line) { LineEditor.run($1, on: $0) }
+            current.deadKeyState = 0
         } else if !modifiers.intersection([.command, .control]).isEmpty {
             dismiss()
             return false
-        } else if code == kVK_Delete {
-            if modifiers.contains(.option) {
-                // ⌥⌫: the last word.
-                while current.typed.last?.isWhitespace == true { current.typed.removeLast() }
-                while let last = current.typed.last, !last.isWhitespace { current.typed.removeLast() }
-            } else if !current.typed.isEmpty {
-                current.typed.removeLast()
-            }
-            current.deadKeyState = 0
         } else {
-            current.typed += layout.typedText(for: CGKeyCode(code), flags: flags, deadKeyState: &current.deadKeyState)
+            let text = layout.typedText(for: CGKeyCode(code), flags: flags, deadKeyState: &current.deadKeyState)
+            // A dead key alone types nothing yet: what is selected stays.
+            if !text.isEmpty { line = LineEditor.insert(text, into: line) }
         }
+        show(line, in: &current)
+        return true
+    }
+
+    /// ← or ⌫ held in the answer line: it moves or erases on, as in a text
+    /// field (the tap swallows the repeats of a key the card took).
+    func repeatKey(_ event: CGEvent) -> Bool {
+        guard popover.isVisible, var current = question, current.prompt.options.isEmpty, !current.listening,
+              let commands = editCommands(Modifiers(event.flags), event) else { return false }
+        show(commands.reduce(Self.line(of: current)) { LineEditor.run($1, on: $0) }, in: &current)
+        return true
+    }
+
+    /// The edits a key names in the answer line (←→, ⌥ and ⌘ with them, ⇧
+    /// to select, ⌫ ⌥⌫ ⌘⌫, ⌃A ⌃E…), from macOS's key bindings, in order;
+    /// only when every one edits the line; never for a Hyper chord.
+    private func editCommands(_ modifiers: Modifiers, _ event: CGEvent?) -> [Selector]? {
+        guard !modifiers.isSuperset(of: .hyper), let typed = event.flatMap(NSEvent.init(cgEvent:)) else { return nil }
+        let commands = KeyBindings.commands(for: typed)
+        guard !commands.isEmpty, commands.allSatisfy({ LineEditor.edits($0) }) else { return nil }
+        return commands
+    }
+
+    private static func line(of question: Question) -> LineEditor.Line {
+        LineEditor.Line(text: question.typed, selection: question.selection ?? NSRange(location: (question.typed as NSString).length, length: 0))
+    }
+
+    /// `line` as the answer: the caret at its end is no selection.
+    private func show(_ line: LineEditor.Line, in current: inout Question) {
+        current.typed = line.text
+        let end = (line.text as NSString).length
+        current.selection = line.selection == NSRange(location: end, length: 0) ? nil : line.selection
         question = current
         refreshQuestion()
-        return true
     }
 
     /// 1–9 from the number row or the keypad, whatever the layout (on

@@ -859,7 +859,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // its keys are its own, esc included; a card behind it takes
             // only ⌘Z for its undo (rule 4).
             if self.ownWindowHasKeyboard { return self.aiActions.undoKey(key, modifiers) }
-            return self.aiActions.handleKey(key, modifiers, keyCode, flags: event.flags)
+            return self.aiActions.handleKey(key, modifiers, keyCode, flags: event.flags, event: event)
+        }
+        router.repeatForAI = { [weak self] event in
+            guard let self, !self.launcher.isVisible, !self.ownWindowHasKeyboard else { return false }
+            return self.aiActions.repeatKey(event)
         }
         aiActions.onOpenSettings = { [weak self] in
             self?.settings.show(pane: .aiAccounts)

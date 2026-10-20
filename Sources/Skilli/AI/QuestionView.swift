@@ -59,7 +59,7 @@ final class QuestionView: NSView {
 
     /// Lays out for `width` and returns the height used.
     @discardableResult
-    func update(question: PromptQuestion, selected: Int, typed: String, context: String? = nil, width: CGFloat) -> CGFloat {
+    func update(question: PromptQuestion, selected: Int, typed: String, selection: NSRange? = nil, context: String? = nil, width: CGFloat) -> CGFloat {
         var top: CGFloat = 0
         if let context, !context.isEmpty {
             contextLabel.isHidden = false
@@ -81,7 +81,7 @@ final class QuestionView: NSView {
             chips.isHidden = true
             field.isHidden = false
             field.frame = NSRect(x: 0, y: answerY, width: width, height: Layout.fieldHeight)
-            field.show(typed: typed, placeholder: question.defaultValue.map { "\($0) (default)" } ?? "Type your answer")
+            field.show(typed: typed, selection: selection, placeholder: question.defaultValue.map { "\($0) (default)" } ?? "Type your answer")
             return answerY + Layout.fieldHeight
         }
 
@@ -108,8 +108,8 @@ final class QuestionView: NSView {
     }
 
     /// A key typed: only the answer line, nothing measured again.
-    func showTyped(_ typed: String) {
-        field.showTyped(typed)
+    func showTyped(_ typed: String, selection: NSRange? = nil) {
+        field.showTyped(typed, selection: selection)
     }
 
     /// Self-test hook: where the typed text ends and where the caret is.
@@ -198,18 +198,26 @@ final class QuestionView: NSView {
         }
     }
 
-    /// One line with what was typed and the system's caret right after it;
-    /// the default as placeholder. A long answer scrolls left, as in a text
-    /// field. Drawn here (no label padding): typing measures one string.
+    /// One line with what was typed, the system's caret where it is (after
+    /// the text until a key moves it) and what ⇧ selected; the default as
+    /// placeholder. A long answer scrolls, as in a text field, keeping the
+    /// caret in view. Drawn here (no label padding): typing measures one
+    /// string.
     private final class AnswerField: NSView {
         private static let inset: CGFloat = 10
         private static let font = NSFont.systemFont(ofSize: 14)
         private let caret = NSTextInsertionIndicator()
         private var typed = ""
         private var placeholder = ""
-        /// Where the text is drawn, and where it ends (the caret's place).
+        /// Nil: the caret after the text.
+        private var selection: NSRange?
+        /// Where the text is drawn, and where it ends.
         private var textOrigin = NSPoint.zero
         private(set) var textEnd: CGFloat = 0
+        /// How far a long answer is scrolled left.
+        private var shift: CGFloat = 0
+        /// What is selected, in the view (empty for a caret).
+        private var selectionRect = NSRect.zero
 
         override var isFlipped: Bool { true }
 
@@ -232,30 +240,59 @@ final class QuestionView: NSView {
         var caretX: CGFloat { caret.frame.minX }
         var caretOnScreen: NSRect? { caret.window?.convertToScreen(caret.convert(caret.bounds, to: nil)) }
 
-        func show(typed: String, placeholder: String) {
+        func show(typed: String, selection: NSRange? = nil, placeholder: String) {
             self.placeholder = placeholder
-            showTyped(typed)
+            showTyped(typed, selection: selection)
         }
 
-        func showTyped(_ typed: String) {
+        func showTyped(_ typed: String, selection: NSRange? = nil) {
             self.typed = typed
+            let text = typed as NSString
+            let range = selection.map { NSRange(location: min($0.location, text.length), length: min($0.length, text.length - min($0.location, text.length))) }
+            self.selection = range
             let shown = typed.isEmpty ? placeholder : typed
             let size = (shown as NSString).size(withAttributes: [.font: Self.font])
             let available = bounds.width - 2 * Self.inset
-            // The end of what was typed stays in view.
-            let shift = typed.isEmpty ? 0 : max(0, ceil(size.width) - available)
+            /// Where the text before `index` ends, from the text's start.
+            func offset(_ index: Int) -> CGFloat {
+                index >= text.length ? size.width : text.substring(to: index).size(withAttributes: [.font: Self.font]).width
+            }
+            let start = range.map { offset($0.location) } ?? size.width
+            let end = range.map { $0.length == 0 ? start : offset($0.location + $0.length) } ?? size.width
+            // The caret stays in view; at the end, the end of the text does.
+            let longest = max(0, ceil(size.width) - available)
+            if typed.isEmpty {
+                shift = 0
+            } else if range == nil {
+                shift = longest
+            } else {
+                shift = min(longest, max(0, min(shift, start), end - available))
+            }
             textOrigin = NSPoint(x: Self.inset - shift, y: (bounds.height - ceil(size.height)) / 2)
             textEnd = typed.isEmpty ? Self.inset : textOrigin.x + size.width
             let height = ceil(Self.font.ascender - Self.font.descender) + 2
-            caret.frame = NSRect(x: round(textEnd), y: (bounds.height - height) / 2, width: 2, height: height)
-            // Typing keeps the caret solid; it blinks again on its own.
-            caret.displayMode = .visible
-            caret.displayMode = .automatic
+            selectionRect = end > start
+                ? NSRect(x: textOrigin.x + start, y: (bounds.height - height) / 2, width: end - start, height: height)
+                : .zero
+            let caretX = typed.isEmpty ? Self.inset : textOrigin.x + start
+            caret.frame = NSRect(x: round(caretX), y: (bounds.height - height) / 2, width: 2, height: height)
+            if selectionRect.isEmpty {
+                // Typing keeps the caret solid; it blinks again on its own.
+                caret.displayMode = .visible
+                caret.displayMode = .automatic
+            } else {
+                // A selection shows no caret, as in a text field.
+                caret.displayMode = .hidden
+            }
             needsDisplay = true
         }
 
         override func draw(_ dirtyRect: NSRect) {
             NSBezierPath(rect: bounds.insetBy(dx: Self.inset - 2, dy: 0)).setClip()
+            if !selectionRect.isEmpty {
+                NSColor.selectedTextBackgroundColor.setFill()
+                selectionRect.fill()
+            }
             let shown = typed.isEmpty ? placeholder : typed
             (shown as NSString).draw(at: textOrigin, withAttributes: [
                 .font: Self.font,

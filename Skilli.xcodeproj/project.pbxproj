@@ -284,6 +284,7 @@
 		E6E53C56DDA4054009275786 /* SkilliTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = C05E0E349D2BACF64F1D5421 /* SkilliTools.swift */; };
 		E704E58FDD504C0825A1DAB5 /* CardMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F3C7B66A9055954306373AB /* CardMarkdown.swift */; };
 		E7858DD3BA597D8B32E9B822 /* Health.swift in Sources */ = {isa = PBXBuildFile; fileRef = F066C8F59CD75C6A215E724C /* Health.swift */; };
+		E87639B06F2120E548CC5B42 /* KeyBindings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2221F1494C4E055BAED62F2A /* KeyBindings.swift */; };
 		E8F305312777A8E91E522299 /* ClipboardPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4960285969C94AE5F3B6CEE2 /* ClipboardPane.swift */; };
 		E99C952A76D4141C07C4B0A0 /* QuicklinksSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DC490C81F9738A39D8D2CD0 /* QuicklinksSection.swift */; };
 		EB52A594F6AB6043C83F41B8 /* BindingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 516D2305BCD384C1B18505BF /* BindingEngine.swift */; };
@@ -377,6 +378,7 @@
 		1D2651D4F883D705A2100969 /* SnippetExpander.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetExpander.swift; sourceTree = "<group>"; };
 		21ABD4AD1E7BFB291A83F013 /* Chord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chord.swift; sourceTree = "<group>"; };
 		21F444F214E3E03561B85FAF /* SkilliMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkilliMain.swift; sourceTree = "<group>"; };
+		2221F1494C4E055BAED62F2A /* KeyBindings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBindings.swift; sourceTree = "<group>"; };
 		23D67AD4AB98FDA10B6E6CC9 /* Calculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Calculator.swift; sourceTree = "<group>"; };
 		25CAA8284FAB4B0E13B42626 /* ClipboardRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardRules.swift; sourceTree = "<group>"; };
 		2732D404236157CC8A325E63 /* RuleJudge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleJudge.swift; sourceTree = "<group>"; };
@@ -828,6 +830,7 @@
 				D08402CB2DF9DA8B27C83D0C /* EnglishTyping.swift */,
 				7FD3487D2A0B80099FC21FA7 /* EventTap.swift */,
 				0FBC1DF266E3BDA8013083A6 /* HyperKeyRemapper.swift */,
+				2221F1494C4E055BAED62F2A /* KeyBindings.swift */,
 				56DD19CABB02002377A1F9F6 /* KeyboardLayout.swift */,
 				133FC9BC883F7262C3BBED4E /* KeyRouter.swift */,
 				5AE4B232E47286DC23172B2A /* SyntheticKeys.swift */,
@@ -1487,6 +1490,7 @@
 				0E4AA175289AF25DE8A554EF /* ImageFolderWatcher.swift in Sources */,
 				8A7B91CB1274CFE662EBCBBF /* ImageTagger.swift in Sources */,
 				1E83DC912A71E6B2C15FDBE0 /* JevImages.swift in Sources */,
+				E87639B06F2120E548CC5B42 /* KeyBindings.swift in Sources */,
 				ECC20E984AB5DC55C4A0D2A4 /* KeyRouter.swift in Sources */,
 				2066841EEC5909AB3B03A7AE /* KeyboardCleaner.swift in Sources */,
 				5B0A7FABC0E1A8723323A595 /* KeyboardLayout.swift in Sources */,

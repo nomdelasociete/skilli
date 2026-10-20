@@ -414,6 +414,24 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         return responder.isDescendant(of: sidebar)
     }
 
+    /// Self-test hook: the text field being typed in (its field editor),
+    /// its words and caret.
+    var editedText: NSTextView? {
+        window?.firstResponder as? NSTextView
+    }
+
+    /// Self-test hook: the pane's editable field whose placeholder says
+    /// `placeholder` takes the keys.
+    func focusField(placeholder: String) -> Bool {
+        guard let window, let content = window.contentView else { return false }
+        let field = Self.views(in: content).compactMap { $0 as? NSTextField }.first { field in
+            field.isEditable && ((field.placeholderString ?? "").contains(placeholder)
+                || (field.placeholderAttributedString?.string ?? "").contains(placeholder))
+        }
+        guard let field else { return false }
+        return window.makeFirstResponder(field)
+    }
+
     /// Self-test hook: the search field has the keys.
     var searchFieldFocused: Bool {
         guard let field = search.field, let editor = field.currentEditor() else { return false }
