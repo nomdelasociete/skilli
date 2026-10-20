@@ -83,10 +83,15 @@ final class ScriptLibrary {
 
     // MARK: - Running
 
+    /// How long a skillie may run (the self-test's are shorter).
+    var timeout: TimeInterval = 120
+
     /// Runs it with the arguments' values; its output (and errors) and exit
-    /// status. Stopped after `timeout`. `id`: this run, told to its process
-    /// (`SKILLI_SKILLIE`); `agentRun`: the Act command whose agent runs it.
-    func run(_ command: ScriptCommand, arguments: [String], timeout: TimeInterval = 120, id: String = UUID().uuidString,
+    /// status. Stopped after `timeout` (its own by default) with what it
+    /// started: a step it waits for (`Skilli call`) stops with it. `id`:
+    /// this run, told to its process (`SKILLI_SKILLIE`); `agentRun`: the
+    /// Act command whose agent runs it.
+    func run(_ command: ScriptCommand, arguments: [String], timeout: TimeInterval? = nil, id: String = UUID().uuidString,
              agentRun: AgentContext? = nil) async throws -> Run {
         let url = URL(fileURLWithPath: command.path)
         let executable: URL
@@ -107,7 +112,8 @@ final class ScriptLibrary {
         running[id] = (command, agentRun)
         defer { running[id] = nil }
         let environment = SkillieEnvironment.variables(cli: Bundle.main.executablePath, socket: toolSocket(), run: id)
-        let (output, status) = try await ChildProcess.run(executable, all, directory: directory, environment: environment, timeout: timeout)
+        let (output, status) = try await ChildProcess.run(executable, all, directory: directory, environment: environment, stopsGroup: true,
+                                                          timeout: timeout ?? self.timeout)
         return Run(output: ScriptCommand.plain(output), status: status)
     }
 

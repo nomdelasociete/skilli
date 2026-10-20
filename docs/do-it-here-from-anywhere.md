@@ -209,20 +209,23 @@ fi
   exit 1; esc again closes it. Another process's calls wait for the
   card as before.
 - **Time**: 120 s for the whole skillie, as for every skillie (a step
-  measured 3.5–7 s; Opus planning a move, about 8 s).
+  measured 3.5–7 s; Opus planning a move, about 8 s). At the limit the
+  script stops with what it started (its process group: a `Skilli call`
+  would keep its output open), and a call of it still in the card is
+  stopped as esc would (its approval declined, its do it here stopped),
+  as when a skillie ends with a call left running; then the card says
+  the skillie failed.
 - **Checked by** `selftest doit`: two skillies run as from the launcher,
   their step asked in the card; the first allowed (↩), done, its next
   step taken; the second declined (esc), its other branch taken, nothing
-  exported.
+  exported. A third left unanswered, stopped at its limit (6 s there):
+  its `Skilli call` gone, the approval gone, the card says it failed.
 
 ## Not now
 
 - **No button** anywhere (no "Copy Link" for an Ask, no Catalog row): JB
   has not tried it yet (no untested entry points). Links and the tool are
   reached by those who write them.
-- **A step that outlives its skillie**: at 120 s the script is stopped,
-  not a `Skilli call` it started: that step goes on to its end. Stopping
-  the call with its script would need the script's whole process group.
 - **Several goals in one link** (`goal=…&goal=…`): one link a step keeps
   each step asked and trusted on its own.
 - **Drags, canvas scrolling**: as in click-what-you-see.md.

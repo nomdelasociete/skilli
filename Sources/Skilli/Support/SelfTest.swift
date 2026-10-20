@@ -169,8 +169,8 @@ final class SelfTest {
         /// `skilli://do` links asked, denied, trusted, chained; a skillie's
         /// two links through macOS (TextEdit then Finder); `do_in_app` for
         /// a real agent and from a terminal; skillies that wait for their
-        /// step and branch on it (the user's decision key, Claude; mouse
-        /// and keys).
+        /// step and branch on it, and one stopped at its time limit with its
+        /// step (the user's decision key, Claude; mouse and keys).
         case doit
         /// Only Chess, "do it here" in any app (docs/click-what-you-see.md):
         /// spots picked on its board seen as a picture only, moves chosen
@@ -436,6 +436,7 @@ final class SelfTest {
             await doLinksChainTwoApps()
             await doInAppForAgents()
             await skilliesWaitForTheirStep()
+            await skillieStopsWithItsStep()
             return finish()
         }
         if scope == .sight {
@@ -10932,6 +10933,71 @@ final class SelfTest {
         record(name, toldRight && doneRight && stoppedRight,
                "told: \(toldRight) \(variables.map { $0.prefix(80) }); done in \(Int(took.milliseconds)) ms: asked \(done.asked), branch \(done.branch), PDF \(exported), "
                    + "steps \(done.steps), card \(done.card); declined: asked \(stopped.asked), branch \(stopped.branch), nothing exported \(notExported), card \(stopped.card)",
+               took.milliseconds)
+    }
+
+    /// A skillie stopped at its time limit stops the step it waits for
+    /// (docs/do-it-here-from-anywhere.md, 5): its `do_in_app` left
+    /// unanswered in its card, the limit (6 s here) ends the script and its
+    /// `Skilli call` together (their process group), the approval goes and
+    /// the card says the skillie failed. Nothing gets past the approval: no
+    /// decision key needed, no app touched.
+    private func skillieStopsWithItsStep() async {
+        let name = "A skillie stopped at its time limit stops its step: its `Skilli call` ends with it, the unanswered approval goes, the card says it failed"
+        guard let library = context.tools.tools.scripts else {
+            record(name, false, "no skillies", nil)
+            return
+        }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-test-\(UUID().uuidString.prefix(8))")
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("wait-forever.sh")
+        let callPID = folder.appendingPathComponent("call.pid")
+        let text = """
+        #!/bin/bash
+        # @skilli.schemaVersion 1
+        # @skilli.title Wait Forever
+        # @skilli.mode compact
+        "$SKILLI_CLI" call do_in_app app=TextEdit goal="exporte en PDF dans mes documents" &
+        echo $! > '\(callPID.path)'
+        wait
+        echo "Never here."
+        """
+        try? text.write(to: file, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+        let popover = context.aiActions.popover
+        let settings = context.tools.settings
+        let mode = settings.mode
+        let right = settings.override(for: SkilliTools.doInApp)
+        let limit = library.timeout
+        settings.mode = .auto
+        settings.setOverride(nil, for: SkilliTools.doInApp)
+        library.timeout = 6
+        defer {
+            settings.mode = mode
+            settings.setOverride(right, for: SkilliTools.doInApp)
+            library.timeout = limit
+            try? FileManager.default.removeItem(at: folder)
+        }
+        guard let command = ScriptCommand.parse(text, path: file.path) else {
+            record(name, false, "the skillie could not be read", nil)
+            return
+        }
+        let start = ContinuousClock.now
+        context.aiActions.runScript?(command, false)
+        let asked = await waitUntil(timeout: 10) { popover.isVisible && popover.phase == .approving } != nil
+        let askedText = popover.shownText.prefix(120)
+        let ended = await waitUntil(timeout: 25) {
+            popover.isVisible && popover.phase != .approving && popover.shownText.hasPrefix("“Wait Forever” failed")
+        }
+        let took = ContinuousClock.now - start
+        let card = popover.isVisible ? "\(popover.shownTitle) — \(popover.shownText.prefix(200))" : "gone"
+        let pid = (try? String(contentsOf: callPID, encoding: .utf8)).flatMap { pid_t($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        // Gone with its script, not left waiting for an answer.
+        let callGone = pid.map { kill($0, 0) != 0 } ?? false
+        if popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        _ = await waitUntil(timeout: 3) { !popover.isVisible }
+        record(name, asked && ended != nil && callGone && took < .seconds(15),
+               "asked: \(asked) “\(askedText)”; ended after \(Int(took.milliseconds)) ms (limit 6 s); call \(pid.map(String.init) ?? "none") gone: \(callGone); card \(card)",
                took.milliseconds)
     }
 

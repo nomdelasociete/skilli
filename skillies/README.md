@@ -55,7 +55,8 @@ fi
   user's tool rights allow "Do it in an app"; what sends, deletes or pays is
   asked again during the step. `needsConfirmation` replaces none of these:
   it asks before the script runs.
-- 120 s for the whole script. A step whose result does not matter can open
+- 120 s for the whole script; a step it is waiting for stops with it. A step
+  whose result does not matter can open
   `skilli://do?app=…&goal=…` instead: asked first, and the script does not
   wait for it.
 

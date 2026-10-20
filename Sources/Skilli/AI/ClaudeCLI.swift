@@ -119,12 +119,20 @@ final class ChildProcess: @unchecked Sendable {
         if process.isRunning { process.terminate() }
     }
 
+    /// It and what it started: `Process` makes it its own process group's
+    /// leader. Only while it runs (its id is not anyone else's then).
+    func terminateGroup() {
+        if process.isRunning { kill(-process.processIdentifier, SIGTERM) }
+    }
+
     /// Runs it with skil.li's PATH (and `environment` on top, `unset` taken
     /// out): what it printed (output and errors together, or the output
     /// alone without `withErrors`) and its exit status. Stopped after
-    /// `timeout`.
+    /// `timeout`, with what it started when `stopsGroup` (a skillie's
+    /// `Skilli call`, which would keep its output open).
     static func run(_ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String] = [:],
-                    unset: [String] = [], withErrors: Bool = true, timeout: TimeInterval) async throws -> (output: String, status: Int32) {
+                    unset: [String] = [], withErrors: Bool = true, stopsGroup: Bool = false,
+                    timeout: TimeInterval) async throws -> (output: String, status: Int32) {
         let child = ChildProcess()
         child.process.executableURL = executable
         child.process.arguments = arguments
@@ -144,7 +152,7 @@ final class ChildProcess: @unchecked Sendable {
                     continuation.resume(throwing: error)
                     return
                 }
-                DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { child.terminate() }
+                DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { stopsGroup ? child.terminateGroup() : child.terminate() }
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 child.process.waitUntilExit()
                 continuation.resume(returning: (String(decoding: data, as: UTF8.self), child.process.terminationStatus))

@@ -2284,7 +2284,8 @@ re-investigating.
   (TextEdit exports to Documents, then Finder opens Documents),
   `do_in_app` from `Skilli call` and from a real Act agent (Haiku), and
   two skillies waiting for their step (`"$SKILLI_CLI" call do_in_app`):
-  allowed and done, then its next branch; declined, its other branch.
+  allowed and done, then its next branch; declined, its other branch; one
+  stopped at its limit with its call.
 - Forms from a card (`FormProfile` in SkilliCore, Settings → Your Details): "do
   it here" types the details of whom the request is for ("remplis ça pour
   Margot": the one or two words after "pour"/"for"), else the user's own
@@ -2903,7 +2904,8 @@ re-investigating.
   Return: Next, then Run; a password shows as dots in its row, not in the
   field). Run: the file itself, or its shebang without the executable bit;
   skil.li's PATH with Homebrew; output and errors together, ANSI colors
-  out; 120 s at most (`ChildProcess.run`). Told `SKILLI_CLI` (skil.li's
+  out; 120 s at most (`ChildProcess.run`, with what it started: its
+  process group, `stopsGroup`). Told `SKILLI_CLI` (skil.li's
   own binary), `SKILLI_SOCKET` (its tool server, which `Skilli call` and
   `Skilli mcp` then reach instead of the usual one) and `SKILLI_SKILLIE`
   (this run's id, sent in their first line), `SkillieEnvironment`: a step
@@ -2916,8 +2918,9 @@ re-investigating.
   the call the skillie's own card (`SkillieCall`, a task-local while
   `MCPService` handles it; `AIActionController.lentCard`): taken at once
   rather than waited for (the skillie waits for the call), one call at a
-  time, then "Running…" again; esc answers that call alone. It grants no
-  right. Nothing printed: the working
+  time, then "Running…" again; esc answers that call alone; one still in
+  the card when the skillie ends (its limit) is stopped as esc would. It
+  grants no right. Nothing printed: the working
   card goes, nothing said. silent: the last line 2 s;
   compact: the last line; fullOutput: all of it in the card (scrolls,
   20 s); inline: the row shows the last line, read again when the launcher

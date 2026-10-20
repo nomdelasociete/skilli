@@ -22,6 +22,22 @@ enum MCPBridge {
     static func runIfRequested(_ arguments: [String]) -> Int32? {
         guard let command = arguments.dropFirst().first, ["mcp", "call"].contains(command) else { return nil }
         signal(SIGPIPE, SIG_IGN)
+        let run = value(after: "--run", in: arguments)
+        // A call written wrong is said (exit 2) before skil.li is reached.
+        var request: (tool: String, arguments: [String: Any])?
+        if command == "call" {
+            var rest: [String] = []
+            var words = Array(arguments.dropFirst(2))[...]
+            while let word = words.popFirst() {
+                if ["--socket", "--run"].contains(word) { _ = words.popFirst() } else if !word.hasPrefix("--") { rest.append(word) }
+            }
+            guard let tool = rest.first else {
+                FileHandle.standardError.write(Data("usage: Skilli call <tool> [<json arguments> | <name>=<value>…]\n".utf8))
+                return 2
+            }
+            guard let parsed = parse(Array(rest.dropFirst())) else { return 2 }
+            request = (tool, parsed)
+        }
         let (path, startsApp) = SkillieEnvironment.socket(flag: value(after: "--socket", in: arguments),
                                                           environment: ProcessInfo.processInfo.environment,
                                                           defaultPath: MCPSocketServer.defaultPath)
@@ -29,20 +45,26 @@ enum MCPBridge {
             FileHandle.standardError.write(Data("skil.li is not running (no tool server at \(path)).\n".utf8))
             return 1
         }
-        if command == "mcp" {
-            return bridge(fd, run: value(after: "--run", in: arguments))
+        guard let request else { return bridge(fd, run: run) }
+        return call(fd, tool: request.tool, arguments: request.arguments, run: run)
+    }
+
+    /// A call's arguments: one JSON object, or `name=value` words (each
+    /// value a string: a skillie's argument in it cannot break the call);
+    /// nil once said what is wrong.
+    private static func parse(_ words: [String]) -> [String: Any]? {
+        if words.count == 1, words[0].hasPrefix("{") {
+            guard let object = try? JSONSerialization.jsonObject(with: Data(words[0].utf8)) as? [String: Any] else {
+                FileHandle.standardError.write(Data("arguments must be a JSON object\n".utf8))
+                return nil
+            }
+            return object
         }
-        let run = value(after: "--run", in: arguments)
-        var rest: [String] = []
-        var words = Array(arguments.dropFirst(2))[...]
-        while let word = words.popFirst() {
-            if ["--socket", "--run"].contains(word) { _ = words.popFirst() } else if !word.hasPrefix("--") { rest.append(word) }
+        guard let pairs = SkillieEnvironment.arguments(words) else {
+            FileHandle.standardError.write(Data("arguments must be one JSON object or name=value words\n".utf8))
+            return nil
         }
-        guard let tool = rest.first else {
-            FileHandle.standardError.write(Data("usage: Skilli call <tool> [<json arguments> | <name>=<value>…]\n".utf8))
-            return 2
-        }
-        return call(fd, tool: tool, arguments: Array(rest.dropFirst()), run: run)
+        return pairs
     }
 
     private static func value(after flag: String, in arguments: [String]) -> String? {
@@ -120,23 +142,8 @@ enum MCPBridge {
         }
     }
 
-    /// `words`: one JSON object, or `name=value` words (each value a
-    /// string: a skillie's argument in it cannot break the call).
-    private static func call(_ fd: Int32, tool: String, arguments words: [String], run: String?) -> Int32 {
+    private static func call(_ fd: Int32, tool: String, arguments parsed: [String: Any], run: String?) -> Int32 {
         hello(fd, run: run)
-        let parsed: [String: Any]
-        if words.count == 1, words[0].hasPrefix("{") {
-            guard let object = try? JSONSerialization.jsonObject(with: Data(words[0].utf8)) as? [String: Any] else {
-                FileHandle.standardError.write(Data("arguments must be a JSON object\n".utf8))
-                return 2
-            }
-            parsed = object
-        } else if let pairs = SkillieEnvironment.arguments(words) {
-            parsed = pairs
-        } else {
-            FileHandle.standardError.write(Data("arguments must be one JSON object or name=value words\n".utf8))
-            return 2
-        }
         let messages: [[String: Any]] = [
             ["jsonrpc": "2.0", "id": 1, "method": "initialize",
              "params": ["protocolVersion": "2025-06-18", "capabilities": [:], "clientInfo": ["name": "skilli-cli", "title": "Terminal", "version": "1"]]],

@@ -3357,7 +3357,22 @@ extension AIActionController: ToolPresenter {
             } catch {
                 message = error.localizedDescription
             }
-            if let skillie, lentCard?.skillie == skillie { lentCard = nil }
+            if let skillie, lentCard?.skillie == skillie {
+                // Its calls end with it (stopped at its time limit, one left
+                // running in the background): what they wait for is
+                // stopped, and the card comes back before its line.
+                if lentCard?.calls ?? 0 > 0 {
+                    outsideControl?.cancel()
+                    outsideControl = nil
+                    answerQuestion(nil)
+                    answerApproval(.deny)
+                    let deadline = ContinuousClock.now + .seconds(10)
+                    while lentCard?.skillie == skillie, lentCard?.calls ?? 0 > 0, ContinuousClock.now < deadline {
+                        try? await Task.sleep(for: .milliseconds(200))
+                    }
+                }
+                lentCard = nil
+            }
             // Closed meanwhile, or nothing to say: done, the card is free.
             guard popover.isVisible, popover.shownText == working, !message.isEmpty else {
                 if popover.shownText == working { popover.hide() }
