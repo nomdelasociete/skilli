@@ -7,6 +7,18 @@ Website design, copy, demos, navigation, social previews or legal pages: read
 build/publishing, use [`website/README.md`](website/README.md); website-only work
 does not require Swift tests, native benchmarks or app self-tests.
 
+## This repository is public
+
+Everything here, its history, pull request texts, comments and the apps built
+from it are public (GPL-3.0). Never add real people (the developer, family,
+contacts), how a machine is set up (hosts, users, keys, lock or sleep
+settings, remote access), home paths of real accounts, or internal
+infrastructure. Test data uses invented people (Jean-François Martaing, Margot
+Martin, Camille), `example.com` addresses and `/Users/me` paths. Machine notes
+stay outside the repository. The self-tests and their data never ship: they
+compile only with `SKILLI_SELFTEST`. `.github/workflows/hygiene.yml` checks
+every pull request for the generic cases (keys, home paths, remote access).
+
 ## What this is
 
 Native macOS launcher, a fast and light alternative to Raycast: app search,

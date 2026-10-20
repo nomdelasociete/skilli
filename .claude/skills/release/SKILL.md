@@ -11,7 +11,7 @@ How a release is built and why: AGENTS.md → Releases. This is the run.
 
 - On `main`, clean, equal to `origin/main` (`git status -sb` says `## main...origin/main` and nothing else).
 - Everything the release should carry is merged, and its mini self-tests passed when it merged.
-- Version: `MARKETING_VERSION` in `project.yml` (both targets, same value). Raise the patch for fixes, the minor for new features; commit and push that change first. The build number takes care of itself (commit count + 700).
+- Version: `MARKETING_VERSION` in `project.yml` (both targets, same value). Raise the patch for fixes, the minor for new features; commit and push that change first. The build number takes care of itself (commit count + 900).
 
 Done when all three hold.
 
