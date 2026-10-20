@@ -2691,6 +2691,11 @@ extension AIActionController: ToolPresenter {
         }
         let writer = ai.writer(for: library.command(PromptLibrary.askID)?.model)
         let control = await makeControl(goal, writer: writer)
+        // Last look before acting: it may have ended while this was made.
+        if let skillie = SkillieCall.id, endedSkillies.contains(skillie) {
+            if !inRun { releaseCardForOutsideAgent() }
+            return ControlReport(app: app, outcome: .stopped("Its skillie ended."), steps: [], took: .zero)
+        }
         popover.activity([], text: "", status: "Looking…")
         let started = ContinuousClock.now
         let job = Task { await control.run(goal: goal, pid: pid) }
