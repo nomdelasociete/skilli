@@ -293,3 +293,9 @@ group: the same results (done in 5.1 s), and a skillie left unanswered at
 a 6 s limit ended 6.3 s after its start, its `Skilli call` gone, the
 approval gone, the card “Wait Forever” failed (exit 15): the script's own
 status, killed by SIGTERM, not one of `Skilli call`'s.
+
+Run 3 (17:42), 5 of 5, once the limit also stopped what a script left
+behind: a script that ended at once, leaving a process that held its
+output and ignored SIGTERM, returned 5.2 s after its start at a 2 s
+limit (SIGKILL 3 s after SIGTERM), that process gone. The rest as in
+run 2.
