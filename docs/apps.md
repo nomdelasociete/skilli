@@ -1,14 +1,15 @@
 # Apps skil.li drives — CleanShot X first
 
-Status: 2026-10-20. Built (PR #35): CleanShot X's commands in the launcher,
-the Catalog, ⌘K, keys, links, Ask and agents, with the front window and the
+Status: 2026-10-20. Built: CleanShot X's commands in the launcher, the
+Catalog, ⌘K, keys, links, Ask and agents, with the front window and the
 latest screenshot (Order 1 and 3). Still proposed: Settings → Apps, files
-into CleanShot, Shortcuts and the next apps. JB: "we need all the features available from
-CleanShot X in skil.li. It's a pain I still have to use Raycast for it. And
-have a menu or setting dedicated to specific connector apps that work like
-skil.li or like CleanShot X, with deeplinks and all."
+into CleanShot, Shortcuts and the next apps.
 
-## Before PR #35 (read in the code)
+Asked for: everything CleanShot X does, from skil.li, so that Raycast is no
+longer needed for it; and one place for the apps skil.li drives through
+their links, as it does CleanShot X.
+
+## Before (read in the code then)
 
 - 7 of CleanShot's commands, as `SkilliAction.openURL` (`ActionCatalog.cleanShot`):
   Capture Area, Previous Area, Fullscreen, Window, Scrolling, All-In-One,
@@ -19,7 +20,6 @@ skil.li or like CleanShot X, with deeplinks and all."
   Raycast is still needed: there you type "capture text" and it runs.
 - Quicklinks take `http`/`https` only (`Quicklink.swift`), so an app's link
   cannot be added by hand either.
-- JB's Mac: CleanShot X 5.0.1, scheme `cleanshot`.
 
 ## CleanShot X, all of it
 
@@ -76,8 +76,8 @@ Rules:
 - `action=`, `start=`, `autoscroll=` and frames need CleanShot 4.7+: older
   versions get the plain rows only (version read from its bundle).
 - CleanShot's coordinates start at the bottom left of a display; Accessibility's
-  at the top left of the main one. The conversion is tested on the mini with a
-  real capture before Capture Front Window ships.
+  at the top left of the main one. The conversion is tested with a real
+  capture before Capture Front Window ships.
 - Links from a web page: captures, history, icons and settings run at once
   (seen, undone as easily). **Upload asks first**: the capture leaves the Mac
   through CleanShot Cloud. Never trusted with Always.
@@ -91,8 +91,8 @@ Calendar, Reminders and GitHub. "The apps skil.li drives: their commands in
 the launcher, on a key, in Ask."
 
 - One row per installed app it knows: icon, name, version, one state line
-  ("Ready", or "Allow skil.li in CleanShot → Advanced" with Open, which is
-  `cleanshot://open-settings?tab=advanced`).
+  ("Ready", or "Allow skil.li in CleanShot → Advanced" with Open, which opens
+  CleanShot itself: its own settings link needs the API already allowed).
 - An app's page: its own options first (CleanShot: Capture Text keeps line
   breaks), then its commands, a long list last: each with its key and Show in
   search.
@@ -101,27 +101,27 @@ the launcher, on a key, in Ask."
 
 ## Next apps
 
-The layer is generic (`AppLink` in SkilliCore: bundle id, scheme, minimum
-version, commands with title, words in English and French, symbol, URL
-template, variants, what asks first). Each app is added only after its link
-format is read in its own documentation and run once on the mini.
+The layer is generic (`LinkedApp` and `AppLinkCommand` in SkilliCore: bundle
+id, scheme, minimum version, commands with title, words in English and
+French, symbol, URL template, variants, what asks first). Each app is added
+only after its link format is read in its own documentation and run once for
+real.
 
 1. **Shortcuts** (Apple, `/usr/bin/shortcuts list` / `run`): every shortcut the
    user made is a row. That reaches every app's App Intents without skil.li
-   knowing them. JB has 10.
-2. Apps with documented schemes on JB's Mac, to check one by one: Slack,
-   Zoom (already parsed in Agenda), Notion, Cap, 1Password, Claude, Discord,
-   WhatsApp, Teams, Tailscale.
+   knowing them.
+2. Apps with documented schemes, to check one by one: Slack, Zoom (already
+   parsed in Agenda), Notion.
 3. App files: `~/Library/Application Support/skil.li/Apps/*.json`, written by
    an agent (`create_app_link`, like `create_skillie`) or a `skilli://` import,
    shown whole before Add, as Commands imports are.
 
 ## Order
 
-1. Done (PR #35): CleanShot rows in the launcher, Catalog, ⌘K variants,
-   links, agents (replaces `ActionCatalog.cleanShot`).
+1. Done: CleanShot rows in the launcher, Catalog, ⌘K variants, links, agents
+   (replaces `ActionCatalog.cleanShot`).
 2. Settings → Apps with CleanShot's page.
-3. Done (PR #35): Capture / Record Front Window, Latest Screenshot rows (the
-   frame checked with a real capture on the mini, one display).
+3. Done: Capture / Record Front Window, Latest Screenshot rows (the frame
+   checked with a real capture, one display).
 4. Files into CleanShot (⌘K on clipboard images, files, Finder selection).
 5. Shortcuts, then the next apps.
