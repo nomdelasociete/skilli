@@ -1637,7 +1637,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nomdelasociete.Skilli.core;
 				PRODUCT_NAME = SkilliCore;
 				SDKROOT = macosx;
@@ -1796,7 +1796,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nomdelasociete.Skilli;
 				PRODUCT_MODULE_NAME = Skilli;
 				PRODUCT_NAME = Skilli;
@@ -1823,7 +1823,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nomdelasociete.Skilli.core;
 				PRODUCT_NAME = SkilliCore;
 				SDKROOT = macosx;
@@ -1853,7 +1853,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.2.1;
+				MARKETING_VERSION = 0.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nomdelasociete.Skilli;
 				PRODUCT_MODULE_NAME = Skilli;
 				PRODUCT_NAME = Skilli;
