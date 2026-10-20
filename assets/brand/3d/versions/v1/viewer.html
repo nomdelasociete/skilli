@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>skil.li — ruban de verre 3D</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #04171f; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  p { position: fixed; left: 16px; bottom: 12px; margin: 0; font: 12px/1.4 system-ui, sans-serif; color: #9fc9c3; opacity: .7; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<p>Référence d’intégration : skilli-logo.glb + studio-env.hdr sur le halo du site. Bouger la souris incline le ruban.</p>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.NoToneMapping;          // brand colours as authored
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+// Orthographic, like the Blender camera: the front view is the approved S,
+// and tilting reveals the folds without perspective squashing the diagonal.
+const FRAME = 270 / 0.72 * 0.01;                     // viewBox fills 72 % of the short side
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 50);
+camera.position.set(-0.0775, -0.0025, 12);           // viewBox centre vs logo centre (m)
+
+// The website's halo (website/halo.js, menthe), as a mesh behind the logo so
+// the glass transmission really refracts it.
+const halo = new THREE.Mesh(
+  new THREE.PlaneGeometry(1, 1),
+  new THREE.ShaderMaterial({
+    uniforms: { t: { value: 3 } },
+    depthWrite: false,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+    fragmentShader: `varying vec2 vUv; uniform float t;
+      float blob(vec2 p, vec2 c, float r){ return exp(-dot(p - c, p - c) * r); }
+      void main(){
+        vec2 p = vUv; float time = t * .38;
+        float a = blob(p, vec2(.64 + .22 * sin(time), .70 + .18 * cos(time * .8)), 5.3 + .7 * sin(time * .65));
+        float b = blob(p, vec2(.16 + .13 * cos(time * .75), .18 + .18 * sin(time * .9)), 7.);
+        vec3 col = mix(vec3(.015, .09, .13), vec3(.06, .58, .55), a);
+        col += vec3(.12, .25, .31) * b;
+        float h = blob(p, vec2(.75 + .18 * sin(time * .85 + .7), .86 + .12 * cos(time * .7)), 16.);
+        col += vec3(.25, .34, .22) * h;
+        gl_FragColor = vec4(pow(col, vec3(2.2)), 1.);  // sRGB-authored → linear
+        #include <colorspace_fragment>
+      }`,
+  }),
+);
+halo.position.set(camera.position.x, camera.position.y, -3);
+scene.add(halo);
+
+const logo = new THREE.Group();
+scene.add(logo);
+
+new RGBELoader().load('studio-env.hdr', (tex) => {
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  scene.environment = tex;
+});
+// The site's glass recipe, inside three.js's transmission: what the ribbon
+// refracts is the halo at brightness(1.65) saturate(.72) (style.css,
+// .halo-refraction), under a milky cyan face (the SVG "face" layer). The
+// ribbon's vertex colour (COLOR_0) carries the "fold" gradient of the diagonal.
+const q = new URLSearchParams(location.search);
+const look = {
+  transmission: 1,
+  roughness: +(q.get('ro') ?? 0.2),
+  envMapIntensity: +(q.get('env') ?? 1.0),
+};
+const BRIGHT = +(q.get('br') ?? 1.65), SAT = 0.72, MILK = +(q.get('milk') ?? 0.24);
+// glint: the soft light band across the middle of the diagonal, placed with
+// the ribbon's extras (s = a·u + b·v + c along the strip; glTF flips v).
+function siteGlass(shader, extras) {
+  const [a, b, c] = extras.s_from_uv ?? [0, 0, 1e9];
+  const f = (x) => x.toFixed(4);
+  shader.defines = { ...shader.defines, USE_UV: '' };
+  shader.fragmentShader = shader.fragmentShader.replace('#include <transmission_fragment>',
+    THREE.ShaderChunk.transmission_fragment.replace(
+      'material.transmissionAlpha = mix(',
+      `{
+        vec3 c = pow(max(transmitted.rgb, 0.), vec3(1. / 2.2)) * ${BRIGHT.toFixed(3)};
+        c = mix(vec3(dot(c, vec3(.2126, .7152, .0722))), c, ${SAT.toFixed(3)});
+        c = mix(c, vec3(.62, .95, .97) * material.diffuseColor, ${MILK.toFixed(3)});
+        float s = ${f(a)} * vUv.x + ${f(b)} * (1. - vUv.y) + ${f(c)};
+        float g = exp(-pow((s - ${f(extras.glint_s ?? 0)}) / ${f(extras.glint_width ?? 1)}, 2.));
+        c = mix(c, vec3(.93, 1., .98), .5 * g);
+        transmitted.rgb = pow(c, vec3(2.2));
+      }
+      material.transmissionAlpha = mix(`));
+}
+new GLTFLoader().load('skilli-logo.glb', (gltf) => {
+  gltf.scene.traverse((o) => {
+    if (o.isMesh) {
+      Object.assign(o.material, look);
+      // The sphere: same glass, more frost and a soft coat (a crisp coat on a
+      // ball mirrors the studio ring as a hard "O"), as in Blender.
+      if (o.name === 'skilli_dot') Object.assign(o.material, { roughness: 0.34, clearcoatRoughness: 0.3, clearcoat: 0.5 });
+      o.material = o.material.clone();
+      o.material.onBeforeCompile = (sh) => siteGlass(sh, o.userData);
+      o.material.customProgramCacheKey = () => o.name;
+    }
+  });
+  logo.add(gltf.scene);
+  document.body.dataset.ready = '1';
+});
+
+function resize() {
+  const w = innerWidth, h = innerHeight, s = Math.min(w, h);
+  renderer.setSize(w, h);
+  const hw = FRAME * w / s / 2, hh = FRAME * h / s / 2;
+  Object.assign(camera, { left: -hw, right: hw, top: hh, bottom: -hh });
+  camera.updateProjectionMatrix();
+  halo.scale.set(hw * 2.2, hh * 2.2, 1);
+}
+addEventListener('resize', resize);
+resize();
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+const target = { x: 0, y: 0 };
+addEventListener('pointermove', (e) => {
+  target.y = (e.clientX / innerWidth - 0.5) * 0.35;   // yaw, ±10°
+  target.x = (e.clientY / innerHeight - 0.5) * 0.2;   // pitch, ±6°
+});
+let last = performance.now();
+renderer.setAnimationLoop((now) => {
+  const dt = Math.min((now - last) / 1000, 0.05); last = now;
+  if (!reduce.matches) {
+    halo.material.uniforms.t.value += dt;
+    logo.rotation.y += (target.y - logo.rotation.y) * 0.06;
+    logo.rotation.x += (target.x - logo.rotation.x) * 0.06;
+  }
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

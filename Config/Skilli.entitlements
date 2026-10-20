@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Hardened Runtime: without these, macOS denies the microphone and
+	     Reminders silently, with no prompt and no entry in Privacy settings. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<!-- The meeting card's Check Camera & Mic: the camera, shown, never recorded. -->
+	<key>com.apple.security.device.camera</key>
+	<true/>
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+	<!-- Contacts: search them, write to them (the note field needs Apple's
+	     own com.apple.developer.contacts.notes, not asked for yet). -->
+	<key>com.apple.security.personal-information.addressbook</key>
+	<true/>
+	<!-- System commands: appearance, Trash, disks, restart (System Events,
+	     Finder). macOS asks the user once per app. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+</dict>
+</plist>

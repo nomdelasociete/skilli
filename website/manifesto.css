@@ -1,0 +1,29 @@
+/* The manifesto: one statement, then each principle on its own line of the page. */
+.manifesto-page{background:radial-gradient(1200px 600px at 50% -120px,#123c3a 0%,#0c0f10 70%) no-repeat,var(--bg)}
+.manifesto-nav{display:flex;align-items:center;justify-content:space-between;padding:26px clamp(24px,6vw,80px)}
+.manifesto-nav nav{display:flex;align-items:center;gap:26px;font-size:13px;color:#b7ccc1}
+.manifesto-nav .manifesto-get{display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:8px;background:var(--mint);color:#08201c;font-weight:500;line-height:1}
+.manifesto-nav .manifesto-get:hover{filter:brightness(1.06)}
+.manifesto-hero{max-width:980px;margin:auto;padding:90px 28px 70px;text-align:center}
+.manifesto-mark{display:block;margin:0 auto 34px;filter:drop-shadow(0 18px 24px #00141a66)}
+.manifesto-hero h1{text-wrap:balance;font-family:'Geist Pixel line',monospace;font-weight:400;font-size:clamp(38px,5.4vw,76px);line-height:1.08;letter-spacing:-.045em}
+.manifesto-lead{text-wrap:pretty;max-width:640px;margin:34px auto 0;font-size:20px;line-height:1.7;color:#c2d6ca}
+.principles{list-style:none;max-width:980px;margin:0 auto;padding:0 28px}
+.principles li{display:grid;grid-template-columns:96px 1fr;gap:28px;padding:46px 0;border-top:1px solid var(--line)}
+.principle-number{font-family:'Geist Pixel line',monospace;font-size:28px;color:var(--mint);line-height:1.15}
+.principles h2{text-wrap:balance;font-family:'Trueno',sans-serif;font-weight:600;font-size:clamp(26px,3vw,38px);line-height:1.15;letter-spacing:-.025em}
+.principles p{margin-top:14px;max-width:680px;font-size:18px;line-height:1.75;color:#b3c7bc}
+.manifesto-close{max-width:980px;margin:0 auto;padding:70px 28px 120px;border-top:1px solid var(--line);text-align:center}
+.manifesto-close>p{font-family:'Geist Pixel line',monospace;font-size:clamp(24px,2.6vw,34px);letter-spacing:-.03em}
+.manifesto-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 28px;margin-top:34px;font-size:15px;color:#c2d6ca}
+.manifesto-actions a:hover{color:var(--ink)}
+.manifesto-actions .manifesto-download{padding:12px 22px;border-radius:999px;background:var(--mint);color:#08201c;font-weight:600}
+.manifesto-actions .manifesto-download:hover{color:#08201c;filter:brightness(1.06)}
+@media(max-width:700px){
+  .manifesto-hero{padding:55px 22px 50px}
+  .manifesto-lead{font-size:17px}
+  .principles{padding:0 22px}
+  .principles li{grid-template-columns:1fr;gap:10px;padding:34px 0}
+  .principle-number{font-size:20px}
+  .principles p{font-size:16px}
+}

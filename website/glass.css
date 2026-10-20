@@ -1,0 +1,52 @@
+/* Browser approximation of the native app's NSGlassEffectView material.
+   The content beneath supplies the colour; the surface adds depth and a rim. */
+:root{
+  --demo-glass:linear-gradient(135deg,#ffffff1c,transparent 38%,#bde8df0c 76%,#ffffff12),#15232799;
+  --demo-glass-edge:#e4fff64a;
+  --demo-glass-shadow:inset 0 1px 1px #ffffff66,inset 1px 0 1px #ffffff20,inset 0 -1px 1px #0005,0 1px 2px #0003,0 18px 42px #0004;
+}
+.ask-bubble,.si-card,.utility-launcher{
+  background:var(--demo-glass);
+  -webkit-backdrop-filter:blur(18px) saturate(150%);
+  backdrop-filter:blur(18px) saturate(150%);
+  border:1px solid var(--demo-glass-edge);
+  border-radius:26px;
+  box-shadow:var(--demo-glass-shadow);
+  color:#f0f7f6;
+}
+.ask-bubble:before,.si-card:before,.utility-launcher:before{
+  content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  border:1px solid transparent;
+  background:linear-gradient(130deg,#ffffff70,transparent 27%,transparent 62%,#d0ffef45) border-box;
+  -webkit-mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+}
+.utility-launcher{position:relative}
+.ask-bubble-head,.card-title{color:#f1faf7}
+.ask-bubble-head>kbd,.ask-bubble-footer,.card-footer,.found-label,.utility-footer{color:#d0dedb}
+.ask-bubble-footer,.card-footer,.utility-input,.utility-footer{border-color:#f0fff522}
+.ask-bubble-footer button,.si-card button,.ask-bubble-head>kbd{
+  background:#effff00d;border:1px solid #f1fff32e;box-shadow:inset 0 1px #ffffff1a;
+}
+.ask-bubble-footer button{border-radius:7px}
+/* A quiet, shaped desktop makes the material visible without tinting all content. */
+.writing-theatre,.desktop,.utility-desktop{
+  background:
+    radial-gradient(ellipse at 85% 5%,#8ed7c26b,transparent 48%),
+    radial-gradient(ellipse at 15% 90%,#4c8b9b7d,transparent 55%),
+    linear-gradient(125deg,#122124 15%,#294748 48%,#13252b 80%);
+}
+.utility-desktop{position:relative;isolation:isolate;overflow:hidden}
+.utility-desktop:before{
+  content:'';position:absolute;z-index:-1;inset:-45% 18%;border-radius:50%;
+  border:36px solid #aee9d928;transform:rotate(-35deg);pointer-events:none;
+}
+.si-card .trace{color:#c5e5df}
+.si-card .option{border-color:#effff51b}
+/* Solid fallbacks keep copy readable where backdrop filters are unavailable. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .ask-bubble,.si-card,.utility-launcher{background:#243736}
+}
+@media(prefers-reduced-transparency:reduce){
+  .ask-bubble,.si-card,.utility-launcher{background:#243736;backdrop-filter:none;-webkit-backdrop-filter:none}
+}

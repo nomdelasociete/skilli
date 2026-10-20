@@ -1,0 +1,297 @@
+<title>skil.li Glass Mark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;650&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one live glass stage on the site's halo, then the flat exports on real backgrounds, then the stills. Single dark world, like the site. */
+:root {
+  --ink: #04171f;          /* deep petrol, the halo's base */
+  --panel: #0b2730;
+  --line: #1f4650;
+  --text: #dff3ef;
+  --muted: #8fb3ad;
+  --mint: #7fe8d4;
+  --display: "Figtree", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--ink); color: var(--text); font: 15px/1.6 var(--display); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 64px; display: grid; gap: 56px; }
+header { display: grid; gap: 6px; }
+.eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(28px, 4.4vw, 46px); line-height: 1.05; font-weight: 650; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+h2 { font-size: 22px; font-weight: 650; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+p { margin: 0; max-width: 64ch; color: var(--muted); }
+p strong { color: var(--text); font-weight: 500; }
+section { display: grid; gap: 16px; }
+
+.stage { position: relative; aspect-ratio: 16 / 10; max-width: 100%; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #0d3a40 url("skilli-logo-3d.png") center / cover; touch-action: none; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.stage .state { position: absolute; left: 16px; bottom: 14px; font: 12px/1.4 var(--mono); color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.controls button { font: 500 13px/1 var(--display); color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 9px 14px; cursor: pointer; }
+.controls button[aria-pressed="true"] { border-color: var(--mint); color: var(--mint); }
+.controls .sep { width: 1px; background: var(--line); margin-inline: 4px; }
+.controls button:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.tile { display: grid; gap: 8px; margin: 0; }
+.tile .bg { aspect-ratio: 270 / 264; max-width: 100%; border-radius: 12px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--line); }
+.tile img { width: 86%; filter: drop-shadow(0 14px 16px #00141a55); }
+.tile figcaption { font: 12px/1.4 var(--mono); color: var(--muted); }
+.bg-halo { background: radial-gradient(60% 55% at 78% 18%, #3fd8b8 0%, #12807a 38%, transparent 70%), radial-gradient(60% 60% at 15% 85%, #1e5a74 0%, transparent 70%), #052a33; }
+.bg-white { background: #f3f7f6; }
+.bg-check { background: repeating-conic-gradient(#2a3d42 0 25%, #1a2a2e 0 50%) 0 0 / 22px 22px; }
+
+.stills { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.stills figure, .compare { margin: 0; display: grid; gap: 8px; }
+.stills img, .compare img { border-radius: 12px; border: 1px solid var(--line); display: block; width: 100%; }
+figcaption { font: 12px/1.5 var(--mono); color: var(--muted); }
+
+.files { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; }
+td, th { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+code { font: 13px/1.4 var(--mono); color: var(--mint); white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .tiles, .stills { grid-template-columns: minmax(0, 1fr); }
+  .stage { aspect-ratio: 4 / 5; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">skil.li · marque en verre · 3D · v3</span>
+    <h1>Liquid glass : surface polie, cœur dépoli, bords en lentille.</h1>
+    <p>Vue live en three.js de <strong>skilli-logo.glb</strong> sur le halo du site. La v3 garde la forme de la v2 (plis ronds, verre épais) : le cœur du ruban floute le halo comme un verre dépoli, les bords en lentille restent nets et brillants, la surface est polie. Les v2 et v1 restent disponibles avec les boutons. Bougez la souris ou glissez le doigt pour incliner le ruban.</p>
+  </header>
+
+  <section aria-label="Vue 3D en direct">
+    <div class="stage" id="stage">
+      <span class="state" id="state">Chargement de la scène 3D…</span>
+    </div>
+    <div class="controls">
+      <button id="ver-v3" aria-pressed="true">v3 · Poli et dépoli</button>
+      <button id="ver-v2" aria-pressed="false">v2 · Verre clair</button>
+      <button id="ver-v1" aria-pressed="false">v1 · Verre givré</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button id="view-front" aria-pressed="true">Face</button>
+      <button id="view-angle" aria-pressed="false">Biais</button>
+      <button id="view-turn" aria-pressed="false">Tour lent</button>
+      <button id="halo-toggle" aria-pressed="true">Halo animé</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="flat-title">
+    <h2 id="flat-title">À plat, fond transparent (v3)</h2>
+    <p><strong>skilli-mark@2x.png</strong> (1080 × 1056) et <strong>skilli-mark.png</strong> (540 × 528) : même cadre que <strong>ribbon-glass.svg</strong> (viewBox 270 × 264), donc ils le remplacent tels quels sur le site. Le verre garde la réfraction du halo ; l’ombre portée reste celle du CSS du site.</p>
+    <div class="tiles">
+      <figure class="tile"><div class="bg bg-halo"><img src="skilli-mark@2x.png" alt="Le S et le point en verre sur un fond halo menthe"></div><figcaption>Sur un halo</figcaption></figure>
+      <figure class="tile"><div class="bg bg-white"><img src="skilli-mark@2x.png" alt="Le S et le point en verre sur fond blanc"></div><figcaption>Sur fond clair</figcaption></figure>
+      <figure class="tile"><div class="bg bg-check"><img src="skilli-mark@2x.png" alt="Le S et le point en verre sur un damier qui montre la transparence"></div><figcaption>Transparence (damier)</figcaption></figure>
+    </div>
+  </section>
+
+  <section aria-labelledby="stills-title">
+    <h2 id="stills-title">Rendus Blender (Cycles), v3</h2>
+    <div class="stills">
+      <figure><img src="skilli-logo-3d.png" alt="Rendu de face du logo en verre sur le halo"><figcaption>Face, caméra orthographique, cadrage du PNG du kit</figcaption></figure>
+      <figure><img src="skilli-logo-3d-angle.png" alt="Rendu de biais montrant le ruban plié en Z et la sphère"><figcaption>Biais 85 mm : un seul ruban, plié en Z</figcaption></figure>
+    </div>
+    <figure class="compare"><img src="versions.png" alt="Comparaison de face des trois versions"><figcaption>Gauche : v1 (verre givré, plis serrés) · milieu : v2 (verre clair, plis ronds) · droite : v3 (surface polie, cœur dépoli)</figcaption></figure>
+    <figure class="compare"><img src="compare.png" alt="Comparaison : logo du site, rendu Blender v2, rendu three.js v2"><figcaption>Gauche : le logo actuel du site · milieu : Blender v3 · droite : three.js v3</figcaption></figure>
+  </section>
+
+  <section aria-labelledby="files-title">
+    <h2 id="files-title">Fichiers dans le dépôt</h2>
+    <div class="files">
+      <table>
+        <thead><tr><th>Fichier</th><th>Pour quoi</th></tr></thead>
+        <tbody>
+          <tr><td><code>assets/brand/3d/skilli-logo.glb</code></td><td>three.js : ruban + sphère, dégradé de pli (COLOR_0), position du reflet en extras, verre glTF.</td></tr>
+          <tr><td><code>assets/brand/3d/studio-env.hdr</code></td><td>Éclairage du studio pour <code>scene.environment</code>.</td></tr>
+          <tr><td><code>assets/brand/3d/viewer.html</code></td><td>Intégration de référence (recette du site dans la transmission).</td></tr>
+          <tr><td><code>assets/brand/3d/skilli-mark@2x.png</code></td><td>Plat, transparent, remplace <code>ribbon-glass.svg</code>.</td></tr>
+          <tr><td><code>assets/brand/3d/skilli-logo.blend</code></td><td>La scène Blender complète, pour les animations.</td></tr>
+          <tr><td><code>assets/brand/3d/versions/v1/</code>, <code>v2/</code></td><td>Les versions figées, complètes (tags git <code>brand-3d-v1</code>, <code>brand-3d-v2</code>).</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+
+const stage = document.getElementById('stage');
+const stateEl = document.getElementById('state');
+const HDR_B64 = '__HDR_B64__';
+
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+} catch (e) {
+  stateEl.textContent = 'WebGL indisponible : image fixe affichée.';
+  throw e;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.NoToneMapping;
+stage.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const FRAME = 270 / 0.72 * 0.01;
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 50);
+camera.position.set(-0.0775, -0.0025, 12);
+
+const halo = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
+  uniforms: { t: { value: 3 } },
+  depthWrite: false,
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: `varying vec2 vUv; uniform float t;
+    float blob(vec2 p, vec2 c, float r){ return exp(-dot(p - c, p - c) * r); }
+    void main(){
+      vec2 p = vUv; float time = t * .38;
+      float a = blob(p, vec2(.64 + .22 * sin(time), .70 + .18 * cos(time * .8)), 5.3 + .7 * sin(time * .65));
+      float b = blob(p, vec2(.16 + .13 * cos(time * .75), .18 + .18 * sin(time * .9)), 7.);
+      vec3 col = mix(vec3(.015, .09, .13), vec3(.06, .58, .55), a);
+      col += vec3(.12, .25, .31) * b;
+      float h = blob(p, vec2(.75 + .18 * sin(time * .85 + .7), .86 + .12 * cos(time * .7)), 16.);
+      col += vec3(.25, .34, .22) * h;
+      gl_FragColor = vec4(pow(col, vec3(2.2)), 1.);
+      #include <colorspace_fragment>
+    }`,
+}));
+halo.position.set(camera.position.x, camera.position.y, -3);
+scene.add(halo);
+
+const logo = new THREE.Group();
+scene.add(logo);
+
+const bin = Uint8Array.from(atob(HDR_B64), (c) => c.charCodeAt(0));
+const env = new RGBELoader().parse(bin.buffer);
+const envTex = new THREE.DataTexture(env.data, env.width, env.height, THREE.RGBAFormat, env.type);
+envTex.colorSpace = THREE.LinearSRGBColorSpace;
+envTex.mapping = THREE.EquirectangularReflectionMapping;
+envTex.minFilter = envTex.magFilter = THREE.LinearFilter;
+envTex.flipY = true;
+envTex.needsUpdate = true;
+scene.environment = envTex;
+
+// The site's glass recipe inside three.js's transmission.
+function frostGLSL(extras) {
+  if (!extras.bezel_uv) return 'smoothstep(.25, .85, abs(normal.z))';
+  const [w, span, bezel, bmin] = extras.bezel_uv.map((x) => x.toFixed(4));
+  return `smoothstep(.6, 1., max(${bmin}, sqrt(max(1. - pow(1. - clamp(min(min(1. - vUv.y, vUv.y) * ${w},
+    min(vUv.x, 1. - vUv.x) * ${span}) / ${bezel}, 0., 1.), 2.), 0.))))`;
+}
+function siteGlass(shader, extras, cfg) {
+  const [a, b, c] = extras.s_from_uv ?? [0, 0, 1e9];
+  const f = (x) => x.toFixed(4);
+  shader.defines = { ...shader.defines, USE_UV: '' };
+  if (cfg.frost) shader.fragmentShader = shader.fragmentShader.replace('#include <lights_physical_fragment>',
+    `roughnessFactor = mix(${f(cfg.frost[0])}, ${f(cfg.frost[1])}, ${frostGLSL(extras)});
+    #include <lights_physical_fragment>`);
+  shader.fragmentShader = shader.fragmentShader.replace('#include <transmission_fragment>',
+    THREE.ShaderChunk.transmission_fragment.replace('vec3 pos = vWorldPosition;',
+      `material.diffuseColor = mix(vec3(1.), material.diffuseColor, ${f(cfg.shade)});\n\tvec3 pos = vWorldPosition;`)
+      .replace('material.transmissionAlpha = mix(', `{
+      vec3 c = pow(max(transmitted.rgb, 0.), vec3(1. / 2.2)) * 1.65;
+      c = mix(vec3(dot(c, vec3(.2126, .7152, .0722))), c, .72);
+      c = mix(c, vec3(.62, .95, .97) * material.diffuseColor, ${f(cfg.milk)});
+      float s = ${f(a)} * vUv.x + ${f(b)} * (1. - vUv.y) + ${f(c)};
+      float g = exp(-pow((s - ${f(extras.glint_s ?? 0)}) / ${f(extras.glint_width ?? 1)}, 2.));
+      c = mix(c, vec3(.93, 1., .98), .5 * g);
+      transmitted.rgb = pow(c, vec3(2.2));
+    }
+    material.transmissionAlpha = mix(`));
+}
+
+const VERSIONS = {
+  v3: { b64: '__GLB_V3__', ro: 0.04, disp: 4, milk: 0.1, shade: 0.55, frost: [0.04, 0.32], dot: { roughness: 0.3, specularIntensity: 0.45, clearcoatRoughness: 0.35, clearcoat: 0.4 } },
+  v2: { b64: '__GLB_V2__', ro: 0.04, disp: 4, milk: 0.1, shade: 0.55, dot: { roughness: 0.3, specularIntensity: 0.45, clearcoatRoughness: 0.35, clearcoat: 0.4 } },
+  v1: { b64: '__GLB_V1__', ro: 0.2, disp: 0, milk: 0.24, shade: 1.0, dot: { roughness: 0.34, clearcoatRoughness: 0.3, clearcoat: 0.5 } },
+};
+const models = {};
+let current = 'v3';
+function show(v) {
+  current = v;
+  for (const [k, m] of Object.entries(models)) m.visible = k === v;
+  for (const k of Object.keys(VERSIONS)) document.getElementById('ver-' + k).setAttribute('aria-pressed', String(k === v));
+}
+for (const k of Object.keys(VERSIONS)) document.getElementById('ver-' + k).addEventListener('click', () => show(k));
+for (const [ver, cfg] of Object.entries(VERSIONS)) {
+const glb = Uint8Array.from(atob(cfg.b64), (c) => c.charCodeAt(0));
+new GLTFLoader().parse(glb.buffer, '', (gltf) => {
+  gltf.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material = o.material.clone();
+    Object.assign(o.material, { transmission: 1, envMapIntensity: 1, roughness: cfg.ro, dispersion: cfg.disp });
+    if (o.name === 'skilli_dot') Object.assign(o.material, cfg.dot);
+    o.material.onBeforeCompile = (sh) => siteGlass(sh, o.userData, cfg);
+    o.material.customProgramCacheKey = () => ver + o.name;
+  });
+  models[ver] = gltf.scene;
+  logo.add(gltf.scene);
+  show(current);
+  stateEl.textContent = 'skilli-logo.glb · three.js r170';
+}, () => { stateEl.textContent = 'Le GLB n’a pas pu être lu.'; });
+}
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight, s = Math.min(w, h);
+  renderer.setSize(w, h, false);
+  const hw = FRAME * w / s / 2, hh = FRAME * h / s / 2;
+  Object.assign(camera, { left: -hw, right: hw, top: hh, bottom: -hh });
+  camera.updateProjectionMatrix();
+  halo.scale.set(hw * 3, hh * 3, 1);
+}
+new ResizeObserver(resize).observe(stage);
+resize();
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+const pointer = { x: 0, y: 0 };
+let mode = 'front', haloOn = !reduce.matches;
+const presets = { front: { x: 0, y: 0 }, angle: { x: 0.22, y: -0.62 } };
+stage.addEventListener('pointermove', (e) => {
+  const r = stage.getBoundingClientRect();
+  pointer.y = ((e.clientX - r.left) / r.width - 0.5) * 0.4;
+  pointer.x = ((e.clientY - r.top) / r.height - 0.5) * 0.24;
+});
+stage.addEventListener('pointerleave', () => { pointer.x = pointer.y = 0; });
+
+const buttons = { front: 'view-front', angle: 'view-angle', turn: 'view-turn' };
+for (const [m, id] of Object.entries(buttons)) {
+  document.getElementById(id).addEventListener('click', () => {
+    mode = m;
+    for (const [mm, other] of Object.entries(buttons)) document.getElementById(other).setAttribute('aria-pressed', String(mm === m));
+  });
+}
+const haloBtn = document.getElementById('halo-toggle');
+haloBtn.setAttribute('aria-pressed', String(haloOn));
+haloBtn.addEventListener('click', () => { haloOn = !haloOn; haloBtn.setAttribute('aria-pressed', String(haloOn)); });
+
+let last = performance.now(), spin = 0, visible = true;
+new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(stage);
+renderer.setAnimationLoop((now) => {
+  const dt = Math.min((now - last) / 1000, 0.05); last = now;
+  if (!visible) return;
+  if (haloOn) halo.material.uniforms.t.value += dt;
+  let tx, ty;
+  if (mode === 'turn') { spin += dt * (reduce.matches ? 0 : 0.5); tx = 0.12; ty = spin; }
+  else { const p = presets[mode]; tx = p.x + pointer.x; ty = p.y + pointer.y; }
+  const k = mode === 'turn' ? 1 : 0.07;
+  logo.rotation.x += (tx - logo.rotation.x) * k;
+  logo.rotation.y += (ty - logo.rotation.y) * k;
+  renderer.render(scene, camera);
+});
+</script>

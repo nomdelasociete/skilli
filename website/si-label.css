@@ -1,0 +1,14 @@
+/* Both labels reserve the same space, including in proportional body type. */
+.si-label{display:inline-grid;vertical-align:baseline;white-space:nowrap;position:relative;cursor:default}
+.si-label>span{grid-area:1/1;pointer-events:none}
+.si-label .si-reveal{visibility:hidden}
+.si-label:is(:hover,:focus-visible,.si-touched) .si-rest{visibility:hidden}
+.si-label:is(:hover,:focus-visible,.si-touched) .si-reveal{visibility:visible}
+.si-label:focus-visible{outline:1px solid currentColor;outline-offset:3px;border-radius:2px}
+.si-pixel:is(:hover,:focus-visible,.si-touched) .si-reveal{animation:si-pixel-cuts 500ms steps(1,end)}
+@keyframes si-pixel-cuts{
+  0%,24%,76%,100%{font-family:'Geist Pixel line',monospace}
+  8%{font-family:'Geist Pixel square',monospace}
+  32%{font-family:'Geist Pixel circle',monospace}
+}
+@media(prefers-reduced-motion:reduce){.si-pixel .si-reveal{animation:none!important}}

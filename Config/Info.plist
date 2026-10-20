@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Finder, Spotlight and the DMG show en.lproj/InfoPlist.strings's name: skil.li. -->
+	<key>LSHasLocalizedDisplayName</key>
+	<true/>
+	<!-- Merged with the keys Xcode generates (GENERATE_INFOPLIST_FILE). -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>skil.li runs the Mac commands you ask for: dark mode, empty the Trash, restart.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>skil.li shows your next meeting and joins it in one key, and answers “qu'est-ce que j'ai demain ?”. Your calendars stay on this Mac.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>skil.li shows your next meeting and joins it in one key, and answers “qu'est-ce que j'ai demain ?”. Your calendars stay on this Mac.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>skil.li finds the people you ask for (“@jean”, “qui est Jean-François de chez Lumière ?”) and writes to them. Your contacts stay on this Mac.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>skil.li listens when you use Ask by Voice (✦V) or Dictate (✦D), and shows your microphone's level when you check it before a meeting; speech is turned into text on this Mac.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>skil.li shows you your camera when you press Check Camera &amp; Mic in a meeting's card, before you join. Nothing is recorded.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>skil.li connects and disconnects the Bluetooth devices paired with this Mac (AirPods, a keyboard, a speaker) when you ask it to.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>skil.li turns what you say to Ask by Voice (✦V) or Dictate (✦D) into text, on this Mac.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>skil.li adds reminders when you ask it to, from Ask or a command with the Reminders tool.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>skil.li adds reminders when you ask it to, from Ask or a command with the Reminders tool.</string>
+	<!-- Sparkle: empty (no updates) unless script/release/build.sh gives them. -->
+	<key>SUFeedURL</key>
+	<string>$(SKILLI_UPDATE_FEED_URL)</string>
+	<key>SUPublicEDKey</key>
+	<string>$(SKILLI_SPARKLE_PUBLIC_ED_KEY)</string>
+	<!-- Search GIFs: skil.li's Klipy key, empty unless script/release/build.sh gives it. -->
+	<key>SkilliKlipyKey</key>
+	<string>$(SKILLI_KLIPY_KEY)</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.nomdelasociete.Skilli.commands</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>skilli</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

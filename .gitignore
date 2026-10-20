@@ -1,0 +1,21 @@
+.build/
+.swiftpm/
+dist/
+DerivedData/
+build/
+xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+.DS_Store
+*.log
+
+# Local font trials with restricted redistribution rights.
+website/assets/font-preview/
+
+# Generated Skillies catalog (python3 website/build.py --preview).
+website/skillies/index.html
+website/skillies/catalog.json
+website/skillies/files/
+__pycache__/
+*.blend1

@@ -1,0 +1,59 @@
+.opening.opening-glass{height:170svh;min-height:0;overflow:visible;background:#092129}
+.opening-pin{position:sticky;top:0;height:100svh;overflow:hidden}
+.opening-glass-scene{display:block;width:100%;height:100%;border:0}
+.opening-glass .opening-caption{top:54%;bottom:auto;pointer-events:none;transform:translateY(var(--caption-shift,0px))!important;opacity:1!important}
+.opening-glass .opening-caption h1{pointer-events:auto}
+.opening-glass.is-refracting .opening-caption h1,.opening-glass.is-refracting .opening-followup{opacity:0;pointer-events:none}
+.opening-glass .opening-followup{margin-top:24px;pointer-events:auto;display:inline-block}
+.opening-glass .scroll-cue{opacity:var(--cue-opacity,1)}
+/* The following content enters while the pinned glass finishes its movement. */
+.opening-glass + .nav{margin-top:-65svh}
+.opening-glass ~ .ask-story{background:var(--bg);z-index:1}
+@media(max-width:700px){
+  .opening-glass .opening-caption{top:53%}
+}
+
+/* Independent menu mark; the large hero keeps its own scroll choreography. */
+.opening-brand a{position:relative;display:flex;align-items:center;height:44px;padding-right:38px}
+.brand-name{display:block;transform:translateX(0);transition:transform .3s ease}
+.has-menu-mark .brand-name{transform:translateX(38px)}
+.nav-glass-mark{position:absolute;left:0;top:2px;width:40px;height:40px;border:0;object-fit:contain;filter:grayscale(.9) brightness(.65);opacity:0;pointer-events:none;transition:opacity .35s ease}
+.has-menu-mark .nav-glass-mark{opacity:.7}
+.nav-brand-space{padding-left:38px}
+@media(prefers-reduced-motion:reduce){.brand-name,.nav-glass-mark{transition:none}}
+
+/* Brand, links centred on the page, then the two buttons: one height, one centre line. */
+.nav{display:grid;grid-template-columns:minmax(max-content,1fr) auto minmax(max-content,1fr)}
+.nav nav{align-items:center;justify-content:center;font-family:Trueno,sans-serif;font-weight:300}
+.nav-end{display:flex;align-items:center;justify-self:end;gap:10px}
+.nav .nav-end .nav-cta,.nav-get{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:8px;font-size:13px;line-height:1}
+.nav-get{background:var(--mint);color:#08201c;font-weight:500}
+.nav-get:hover{filter:brightness(1.06)}
+.nav-menu{display:none;width:44px;height:44px;margin:0;padding:0;border:0;background:transparent;color:#e7f6ee}
+.nav-menu span,.nav-menu span:before,.nav-menu span:after{display:block;width:18px;height:1.5px;margin:auto;background:currentColor;border-radius:1px;position:relative}
+.nav-menu span:before,.nav-menu span:after{content:'';position:absolute;left:0}
+.nav-menu span:before{top:-6px}
+.nav-menu span:after{top:6px}
+.nav-backdrop{display:none}
+
+@media(max-width:960px){
+  .nav{display:flex}
+  .nav-menu{display:grid;place-items:center}
+  .nav.is-open{z-index:13;position:fixed;top:0;left:0;right:0;width:100%;margin-top:0}
+  .nav nav,.nav-locked>#site-nav{display:none;position:fixed;inset:64px 0 0;z-index:12;flex-direction:column;justify-content:flex-start;gap:0;padding:12px 6% 40px;background:#0c1415;overflow:auto;font-family:Trueno,sans-serif;font-weight:300}
+  .nav.is-open nav,.nav-locked>#site-nav{display:flex}
+  .nav.is-open .nav-backdrop,.nav-locked>.nav-backdrop{display:block;position:fixed;inset:0;z-index:11;border:0;padding:0;margin:0;background:#0006}
+  .nav nav a,.nav-locked>#site-nav a{display:flex;align-items:center;min-height:52px;font-size:22px;color:#e7f6ee;border-bottom:1px solid #ffffff10}
+  .nav.is-open .nav-menu span{background:transparent}
+  .nav.is-open .nav-menu span:before{top:0;transform:rotate(45deg)}
+  .nav.is-open .nav-menu span:after{top:0;transform:rotate(-45deg)}
+  body.nav-locked{overflow:hidden}
+  body.nav-locked .opening-brand{z-index:14}
+}
+@media(max-width:700px){
+  .nav .nav-end .nav-cta.github-link{width:36px;padding:0}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .nav-menu span:before,.nav-menu span:after{transition:none}
+}

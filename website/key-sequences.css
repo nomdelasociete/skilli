@@ -1,0 +1,33 @@
+/* One continuous signal, with a short key press at each arrival. */
+.qte-sequence .large-key,.qte-sequence kbd{
+  transition:transform .16s cubic-bezier(.2,.8,.2,1),background .3s,border-color .3s,box-shadow .16s,color .3s;
+}
+.qte-sequence .is-held,.qte-sequence .is-pressed{
+  transform:translateY(4px);background:#35564e;color:#eafff5;
+  border-color:#a6d9c7;box-shadow:0 1px #070b0b,inset 0 1px 3px #0002;
+}
+.qte-sequence .is-done:not(.is-pressed){background:#253c36;border-color:#779c8f;color:#e0f4ea}
+.qte-sequence .line{overflow:visible;height:1px;background:#526e603b}
+.qte-sequence .line:after{
+  content:'';position:absolute;inset:0;background:#a8dcc8;opacity:1;
+  transform:scaleX(0);transform-origin:left;animation:none;
+  transition:transform .42s linear,opacity .65s;
+}
+.qte-sequence .line:before{
+  content:'';position:absolute;left:0;top:50%;width:5px;height:5px;border-radius:50%;
+  background:#d3ffed;box-shadow:0 0 8px #a5e5ce70;transform:translate(-50%,-50%);
+  opacity:0;transition:left .42s linear,opacity .18s;
+}
+.qte-sequence .line.is-traversed:after{transform:scaleX(1)}
+.qte-sequence .line.is-traversed:before{left:100%}
+.qte-sequence .line.is-traversing:before{opacity:1}
+.qte-sequence .sequence-result{opacity:1}
+.qte-sequence .qte-result-label{opacity:.32;transform:none;transition:opacity .4s;color:#d7f2e6}
+.qte-sequence.sequence-arrived .qte-result-label{opacity:1}
+.qte-sequence .qte-status{color:#aec3b9!important}
+.qte-sequence.sequence-reset .line:after,.qte-sequence.sequence-reset .line:before{opacity:0}
+.qte-sequence.sequence-reset .is-done{background:#1d2928;border-color:#ffffff20;color:#d5eae9;transition:background .65s,border-color .65s,color .65s}
+.qte-sequence.sequence-reset .qte-result-label{opacity:.32;transition:opacity .65s}
+/* Reset the travelled path only after its fade, never sweep it backwards. */
+.qte-sequence:not(.sequence-running) .line:after,.qte-sequence:not(.sequence-running) .line:before{transition:none;opacity:0}
+@media(prefers-reduced-motion:reduce){.qte-sequence .qte-result-label{opacity:1}.qte-sequence *{transition:none!important;animation:none!important}}

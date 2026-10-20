@@ -1,0 +1,24 @@
+
+const vs='attribute vec2 p;varying vec2 uv;void main(){uv=p*.5+.5;gl_Position=vec4(p,0.,1.);}';
+const fs=`precision highp float;varying vec2 uv;uniform float t;uniform float mode;uniform float refract;
+float blob(vec2 p,vec2 c,float r){return exp(-dot(p-c,p-c)*r);}
+void main(){vec2 p=uv;float time=t*.18;if(refract>.5){p+=vec2(.10*sin(uv.y*9.+.3),.10*cos(uv.x*6.-.8));}vec3 col;
+if(mode<.5){float a=blob(p,vec2(.72+.13*sin(time),.72+.12*cos(time*.7)),5.);float b=blob(p,vec2(.1,.1+.15*sin(time)),7.);col=mix(vec3(.015,.09,.13),vec3(.06,.58,.55),a);col+=vec3(.12,.25,.31)*b;float h=blob(p,vec2(.88,.98),16.);col+=vec3(.25,.34,.22)*h;}
+else if(mode<1.5){float w=sin(p.x*4.+time)+sin(p.y*3.-time*.8);float f=.5+.5*sin(5.*p.x-3.*p.y+w+time*.35);col=mix(vec3(.015,.035,.18),vec3(.04,.3,.72),smoothstep(.0,.8,f));float band=exp(-pow((p.y-.45-.17*sin(p.x*5.+time))*5.,2.));col=mix(col,vec3(.06,.85,.75),band*.7);col+=vec3(.16,.05,.3)*blob(p,vec2(.1,.8),9.);}
+else{float w=sin(p.x*6.+time)+cos(p.y*5.-time*.8);col=mix(vec3(.19,.39,.52),vec3(.75,.88,.83),smoothstep(-1.5,1.5,w));col=mix(col,vec3(.56,.43,.72),blob(p,vec2(.85,.7),9.)*.7);float caustic=pow(.5+.5*sin(10.*p.y+4.*p.x+w*1.2+time),12.);col+=vec3(.22,.24,.22)*caustic*.6;}
+float grain=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-.5;gl_FragColor=vec4(col+grain*.008,1.);}`;
+const renderers=[];for(const c of document.querySelectorAll('canvas')){const gl=c.getContext('webgl',{alpha:false,preserveDrawingBuffer:true});if(!gl)continue;const shader=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;};const pr=gl.createProgram();gl.attachShader(pr,shader(gl.VERTEX_SHADER,vs));gl.attachShader(pr,shader(gl.FRAGMENT_SHADER,fs));gl.linkProgram(pr);if(!gl.getProgramParameter(pr,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(pr));gl.useProgram(pr);const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);const pos=gl.getAttribLocation(pr,'p');gl.enableVertexAttribArray(pos);gl.vertexAttribPointer(pos,2,gl.FLOAT,false,0,0);gl.uniform1f(gl.getUniformLocation(pr,'mode'),Number(c.dataset.mode));gl.uniform1f(gl.getUniformLocation(pr,'refract'),c.classList.contains('refracted')?1:0);const tl=gl.getUniformLocation(pr,'t');renderers.push(time=>{const d=Math.min(devicePixelRatio,2);const w=1024,h=1024;if(c.width!==w||c.height!==h){c.width=w;c.height=h;gl.viewport(0,0,w,h);}gl.uniform1f(tl,time);gl.drawArrays(gl.TRIANGLES,0,6);});}
+let paused=matchMedia('(prefers-reduced-motion: reduce)').matches,time=3,last=0,lastDraw=false;const btn=document.querySelector('#motion');function label(){btn.textContent=paused?'Animer':'Pause';btn.setAttribute('aria-pressed',String(!paused));}label();btn.onclick=()=>{paused=!paused;label();};function frame(now){if(!paused&&!document.hidden)time+=Math.min((now-last)/1000,.05);last=now;if((!paused&&!document.hidden)||!lastDraw){for(const render of renderers)render(time);lastDraw=true;}requestAnimationFrame(frame);}requestAnimationFrame(frame);
+
+window.addEventListener('resize',()=>{lastDraw=false});
+async function exportPNG(){
+ const out=document.createElement('canvas');out.width=out.height=1024;const ctx=out.getContext('2d');
+ const layers=[...document.querySelectorAll('canvas')];ctx.drawImage(layers[0],0,0,1024,1024);
+ const load=src=>new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=src;});
+ const refr=document.createElement('canvas');refr.width=refr.height=1024;const rc=refr.getContext('2d');rc.filter='brightness(1.65) saturate(.72)';rc.drawImage(layers[1],0,0,1024,1024);rc.filter='none';rc.globalCompositeOperation='destination-in';
+ const size=1024*.72,at=(1024-size)/2;rc.drawImage(await load('ribbon-mask.svg'),at,at,size,size);ctx.drawImage(refr,0,0);
+ ctx.shadowColor='#00141a66';ctx.shadowBlur=28;ctx.shadowOffsetY=30;ctx.drawImage(await load('ribbon-glass.svg'),at,at,size,size);ctx.shadowColor='transparent';
+ const light=ctx.createLinearGradient(0,0,1024,1024);light.addColorStop(0,'#ffffff22');light.addColorStop(.4,'#ffffff00');light.addColorStop(1,'#00000022');ctx.fillStyle=light;ctx.fillRect(0,0,1024,1024);
+ const a=document.createElement('a');a.download='halo-menthe-glass.png';a.href=out.toDataURL('image/png');a.textContent='Enregistrer le PNG';a.id='download-png';document.querySelector('#download-png')?.remove();document.body.append(a);const preview=document.querySelector('#export-preview')||document.createElement('img');preview.id='export-preview';preview.alt='Export PNG 1024';preview.style.cssText='display:block;width:240px;margin-top:16px';preview.src=a.href;document.body.append(preview);
+}
+document.querySelector('#export').onclick=exportPNG;

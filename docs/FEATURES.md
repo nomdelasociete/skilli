@@ -1,0 +1,552 @@
+# skil.li features
+
+Everything skil.li does, one area per section, in the order of Settings'
+sidebar: one feature, one place. Each section says how to reach the
+feature, what it does, then its settings (Settings → that pane).
+
+✦ is the Hyper Key: Caps Lock held. Keys are the defaults; every one can
+be changed in Settings → Keys. Whatever of yours you delete (a copy, a
+file moved to the Trash, a reminder, a snippet, a command, a quicklink,
+a saved IBAN, a key, a server…) goes at once, nothing asked, and ⌘Z
+brings it back for 10 s. "SI" is skil.li's name for the AI it
+uses; it writes with your own Claude or ChatGPT and chooses with your
+TypeSafe Jev or OpenAI Decisions key.
+
+`FeaturesDocTests` keeps this file complete: every entry of the Catalog
+(`FeatureCatalog`) and every setting (`SettingsTable`) must be here, in
+its pane's section. Add a feature here when you build it.
+
+## Contents
+
+1. [General](#general)
+2. [Keys](#keys)
+3. [Privacy](#privacy)
+4. [Backup](#backup)
+5. [Launcher](#launcher)
+6. [Clipboard](#clipboard)
+7. [Snippets](#snippets)
+8. [Emoji](#emoji)
+9. [GIFs](#gifs)
+10. [Windows](#windows)
+11. [Mac](#mac)
+12. [Calendar](#calendar)
+13. [Reminders](#reminders)
+14. [GitHub](#github)
+15. [Your Details](#your-details)
+16. [Ask](#ask)
+17. [Commands](#commands)
+18. [Tools](#tools)
+19. [Skillies](#skillies)
+20. [SI Accounts](#si-accounts)
+21. [Catalog](#catalog)
+21. [About](#about)
+
+<!-- pane: general -->
+## General
+
+Ready as soon as you log in, in the glass you like.
+
+- **Menu bar**: skil.li's S, with Open skil.li (its real keys), Settings…,
+  Privacy… and Quit; it also shows what is running (timers, Keep Awake,
+  the next meeting, a skillie's line).
+- **skil.li Settings**: every option, shortcut and account. ⌘, in the
+  launcher, the menu bar, or reopening skil.li while it runs.
+- **Quit skil.li**: its shortcuts stop until you open it again.
+- **Welcome to skil.li**: the first launch's welcome, a minute of doing:
+  Accessibility turned on with a guide at System Settings' switch, Caps
+  Lock held to feel the Hyper Key, the launcher's keys chosen (⌘Space
+  instead of Spotlight, ✦Space, or your own) and pressed, your SI
+  found or connected, a sentence fixed with ✦K G and taken back with ⌘Z,
+  then what it set up, line by line (missing ones say where to set them).
+  Your SI's step has both: the SI that writes (Claude Code, Codex, a key)
+  and the one that chooses (a TypeSafe Jev key, recommended). It asks for
+  no other permission:
+  each is asked where you first use what needs it (macOS's own question,
+  right there). Closed with ✕ or Later, it never comes back by itself:
+  Set Up skil.li… stays in the menu bar and here until Accessibility is
+  on, and Welcome to skil.li in the launcher shows it again.
+
+Settings: Open skil.li at login · Show in menu bar · Glass (Regular or
+Clear, with a live preview) · Launcher position (Reset).
+
+<!-- pane: keys -->
+## Keys
+
+Caps Lock becomes your Hyper Key, ✦, and every shortcut is yours to
+change.
+
+- **Hyper Key**: Caps Lock held is ✦ (⌘⌃⌥⇧); tapped alone it sends
+  Escape. Works alongside Raycast's own Hyper Key.
+- **Shortcuts**: one key (✦A) or a chain (✦K then U), several per
+  command; a panel shows what comes next in a chain (✦K, ✦W).
+- **No shared keys**: a shortcut is refused when macOS, the launcher or
+  another skil.li shortcut already uses its key; the refusal says who and
+  where to turn it off. Two exceptions, each doing the same thing as
+  macOS's: Search Emoji may take ⌃⌘Space from Emoji & Symbols, and the
+  launcher ⌘Space from Spotlight (the welcome recommends it): skil.li then
+  turns Spotlight's own ⌘Space off, and back on if the launcher leaves it.
+
+Default keys:
+
+| Keys | Does |
+|---|---|
+| ✦Space | Open skil.li (the launcher) |
+| ✦A | Ask |
+| ✦V | Ask by Voice |
+| ✦D | Dictate |
+| ✦C | Clipboard History |
+| ⌃⌘Space | Search Emoji |
+| ✦U | UPPERCASE Selection |
+| ✦K U · L · T | UPPERCASE · lowercase · Title Case |
+| ✦K G · I | Fix Spelling & Grammar · Improve Writing |
+| ✦K E · R | Translate to English · Translate to French |
+| ✦K V | Paste in Sequence |
+| ✦K C · F · S | CleanShot: Capture Area · Fullscreen · Scrolling Capture |
+| ✦W ← → ↑ ↓ | Left · Right · Top · Bottom Half (again: ⅔, then ⅓) |
+| ✦W F · A · C | Maximize · Almost Maximize · Center |
+| ✦W U · I · J · K | The four quarters |
+| ✦W 1 · 2 · 3 · 4 · 5 | Thirds, then left and right two thirds |
+| ✦W N · P · R | Next · Previous Display · Restore |
+| ⌘, (in the launcher) | Open Settings from the launcher |
+
+Settings: Hyper Key · Advanced: Tap Caps Lock alone to send Escape ·
+Shortcuts (every one, recorded by pressing the keys) · Add Shortcut
+(apps, URLs, CleanShot, System Settings panes, sound devices, layouts,
+skillies, projects).
+
+<!-- pane: privacy -->
+## Privacy
+
+What skil.li may use on this Mac, and all it sends out: what, when,
+where.
+
+- **Permissions**: each one with what it turns on, its state live and
+  its one button; the apps skil.li sends commands to.
+- **What Leaves This Mac**: every feature that sends anything, grouped
+  by where it goes (Claude, ChatGPT, OpenAI, TypeSafe Jev, GitHub, your
+  servers, websites, Apple): what, when, and whether its switch is on.
+  Each pane ends with its own line of it.
+- skil.li reopens itself when System Settings quits it to apply a
+  permission.
+
+Settings: Permissions · Apps skil.li Sends Commands To · What Leaves
+This Mac.
+
+<!-- pane: backup -->
+## Backup
+
+A copy of everything skil.li keeps, in a folder you choose.
+
+- **Back Up skil.li Now**: saves your settings and files (snippets,
+  commands, layouts, skillies…) to the folder; never the clipboard
+  history. From the launcher or Settings.
+- **Scheduled backups** and **Restore** from a backup.
+
+Settings: Back up to · How often · Keep · Back Up Now · Backups.
+
+<!-- pane: launcher -->
+## Launcher
+
+The search panel you open from anywhere. ✦Space.
+
+- **Apps, commands and everything below**, by a fuzzy search that learns
+  what you pick; a name typed whole comes first.
+- **Recent searches** with ↑ in the empty field; **Pin** a row from ⌘K
+  to keep it first.
+- **⌘K Actions** on every row: what the row can do, Copy Link, Set
+  Alias…, Set Shortcut…, Pin; ⌘↩ the second action; ⌃N / ⌃P move.
+- **The same keys everywhere**: the footer names the selected row's ↩
+  ("Paste ↩", "Join ↩", "Quit ↩"), ⇥ where it does something, and ⌘K;
+  ⌘C copies the row's value (its name when it has nothing else), silently;
+  ⇥ in a mode shows the row's actions, never Ask; esc steps back (out of a
+  mode to what you had typed, then closed). What fails says why in a line,
+  never a beep.
+- **Modes** by a prefix, each with a chip: see their sections (Clipboard
+  `cb`, Snippets `snip`, Emoji `:`, GIFs `gif`, Calendar `cal`, Reminders `todo`,
+  GitHub `pr`, the Catalog `?`).
+- **Search Files** (`f`): by name with Spotlight, or by what it was about
+  with ⇥. ↩ opens, ⌘↩ shows in Finder.
+- **Search Tabs** (`tab`): any tab open in Safari, Chrome, Arc, Brave,
+  Edge…; ↩ shows it.
+- **Search Browser History** (`hist`): a page you visited, by its words
+  or by meaning with ⇥ (Safari, Chrome, Arc, Brave, Edge, Vivaldi, Opera,
+  Firefox, Zen).
+- **Search Contacts** (`@`): by name, company, email, number or city; the
+  card writes a mail or opens Contacts.
+- **Search Projects**: recent folders of Cursor, VS Code, Windsurf, Zed,
+  Sublime Text, JetBrains; ↩ opens in the editor.
+- **Homebrew** (`brew`): search, install, upgrade, uninstall formulae and
+  casks; Upgrade All.
+- **Calculator**: math as typed (French decimals, percentages), units,
+  time in a city; ↩ pastes the result in your app, ⌘↩ or ⌘C copies it.
+- **Kill a Process** (`kill`): quits an app and its helpers, or what
+  listens on a port; ⇧↩ forces. A running app's row says "· running" and
+  its ⌘K adds Quit and Force Quit.
+- **Switch Window**: any open window, by title or app.
+- **Search Menu Items** (`m`): every menu item of the app in front, by its
+  name as typed, without SI ("m export pdf"); each row says where it is
+  and its keys; ↩ chooses it (refused by the app, a line says so).
+  Ask finds one by meaning instead.
+- **System Settings Panes**: "displays", "night shift", "bluetooth"…
+  opens that pane.
+- **CleanShot X** (when installed): every command its API documents is a
+  row with its icon, under "In Your Apps" in the Catalog: Capture Area,
+  Window, Fullscreen, Previous Area, Self-Timer, Scrolling Capture,
+  All-In-One, Record Screen, Capture Text, Annotate Clipboard Image, Annotate
+  Image…, Pin Image…, the desktop icons, Capture History, Restore Recently
+  Closed, CleanShot Settings. skil.li adds Capture and Record Front Window
+  (its frame, nothing to pick) and Annotate or Pin Latest Screenshot. ⌘K on
+  a capture: Copy, Save, Annotate, Pin or Upload it; on Scrolling Capture:
+  start at once, auto-scroll; on Capture Text: with or without line breaks;
+  on CleanShot Settings: each tab. Each one, variants too, takes a shortcut
+  (Keys → Add Shortcut → CleanShot X), a link, Ask ("fais une capture de
+  la fenêtre") and agents. CleanShot runs them once its API is allowed
+  (CleanShot → Settings → Advanced).
+- **Links**: `skilli://run/…` runs any Catalog row from any app (⌘K →
+  Copy Link); what takes the Mac away asks first, and Always ⌘↩ in that
+  card lets links run that entry at once (Settings → Catalog → Trusted
+  Links).
+- **Reset Launcher Position**: drag the launcher by its glass anywhere
+  (guides pull it to the middles); this puts it back.
+
+Settings: the launcher's keys and Open Settings from the launcher ·
+Search browser history by meaning with ⇥ · Search files by meaning with
+⇥ · Advanced: Opens on · Starts again empty · Type in English while
+open.
+
+<!-- pane: clipboard -->
+## Clipboard
+
+Everything you copy, and your screenshots, ready to paste again.
+
+- **Clipboard History** (✦C, `cb`): text, images and files; search
+  without accents, even words inside images; ⇥ by meaning ("my train
+  ticket from yesterday"). ↩ pastes, ⇧↩ plain text, ⌘↩ copies, ⌘⌫ forgets
+  (⌘Z brings it back for 10 s).
+- **Previews** by kind: a link's card (picture, title, site), a color's
+  swatch with Hex, RGB, HSL, an image with what SI sees and its words, a
+  file's thumbnail, an email, phone or address, code, long text.
+- **Paste in Sequence** (✦K V): your last copies one after another, a key
+  each, newest first.
+- **Paste Latest Screenshot**: your last screenshot in the app in front.
+- Passwords marked secret by password managers are never kept.
+
+Settings: Keep clipboard history · Keep screenshots too · Folder · Keep
+copies for · Clear History · Advanced: Search by meaning with ⇥ · Show
+link previews · Read text in images · Images you copy, by what they
+show · Screenshots, by what they show · Never keep copies from.
+
+<!-- pane: snippets -->
+## Snippets
+
+Text you type often, from a keyword or the launcher.
+
+- **Snippets**: saves a text once (with `{date}`, `{clipboard}`,
+  `{cursor}`…); its keyword types it anywhere, at once or after a space
+  or ↩. Never in password fields.
+- **Search Snippets** (`snip`): by name, or by what you need with ⇥
+  ("my iban"). ↩ types it, ⌘↩ copies it.
+- **New Snippet** in the launcher: this pane, its editor open on a new
+  snippet.
+
+Settings: Expand keywords as you type · Expand (with a preview) · Find
+snippets by meaning with ⇥ · Snippets (each in its editor) · Advanced:
+Keywords stay as typed in.
+
+<!-- pane: emoji -->
+## Emoji
+
+Every emoji and symbol, by its name or by how you feel, typed where you
+are.
+
+- **Search Emoji** (⌃⌘Space, replacing macOS's Emoji & Symbols; `:` in
+  the launcher): a grid, eight across. Nothing typed, every emoji: Recently
+  Used, then Unicode's groups (Smileys & Emotion, People & Body…), then
+  the symbols' (Mac Keys, Typography, Arrows, Math, Currencies, Signs &
+  Shapes); typed, by name in your language and in English. ←→↑↓ move, the
+  name shows at the top; ↩ types it, ⌘↩ copies it.
+- **Symbols**: ⌘ ⌥ ⇧ ⎋, the Apple logo, — « » …, → ⇒, ≠ ≤ ∞, € £ ₿, ✓ ★,
+  found by their names and the words people use ("cmd", "logo pomme",
+  "au carré"); typed itself (→), a symbol finds itself. Every other
+  symbol Unicode names is found by that name ("three rightwards arrows").
+  Beside a symbol's name, the keys that type it on your keyboard (⌥⇧K
+  for the Apple logo on a U.S. layout): next time, no picker.
+- **By feeling**: say it ("trop content mais crevé"), then ⇥; it also
+  asks by itself when no name fits.
+- **Skin tone** for the emoji that come in tones (a family stays as it
+  is).
+- **Words learned**: an emoji picked after ⇥ comes at once next time by
+  the same words, without asking.
+
+Settings: Search Emoji's shortcut · Skin tone · Find emoji by feeling
+with ⇥ · Words Learned (Forget, ⌘Z brings them back).
+
+<!-- pane: gifs -->
+## GIFs
+
+A GIF where you are, animated: from Klipy, or from the ones on this Mac.
+
+- **Search GIFs** (`gif` in the launcher): a grid, four across, the
+  selected one playing. Nothing typed: Recently Used, then Klipy's
+  Trending; typed, Klipy's GIFs for the words, then the GIFs on this Mac
+  whose name has them. ↩ pastes it animated (Markdown in a terminal or a
+  code editor), ⌘↩ copies it, ⇧⌘C copies its link.
+
+Settings: Search GIFs' shortcut · Klipy key (Your Own).
+
+<!-- pane: windows -->
+## Windows
+
+Where your windows go, the layouts you saved, and the apps you stopped
+using.
+
+- **Window places** (✦W then a key, the launcher, Ask): **Left Half**,
+  **Right Half**, **Top Half**, **Bottom Half** (again: ⅔, then ⅓),
+  **Top Left Quarter**, **Top Right Quarter**, **Bottom Left Quarter**,
+  **Bottom Right Quarter**, **Left Third**, **Center Third**, **Right
+  Third**, **Left Two Thirds**, **Right Two Thirds**, **Maximize Window**
+  (again puts it back), **Almost Maximize**, **Center Window**, **Move to
+  Next Display**, **Move to Previous Display**, **Restore Window**.
+- **Window layouts**: **New Window Layout** saves where every window is
+  ("save layout Coding"); **New Empty Window Layout** builds one app by
+  app. Typing its name puts every window back, apps and files opened,
+  displays known by who they are. Edited on the displays in an editor.
+- **A display plugged in** asks, in its middle, which of its layouts to
+  put back.
+- **Switch Window**: see Launcher.
+- **Auto Quit**: quits the apps you stopped using after a delay you
+  choose; never the front app, unsaved work, sound or a call.
+
+Settings: Space between windows (with a preview) · Layouts · Always
+leave out of layouts · Monitors ignored when plugged in · Apps You
+Stopped Using: Quit apps you stopped using · Unused for · Never quit.
+
+<!-- pane: none -->
+## Mac
+
+Commands for the Mac itself, from the launcher, Ask ("mets la musique en
+pause") or a shortcut. Irreversible ones ask first.
+
+- **Power and screen**: **Lock Screen**, **Sleep**, **Sleep Displays**,
+  **Restart**, **Shut Down**, **Log Out**, **Keep Awake** (until run
+  again), **Keep Awake for a While** (`awake 2h`, "until 6pm"; a cup in
+  the menu bar).
+- **Appearance and Finder**: **Toggle Dark Mode**, **Toggle Hidden
+  Files**, **Show Desktop**, **Eject All Disks**, **Empty Trash**.
+- **Apps**: **Quit All Apps**, **Quit Other Apps**, **Hide Other Apps**,
+  **Show All Apps**.
+- **Sound**: **Play / Pause**, **Next Track**, **Previous Track**,
+  **Volume Up**, **Volume Down**, **Mute / Unmute**, **Set Volume**
+  (`volume 30`), **Sound Output** (speakers, AirPods, a display…),
+  **Microphone**, **Mute / Unmute Microphone**.
+- **Connections**: **Turn Wi-Fi On**, **Turn Wi-Fi Off**, **Bluetooth
+  Devices** (connect or disconnect AirPods, a keyboard…), **Test Internet
+  Speed**.
+- **Tools**: **Timer** (`timer 10 min tea`; counts down in the menu bar,
+  rings with a card), **Pick a Color** (copies its hex), **System Info**
+  (battery, disk, memory, Wi-Fi, IP, uptime), **Clean Keyboard** (every
+  key off for a minute to wipe it).
+- **Auto Quit**: see Windows.
+
+<!-- pane: calendar -->
+## Calendar
+
+Your next meeting, one key away, in the launcher and the menu bar.
+
+- **Calendar** (`cal`): your coming events; ↩ joins a call; ⌘⌫ deletes
+  one at once (⌘Z brings it back; one with invitees asks first).
+- **Add an Event** (`event lunch with Paul tomorrow 1pm`) and **Copy
+  Availability** (your free time in the next five working days); Ask
+  does both in your words, and blocks time.
+- **The menu bar**: the next meeting, at a glance before ("in 12 min"),
+  late and not joined (a red camera), and during (a ring, "20 min
+  left"), with the next one beside it.
+- **The launcher** shows the coming meeting before you type, in the
+  minutes before it.
+- **Alerts before a meeting**: a card, or screens going dark, with Join
+  and **Check Camera & Mic** (the camera live and the microphone's
+  level). None once you are in the call, and a card still up goes as you
+  join.
+
+Settings: Next meeting in the menu bar · Only meetings with a call in
+the menu bar · Count down to its end · Leaves the menu bar · The next
+one too, during a meeting · Alerts (with Try) · Alerts for events
+without a call too · When a meeting starts · Before you type, the
+meeting shows · Open events in · Google Meet opens in · Calendars turned
+off (by account).
+
+<!-- pane: reminders -->
+## Reminders
+
+What you have to do, said in one sentence.
+
+- **Reminders** (`todo`): what you have to do; check it off from the
+  launcher; ⌘⌫ deletes one at once (⌘Z brings it back).
+- **Remind Me** (`remind me to call Paul at 9am`): one line, any words;
+  Ask too ("rappelle-moi dans une heure trente"). Places (home, work)
+  from your card.
+- **Today's reminders in the menu bar**.
+
+Settings: Said reminders go to · Today's reminders in the menu bar ·
+Places.
+
+<!-- pane: github -->
+## GitHub
+
+Your pull requests and notifications in the launcher: what is ready,
+what waits for you.
+
+- **GitHub Inbox** (`pr`): pull requests in four groups (ready to merge
+  only when you can), unread notifications; ↩ opens, ⇥ merges (asked
+  twice), updates the branch or shows the checks, ⌘⌫ marks read.
+- **The strip** under the launcher's search field.
+- Sign in with GitHub (device flow); authorize this Mac in the browser for live updates. Access renews automatically and can be revoked independently of GitHub sign-in. If live updates are unavailable, the inbox keeps polling.
+
+Settings: GitHub (sign in) · Show under the search field · Live updates
+from · Live updates token.
+
+<!-- pane: yourDetails -->
+## Your Details
+
+Forms filled in for you and your people, and commands that know who you
+are.
+
+- **Forms**: Do It Here fills a form with your details (and those of
+  the people and companies you add); sensitive ones stay in the
+  Keychain and wait for one ↩ for the whole form.
+- **About You**: what commands may know about you, included when a
+  command says so.
+
+Settings: Your other details · People and companies · About You.
+
+<!-- pane: ask -->
+## Ask
+
+Say what you want, in any app: skil.li answers, or does it for you.
+
+- **Ask** (✦A, or ⇥ in the launcher): SI answers, rewrites the
+  selection, or acts. It reads what you mean, never a pattern: lengths,
+  times, people, places. It opens apps, files, projects, panes, menus,
+  quits or uninstalls an app, runs a Mac command or a skillie, sets a
+  timer or Keep Awake, adds an event or a reminder, writes a mail to a
+  contact. Unsure, the card asks. Something you did not say (how long,
+  which app, when) is asked in the card: answer just that, the rest is
+  kept. A menu item it is sure of is chosen at once; one that quits,
+  closes, deletes or sends waits for ↩.
+- **Ask by Voice** (✦V): say it; the text appears live, ↩ runs it.
+  Speech stays on this Mac.
+- **Dictate** (✦D): types what you say into any app, on this Mac,
+  knowing your contacts' names.
+- **Do It Here**: clicks and types for you in the window in front ("fill
+  this form"), step by step, risky steps asked first; a form's sensitive
+  details asked once, together.
+- **Ask on a Schedule**: "every Monday at 9am sum up my PRs".
+- **The card**: answers in Markdown, follow-ups with ⇥ (a changed text too:
+  "plus formel", "keep the line breaks", then ↩ puts the new version in
+  place), ⌘↩ continues the conversation in Claude Code or Codex.
+- **Your Rules**: what agents may do, in your words (Allow, Ask First,
+  Never), checked before each step.
+
+Settings: When It Acts: Approvals · Your rules · Keep Claude ready ·
+Voice language · Continue in · Terminal · Use Claude Code's skills too ·
+Skills · On a Schedule.
+
+<!-- pane: commands -->
+## Commands
+
+Your prompts, on any text, from any app.
+
+- **SI Commands** on the selection, from a shortcut or the launcher:
+  Fix Spelling & Grammar, Improve Writing, Translate to English,
+  Translate to French, and yours. The card shows the changes; ↩ replaces,
+  ⌘C copies.
+- Each command: its prompt with variables, questions, output (replace,
+  insert after, copy, card), model, tools; imported and shared by file or
+  link.
+- **New Command** in the launcher: this pane, its editor open on a new
+  command.
+- **Case changes** without SI: **UPPERCASE Selection**, **lowercase
+  Selection**, **Title Case Selection**.
+
+Settings: Commands (each in its editor) · Built In.
+
+<!-- pane: tools -->
+## Tools
+
+What commands and agents may do on your Mac.
+
+- **skil.li's tools** for agents (Claude Code, Codex, any MCP client):
+  the selection, clipboard, apps, menus, windows, files, calendar,
+  reminders, contacts, the screen's controls… through skil.li's MCP
+  server.
+- **Rights** per tool: Default, Always Ask, Always Allow, Block; Set
+  Rights With Claude Code / Codex….
+- **Connected Servers**: your MCP servers (token or OAuth), imported from
+  Claude Code, Claude for Mac, Codex and Cursor.
+- **Your Tools**: webhooks commands can call.
+
+Settings: skil.li Tools · Connected Servers · Your Tools.
+
+<!-- pane: skillies -->
+## Skillies
+
+Your own scripts, run from the launcher like any command.
+
+- **Skillies**: scripts with a title and arguments, run from the
+  launcher, a shortcut, Ask or agents; output silent, compact, full or
+  inline.
+- **In the menu bar**: a skillie's last line, refreshed on its own.
+
+Settings: Your Skillies · In the menu bar.
+
+<!-- pane: aiAccounts -->
+## SI Accounts
+
+skil.li writes with your own Claude or ChatGPT, already paid for.
+
+- **Writing**: your Claude subscription (Claude Code) or API key, your
+  ChatGPT subscription (Codex) or OpenAI API key; a model per command.
+- **Choosing**: your TypeSafe Jev or OpenAI Decisions key decides what
+  Ask does and finds things by meaning.
+
+Settings: Writing: Model · Pay for Claude with · Claude subscription ·
+Claude API key · ChatGPT subscription · OpenAI API key · Choosing:
+TypeSafe Jev key.
+
+<!-- pane: catalog -->
+## Catalog
+
+Everything skil.li can do, and how you reach each one.
+
+- **What skil.li Can Do** (`?` in the launcher): every entry by group,
+  with its prefix, alias and shortcut; ↩ runs it.
+- **Aliases**: your own short names for any result.
+- **Quicklinks**: search a site from the launcher (`g skilli`, `yt lofi`);
+  the selection is the query when none is typed; Add from Library….
+  **New Quicklink** in the launcher opens its editor on a new one.
+- **From other apps**: every entry's `skilli://` link (⌘K → Copy Link)
+  for Shortcuts, a Stream Deck or a page. What could change your Mac
+  asks first; Always ⌘↩ trusts that entry only, a skillie with the same
+  arguments. Empty Trash, Restart, Shut Down, Log Out, Quit All Apps,
+  Quit Other Apps, settings and pastes of your copies (Paste in
+  Sequence, Paste Latest Screenshot) are never trusted.
+- **Do it here from a link**: `skilli://do?app=TextEdit&goal=…` does
+  what the goal says in that app, as Ask's "do it here" would; always
+  asked first (Always trusts that goal in that app). A skillie chains
+  steps with one link a line, run one after the other; a step that did
+  not finish drops the rest. Agents get the same as `do_in_app`.
+
+Settings: Show in search (per entry) · Quicklinks · Reuse an open tab ·
+Aliases · Trusted Links (− asks again).
+
+<!-- pane: about -->
+## About
+
+Whether each part of skil.li works now, and where to fix it.
+
+- **Health**: one line per feature with where to fix it.
+- **Copy Diagnostics**: version, macOS and the lines; nothing personal.
+
+Settings: Health · Copy Diagnostics.
+
+GitHub live updates: authorize multiple accounts and organizations in the browser; manage the selected accounts from Settings → GitHub. The existing pairing remains until authorization succeeds.

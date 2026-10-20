@@ -1,0 +1,72 @@
+@font-face{font-family:'Space Grotesk';src:url('assets/fonts/space-grotesk.ttf') format('truetype');font-weight:300 700;font-display:swap}
+@font-face{font-family:'Manrope';src:url('assets/fonts/manrope.ttf') format('truetype');font-weight:200 800;font-display:swap}
+@font-face{font-family:'Instrument Serif';src:url('assets/fonts/instrument-serif.ttf') format('truetype');font-weight:400;font-display:swap}
+.opening[data-type=space] h1{font-family:'Space Grotesk',sans-serif;font-weight:450;letter-spacing:-.055em;line-height:1.08}
+.opening[data-type=manrope] h1{font-family:'Manrope',sans-serif;font-weight:450;letter-spacing:-.05em;line-height:1.12}
+.opening[data-type=serif] h1{font-family:'Instrument Serif',serif;font-weight:400;letter-spacing:-.015em;font-size:clamp(48px,5.9vw,88px);line-height:1.02}
+.type-comparison{position:absolute;z-index:6;left:50%;bottom:72px;transform:translateX(-50%);max-width:calc(100% - 32px);width:max-content;text-align:center}.type-options{display:flex;gap:3px;padding:5px;border:1px solid #e6fff12b;border-radius:10px;background:#0c242bb8;backdrop-filter:blur(18px)}.type-options button{background:none;border:0;border-radius:6px;padding:10px 14px;font:12px -apple-system,BlinkMacSystemFont,sans-serif;white-space:nowrap;color:#b4cdc5}.type-options button[aria-pressed=true]{background:#e7f9ee;color:#203c32}.type-description{font-size:11px;line-height:1.5;margin-top:10px;color:#b6cec4}.type-options button:focus-visible{outline:2px solid #d8ffe9;outline-offset:2px}
+@media(max-width:700px){.opening[data-type=serif] h1{font-size:clamp(36px,8.8vw,57px)}.type-options button{font-size:10px;padding:9px 8px}.type-description{font-size:10px}.type-comparison{bottom:80px}.opening:has(.type-comparison) .opening-caption{top:46%}}
+
+@font-face{font-family:'Outfit';src:url('assets/fonts/outfit.ttf') format('truetype');font-weight:100 900;font-display:swap}
+@font-face{font-family:'Sora';src:url('assets/fonts/sora.ttf') format('truetype');font-weight:100 800;font-display:swap}
+@font-face{font-family:'Inclusive Sans';src:url('assets/fonts/inclusivesans.ttf') format('truetype');font-weight:300 700;font-display:swap}
+.opening[data-type=outfit] h1{font-family:'Outfit',sans-serif;font-weight:480;letter-spacing:-.035em;line-height:1.08}
+.opening[data-type=sora] h1{font-family:'Sora',sans-serif;font-weight:420;letter-spacing:-.05em;line-height:1.13;font-size:clamp(40px,4.85vw,73px)}
+.opening[data-type=inclusive] h1{font-family:'Inclusive Sans',sans-serif;font-weight:450;letter-spacing:-.025em;line-height:1.1}
+@media(max-width:700px){.opening[data-type=sora] h1{font-size:clamp(29px,6.9vw,46px)}.opening[data-type=outfit] h1,.opening[data-type=inclusive] h1{font-size:clamp(30px,7.3vw,49px)}}
+
+@font-face{font-family:'Satoshi Trial';src:url('assets/font-preview/satoshi/Satoshi-Variable.woff2') format('woff2');font-weight:300 900;font-display:swap}
+@font-face{font-family:'Creato Display';src:url('assets/fonts/creato-regular.otf') format('opentype');font-weight:400;font-display:swap}
+@font-face{font-family:'Creato Display';src:url('assets/fonts/creato-medium.otf') format('opentype');font-weight:500;font-display:swap}
+.opening[data-type=satoshi] h1{font-family:'Satoshi Trial',sans-serif;font-weight:480;letter-spacing:-.045em;line-height:1.1}
+.opening[data-type=creato] h1{font-family:'Creato Display',sans-serif;font-weight:500;letter-spacing:-.025em;line-height:1.1}
+.type-options{flex-wrap:wrap;justify-content:center}
+@media(max-width:700px){.type-comparison{width:340px;bottom:70px}.type-options button{flex:1 0 28%;padding:8px 5px}.opening[data-type=satoshi] h1,.opening[data-type=creato] h1{font-size:clamp(30px,7.3vw,49px)}}
+
+@font-face{font-family:'ABeeZee';src:url('assets/fonts/abeezee.ttf') format('truetype');font-weight:400;font-display:swap}
+@font-face{font-family:'Trueno';src:url('assets/fonts/trueno.otf') format('opentype');font-weight:400;font-display:swap}
+.opening[data-type=abeezee] h1{font-family:'ABeeZee',sans-serif;font-weight:400;letter-spacing:-.035em;line-height:1.1}
+.opening[data-type=trueno] h1{font-family:'Trueno',sans-serif;font-weight:400;letter-spacing:-.045em;line-height:1.1}
+.opening[data-type=geist] h1{font-weight:400;letter-spacing:-.04em;line-height:1.12;font-size:clamp(38px,4.6vw,69px)}
+.type-comparison{width:850px}
+.type-variant{margin-top:8px;padding:5px 28px 5px 10px;border:1px solid #e6fff12b;border-radius:6px;background:#173b37;color:#e7f9ee;font:12px -apple-system,BlinkMacSystemFont,sans-serif;color-scheme:dark}
+@media(max-width:700px){.type-comparison{width:340px;bottom:62px}.opening:has(.type-comparison){min-height:720px}.opening[data-type=abeezee] h1,.opening[data-type=trueno] h1{font-size:clamp(30px,7.3vw,49px)}.opening[data-type=geist] h1{font-size:clamp(27px,6.6vw,44px)}}
+@font-face{font-family:'Geist Pixel square';src:url('assets/fonts/geist-pixel-square.woff2') format('woff2');font-weight:400;font-display:swap}
+.opening[data-type=geist][data-pixel=square] h1{font-family:'Geist Pixel square',monospace}
+@font-face{font-family:'Geist Pixel circle';src:url('assets/fonts/geist-pixel-circle.woff2') format('woff2');font-weight:400;font-display:swap}
+.opening[data-type=geist][data-pixel=circle] h1{font-family:'Geist Pixel circle',monospace}
+@font-face{font-family:'Geist Pixel grid';src:url('assets/fonts/geist-pixel-grid.woff2') format('woff2');font-weight:400;font-display:swap}
+.opening[data-type=geist][data-pixel=grid] h1{font-family:'Geist Pixel grid',monospace}
+@font-face{font-family:'Geist Pixel triangle';src:url('assets/fonts/geist-pixel-triangle.woff2') format('woff2');font-weight:400;font-display:swap}
+.opening[data-type=geist][data-pixel=triangle] h1{font-family:'Geist Pixel triangle',monospace}
+@font-face{font-family:'Geist Pixel line';src:url('assets/fonts/geist-pixel-line.woff2') format('woff2');font-weight:400;font-display:swap}
+.opening[data-type=geist][data-pixel=line] h1{font-family:'Geist Pixel line',monospace}
+
+/* Brand typography: expressive headlines, light reading text, native demo UI. */
+@font-face{font-family:'Trueno';src:url('assets/fonts/trueno-light.otf') format('opentype');font-weight:300;font-display:swap}
+@font-face{font-family:'Trueno';src:url('assets/fonts/trueno-semibold.otf') format('opentype');font-weight:600;font-display:swap}
+body{font-family:'Trueno',sans-serif;font-weight:300}
+.opening:not([data-type]) h1,h2{font-family:'Geist Pixel line',monospace;font-weight:400;letter-spacing:-.04em;line-height:1.12}
+.opening:not([data-type]) h1{font-size:clamp(38px,4.6vw,69px)}
+.opening[data-type=trueno] h1{font-weight:300}
+.freedom>p:not(.intro){font-family:'Geist Pixel line',monospace;font-weight:400;letter-spacing:-.025em}
+/* UI examples retain the native macOS typography of the actual product. */
+.demo,.ask-theatre,.action-stage,.utility-desktop,.command-sheet,kbd{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;font-weight:400}
+@media(max-width:700px){.opening:not([data-type]) h1{font-size:clamp(27px,6.6vw,44px)}}
+
+.pixel-character{display:inline-block;position:relative}
+.pixel-character>span{pointer-events:none}
+.pixel-square,.pixel-circle{position:absolute;inset:0;opacity:0}
+.pixel-square{font-family:'Geist Pixel square',monospace}
+.pixel-circle{font-family:'Geist Pixel circle',monospace}
+.pixel-active>.pixel-line{animation:pixel-line 500ms steps(1,end) var(--pixel-delay,0ms)}
+.pixel-active>.pixel-square{animation:pixel-square 500ms steps(1,end) var(--pixel-delay,0ms)}
+.pixel-active>.pixel-circle{animation:pixel-circle 500ms steps(1,end) var(--pixel-delay,0ms)}
+@keyframes pixel-line{0%,24%,100%{opacity:1}8%,32%{opacity:0}76%{opacity:1}}
+@keyframes pixel-square{0%,24%,100%{opacity:0}8%{opacity:1}32%{opacity:0}}
+@keyframes pixel-circle{0%,100%{opacity:0}32%{opacity:1}76%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.pixel-active>span{animation:none}}
+
+.wordmark{font-family:'Trueno',sans-serif;font-weight:400}
+
+.pixel-word{white-space:nowrap;display:inline-block}

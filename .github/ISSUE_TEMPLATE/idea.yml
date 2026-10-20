@@ -1,0 +1,18 @@
+name: Idea
+description: A change or a feature, to discuss before anyone writes code.
+labels: [idea]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is slow, missing or in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: The change you have in mind
+      description: How it would work, from the keyboard. Which principle of the manifesto it serves.
+    validations:
+      required: true

@@ -1,0 +1,27 @@
+/* Get skil.li: the icon, one button, the Homebrew line, and the first minute as the welcome teaches it. */
+.get{max-width:1040px;margin:0 auto;padding:110px 28px 120px;text-align:center}
+.get .get-icon{display:block;width:128px;height:128px;margin:0 auto 30px;filter:drop-shadow(0 22px 30px #0007)}
+.get h2{font-size:clamp(40px,5vw,64px);margin-bottom:0}
+.get-lead{margin:22px auto 0;max-width:520px;font-size:18px;line-height:1.7;color:#b3c7bc}
+.get-download{display:inline-flex;align-items:center;height:48px;margin-top:34px;padding:0 26px;border-radius:10px;background:var(--mint);color:#08201c;font-size:15px;font-weight:600}
+.get-download:hover{filter:brightness(1.06)}
+.get-meta{margin-top:16px;font-size:12px;color:#8aa196}
+.get-brew{display:inline-flex;align-items:center;gap:12px;margin-top:26px;padding:8px 8px 8px 16px;border:1px solid #ffffff1c;border-radius:10px;background:#ffffff06}
+.get-brew code{font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#d2e3d7;white-space:nowrap}
+.get-copy{height:30px;padding:0 12px;border:1px solid #ffffff22;border-radius:7px;background:#ffffff0a;color:#d2e3d7;font-size:12px}
+.get-copy:hover{background:#ffffff16}
+.get-steps{list-style:none;display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin:80px 0 0;padding:0;text-align:left}
+.get-steps li{padding:24px 22px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(160deg,#16282499,#0f1615)}
+.get-steps li>span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#b9e8d01c;color:var(--mint);font-size:12px;font-weight:600}
+.get-steps strong{display:block;margin-top:16px;font-size:16px;font-weight:550;color:#e6f2ec}
+.get-steps p{margin-top:8px;font-size:13px;line-height:1.7;color:#93aa9e}
+@media(max-width:900px){.get-steps{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){
+  .get{padding:70px 22px 80px}
+  .get .get-icon{width:104px;height:104px}
+  .get-lead{font-size:16px}
+  .get-brew{max-width:100%}
+  .get-brew{display:flex;text-align:left}
+  .get-brew code{font-size:12px;white-space:normal}
+  .get-steps{grid-template-columns:1fr;margin-top:50px}
+}

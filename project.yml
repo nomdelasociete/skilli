@@ -1,0 +1,111 @@
+name: Skilli
+
+options:
+  bundleIdPrefix: com.nomdelasociete
+  minimumXcodeGenVersion: 2.45.0
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+
+packages:
+  # Updates of the Developer ID build (script/release): the feed and its
+  # key are given by the release build only, so development builds never
+  # update themselves.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.9.2
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    DEVELOPMENT_TEAM: JSFMAD28GS
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: Apple Development
+    ENABLE_HARDENED_RUNTIME: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    CLANG_ENABLE_MODULES: YES
+
+targets:
+  SkilliCore:
+    type: framework
+    platform: macOS
+    sources:
+      - path: Sources/SkilliCore
+    settings:
+      base:
+        PRODUCT_NAME: SkilliCore
+        PRODUCT_BUNDLE_IDENTIFIER: com.nomdelasociete.Skilli.core
+        GENERATE_INFOPLIST_FILE: YES
+        MARKETING_VERSION: "0.2.1"
+        CURRENT_PROJECT_VERSION: "1"
+        SKIP_INSTALL: YES
+
+  Skilli:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/Skilli
+    dependencies:
+      - target: SkilliCore
+        embed: true
+      - package: Sparkle
+        product: Sparkle
+    settings:
+      base:
+        PRODUCT_NAME: Skilli
+        # Set by script/release/build.sh; empty in development builds.
+        SKILLI_UPDATE_FEED_URL: ""
+        SKILLI_SPARKLE_PUBLIC_ED_KEY: ""
+        # skil.li's Klipy key (Search GIFs); never in the repository.
+        SKILLI_KLIPY_KEY: ""
+        PRODUCT_MODULE_NAME: Skilli
+        PRODUCT_BUNDLE_IDENTIFIER: com.nomdelasociete.Skilli
+        GENERATE_INFOPLIST_FILE: YES
+        # skilli:// links (command import); merged with the generated keys.
+        INFOPLIST_FILE: Config/Info.plist
+        # Microphone (Ask by Voice) and Reminders under the Hardened Runtime.
+        CODE_SIGN_ENTITLEMENTS: Config/Skilli.entitlements
+        # Every name a person reads is skil.li: en.lproj/InfoPlist.strings gives
+        # it to menus, Finder, the Dock and permission lists. These two stay
+        # the file's name (Skilli.app), which macOS requires before it shows
+        # the localized one (LSHasLocalizedDisplayName in Config/Info.plist).
+        INFOPLIST_KEY_CFBundleDisplayName: Skilli
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_LSMinimumSystemVersion: "26.0"
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© Nom de la société"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        MARKETING_VERSION: "0.2.1"
+        CURRENT_PROJECT_VERSION: "1"
+        # Event taps, Accessibility and synthetic keys are not allowed in the
+        # App Sandbox. Distribution is Developer ID + notarization (like dsmn).
+        ENABLE_APP_SANDBOX: NO
+      configs:
+        # The self-tests (SelfTest.swift) only in Debug; a Release build that
+        # runs them adds the flag (script/build_and_run.sh), a release never.
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SKILLI_SELFTEST"
+    # The build number (commit count), the commit and the build's time, for
+    # Settings → About.
+    postBuildScripts:
+      - name: Stamp the build
+        script: "\"$SRCROOT/script/stamp_build.sh\""
+        # After Info.plist is written, every build: its input orders it.
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
+        basedOnDependencyAnalysis: false
+
+schemes:
+  Skilli:
+    build:
+      targets:
+        Skilli: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    archive:
+      config: Release
