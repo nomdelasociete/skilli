@@ -81,6 +81,44 @@ open_app() {
   launch_bundle "$(app_bundle "$CONFIGURATION")"
 }
 
+# Before building for the other Mac: it must answer SSH and show a
+# logged-in, unlocked session, or the self-test waits or aborts there.
+# NSWorkspace's frontmost app is loginwindow when locked or at the login
+# window (System Events' "frontmost process" names the app behind the lock).
+# Asked after waking the display: a sleeping display can show loginwindow
+# too. No answer at all counts as the login window: nobody's session to ask.
+# SKILLI_REMOTE_CHECK=0 skips it, for a host that cannot be asked this way.
+check_remote() {
+  local host="$1" front status=0
+  [[ "${SKILLI_REMOTE_CHECK:-}" == 0 ]] && return 0
+  # ssh exits 255 for its own errors, else with osascript's status; 143
+  # when stopped after 20 s (ConnectTimeout covers only the connection).
+  # BatchMode: never a prompt, whatever SKILLI_REMOTE's own SSH settings.
+  front="$(
+    ssh -o BatchMode=yes -o ConnectTimeout=10 "$host" "caffeinate -u -t 1; osascript -l JavaScript -e 'ObjC.import(\"AppKit\"); \$.NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier.js' 2>/dev/null" &
+    ssh_pid=$!
+    { sleep 20; kill "$ssh_pid"; } >/dev/null 2>&1 &
+    wait "$ssh_pid"
+    ssh_status=$?
+    kill $! 2>/dev/null
+    exit "$ssh_status"
+  )" || status=$?
+  # The answer is the last line: a remote shell's startup output comes first.
+  front="${front##*$'\n'}"
+  if [[ "$status" == 255 ]]; then
+    echo "$host does not answer SSH (asleep, off or off the network): wake it, then run again." >&2
+    exit 2
+  fi
+  if [[ "$status" == 143 ]]; then
+    echo "$host answers SSH but not within 20 s: look at that Mac, then run again." >&2
+    exit 2
+  fi
+  if [[ "$status" != 0 || -z "$front" || "$front" == com.apple.loginwindow ]]; then
+    echo "$host is at the login window or locked: log in on that Mac, then run again." >&2
+    exit 2
+  fi
+}
+
 case "$MODE" in
   run)
     build_app "$CONFIGURATION"
@@ -157,6 +195,7 @@ case "$MODE" in
     scope="${2:-all}"
     # It goes into a remote shell command: a scope is one word.
     [[ "$scope" =~ ^[a-z]+$ ]] || { echo "unknown scope: $scope" >&2; exit 2; }
+    check_remote "$host"
     build_selftest_app "$CONFIGURATION"
     was_running=0
     ssh "$host" "pgrep -x $PROCESS_NAME" >/dev/null && was_running=1
@@ -177,6 +216,7 @@ case "$MODE" in
     # Copies the app to the other Mac and opens it normally: its setup
     # window asks for the permissions the self-tests need there.
     host="${SKILLI_REMOTE:-skilli-mini}"
+    check_remote "$host"
     build_selftest_app "$CONFIGURATION"
     ssh "$host" "pkill -TERM -x $PROCESS_NAME; mkdir -p ~/skilli-selftest; true"
     rsync -a --delete "$(app_bundle "$CONFIGURATION")" "$host:skilli-selftest/"
@@ -200,6 +240,7 @@ case "$MODE" in
     # to dist/benchmark.json. skil.li there is stopped for it and opened
     # again after.
     host="${SKILLI_REMOTE:-skilli-mini}"
+    check_remote "$host"
     build_app Release
     was_running=0
     ssh "$host" "pgrep -x $PROCESS_NAME" >/dev/null && was_running=1

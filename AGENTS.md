@@ -120,7 +120,14 @@ repository. What the self-tests need from it:
 
 - A logged-in session that stays awake: a locked screen swallows the
   synthetic keys and the self-test aborts; a sleeping Mac does not answer
-  SSH.
+  SSH. `remote …`, `remote-app` and `remote-benchmark` check this before
+  building (`check_remote`) and stop at once (exit 2) when SSH does not
+  answer, does not answer within 20 s, or the Mac is at the login window or
+  locked: NSWorkspace's frontmost app is then `com.apple.loginwindow`
+  (System Events' "frontmost process" names the app behind the lock: never
+  use it). The check wakes the display first, since a sleeping display can
+  show the login window too. `SKILLI_REMOTE_CHECK=0` skips it, for a host
+  that cannot be asked this way.
 - skil.li there (`./script/build_and_run.sh remote-app` copies and opens it
   normally, its setup window asks Accessibility; the rest from Settings →
   Privacy): Accessibility, Paste from Other Apps → Allow, Screen & System
