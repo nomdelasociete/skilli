@@ -31,7 +31,10 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          added=$(git diff -U0 "$(git merge-base "$BASE" "$HEAD")" "$HEAD" | grep -E '^\+' | grep -vE '^\+\+\+ ' || true)
+          # Added lines only: each file's own header (before its first @@) is skipped,
+          # so an added line that starts with "++" is still read.
+          added=$(git diff -U0 --no-color "$(git merge-base "$BASE" "$HEAD")" "$HEAD" \
+            | awk '/^diff --git /{header=1} /^@@/{header=0} !header && /^\+/' || true)
           found=0
           # Written so that this file does not match itself.
           patterns=(
