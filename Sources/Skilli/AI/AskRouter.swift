@@ -501,8 +501,14 @@ enum AskRouter {
                         if (route == .open || route == .act || route == .answer && !hasSelection) && probability >= projectBar {
                             route = .command
                         }
-                    case .script, .shortcut:
+                    case .script:
                         if (route == .open || route == .act || route == .control) && probability >= 0.6 { route = .command }
+                    // A shortcut named whole ("lance ma routine du matin":
+                    // Jev routed it to plans, the shortcut 96 %) is run, even
+                    // over a reminder or an answer.
+                    case .shortcut:
+                        if (route == .open || route == .act || route == .control) && probability >= 0.6
+                            || (route == .plans || route == .answer && !hasSelection) && probability >= 0.85 { route = .command }
                     default:
                         break
                     }

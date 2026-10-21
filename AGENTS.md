@@ -3375,8 +3375,8 @@ re-investigating.
   aliases and pins, keys (Add Shortcut → Shortcuts, a submenu each: as it
   is, With the Selection), links (asked first, Always offered: a shortcut
   can do anything), Ask (a question of its own, `shortcut0`…, by name;
-  ≥ 60 % beats the agent, asked first under 85 %; what Ask was asked on
-  is its input) and agents (`list_shortcuts`, `run_shortcut` with an
+  ≥ 60 % beats the agent, ≥ 85 % a reminder or an answer too; asked
+  first under 85 %; what Ask was asked on is its input) and agents (`list_shortcuts`, `run_shortcut` with an
   optional input, the text it gave back). Read with Apple's tool
   (`shortcuts list --show-identifiers`, "Name (identifier)") off the
   main thread at launch and each time the launcher opens, with the

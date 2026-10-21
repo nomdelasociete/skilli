@@ -18114,8 +18114,10 @@ final class SelfTest {
         let shortcuts = ["Morning Routine", "Text Camille I'm Late", "Log Water", "Resize Images for the Web"].enumerated().map { index, name in
             AppleShortcut(id: "00000000-0000-4000-8000-00000000000\(index)", name: name)
         }
-        let cases = [("lance ma routine du matin", shortcuts[0]), ("préviens Camille que je suis en retard", shortcuts[1]),
-                     ("note que j'ai bu un verre d'eau", shortcuts[2])]
+        // By its name, said as people say it; a shortcut is named, not
+        // guessed ("préviens Camille…" is as much a message to send).
+        let cases = [("lance ma routine du matin", shortcuts[0]), ("lance le raccourci log water", shortcuts[2]),
+                     ("redimensionne mes images pour le web avec mon raccourci", shortcuts[3])]
         let elsewhere = ["mets le son à 30 %"]
         for provider in DecisionProvider.allCases {
             let name = "Ask runs the user's shortcuts by their names with \(provider.title) (decided only, nothing run)"
