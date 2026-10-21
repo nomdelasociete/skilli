@@ -391,8 +391,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainMenu.install()
         routeTerminationSignal()
         // LaunchServices' first answer (~15 ms) off the main thread, before
-        // the launcher's rows ask for CleanShot X.
-        Task.detached(priority: .userInitiated) { LinkedApps.read() }
+        // the launcher's rows ask for CleanShot X; the user's shortcuts with
+        // it (Apple's tool, a process).
+        Task.detached(priority: .userInitiated) {
+            LinkedApps.read()
+            AppleShortcuts.read()
+        }
         launcher.prewarm()
 
         if case .benchmark(let outputPath) = mode {
@@ -496,9 +500,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } + MacAction.bluetoothDevices().map { ($0, $0.title) }
                 + MacAction.settingsPanes().map { ($0, $0.title) }
                 + MacAction.appLinks().map { ($0, $0.title) }
+                + MacAction.appleShortcuts().map { ($0, $0.title) }
         }
-        // Wi-Fi, Bluetooth and the linked apps read again as the launcher
-        // opens, off the main thread; a change redraws the rows.
+        // Wi-Fi, Bluetooth, the linked apps and the shortcuts read again as
+        // the launcher opens, off the main thread; a change redraws the rows.
         launcher.onShow = { [weak self] in self?.refreshRadios() }
         launcher.bluetoothAskable = { BluetoothDevices.authorization == .notDetermined }
         launcher.clipboardItems = { [weak self] text in self?.clipboard.search(text) ?? [] }
@@ -614,6 +619,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         scriptLibrary.toolSocket = { [toolServer] in toolServer.socketPath }
         aiActions.scriptCommands = { [scriptLibrary] in scriptLibrary.all() }
         aiActions.runScript = { [weak self] command, askFirst in self?.runScript(command, arguments: [], askFirst: askFirst) }
+        aiActions.appleShortcuts = { AppleShortcuts.all() }
+        aiActions.runShortcut = { [weak self] shortcut, input, askFirst in self?.runShortcut(shortcut, input: input, askFirst: askFirst) }
+        launcher.onRunShortcut = { [weak self] shortcut, input in self?.runShortcut(shortcut, input: input) }
+        launcher.onEditShortcut = { [weak self] shortcut in self?.editShortcut(shortcut) }
         launcher.emojiSearch = { [emojiLibrary] text in emojiLibrary.search(text) }
         launcher.emojiByFeelingAvailable = { [weak self] in
             guard let self else { return false }
@@ -1015,7 +1024,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// What Settings → Keys → Add Shortcut offers, as its menu names it.
     private func shortcutActions() -> [(action: SkilliAction, title: String)] {
         let actions = ActionCatalog.general + ActionCatalog.ai + ActionCatalog.windows + ActionCatalog.mac + ActionCatalog.sound()
-            + ActionCatalog.settingsPanes() + ActionCatalog.appLinks()
+            + ActionCatalog.settingsPanes() + ActionCatalog.appLinks() + ActionCatalog.appleShortcuts()
             + editorProjects.all().prefix(12).map { SkilliAction.mac(.project($0)) }
             + scriptLibrary.all().filter { $0.arguments.allSatisfy(\.optional) }.map { SkilliAction.mac(.script($0)) }
         return actions.map { ($0, $0.title) } + arranger.layouts().map { (.windowLayout($0.id), "Window Layout · \($0.name)") }
@@ -1033,17 +1042,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// opens: its rows use what was read last, and are redrawn when it
     /// changed.
     private func refreshRadios() {
-        let before = (wifi: WiFi.cachedIsOn, devices: BluetoothDevices.cached, apps: LinkedApps.summary)
+        let before = (wifi: WiFi.cachedIsOn, devices: BluetoothDevices.cached, apps: LinkedApps.summary, shortcuts: AppleShortcuts.summary)
         Task { [weak self] in
             await Task.detached(priority: .utility) {
                 _ = WiFi.isOn()
                 _ = BluetoothDevices.paired()
                 // CleanShot X installed, updated or gone: its rows follow.
                 LinkedApps.read()
+                // A shortcut made, renamed or deleted in Shortcuts: its row too.
+                AppleShortcuts.read()
             }.value
-            guard WiFi.cachedIsOn != before.wifi || BluetoothDevices.cached != before.devices || LinkedApps.summary != before.apps else { return }
+            guard WiFi.cachedIsOn != before.wifi || BluetoothDevices.cached != before.devices || LinkedApps.summary != before.apps
+                    || AppleShortcuts.summary != before.shortcuts else { return }
             self?.launcher.reloadSources()
         }
+    }
+
+    /// One of the user's shortcuts (Apple's Shortcuts app), as a skillie
+    /// runs: asked first when Ask was unsure; what it gave back in the card,
+    /// one line for a moment, more for longer (scrolls); nothing given back,
+    /// nothing said (the card goes). `input`: the selection read now, or
+    /// text read already.
+    private func runShortcut(_ shortcut: AppleShortcut, input: ShortcutInput, askFirst: Bool = false) {
+        let name = AppleShortcuts.name(of: shortcut)
+        Task {
+            if askFirst {
+                guard await systemCommands.confirm?("Run “\(name)”?", "One of your shortcuts, run by Apple's Shortcuts.", "Run") == true else { return }
+            }
+            var text: String?
+            switch input {
+            case .none: text = nil
+            case .text(let given): text = given
+            case .selection:
+                guard let read = await selection.read()?.text else {
+                    aiActions.notify("Nothing is selected: select the text “\(name)” works on, then run it again.", caller: name, run: nil)
+                    return
+                }
+                text = read
+            }
+            aiActions.notify(caller: name, working: "Running “\(name)”…", seconds: 4, perLine: 16) {
+                try await AppleShortcuts.run(shortcut, input: text) ?? ""
+            }
+        }
+    }
+
+    /// ⌘K → Edit in Shortcuts: its editor, through Shortcuts' own link.
+    private func editShortcut(_ shortcut: AppleShortcut) {
+        guard let url = AppleShortcuts.current(shortcut).editURL else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// A skillie, as Raycast runs a Script Command: asked first when it says so;
@@ -1483,6 +1529,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             snippets: snippetLibrary.all, skillies: scriptLibrary.all(), quicklinks: quicklinkStore.links, layouts: arranger.layouts(),
             appLinks: MacAction.appLinks().compactMap { if case .appLink(let command, _) = $0 { command } else { nil } },
+            shortcuts: AppleShortcuts.all(),
             intelligence: Brand.intelligence
         )
     }

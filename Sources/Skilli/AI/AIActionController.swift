@@ -157,6 +157,10 @@ final class AIActionController {
     var scriptCommands: (() -> [ScriptCommand])?
     /// `askFirst`: Ask was not quite sure it is the one.
     var runScript: ((ScriptCommand, _ askFirst: Bool) -> Void)?
+    /// The user's shortcuts Ask can run (Apple's Shortcuts app), and how:
+    /// `input` the text it is given, `askFirst` as for skillies.
+    var appleShortcuts: (() -> [AppleShortcut])?
+    var runShortcut: ((AppleShortcut, _ input: ShortcutInput, _ askFirst: Bool) -> Void)?
     /// "mets un minuteur de 10 minutes": started at once, no model asked.
     /// Starts a timer; its id, to cancel it (`cancelTimer`).
     var startTimer: ((TimerRequest) -> UUID)?
@@ -449,6 +453,7 @@ final class AIActionController {
                 decision = await AskRouter.decide(answers["instruction"] ?? "", hasSelection: read != nil, app: place.app,
                                                   menu: menu, apps: apps, projects: recentProjects?() ?? [],
                                                   scripts: (scriptCommands?() ?? []).filter { $0.arguments.allSatisfy(\.optional) },
+                                                  shortcuts: appleShortcuts?() ?? [],
                                                   settings: SystemSettingsPanes.all(),
                                                   bluetooth: MacAction.bluetoothDevices(),
                                                   services: services,
@@ -553,6 +558,9 @@ final class AIActionController {
                     close()
                     if case .script(let script) = command, (decision?.command?.probability ?? 0) < 0.85 {
                         runScript?(script, true)
+                    } else if case .shortcut(let shortcut, _) = command {
+                        // What was selected when Ask was asked is its input.
+                        runShortcut?(shortcut, read.map { .text($0.text) } ?? .none, (decision?.command?.probability ?? 0) < 0.85)
                     } else {
                         runMac(command)
                     }
@@ -2987,6 +2995,10 @@ extension AIActionController: ToolPresenter {
             runScript?(command, false)
             return
         }
+        if case .shortcut(let shortcut, let withSelection) = action {
+            runShortcut?(shortcut, withSelection ? .selection : .none, false)
+            return
+        }
         guard let systemCommands else { return }
         if case .system(let command) = action, command == .speedTest {
             notify(caller: action.title, working: "Testing your connection… about 15 seconds.", seconds: 12) {
@@ -3399,7 +3411,7 @@ extension AIActionController: ToolPresenter {
 
     /// A card that says `working`, then what `work` returns (or its error),
     /// in place, for `seconds` (and `perLine` more for each line past the
-    /// first, to read a list). Esc closes it early. `skillie`: the run
+    /// first, to read a list, 20 s at most in all). Esc closes it early. `skillie`: the run
     /// `work` is, whose own tool calls borrow the card meanwhile.
     func notify(caller: String, working: String, seconds: Double, perLine: Double = 0, skillie: String? = nil,
                 _ work: @escaping @MainActor () async throws -> String) {
@@ -3443,7 +3455,7 @@ extension AIActionController: ToolPresenter {
             noteText = message
             popover.fail(message, status: caller, hints: [("Close", "esc")], color: .labelColor)
             let lines = message.split(separator: "\n", omittingEmptySubsequences: true).count
-            try? await Task.sleep(for: .seconds(seconds + perLine * Double(max(lines - 1, 0))))
+            try? await Task.sleep(for: .seconds(lines > 1 && perLine > 0 ? min(seconds + perLine * Double(lines - 1), max(seconds, 20)) : seconds))
             if popover.shownText == message { releaseCardForOutsideAgent() }
         }
     }

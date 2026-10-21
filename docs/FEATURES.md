@@ -112,8 +112,8 @@ Default keys:
 
 Settings: Hyper Key · Advanced: Tap Caps Lock alone to send Escape ·
 Shortcuts (every one, recorded by pressing the keys) · Add Shortcut
-(apps, URLs, CleanShot, System Settings panes, sound devices, layouts,
-skillies, projects).
+(apps, URLs, CleanShot, Shortcuts, System Settings panes, sound devices,
+layouts, skillies, projects).
 
 <!-- pane: privacy -->
 ## Privacy
@@ -190,6 +190,19 @@ The search panel you open from anywhere. ✦Space.
   Ask finds one by meaning instead.
 - **System Settings Panes**: "displays", "night shift", "bluetooth"…
   opens that pane.
+- **Shortcuts**: every shortcut in your Shortcuts library is a
+  row by its name, with Shortcuts' icon, under "In Your Apps" in the
+  Catalog; through them, whatever an app lets Shortcuts do. ↩ runs it;
+  what it gives back shows in the card (a line for a moment, more for
+  longer; the first time, Shortcuts asks before handing it over);
+  nothing given back, nothing said. ⌘K: Run with the Selection
+  (the text selected where the launcher opened is its input), Edit in
+  Shortcuts. Each one takes an alias, a key (Keys → Add Shortcut →
+  Shortcuts, as it is or with the selection), a link (asked first: a
+  shortcut can do anything), Ask ("lance mon raccourci du matin"),
+  agents and skillies (its link, or `$SKILLI_CLI call run_shortcut` with
+  an input or the selection). A shortcut made, renamed or deleted shows the next time the
+  launcher opens.
 - **Links**: `skilli://run/…` runs any Catalog row from any app (⌘K →
   Copy Link); what takes the Mac away asks first, and Always ⌘↩ in that
   card lets links run that entry at once (Settings → Catalog → Trusted
@@ -492,7 +505,7 @@ What commands and agents may do on your Mac.
 
 - **skil.li's tools** for agents (Claude Code, Codex, any MCP client):
   the selection, clipboard, apps, menus, windows, files, calendar,
-  reminders, contacts, the screen's controls… through skil.li's MCP
+  reminders, contacts, your shortcuts, the screen's controls… through skil.li's MCP
   server.
 - **Rights** per tool: Default, Always Ask, Always Allow, Block; Set
   Rights With Claude Code / Codex….

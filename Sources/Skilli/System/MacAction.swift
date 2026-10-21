@@ -21,6 +21,9 @@ enum MacAction: Hashable, Sendable {
     /// A command of an app skil.li drives through its links (CleanShot X's
     /// Capture Area), and one of its variants ("copy": the capture copied).
     case appLink(AppLinkCommand, variant: String?)
+    /// One of the user's shortcuts in Apple's Shortcuts app; with the
+    /// selection as its input, read where it runs.
+    case shortcut(AppleShortcut, withSelection: Bool)
 
     /// Commands and window places: the same on every Mac.
     static let all: [MacAction] = SystemCommand.allCases.map(MacAction.system) + WindowLayout.allCases.map(MacAction.window)
@@ -50,6 +53,12 @@ enum MacAction: Hashable, Sendable {
         LinkedApps.commands()
     }
 
+    /// The user's shortcuts as last read (`AppleShortcuts.read`), each run
+    /// as it is.
+    static func appleShortcuts() -> [MacAction] {
+        AppleShortcuts.all().map { .shortcut($0, withSelection: false) }
+    }
+
     /// The variant an `appLink` names, when it names one the command has.
     var appLinkVariant: AppLinkCommand.Variant? {
         guard case .appLink(let command, let variant?) = self else { return nil }
@@ -73,11 +82,18 @@ enum MacAction: Hashable, Sendable {
         case .volume(let level): "volume.\(level)"
         // "link:cleanshot.capture-area", "link:cleanshot.capture-area/copy".
         case .appLink(let command, let variant): "link:\(command.id)" + (variant.map { "/\($0)" } ?? "")
+        // By Shortcuts' identifier: renamed, it keeps its keys and alias.
+        case .shortcut(let shortcut, let withSelection): "shortcut:\(shortcut.id)" + (withSelection ? "/selection" : "")
         }
     }
 
     init?(rawValue: String) {
-        if rawValue.hasPrefix("link:") {
+        if rawValue.hasPrefix("shortcut:") {
+            // Its name as last read, if read: it runs by its identifier.
+            let parts = rawValue.dropFirst(9).split(separator: "/", maxSplits: 1).map(String.init)
+            guard let id = parts.first, UUID(uuidString: id) != nil, parts.count == 1 || parts[1] == "selection" else { return nil }
+            self = .shortcut(AppleShortcuts.current(AppleShortcut(id: id, name: "")), withSelection: parts.count > 1)
+        } else if rawValue.hasPrefix("link:") {
             let parts = rawValue.dropFirst(5).split(separator: "/", maxSplits: 1).map(String.init)
             guard let id = parts.first, let command = LinkedApp.command(id: id) else { return nil }
             let variant = parts.count > 1 ? parts[1] : nil
@@ -138,6 +154,7 @@ enum MacAction: Hashable, Sendable {
         case .bluetooth(let target, let connect): BluetoothRoute.title(name: target.name, connect: connect)
         case .volume(let level): VolumeRequest.title(level)
         case .appLink(let command, _): appLinkVariant?.title ?? command.title
+        case .shortcut(let shortcut, let withSelection): AppleShortcuts.name(of: shortcut) + (withSelection ? " · With the Selection" : "")
         }
     }
 
@@ -165,6 +182,7 @@ enum MacAction: Hashable, Sendable {
         case .bluetooth(let target, let connect): BluetoothRoute.keywords(kind: target.kind, connect: connect)
         case .volume: ["volume", "son", "sound"]
         case .appLink(let command, _): command.keywords
+        case .shortcut: AppleShortcut.keywords
         }
     }
 
@@ -190,6 +208,8 @@ enum MacAction: Hashable, Sendable {
         case .volume(let level): "Set the sound's volume to \(level) %"
         case .appLink(let command, _):
             "\(command.app?.name ?? "An app"): \(command.oneLine)" + (appLinkVariant.map { " (\($0.title))" } ?? "")
+        case .shortcut(let shortcut, let withSelection):
+            "Run the user's shortcut “\(AppleShortcuts.name(of: shortcut))” (Apple's Shortcuts app)" + (withSelection ? ", on the selected text" : "")
         }
     }
 
@@ -204,6 +224,7 @@ enum MacAction: Hashable, Sendable {
         case .bluetooth(let target, _): BluetoothRoute.symbol(name: target.name, kind: target.kind)
         case .volume: "speaker.wave.2.fill"
         case .appLink(let command, _): appLinkVariant?.symbol ?? command.symbol
+        case .shortcut: FeatureCatalog.shortcutSymbol
         }
     }
 
@@ -219,6 +240,7 @@ enum MacAction: Hashable, Sendable {
         case .bluetooth: "Bluetooth"
         case .volume: "Sound"
         case .appLink(let command, _): command.app?.name ?? "App"
+        case .shortcut: "Shortcuts"
         }
     }
 }
