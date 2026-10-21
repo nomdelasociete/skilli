@@ -707,7 +707,11 @@ final class SettingTools {
     /// The action `text` names: its id, its name, or an app's name.
     private func action(_ text: String) throws -> SkilliAction {
         let actions = shortcutActions()
-        if let action = SkilliAction(id: text.trimmingCharacters(in: .whitespaces)), actions.contains(where: { $0.action == action }) { return action }
+        if let action = SkilliAction(id: text.trimmingCharacters(in: .whitespaces)) {
+            if actions.contains(where: { $0.action == action }) { return action }
+            // An app by its id ("app:/…"), as a name both an app and a command say.
+            if case .openApp(let path) = action, FileManager.default.fileExists(atPath: path) { return action }
+        }
         let wanted = Self.folded(text)
         // "SI · Fix" is also "Fix"; "Window Layout · Coding" also "Coding".
         func plain(_ title: String) -> String {

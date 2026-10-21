@@ -548,10 +548,12 @@ TypeSafe Jev key.
 Everything skil.li can do, and how you reach each one.
 
 - **What skil.li Can Do** (`?` in the launcher): every entry by group,
-  with its prefix, alias and shortcut; ↩ runs it. Every launcher
-  command, Mac command and what you made takes a shortcut (⌘K → Set
+  with its prefix, alias and shortcut; ↩ runs it. Every launcher command
+  and Mac command takes a shortcut, and so do your snippets, quicklinks,
+  layouts, commands and the skillies that need no argument (⌘K → Set
   Shortcut…, or the entry's popover here): Search Snippets opens
-  straight in your snippets.
+  straight in your snippets. What only types the start of words (Timer)
+  or opens where the first of something is made takes none.
 - **Aliases**: your own short names for any result.
 - **Quicklinks**: search a site from the launcher (`g skilli`, `yt lofi`);
   the selection is the query when none is typed; a shortcut of its own

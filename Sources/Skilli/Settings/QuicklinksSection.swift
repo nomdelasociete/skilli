@@ -101,7 +101,12 @@ struct QuicklinksSection: View {
                 .fixedSize()
                 Spacer()
                 Button("Reset to Defaults") {
+                    let before = store.links.map(\.id)
                     store.resetToDefaults()
+                    // The ones gone take their shortcuts with them.
+                    for id in before where !store.links.contains(where: { $0.id == id }) {
+                        shortcuts.removeEntries(for: .quicklink(id))
+                    }
                     links = store.links
                     onChange()
                 }

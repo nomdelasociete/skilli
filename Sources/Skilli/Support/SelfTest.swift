@@ -11210,10 +11210,17 @@ final class SelfTest {
         }
         let flags: CGEventFlags = [.maskCommand, .maskAlternate, .maskShift]
         let actions: [SkilliAction] = [.launcherCommand(.searchSnippets), .snippet(snippet.id), .quicklink(quicklink.id)]
-        let had = actions.map { store.entryID(for: $0) }
+        // A shortcut there before gets its keys back; one added goes.
+        let had = actions.map { action in
+            store.entryID(for: action).map { id in (id: id, chords: store.config.shortcuts.first { $0.id == id }?.chords) }
+        }
         defer {
-            for (action, had) in zip(actions, had) where had == nil {
-                if let id = store.entryID(for: action) { store.remove(id) }
+            for (action, had) in zip(actions, had) {
+                if let had {
+                    try? store.setKeys(had.chords, for: had.id)
+                } else if let id = store.entryID(for: action) {
+                    store.remove(id)
+                }
             }
             library.delete(snippet.id)
             textView.string = ""
