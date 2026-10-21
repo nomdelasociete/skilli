@@ -135,7 +135,8 @@ final class ChildProcess: @unchecked Sendable {
         }
     }
 
-    private func closedOutput() {
+    /// Its output read to the end: its group is no longer its to stop.
+    func closedOutput() {
         lock.withLock { outputClosed = true }
     }
 

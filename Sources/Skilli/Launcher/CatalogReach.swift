@@ -26,6 +26,7 @@ extension CatalogEntry {
         case .quicklink(let link): return .quicklink(link)
         case .layout(let layout): return .windowLayout(layout)
         case .appLink(let link): return LinkedApp.command(id: link).map { .mac(.appLink($0, variant: nil)) }
+        case .shortcut(let shortcut): return .mac(.shortcut(AppleShortcuts.current(AppleShortcut(id: shortcut, name: "")), withSelection: false))
         case .skillie(let path):
             guard let command = skillies.first(where: { $0.path == path }), command.arguments.allSatisfy(\.optional) else { return nil }
             return .mac(.script(command))

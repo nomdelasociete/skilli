@@ -127,7 +127,7 @@ enum SkilliAction: Hashable, Sendable {
             } else if id.hasPrefix("ai."), id.count > 3 {
                 self = .aiPrompt(String(id.dropFirst(3)))
             } else if id.hasPrefix("window.") || id.hasPrefix("sound.") || id.hasPrefix("project:") || id.hasPrefix("script:")
-                        || id.hasPrefix("settings:") || id.hasPrefix("link:"), let action = MacAction(rawValue: id) {
+                        || id.hasPrefix("settings:") || id.hasPrefix("link:") || id.hasPrefix("shortcut:"), let action = MacAction(rawValue: id) {
                 self = .mac(action)
             } else if id.hasPrefix("mac."), let command = SystemCommand(rawValue: String(id.dropFirst(4))) {
                 self = .mac(.system(command))
@@ -162,6 +162,9 @@ enum SkilliAction: Hashable, Sendable {
         case .mac(.appLink(let command, let variant)):
             ([command.app?.shortName ?? "App", command.title] + (variant.flatMap(command.variant(id:)).map { [$0.label] } ?? []))
                 .joined(separator: " · ")
+        // "Shortcuts · Morning Routine · With the Selection".
+        case .mac(.shortcut(let shortcut, let withSelection)):
+            "Shortcuts · \(MacAction.shortcut(shortcut, withSelection: withSelection).title)"
         case .mac(let action): action.title
         case .windowLayout(let id): "Window Layout · \(id)"
         case .launcherCommand(let id): LauncherCommand.all.first { $0.id == id }?.title ?? id.rawValue
@@ -268,6 +271,14 @@ enum ActionCatalog {
         MacAction.appLinks().flatMap { action -> [SkilliAction] in
             guard case .appLink(let command, _) = action else { return [] }
             return [.mac(action)] + LinkedApps.variants(of: command).map { .mac(.appLink(command, variant: $0.id)) }
+        }
+    }
+
+    /// The user's shortcuts in Apple's Shortcuts app, each followed by its
+    /// run on the selection.
+    static func appleShortcuts() -> [SkilliAction] {
+        AppleShortcuts.all().flatMap { shortcut -> [SkilliAction] in
+            [.mac(.shortcut(shortcut, withSelection: false)), .mac(.shortcut(shortcut, withSelection: true))]
         }
     }
 }

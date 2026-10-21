@@ -169,6 +169,7 @@
 		8336A1CAEDC83B5AE2C0609C /* LinkedApps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F2AB86D0BAAAB6AFFBCD42 /* LinkedApps.swift */; };
 		83598DA3908849017EF84D68 /* ReminderWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEB0C9CEF0DD20D0FD01B1BC /* ReminderWatch.swift */; };
 		837C3CA8C8645B53457EF72C /* BrandCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 589BBB57B8D9D8261748F540 /* BrandCheck.swift */; };
+		840E0886C5B4EB9EACBD04F0 /* AppleShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73C96BF2E237C85FCFC3FCF7 /* AppleShortcut.swift */; };
 		8451A3DD7ACEE075D4328920 /* EmojiGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46D382426CB605EA44DB1EEF /* EmojiGridView.swift */; };
 		8483629CF236029E8E8DF1AB /* QuicklinkLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 328C9768FD366435AE296159 /* QuicklinkLibrary.swift */; };
 		89438C36C85E5874DC9BF601 /* BackupPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059D7C24F82A37F30C340CC6 /* BackupPlan.swift */; };
@@ -203,6 +204,7 @@
 		A1CD24CD42B272BD3EF891C7 /* AskValues+Plan.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7FA2D07E598EABCD227CCDC /* AskValues+Plan.swift */; };
 		A1E94CD8D13F41FA1063E10C /* AIAccountsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB63022DBB47B70E6F914593 /* AIAccountsPane.swift */; };
 		A246A96870E4A98EC51E2A1E /* TargetHighlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = E09DD4F64D0B4785BC7D1478 /* TargetHighlight.swift */; };
+		A2D21504ED0D1CBDAAA758E5 /* AppleShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFFAE2DCDD4BBDEC7BFAD584 /* AppleShortcuts.swift */; };
 		A3298F585D31A726CB08A8B8 /* ActionRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB6EB38FA2E582FBA2D4B35C /* ActionRunner.swift */; };
 		A5F06C4A1DBB70A6B8E8B0AF /* AppUninstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A6D55308FEC6AE23E9689ED /* AppUninstaller.swift */; };
 		A6538E60D90762C43F069F45 /* ControlTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77684E985793CEC22D2C04A4 /* ControlTarget.swift */; };
@@ -485,6 +487,7 @@
 		714B2B01BE20FBE3A213B814 /* WelcomeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeModel.swift; sourceTree = "<group>"; };
 		72C04A03C3CFB05353E7D60B /* MeetingCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingCheck.swift; sourceTree = "<group>"; };
 		738E57A49A152A4B343380FA /* HyperKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HyperKey.swift; sourceTree = "<group>"; };
+		73C96BF2E237C85FCFC3FCF7 /* AppleShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleShortcut.swift; sourceTree = "<group>"; };
 		7401408A8769931FA8BADBD0 /* SymbolicHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymbolicHotKey.swift; sourceTree = "<group>"; };
 		76F771A9D2CA028E26771631 /* AgentSkill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSkill.swift; sourceTree = "<group>"; };
 		770FB0B9E4F8E315F3268866 /* AutoQuitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoQuitter.swift; sourceTree = "<group>"; };
@@ -606,6 +609,7 @@
 		DD3FFF919066544B9CB6E429 /* Benchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Benchmark.swift; sourceTree = "<group>"; };
 		DD73B1BA771D2563DA968926 /* SpotlightKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightKey.swift; sourceTree = "<group>"; };
 		DFD907BC9FD0A9478E050918 /* BrewPackage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrewPackage.swift; sourceTree = "<group>"; };
+		DFFAE2DCDD4BBDEC7BFAD584 /* AppleShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleShortcuts.swift; sourceTree = "<group>"; };
 		E09DD4F64D0B4785BC7D1478 /* TargetHighlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetHighlight.swift; sourceTree = "<group>"; };
 		E14F0C34BE79BC6B1D7E6A9B /* Dictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dictation.swift; sourceTree = "<group>"; };
 		E21A7E7D757144D08CF050D2 /* AskValues+Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AskValues+Contact.swift"; sourceTree = "<group>"; };
@@ -669,6 +673,7 @@
 				76F771A9D2CA028E26771631 /* AgentSkill.swift */,
 				BDE51110EFE83A715B70F49E /* AgentStream.swift */,
 				DB28EB739F8A118246007F1C /* AppLeftovers.swift */,
+				73C96BF2E237C85FCFC3FCF7 /* AppleShortcut.swift */,
 				011954ED392BD0FA6BBF248F /* ApprovalRules.swift */,
 				8F8ECF7BCD7E0CE2A77DF0EE /* AskSchedule.swift */,
 				C47232963E45D2D87A3E56CC /* AskValues.swift */,
@@ -1058,6 +1063,7 @@
 		D6287AA0D05B9B100BA671CB /* System */ = {
 			isa = PBXGroup;
 			children = (
+				DFFAE2DCDD4BBDEC7BFAD584 /* AppleShortcuts.swift */,
 				7A6D55308FEC6AE23E9689ED /* AppUninstaller.swift */,
 				3083C8B3776FFFAA767674C1 /* AudioDevices.swift */,
 				770FB0B9E4F8E315F3268866 /* AutoQuitter.swift */,
@@ -1296,6 +1302,7 @@
 				F8AC6DCB0C67CE7C4D5B72EB /* AgentSkill.swift in Sources */,
 				68075FC4516948C26A9FD315 /* AgentStream.swift in Sources */,
 				9472AB18BC7BA4FD574DD7CE /* AppLeftovers.swift in Sources */,
+				840E0886C5B4EB9EACBD04F0 /* AppleShortcut.swift in Sources */,
 				E232C008FF6F93C66F195458 /* ApprovalRules.swift in Sources */,
 				5A80D9B7B0CBBEC36F4D64CC /* AskSchedule.swift in Sources */,
 				573F521BA02761CE19E2D4BB /* AskValues+Contact.swift in Sources */,
@@ -1434,6 +1441,7 @@
 				01B6A2146622400D384B37A1 /* AppDelegate.swift in Sources */,
 				AA7270CC05A8C28765EC6C9A /* AppIndex.swift in Sources */,
 				A5F06C4A1DBB70A6B8E8B0AF /* AppUninstaller.swift in Sources */,
+				A2D21504ED0D1CBDAAA758E5 /* AppleShortcuts.swift in Sources */,
 				24E0278210384D17E7295196 /* AppsPane.swift in Sources */,
 				8A33D74074273BDE6EBA492A /* AskPane.swift in Sources */,
 				B8E516D073F1EFB0D8B172ED /* AskRouter.swift in Sources */,

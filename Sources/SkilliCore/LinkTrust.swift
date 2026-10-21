@@ -61,7 +61,7 @@ public struct LinkTrust: Equatable, Sendable {
         case .system(let command): command.asksAnyway || command == .pasteLatestScreenshot
         case .command(let id): id == .pasteInSequence || id == .resetLauncherPosition
         case .settings: true
-        case .window, .type, .ask, .askByVoice, .dictate, .transform, .prompt, .snippet, .skillie, .quicklink, .layout, .appLink: false
+        case .window, .type, .ask, .askByVoice, .dictate, .transform, .prompt, .snippet, .skillie, .quicklink, .layout, .appLink, .shortcut: false
         }
     }
 

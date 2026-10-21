@@ -3417,6 +3417,55 @@ re-investigating.
   display), Annotate / Pin Latest Screenshot the newest screenshot's path
   (PNG or JPEG). `SystemCommands.openAppLink` is the self-test's dry run;
   `remote apps` (✦K C, "capture front", ⌘K, the frame) captures nothing.
+- Apple's Shortcuts (docs/apps.md, Next apps 1; `AppleShortcut` in
+  SkilliCore, `AppleShortcuts`): every shortcut in the user's library is a
+  `MacAction.shortcut(shortcut, withSelection:)` (raw value
+  `shortcut:<identifier>`, `…/selection` run on the selection), so the
+  same list serves the launcher's rows (by name, Shortcuts' icon,
+  accessory "Shortcuts"), the Catalog (In Your Apps, entry
+  `system:shortcut:<identifier>`, `FeatureCatalog.Input.shortcuts`),
+  aliases and pins, keys (Add Shortcut → Shortcuts, a submenu each: as it
+  is, With the Selection), links (asked first, Always offered: a shortcut
+  can do anything), Ask (questions of their own, `shortcut0`…, 60 shortcuts each, by name;
+  ≥ 60 % beats the agent, ≥ 85 % a reminder or an answer too; asked
+  first under 85 %; what Ask was asked on is its input), agents
+  (`list_shortcuts`, `run_shortcut` with an optional `input` or
+  `selection=true`, the text it gave back) and skillies
+  (skillies/README.md: `open` its row's link; or `"$SKILLI_CLI" call
+  run_shortcut name=… input=…`, or `… name=… selection=true` for the
+  selected text, each of which waits and exits 0, 1 or 2). Read with Apple's tool
+  (`shortcuts list --show-identifiers`, "Name (identifier)") off the
+  main thread at launch and each time the launcher opens, with the
+  radios; a change redraws the rows; a key never runs it. Run by
+  identifier (`shortcuts run <identifier>`), so a renamed shortcut keeps
+  its keys, alias and learning; a key saved before the first read knows
+  only the identifier, its name comes from the last read
+  (`AppleShortcuts.name(of:)`); `AppleShortcut` is equal by identifier.
+  Input: text on the standard input, which Shortcuts reads as text
+  (`shortcuts help run`; Shortcuts User Guide, "Run shortcuts from the
+  command line"): ⌘K → Run with the Selection takes the text the launcher
+  read as it opened (listed only when it read some), a key with the
+  selection reads it as it runs (none: the card says so, nothing runs).
+  Output: what it printed, text only (`AppleShortcut.shownOutput`), in
+  the card as a skillie's: one line 4 s, more up to 20 s (scrolls);
+  nothing or not text (an image, a file): the card goes, nothing said.
+  The first time a shortcut hands what it made to skil.li, Shortcuts asks
+  in its own window ("Allow “…” to produce 1 text item?": deny, allow
+  once, always allow); the run waits for it, "Running “…”…" in the
+  card, which never covers that window.
+  Errors: Shortcuts' last line, "Error: " taken out. 300 s at most (a
+  shortcut can wait for the user). ⌘K → Edit in Shortcuts opens
+  `shortcuts://open-shortcut?name=…` (Shortcuts User Guide, "Open and
+  create a shortcut using a URL scheme"), the name encoded whole.
+  `remote apps` imports a test shortcut it signs (`shortcuts sign`, then
+  opened and added in Shortcuts), answers Shortcuts' question once
+  (Always Allow), runs it from the launcher (↩, ⌘K with the selection), a
+  key on the selection, its link (asked), Ask, `run_shortcut`, and three
+  scratch skillies (its link opened, `call` with `input=`, with
+  `selection=true`, each asked in the card), then
+  deletes it in Shortcuts (Edit → Delete) and quits Shortcuts when it
+  opened it; `selftest decide`: Ask picks made-up shortcuts by name, and
+  none for something else (decided only).
 - Import: `skilli://commands/import?command=<file>` (repeatable) or
   `?url=https://…` (`CommandLink`, `Config/Info.plist`). Settings →
   Commands shows every command in full before Add; nothing is added from a
