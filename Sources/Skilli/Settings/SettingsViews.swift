@@ -327,7 +327,7 @@ struct SettingsRootView: View {
             }
         }
         // An app's page in Apps: its name, the way back beside it.
-        .navigationTitle(pane == .apps ? AppsPaneApp.installed().first { $0.page == apps.page }?.name ?? pane.title : pane.title)
+        .navigationTitle(pane == .apps ? apps.title ?? pane.title : pane.title)
     }
 }
 

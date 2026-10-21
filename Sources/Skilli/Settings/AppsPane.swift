@@ -20,6 +20,11 @@ enum AppsPage: Hashable {
 final class AppsPaneModel {
     /// Nil: the list.
     var page: AppsPage?
+
+    /// The window's title on an app's page: the app's name.
+    var title: String? {
+        page.flatMap { page in AppsPaneApp.installed().first { $0.page == page }?.name }
+    }
     let newShortcut = NewShortcut()
     /// The user's shortcuts as last read; read again as the pane shows.
     private(set) var shortcuts: [AppleShortcut] = AppleShortcuts.all()
@@ -98,19 +103,6 @@ struct AppsPane: View {
                     .id(page)
             } else {
                 AppsListView(apps: apps, store: context.shortcuts, model: model)
-            }
-        }
-        .toolbar {
-            if model.page != nil {
-                ToolbarItem(placement: .navigation) {
-                    Button {
-                        model.page = nil
-                    } label: {
-                        Label("Apps", systemImage: "chevron.left")
-                    }
-                    .labelStyle(.titleAndIcon)
-                    .help("Back to the apps")
-                }
             }
         }
         // Another pane: the list again when it comes back.
@@ -248,7 +240,7 @@ private struct AppPageView: View {
                 .settingAnchor("cleanShotTextLineBreaks")
             }
         } header: {
-            AppPageHeader(app: app, detail: AppsCount.line(commands.count, "command", keys: 0), note: installed.app.allowance)
+            AppPageHeader(app: app, detail: AppsCount.line(commands.count, "command", keys: 0), note: installed.app.allowance) { model.page = nil }
         }
         // The long list last: the commands, by group.
         ForEach(Array(groups.enumerated()), id: \.element.title) { position, group in
@@ -320,7 +312,7 @@ private struct AppPageView: View {
             }
         } header: {
             AppPageHeader(app: app, detail: list.isEmpty ? nil : AppsCount.line(list.count, "shortcut", keys: 0),
-                          note: "Every shortcut in your library, run by Shortcuts from the launcher, a key, Ask or a link.")
+                          note: "Every shortcut in your library, run from the launcher, a key, Ask or a link.") { model.page = nil }
         } footer: {
             if !list.isEmpty {
                 Text("A hidden shortcut leaves the launcher's results; its keys, Ask and links still run it.")
@@ -330,16 +322,33 @@ private struct AppPageView: View {
     }
 }
 
-/// The top of an app's page, centered like a pane's header: the app's own
-/// icon, its name, its version and what it has, what it needs, and the
-/// button that opens it.
+/// The top of an app's page: "‹ Apps" back to the list, then centered
+/// like a pane's header, the app's own icon, its name, its version and
+/// what it has, what it needs, and the button that opens it.
 private struct AppPageHeader: View {
     let app: AppsPaneApp
     let detail: String?
     let note: String?
+    let back: () -> Void
 
     var body: some View {
         VStack(spacing: 6) {
+            // In the page, not the toolbar: a toolbar item would make the
+            // window taller as the page opens.
+            HStack {
+                Button(action: back) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "chevron.left")
+                            .fontWeight(.semibold)
+                        Text("Apps")
+                    }
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.tint)
+                .help("Back to the apps")
+                Spacer()
+            }
+            .padding(.bottom, 2)
             Image(nsImage: app.icon)
                 .resizable()
                 .interpolation(.high)
@@ -360,7 +369,6 @@ private struct AppPageHeader: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 24)
             }
             Button("Open \(app.shortName)") { app.open() }
                 .padding(.top, 4)

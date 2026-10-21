@@ -1866,33 +1866,41 @@ final class SelfTest {
             await captureSettingsBothWays(as: "settings-apps-keys")
         }
 
-        // The pointer over a row: its ⋯; a click opens its menu.
+        // The pointer over a row: its ⋯ shows; a click opens its menu.
         var hoverMenu: [String] = []
+        var moreShown = false
         let source = CGEventSource(stateID: .hidSystemState)
-        if let window, let more = Self.axElements(roles: [kAXMenuButtonRole, kAXPopUpButtonRole, kAXButtonRole],
-                                                     where: { $0 == "\(window.title) Options" }).first,
-           let frame = Self.axFrame(more) {
-            let point = CGPoint(x: frame.midX, y: frame.midY)
-            CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+        if let window, let title = Self.axElements(roles: [kAXStaticTextRole], where: { $0 == window.title }).first,
+           let titleFrame = Self.axFrame(title) {
+            let over = CGPoint(x: titleFrame.maxX + 120, y: titleFrame.midY)
+            CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: over, mouseButton: .left)?.post(tap: .cghidEventTap)
             await pause(500)
+            let label = "\(window.title) Options"
+            let more = Self.axElements(roles: [kAXMenuButtonRole, kAXPopUpButtonRole, kAXButtonRole], where: { $0 == label }).first
+            moreShown = more != nil
             if let directory = context.snapshotDirectory, let png = await settings.snapshotPNG() {
                 try? png.write(to: directory.appendingPathComponent("settings-apps-hover.png"))
             }
-            for type in [CGEventType.leftMouseDown, .leftMouseUp] {
-                CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
-                await pause(60)
+            if let more, let frame = Self.axFrame(more) {
+                let point = CGPoint(x: frame.midX, y: frame.midY)
+                for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
+                    CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+                    await pause(60)
+                }
+                await pause(600)
+                // Its items only, not the menu bar's.
+                let ours = ["Shortcut", "Search", window.title]
+                hoverMenu = Self.axElements(roles: [kAXMenuItemRole], where: { title in ours.contains { title.contains($0) } }).compactMap(Self.axTitle)
+                if let directory = context.snapshotDirectory, let png = await settings.snapshotPNG(withMenu: true) {
+                    try? png.write(to: directory.appendingPathComponent("settings-apps-menu.png"))
+                }
+                for down in [true, false] {
+                    CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap)
+                }
+                await pause(400)
             }
-            await pause(600)
-            hoverMenu = Self.axElements(roles: [kAXMenuItemRole], where: { !$0.isEmpty }).compactMap(Self.axTitle)
-            if let directory = context.snapshotDirectory, let png = await settings.snapshotPNG(withMenu: true) {
-                try? png.write(to: directory.appendingPathComponent("settings-apps-menu.png"))
-            }
-            for down in [true, false] {
-                CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap)
-            }
-            await pause(400)
         }
-        let menuWorks = ["Change Shortcut", "Remove Shortcut", "Add a Shortcut for", "Hide from Search"].allSatisfy(hoverMenu.contains)
+        let menuWorks = moreShown && ["Change Shortcut", "Remove Shortcut", "Add a Shortcut for", "Hide from Search"].allSatisfy(hoverMenu.contains)
 
         // Hidden from search: the row dims; the launcher no longer lists it.
         let restore = LinkedApp.command(id: "cleanshot.restore-recently-closed")
@@ -1952,7 +1960,7 @@ final class SelfTest {
         let landed = await waitUntil(timeout: 2) { settings.search.landed == anchor } != nil && model.page == cleanShotPage
         let inSight = await waitUntil(timeout: 1) { settings.anchorVisibility(anchor) > 0.95 } != nil
 
-        // ‹ Apps, in the window's toolbar: the list again.
+        // ‹ Apps, atop the page: the list again.
         settings.scrollPaneToTop()
         await pause(300)
         var back = false
@@ -1991,7 +1999,7 @@ final class SelfTest {
         let fits = listOverflow <= 1 && pageOverflow <= 1 && shortcutsOverflow <= 1
         record(name, fits && pushed && keysShown && menuWorks && hiddenWorks && recorded && !leftBehind && landed && inSight && back && linesWork,
                "CleanShot X \(installed.version ?? "?"); past the window: list \(Int(listOverflow)), page \(Int(pageOverflow)), Shortcuts \(Int(shortcutsOverflow)) pt; "
-                   + "its row pushes its page: \(pushed); keys on a command and a variant: \(keysShown)\(keysProblem); ⋯ menu: \(hoverMenu.joined(separator: ", ")); "
+                   + "its row pushes its page: \(pushed); keys on a command and a variant: \(keysShown)\(keysProblem); ⋯ on hover: \(moreShown), its menu: \(hoverMenu.joined(separator: ", ")); "
                    + "hidden leaves the results and comes back: \(hiddenWorks); recording: \(recorded), ⎋ or going back left one: \(leftBehind); "
                    + "search lands on the page's row: \(landed), in sight \(inSight); ‹ Apps: \(back); Capture Text's links: \(links.joined(separator: ", ")); "
                    + "Shortcuts' page: \(model.shortcuts.count) shortcuts, \(shortcutRows) rows drawn",

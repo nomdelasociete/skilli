@@ -563,7 +563,7 @@ per-show work.
   Apps (docs/apps.md): a list of the apps skil.li drives that are
   installed (CleanShot X, Shortcuts): a row each (its own icon, its
   commands and how many on keys, a chevron); a click pushes the app's
-  page in the pane (`AppsPaneModel.page`, "‹ Apps" in the toolbar goes
+  page in the pane (`AppsPaneModel.page`, "‹ Apps" atop the page goes
   back, the window's title is the app's). A page: its header (icon, name,
   version, `LinkedApp.allowance`: nothing on the Mac says whether
   CleanShot's API is on; Open, which opens the app), its options

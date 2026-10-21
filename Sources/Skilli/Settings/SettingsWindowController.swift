@@ -91,7 +91,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             if pane == .catalog, section != nil { catalog.search = "" }
         }
         // SwiftUI retitles the window after its first pass; no "Untitled".
-        window.title = (navigation.pane ?? .general).title
+        window.title = navigation.pane == .apps ? apps.title ?? SettingsPane.apps.title : (navigation.pane ?? .general).title
         if isNew { window.center() }
         Foreground.bring(window)
         if isNew {
