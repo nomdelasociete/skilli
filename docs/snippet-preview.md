@@ -26,7 +26,7 @@ of it. Fixed frames: a row change fills views in place, no Auto Layout.
 │                       │ Shortcut                         ⌥⇧⌘9   │
 │                       │ Size                 9 words · 52 chars  │
 │                       │ Modified                    2 hours ago  │
-└──────────────────────────────── Type Snippet ↩  Copy ⌘↩  … ──────┘
+└──────────────────────────── Paste ↩  By Meaning ⇥  Actions ⌘K ──┘
 ```
 
 ## The rows
@@ -95,6 +95,13 @@ under 8 ms.
 
 ## Checked by
 
-`selftest snippets` (Mac mini): the pane shows the selected snippet with
-`{date}` filled, `{cursor}` as the caret, its information rows; ↓ moves
-the pane; captures `launcher-snippets-light/-dark.png`.
+`selftest snippets` (Mac mini, `snippetsFoundByMeaning`): the split, the
+keycaps and no alias cap, ↓ moving the pane, `{date}` and the clipboard
+filled (or the token left as written), the caret, every Information row,
+a row shown in under 8 ms (0.23 ms measured), code under its language,
+a long snippet without a keyword, the quiet tile, ⇥'s pick in the pane,
+the list whole again after esc. Captures, light and dark:
+`launcher-snippets`, `-code`, `-long`, `-empty`, `-meaning`. Judged on
+the mini against Clipboard History's `launcher-clipboard-preview-*`
+(`selftest previews`, which also covers the clipboard preview on its
+shared parts).
