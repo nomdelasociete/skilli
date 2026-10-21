@@ -30,6 +30,29 @@ final class SnippetTests: XCTestCase {
         XCTAssertEqual(plain.cursorFromEnd, 0)
     }
 
+    /// The launcher's preview: the same expansion, its filled parts and
+    /// the caret told apart; joined, exactly what `expanded` types.
+    func testExpansionPiecesAreWhatIsTyped() {
+        let snippet = Snippet(id: "r", name: "Reply", text: "Le {date | upper}, {cursor}{uuid} de {clipboard}{cursor}.")
+        let values: [PromptTemplate.Variable: String] = [.date: "21 octobre", .clipboard: "Camille"]
+        let pieces = snippet.expansion(values)
+        XCTAssertEqual(pieces, [
+            .written("Le "),
+            .filled(token: "{date | upper}", variable: .date, value: "21 OCTOBRE"),
+            .written(", "),
+            .cursor,
+            .written("{uuid} de "),
+            .filled(token: "{clipboard}", variable: .clipboard, value: "Camille"),
+            .written(".")
+        ])
+        let expanded = snippet.expanded(values)
+        XCTAssertEqual(pieces.map(\.typed).joined(), expanded.text)
+        XCTAssertEqual(expanded.cursorFromEnd, "{uuid} de Camille.".count)
+        XCTAssertEqual(snippet.placeholders, ["{date | upper}", "{cursor}", "{clipboard}"])
+        XCTAssertEqual(Snippet(id: "p", name: "Plain", text: "Just text").expansion([:]), [.written("Just text")])
+        XCTAssertEqual(Snippet(id: "p", name: "Plain", text: "Just text").placeholders, [])
+    }
+
     func testMatcherSymbolKeywordsAtOnceLetterKeywordsAtTheWordsEnd() {
         let snippets = [
             Snippet(id: "a", name: "Address", keyword: ";addr", text: "x"),
