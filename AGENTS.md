@@ -829,7 +829,12 @@ per-show work.
 - In the list: typing filters (each word starts a word of the title: "co
   ph"), arrows move, ↩ runs, an action's key runs it, esc or ⌘K go back to
   the results, a click beside it closes it. ⌃N and ⌃P move as ↓ and ↑,
-  in the list and in the results. Copies close the launcher, nothing
+  in the list and in the results. In the list only, a press past an end
+  goes round to the other (↑ on the first selects the last); held, the
+  key stops at the end (`ActionPanelView.move(by:wraps:)`). The results
+  do not: they are long, and ↑ on their first row with the field empty
+  brings back older searches. Copies close
+  the launcher, nothing
   said. A key with no action there says so in the list's field ("Nothing
   on ⇧⌘C here: pick an action in the list.", `ActionPanelView.say`) until
   the next key; the contact card's list too, and a key the card has no
