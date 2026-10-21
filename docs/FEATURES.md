@@ -191,19 +191,6 @@ The search panel you open from anywhere. ✦Space.
   Ask finds one by meaning instead.
 - **System Settings Panes**: "displays", "night shift", "bluetooth"…
   opens that pane.
-- **Shortcuts**: every shortcut in your Shortcuts library is a
-  row by its name, with Shortcuts' icon, under "In Your Apps" in the
-  Catalog; through them, whatever an app lets Shortcuts do. ↩ runs it;
-  what it gives back shows in the card (a line for a moment, more for
-  longer; the first time, Shortcuts asks before handing it over);
-  nothing given back, nothing said. ⌘K: Run with the Selection
-  (the text selected where the launcher opened is its input), Edit in
-  Shortcuts. Each one takes an alias, a key (Keys → Add Shortcut →
-  Shortcuts, as it is or with the selection), a link (asked first: a
-  shortcut can do anything), Ask ("lance mon raccourci du matin"),
-  agents and skillies (its link, or `$SKILLI_CLI call run_shortcut` with
-  an input or the selection). A shortcut made, renamed or deleted shows the next time the
-  launcher opens.
 - **Links**: `skilli://run/…` runs any Catalog row from any app (⌘K →
   Copy Link); what takes the Mac away asks first, and Always ⌘↩ in that
   card lets links run that entry at once (Settings → Catalog → Trusted
@@ -411,7 +398,9 @@ from · Live updates token.
 ## Apps
 
 The apps skil.li drives: their commands in the launcher, on a key, in Ask.
-Only the apps installed on this Mac are listed.
+Only the apps installed on this Mac are listed: a row each (its icon, how
+many commands, how many on keys); a click opens its page, "‹ Apps" goes
+back.
 
 - **CleanShot X**: every command its API documents is a launcher row with
   its icon, under "In Your Apps" in the Catalog: Capture Area, Window,
@@ -427,12 +416,29 @@ Only the apps installed on this Mac are listed.
   skillies (`run_action` with its variant; an upload asks every time).
 - **Where to allow it**: CleanShot runs them while its API is allowed
   (CleanShot → Settings → Advanced → Allow URL scheme API); while it is
-  off, CleanShot ignores them without a word. The pane says where to turn
+  off, CleanShot ignores them without a word. Its page says where to turn
   it on, and Open CleanShot opens it.
+- **Shortcuts**: every shortcut in your Shortcuts library is a
+  launcher row by its name, with Shortcuts' icon, under "In Your Apps" in the
+  Catalog; through them, whatever an app lets Shortcuts do. ↩ runs it;
+  what it gives back shows in the card (a line for a moment, more for
+  longer; the first time, Shortcuts asks before handing it over);
+  nothing given back, nothing said. ⌘K: Run with the Selection
+  (the text selected where the launcher opened is its input), Edit in
+  Shortcuts. Each one takes an alias, a key (its row's ⋯ in Settings →
+  Apps → Shortcuts, or Keys → Add Shortcut → Shortcuts; as it is or with
+  the selection), a link (asked first: a
+  shortcut can do anything), Ask ("lance mon raccourci du matin"),
+  agents and skillies (its link, or `$SKILLI_CLI call run_shortcut` with
+  an input or the selection). A shortcut made, renamed or deleted shows
+  the next time the launcher opens.
 
-Settings: each app (its version, where to allow it) · Line breaks in
-Capture Text · its commands by group, each with its shortcut (right-click:
-a variant's) and Show in search.
+Settings: each app's page: its version and what it has, Open, its
+options (CleanShot: Line breaks in Capture Text), then its commands (or
+shortcuts), each with its keys; ⋯ on a row (or a right-click): Add
+Shortcut, Add a Shortcut for a variant (Capture and Copy…, With the
+Selection), Hide from Search; a hidden one is dimmed, "Hidden from
+search".
 
 <!-- pane: yourDetails -->
 ## Your Details

@@ -57,7 +57,12 @@ final class SettingsSearchModel {
     /// read when a search starts (a command or a snippet made meanwhile).
     @ObservationIgnored var catalogInput: () -> FeatureCatalog.Input = { FeatureCatalog.Input() }
     /// Before a row of `pane` is looked for (Catalog: its own search cleared).
-    @ObservationIgnored var beforeReveal: (SettingsPane) -> Void = { _ in }
+    /// Before a row is looked for in `pane`: true when that makes the
+    /// pane draw anew (Apps pushes the app's page holding it).
+    @ObservationIgnored var beforeReveal: (_ pane: SettingsPane, _ anchor: String) -> Bool = { _, _ in false }
+    /// `pane` still reads what its rows show (Apps' shortcuts): a row not
+    /// there yet is waited for, within the reveal's 2 s.
+    @ObservationIgnored var revealIsLoading: (_ pane: SettingsPane) -> Bool = { _ in false }
     /// The pane on screen back to its top.
     @ObservationIgnored var scrollToTop: () -> Void = {}
     @ObservationIgnored weak var field: NSSearchField?
@@ -177,7 +182,11 @@ final class SettingsSearchModel {
         selected = id
         if let item = row.item {
             reveal(item.anchor, in: row.pane)
-        } else if navigation.pane == row.pane {
+            return
+        }
+        // The pane itself: its top (Apps: its list, not an app's page).
+        _ = beforeReveal(row.pane, row.id)
+        if navigation.pane == row.pane {
             scrollToTop()
         } else {
             navigation.pane = row.pane
@@ -196,8 +205,8 @@ final class SettingsSearchModel {
         revealPane = pane
         landed = nil
         revealCount += 1
-        beforeReveal(pane)
-        if navigation.pane != pane {
+        let redrawn = beforeReveal(pane, anchor)
+        if navigation.pane != pane || redrawn {
             // Its rows say when it is drawn.
             awaitingPane = true
             navigation.pane = pane
@@ -226,6 +235,8 @@ final class SettingsSearchModel {
             land(anchor)
         } else if (closedAdvanced[anchor] ?? 0) > 0 {
             // Its Advanced opens (it saw `revealing`): the row lands as it appears.
+        } else if let pane = revealPane, revealIsLoading(pane) {
+            // Its rows are being read: the row lands as it appears.
         } else {
             giveUp()
         }

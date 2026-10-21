@@ -560,14 +560,21 @@ per-show work.
   token under Advanced. Your Details: the card (Contacts in its place
   while missing), your other details, About You, what leaves, then the
   people and what forms get from the card.
-  Apps (docs/apps.md): only the linked apps installed, each with its row
-  (its icon, name, version, where the user lets skil.li drive it,
-  `LinkedApp.allowance`, and Open, which opens the app: nothing on the Mac
-  says whether CleanShot's API is on), its options (CleanShot: Line breaks
-  in Capture Text), then its commands by group (`LinkedApp.groups`), the
-  long list last, each with its shortcut (right-click: a variant's) and
-  Show in search (the Catalog's `catalogOff`); Settings' search opens a
-  linked app's command there. Keys and Catalog list the same commands.
+  Apps (docs/apps.md): a list of the apps skil.li drives that are
+  installed (CleanShot X, Shortcuts): a row each (its own icon, its
+  commands and how many on keys, a chevron); a click pushes the app's
+  page in the pane (`AppsPaneModel.page`, "‹ Apps" atop the page goes
+  back, the window's title is the app's). A page: its header (icon, name,
+  version, `LinkedApp.allowance`: nothing on the Mac says whether
+  CleanShot's API is on; Open, which opens the app), its options
+  (CleanShot: Line breaks in Capture Text), then its commands by group
+  (`LinkedApp.groups`) or Shortcuts' shortcuts, the long list last: a grey
+  symbol, the title, keycaps only when it has keys, and on hover a ⋯ menu
+  (a right-click too): Add / Change / Remove Shortcut, Add a Shortcut for
+  a variant (shown under its command once it has keys), Hide from Search
+  (the Catalog's `catalogOff`; dimmed, "Hidden from search"). Recording
+  stops when the page goes. Settings' search opens the page holding the
+  row (`beforeReveal`). Keys and Catalog list the same commands.
   Clipboard and Snippets too: Clipboard's first rows are ✦C, Paste in
   Sequence's ✦K V and "cb" as a keycap, then Keep clipboard history (Paste
   from Other Apps only while missing), Keep screenshots too and its
