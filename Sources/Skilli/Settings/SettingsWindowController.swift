@@ -15,6 +15,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// Settings → Catalog's search and the alias being typed; the
     /// self-test calls what its controls call.
     let catalog = CatalogPaneModel()
+    /// A shortcut Settings → Apps added to record; the self-test records
+    /// as its rows do.
+    let appShortcuts = NewShortcut()
     /// The search atop the sidebar; kept with its index while the window
     /// comes and goes. The self-test reads it.
     let search: SettingsSearchModel
@@ -320,7 +323,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         search.shortcuts = context.shortcuts
         search.catalogInput = context.catalogInput
         let root = SettingsRootView(preferences: preferences, navigation: navigation, context: context, markTilt: markTilt,
-                                    catalog: catalog, search: search)
+                                    catalog: catalog, appShortcuts: appShortcuts, search: search)
         let host = NSHostingController(rootView: root)
         // SwiftUI owns the title (the selected pane) and the toolbar.
         host.sceneBridgingOptions = [.title, .toolbars]

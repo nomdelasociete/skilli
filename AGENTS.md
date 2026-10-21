@@ -510,7 +510,7 @@ per-show work.
   on Linux and Windows (2026-10-17: "it's hyper key and not super key"). The
   sidebar is five blocks split by a gap, no headers (`SettingsPane.blocks`,
   2026-10-15): General, Keys, Privacy, Backup · Launcher, Clipboard,
-  Snippets, Emoji, Windows · Calendar, Reminders, GitHub, Your Details · Ask,
+  Snippets, Emoji, Windows · Calendar, Reminders, GitHub, Apps, Your Details · Ask,
   Commands, Tools, Skillies, SI Accounts · Catalog, About. Keys holds Caps Lock as
   the Hyper Key (✦) and every shortcut; General the launcher's keys, how
   skil.li looks (glass) and the launcher's place on the screen; Launcher its shortcuts, search
@@ -560,6 +560,14 @@ per-show work.
   token under Advanced. Your Details: the card (Contacts in its place
   while missing), your other details, About You, what leaves, then the
   people and what forms get from the card.
+  Apps (docs/apps.md): only the linked apps installed, each with its row
+  (its icon, name, version, where the user lets skil.li drive it,
+  `LinkedApp.allowance`, and Open, which opens the app: nothing on the Mac
+  says whether CleanShot's API is on), its options (CleanShot: Line breaks
+  in Capture Text), then its commands by group (`LinkedApp.groups`), the
+  long list last, each with its shortcut (right-click: a variant's) and
+  Show in search (the Catalog's `catalogOff`); Settings' search opens a
+  linked app's command there. Keys and Catalog list the same commands.
   Clipboard and Snippets too: Clipboard's first rows are ✦C, Paste in
   Sequence's ✦K V and "cb" as a keycap, then Keep clipboard history (Paste
   from Other Apps only while missing), Keep screenshots too and its
@@ -829,7 +837,12 @@ per-show work.
 - In the list: typing filters (each word starts a word of the title: "co
   ph"), arrows move, ↩ runs, an action's key runs it, esc or ⌘K go back to
   the results, a click beside it closes it. ⌃N and ⌃P move as ↓ and ↑,
-  in the list and in the results. Copies close the launcher, nothing
+  in the list and in the results. In the list only, a press past an end
+  goes round to the other (↑ on the first selects the last); held, the
+  key stops at the end (`ActionPanelView.move(by:wraps:)`). The results
+  do not: they are long, and ↑ on their first row with the field empty
+  brings back older searches. Copies close
+  the launcher, nothing
   said. A key with no action there says so in the list's field ("Nothing
   on ⇧⌘C here: pick an action in the list.", `ActionPanelView.say`) until
   the next key; the contact card's list too, and a key the card has no

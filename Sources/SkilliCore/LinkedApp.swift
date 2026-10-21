@@ -15,6 +15,27 @@ public struct LinkedApp: Identifiable, Sendable {
     public let bundleID: String
     public let scheme: String
     public let commands: [AppLinkCommand]
+    /// Its commands as Settings → Apps lists them, under a title each.
+    public let groups: [CommandGroup]
+    /// Where the user lets other apps drive it, in the user's words, when
+    /// the app asks for that. Nothing on the Mac says whether it is on:
+    /// CleanShot keeps its switch out of its defaults and ignores links
+    /// while it is off, asking nothing (checked on CleanShot X 5.0.1).
+    public let allowance: String?
+
+    /// A few of an app's commands under one title ("Capture"), by their
+    /// name after the app's id ("capture-area").
+    public struct CommandGroup: Sendable {
+        public let title: String
+        public let commands: [String]
+    }
+
+    /// The commands of each group, in its order.
+    public var grouped: [(title: String, commands: [AppLinkCommand])] {
+        groups.map { group in
+            (group.title, group.commands.compactMap { name in commands.first { $0.id == "\(id).\(name)" } })
+        }
+    }
 
     public static let all: [LinkedApp] = [.cleanShot]
 
@@ -168,7 +189,8 @@ extension LinkedApp {
     /// its API is allowed (CleanShot → Settings → Advanced); the first asks.
     public static let cleanShot = LinkedApp(
         id: "cleanshot", name: "CleanShot X", shortName: "CleanShot", bundleID: "pl.maketheweb.cleanshotx", scheme: "cleanshot",
-        commands: CleanShot.commands
+        commands: CleanShot.commands, groups: CleanShot.groups,
+        allowance: "Its commands run while Allow URL scheme API is on, in CleanShot → Settings → Advanced."
     )
 }
 
@@ -296,6 +318,45 @@ public enum CleanShot {
         guard url.scheme?.lowercased() == LinkedApp.cleanShot.scheme,
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return false }
         return items.contains { $0.name.lowercased() == "action" && $0.value?.lowercased() == "upload" }
+    }
+
+    static let groups: [LinkedApp.CommandGroup] = [
+        .init(title: "Capture", commands: ["capture-area", "capture-front-window", "capture-window", "capture-fullscreen", "capture-previous-area",
+                                           "self-timer", "scrolling-capture", "all-in-one", "capture-text"]),
+        .init(title: "Record", commands: ["record-screen", "record-front-window"]),
+        .init(title: "Annotate and Pin", commands: ["open-from-clipboard", "annotate-latest-screenshot", "open-annotate", "pin-latest-screenshot",
+                                                    "pin"]),
+        .init(title: "Desktop Icons", commands: ["toggle-desktop-icons", "hide-desktop-icons", "show-desktop-icons"]),
+        .init(title: "History and Settings", commands: ["open-history", "restore-recently-closed", "open-settings"])
+    ]
+
+    /// What Capture Text does with line breaks when ⌘K does not say
+    /// (Settings → Apps): as CleanShot's own Keep line breaks is set, or
+    /// one of its two variants each time.
+    public enum TextLineBreaks: String, CaseIterable, Sendable {
+        case asSet = "cleanshot"
+        case kept = "linebreaks"
+        case joined = "nolinebreaks"
+
+        public var title: String {
+            switch self {
+            case .asSet: "As set in CleanShot"
+            case .kept: "Kept"
+            case .joined: "Joined on one line"
+            }
+        }
+
+        /// The variant of Capture Text it runs; nil: CleanShot's setting.
+        public var variant: String? {
+            self == .asSet ? nil : rawValue
+        }
+    }
+
+    /// The variant a command runs when none is said: Capture Text's line
+    /// breaks; nil for every other.
+    public static func defaultVariant(of command: AppLinkCommand, lineBreaks: TextLineBreaks) -> AppLinkCommand.Variant? {
+        guard command.id == "cleanshot.capture-text", let id = lineBreaks.variant else { return nil }
+        return command.variant(id: id)
     }
 
     /// The image types CleanShot opens (`pin`, `open-annotate`).

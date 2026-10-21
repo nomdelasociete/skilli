@@ -1013,6 +1013,9 @@ final class SettingTools {
         })
         bindings["relayToken"] = secret { [unowned self] in self.github?.hasRelayToken == true }
 
+        // Apps
+        bindings["cleanShotTextLineBreaks"] = choice(\.cleanShotTextLineBreaks)
+
         // Your Details
         bindings["otherDetails"] = otherDetails()
         bindings["people"] = people()
