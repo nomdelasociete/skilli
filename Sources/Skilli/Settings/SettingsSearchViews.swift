@@ -57,7 +57,9 @@ final class SettingsSearchModel {
     /// read when a search starts (a command or a snippet made meanwhile).
     @ObservationIgnored var catalogInput: () -> FeatureCatalog.Input = { FeatureCatalog.Input() }
     /// Before a row of `pane` is looked for (Catalog: its own search cleared).
-    @ObservationIgnored var beforeReveal: (SettingsPane) -> Void = { _ in }
+    /// Before a row is looked for in `pane`: true when that makes the
+    /// pane draw anew (Apps pushes the app's page holding it).
+    @ObservationIgnored var beforeReveal: (_ pane: SettingsPane, _ anchor: String) -> Bool = { _, _ in false }
     /// The pane on screen back to its top.
     @ObservationIgnored var scrollToTop: () -> Void = {}
     @ObservationIgnored weak var field: NSSearchField?
@@ -196,8 +198,8 @@ final class SettingsSearchModel {
         revealPane = pane
         landed = nil
         revealCount += 1
-        beforeReveal(pane)
-        if navigation.pane != pane {
+        let redrawn = beforeReveal(pane, anchor)
+        if navigation.pane != pane || redrawn {
             // Its rows say when it is drawn.
             awaitingPane = true
             navigation.pane = pane

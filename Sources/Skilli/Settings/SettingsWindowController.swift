@@ -15,9 +15,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// Settings → Catalog's search and the alias being typed; the
     /// self-test calls what its controls call.
     let catalog = CatalogPaneModel()
-    /// A shortcut Settings → Apps added to record; the self-test records
-    /// as its rows do.
-    let appShortcuts = NewShortcut()
+    /// Settings → Apps' page and the shortcut its rows record; the
+    /// self-test calls what its controls call.
+    let apps = AppsPaneModel()
     /// The search atop the sidebar; kept with its index while the window
     /// comes and goes. The self-test reads it.
     let search: SettingsSearchModel
@@ -39,8 +39,14 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         super.init()
         // A row looked for in the Catalog: its whole list, not what was
         // searched there.
-        search.beforeReveal = { [weak self] pane in
-            if pane == .catalog { self?.catalog.search = "" }
+        search.beforeReveal = { [weak self] pane, anchor in
+            guard let self else { return false }
+            if pane == .catalog { self.catalog.search = "" }
+            // A row of an app's page: that page, drawn anew.
+            guard pane == .apps else { return false }
+            let page = AppsPaneModel.page(for: anchor)
+            defer { self.apps.page = page }
+            return self.apps.page != page
         }
         search.scrollToTop = { [weak self] in self?.scrollDetailToTop() }
         catalog.onAllRowsShown = { [weak self] in
@@ -203,8 +209,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     /// Self-test hook: the window as PNG, as it shows on screen. Falls back
     /// to an off-screen render, which leaves the sidebar's glass blank.
-    func snapshotPNG() async -> Data? {
+    func snapshotPNG(withMenu: Bool = false) async -> Data? {
         guard let window else { return nil }
+        // A menu open over it (a row's ⋯): both.
+        if withMenu, let png = await WindowCapture.png(of: [window], withMenu: true) { return png }
         // A popover (Catalog's) or a sheet (a dialog) open over it: both,
         // as they show.
         let popovers = Self.popoverWindows + window.sheets.filter(\.isVisible)
@@ -323,7 +331,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         search.shortcuts = context.shortcuts
         search.catalogInput = context.catalogInput
         let root = SettingsRootView(preferences: preferences, navigation: navigation, context: context, markTilt: markTilt,
-                                    catalog: catalog, appShortcuts: appShortcuts, search: search)
+                                    catalog: catalog, apps: apps, search: search)
         let host = NSHostingController(rootView: root)
         // SwiftUI owns the title (the selected pane) and the toolbar.
         host.sceneBridgingOptions = [.title, .toolbars]
