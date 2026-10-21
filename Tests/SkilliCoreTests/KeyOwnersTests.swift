@@ -44,7 +44,7 @@ final class KeyOwnersTests: XCTestCase {
 
     func testTheFileSaysWhatIsOnAndItsKeys() throws {
         let hotKeys: [String: Any] = [
-            "64": entry(enabled: 0, [32, 49, 1_048_576]),          // Spotlight off (JB's Mac, the mini)
+            "64": entry(enabled: 0, [32, 49, 1_048_576]),          // Spotlight off (the developer's Mac, the mini)
             "65": entry(enabled: 1, [65535, 49, 1_572_864]),
             "60": entry(enabled: 0, [32, 49, 262_144]),
             "118": entry(enabled: 1, [65535, 18, 262_144]),        // Desktop 1 turned on

@@ -2192,7 +2192,7 @@ final class SelfTest {
         return windows
     }
 
-    /// The same key twice in a chain, as JB asked for it: ⌘Space then
+    /// The same key twice in a chain, as asked: ⌘Space then
     /// Space, recorded with ⌘ kept down and with ⌘ let go before the second
     /// Space; each saved the same way and run whichever way it is typed.
     /// ⌘Space must be free on this Mac (Spotlight's off on the mini).
@@ -2363,9 +2363,9 @@ final class SelfTest {
         )
     }
 
-    /// JB, 2026-10-16: "The launcher is the most important command. It
+    /// 2026-10-16: "The launcher is the most important command. It
     /// should not be buried." Its keys are General's first row and the
-    /// first of Keys' shortcuts list, under its name, once (JB: not a second
+    /// first of Keys' shortcuts list, under its name, once (asked: not a second
     /// block above the Hyper Key): one setting, recorded in General and
     /// shown in Keys. The status menu says
     /// its real keys, a chain too, nothing without keys; light and dark.
@@ -2533,7 +2533,7 @@ final class SelfTest {
         _ = await waitUntil(timeout: 1) { Self.finderWindows().subtracting(before).isEmpty }
     }
 
-    /// Keys → Restore Defaults, pressed as a click (JB 2026-10-17: one
+    /// Keys → Restore Defaults, pressed as a click (2026-10-17: one
     /// click erased every custom shortcut): it asks first, naming what
     /// goes; Cancel keeps every shortcut; Restore Defaults puts them back
     /// (✦Space opens the launcher again), then the button is off.
@@ -3913,9 +3913,9 @@ final class SelfTest {
         let reset = !model.isModified("fix") && file("fix")?.contains("{selection}") == true && file("fix")?.contains("Changed") == false
 
         let originalProfile = model.profile
-        model.profile = "I am JB, I write short."
+        model.profile = "I am Camille, I write short."
         model.saveProfile()
-        let profileSaved = (try? String(contentsOf: folder.appendingPathComponent(PromptLibrary.profileFileName), encoding: .utf8))?.contains("I am JB") == true
+        let profileSaved = (try? String(contentsOf: folder.appendingPathComponent(PromptLibrary.profileFileName), encoding: .utf8))?.contains("I am Camille") == true
         model.profile = originalProfile
         model.saveProfile()
 
@@ -4170,7 +4170,7 @@ final class SelfTest {
         command.prompt = "App {app}, on {day}, clipboard [{clipboard}]: {selection}"
         command.includeProfile = true
         model.save(command)
-        model.profile = "I am JB."
+        model.profile = "I am Camille."
         model.saveProfile()
         setClipboard("clip-sentinel")
 
@@ -4186,7 +4186,7 @@ final class SelfTest {
         let weekday = { let f = DateFormatter(); f.locale = .current; f.setLocalizedDateFormatFromTemplate("EEEE"); return f.string(from: .now) }()
         let app = NSRunningApplication.current.localizedName ?? "?"
         let checks = [
-            ("About You first", message.hasPrefix("About me: I am JB.")),
+            ("About You first", message.hasPrefix("About me: I am Camille.")),
             ("app", message.contains("App \(app)")),
             ("day", message.contains(weekday)),
             ("clipboard, quoted", message.contains("[\"\"\"\nclip-sentinel\n\"\"\"]")),
@@ -5321,7 +5321,7 @@ final class SelfTest {
     private func siCommandWithoutSelectionInserts() async {
         let name = "Commands: without a selection the answer is inserted at the cursor"
         let model = context.aiCommands
-        context.ai.testEngine = FakeTextEngine(chunks: [" — signed, JB"], delay: .milliseconds(20))
+        context.ai.testEngine = FakeTextEngine(chunks: [" — signed, Camille"], delay: .milliseconds(20))
         var command = model.newCommand()
         defer {
             context.ai.testEngine = nil
@@ -5338,7 +5338,7 @@ final class SelfTest {
         context.aiActions.run(command.id, triggeredAt: .now)
         let done = await waitUntil(timeout: 3) { self.context.aiActions.popover.isVisible && self.context.aiActions.popover.phase == .done } != nil
         await pressKey(nil, code: CGKeyCode(kVK_Return))
-        let inserted = await waitUntil(timeout: 2) { self.textView.string == "Thanks— signed, JB" || self.textView.string == "Thanks — signed, JB" } != nil
+        let inserted = await waitUntil(timeout: 2) { self.textView.string == "Thanks— signed, Camille" || self.textView.string == "Thanks — signed, Camille" } != nil
         let message = context.aiActions.lastMessage ?? ""
         record(name, done && inserted && !message.contains("\"\"\""), "text now “\(textView.string)”, message “\(message)”", nil)
     }
@@ -5391,7 +5391,7 @@ final class SelfTest {
         record(name, completed && unchanged, "offered \(offered), prompt ends “\(typed.suffix(24))”, cancel left the file unchanged: \(unchanged), editors \(instances.total) (\(instances.inWindow) on screen)", nil)
     }
 
-    /// JB 2026-10-16: in the command editor ⌘S saves, the name stays on
+    /// 2026-10-16: in the command editor ⌘S saves, the name stays on
     /// top while the form scrolls, and tools are the ones added, each with
     /// what it does, then Add Tool.
     private func commandEditorSavesAndListsTools() async {
@@ -5457,7 +5457,7 @@ final class SelfTest {
                "name on top: \(pinned) (\(nameTop.map { "\(Int($0))" } ?? "?") → \(nameTopScrolled.map { "\(Int($0))" } ?? "?")), ⌘S closed: \(closed), saved: \(saved), tools kept: \(tools)", nil)
     }
 
-    /// JB 2026-10-17: the command editor writes nothing until Save, its
+    /// 2026-10-17: the command editor writes nothing until Save, its
     /// buttons pressed as clicks. New Command opens a draft: Cancel leaves
     /// no file and no shortcut. On a command, a shortcut recorded and the
     /// prompt changed stay in the editor; Duplicate opens a draft copy of
@@ -7112,7 +7112,7 @@ final class SelfTest {
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         let darkGone = await waitUntil(timeout: 2) { !card.isVisible && !card.screensDark } != nil
 
-        // Typing in an app as the dark alert comes (JB 2026-10-16): the card
+        // Typing in an app as the dark alert comes (2026-10-16): the card
         // takes the keyboard, the keys on their way do nothing, then ↩ joins
         // and nothing reached the app.
         var opened: [URL] = []
@@ -8284,7 +8284,7 @@ final class SelfTest {
         /// (`chessGrounding`); 0: none.
         var grounding = 0
         /// Looks cut short after 15 elements once a move's first square was
-        /// pressed, as Chess answered in JB's run of 2026-10-18 (`modes`);
+        /// pressed, as Chess answered in the real run of 2026-10-18 (`modes`);
         /// 0: read whole.
         var slowLooks = 0
         /// The square a plan's second line clicks never read once its
@@ -8508,7 +8508,7 @@ final class SelfTest {
             control.askText = { _ in nil }
             if slowLooks > 0 {
                 // As Chess answered once its first square was pressed in
-                // JB's run: 15 elements (rank 1, most of rank 2), cut short.
+                // the real run: 15 elements (rank 1, most of rank 2), cut short.
                 var cut = 0
                 control.cutsLook = { history in
                     guard history.count == 1, cut < slowLooks else { return nil }
@@ -8948,16 +8948,16 @@ final class SelfTest {
     }
 
     /// Whether Chess answers Accessibility slowly once a piece is picked
-    /// up, as in JB's run of 2026-10-18 (after “fou blanc, f1” was pressed:
+    /// up, as in the real run of 2026-10-18 (after “fou blanc, f1” was pressed:
     /// 15 of its 73 elements in 2 s, for about 12 s). Chess opened as the
     /// user opens it (its first game: once it has a move, Partie ›
-    /// Partager is enabled, as in JB's game), 1. e4 played, then `rounds`
+    /// Partager is enabled, as in the real game), 1. e4 played, then `rounds`
     /// times: a look as "do it here" takes it (the window, the menus every
     /// other round, the words on screen), the bishop pressed 3.5 s later
     /// as after a plan, the window read every 500 ms for 12 s, the bishop
     /// put down. A measure; report: dist/chess-slow.json.
     private func chessSlowProbe(rounds: Int) async {
-        let name = "Chess: its window read after a piece is picked up (JB's slow run)"
+        let name = "Chess: its window read after a piece is picked up (a slow real run)"
         let bundleID = "com.apple.Chess"
         guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
             checks.append(Check(name: name, passed: true, skipped: true, detail: "no Chess", latencyMs: nil))
@@ -9050,7 +9050,7 @@ final class SelfTest {
     /// Measures for docs/click-what-you-see.md's "Grounding a plan's line"
     /// (`"grounding": N`): Chess opened as the user opens it (its first
     /// game; its second move reads 31 menu items, "Partager › Mail"
-    /// among them, as in JB's retest), three moves through Ask; then
+    /// among them, as in the retest), three moves through Ask; then
     /// "exporte en PDF dans mes documents" in TextEdit and Word through
     /// Ask (their own checks). Every request "do it here" sent is kept;
     /// those for a plan's line (Chess) and the first four (export) are
@@ -9778,7 +9778,7 @@ final class SelfTest {
 
     /// Ask by Voice on the real microphone for two seconds, then stopped:
     /// its tap runs on AVFoundation's audio queue (it stopped the app on
-    /// JB's Mac every time). Only how much was heard is kept, never the
+    /// the developer's Mac every time). Only how much was heard is kept, never the
     /// words. Skipped without a microphone.
     private func microphoneHeardForReal() async {
         let name = "Ask by Voice: the real microphone for 2 s (its audio queue), stopped cleanly"
@@ -10041,7 +10041,7 @@ final class SelfTest {
     }
 
     /// "Open": the user's own installed apps are the options; decided only,
-    /// nothing is opened. JB's case first: VectorCraft for "vector drawing".
+    /// nothing is opened. The first case asked for: VectorCraft for "vector drawing".
     private func askOpensApps() async {
         let entries = await Task.detached { AppScanner.scan().map { ($0.name, $0.url) } }.value
         let apps = await Task.detached { AppCandidates.apps(entries) }.value
@@ -11982,7 +11982,7 @@ final class SelfTest {
                "\(written.count) captures (\(states.count) states × light, dark); window \(Int(size.width))×\(Int(size.height)) pt", nil)
     }
 
-    /// D7 (JB 2026-10-17): the first launch asks only for Accessibility
+    /// D7 (2026-10-17): the first launch asks only for Accessibility
     /// and the user's SI; every other permission where its feature first
     /// needs it (macOS's question there, or its list once refused; Full
     /// Disk Access through Settings → Privacy, it cannot be asked). Closed
@@ -12659,7 +12659,7 @@ final class SelfTest {
         let quiet = !context.aiActions.popover.isVisible
         if !quiet { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
 
-        // Ask, its model picking Keep Awake, the time said in words (JB
+        // Ask, its model picking Keep Awake, the time said in words (asked
         // 2026-10-16: it stayed awake until stopped): awake that long.
         _ = commands.keepAwake(.allowSleep)
         context.aiActions.decisionOverride = AskRouter.Decision(route: .command, confidence: 0.91, menu: [], routes: [(.command, 0.91)],
@@ -14281,7 +14281,7 @@ final class SelfTest {
         return NSBitmapImageRep(cgImage: image).representation(using: .jpeg, properties: [:])
     }
 
-    /// The picker as a grid (JB 2026-10-16, after Raycast's): browsing
+    /// The picker as a grid (2026-10-16, after Raycast's): browsing
     /// shows Recently Used then Unicode's groups, every emoji; → selects
     /// the next tile, ↓ the one under it in the same column, ↑ back; a
     /// search ranks in the grid and ↩ types the one selected.
@@ -14330,7 +14330,7 @@ final class SelfTest {
         )
     }
 
-    /// Symbols in the picker (JB 2026-10-19: the Apple logo found
+    /// Symbols in the picker (2026-10-19: the Apple logo found
     /// nothing): "apple logo" finds it first, its names and the keys that
     /// type it on this Mac's layout beside them, drawn in the text color
     /// in both appearances; ↩ types it.
@@ -14532,7 +14532,7 @@ final class SelfTest {
     /// "timer 3s selftest" from the launcher counts down in the menu bar and
     /// ends with its card; Ask starts one from a sentence with no model.
     /// A card takes only the keys of what the user does with it (the
-    /// interactions review, JB 2026-10-17): a note lets ↩ through to the app
+    /// interactions review, 2026-10-17): a note lets ↩ through to the app
     /// in front and stays; the undo card answers ⌘Z, never ↩; ⌘↩ typed in a
     /// card's field answers it and never reaches the app behind (Send in
     /// Mail); an agent's question lets the keys of its first half second
@@ -14862,7 +14862,7 @@ final class SelfTest {
                nil)
     }
 
-    /// A keyword in Safari (JB 2026-10-16: "!!ytva" pasted his last copy
+    /// A keyword in Safari (2026-10-16: "!!ytva" pasted the last copy
     /// in Safari and Claude, the snippet in WhatsApp): the page takes the
     /// keyword's deletes after ⌘V is sent, and a clipboard put back at the
     /// first change was what it pasted. The snippet lands, the clipboard
@@ -14945,7 +14945,7 @@ final class SelfTest {
         await pause(300)
         var results: [String] = clicked ? [] : ["no window to click in"]
         var allRight = clicked
-        // Three times in a row, as JB tried it.
+        // Three times in a row, as tried for real.
         for round in 1...3 {
             let sentinel = "skilli-last-copy-\(round)-\(UUID().uuidString.prefix(6))"
             setClipboard(sentinel)
@@ -15282,7 +15282,7 @@ final class SelfTest {
         record(name, overflowing.isEmpty, overflowing.isEmpty ? "every page fits" : overflowing.joined(separator: ", "), nil)
     }
 
-    /// Settings → Clipboard (JB 2026-10-17: a shorter Keep copies for
+    /// Settings → Clipboard (2026-10-17: a shorter Keep copies for
     /// deleted older copies on the spot): "1 week" picked from its menu
     /// with a real click and the Custom stepper pressed delete nothing,
     /// the line under them says what goes within the hour; Custom starts
@@ -16569,7 +16569,7 @@ final class SelfTest {
         }
     }
 
-    /// Ask's values read by the model, never a regex (JB 2026-10-16: "une
+    /// Ask's values read by the model, never a regex (2026-10-16: "une
     /// heure trente" kept the Mac awake one hour; "rappelle-moi dans 1h et
     /// quart…" started a timer): each sentence routed for real, then its
     /// value read and put together (`AskValues`), decided only, nothing run.
@@ -16699,7 +16699,7 @@ final class SelfTest {
     /// connected), Wi-Fi off, the desktop; the volume at a level read
     /// without a model.
     private func askRunsNewMacCommands() async {
-        let airpods = BluetoothTarget(address: "a4-83-e7-00-00-01", name: "AirPods Pro de JB", kind: .headphones)
+        let airpods = BluetoothTarget(address: "a4-83-e7-00-00-01", name: "AirPods Pro de Camille", kind: .headphones)
         let keyboard = BluetoothTarget(address: "a4-83-e7-00-00-02", name: "Magic Keyboard", kind: .keyboard)
         let bluetooth: [MacAction] = [.bluetooth(airpods, connect: true), .bluetooth(keyboard, connect: false)]
         let cases: [(String, MacAction)] = [
@@ -16778,7 +16778,7 @@ final class SelfTest {
             return process.terminationStatus == 0 ? text.split(separator: "\n").map(String.init) : nil
         }
         do {
-            for (path, text) in [("snippets/hello.md", "Hello"), ("snippets/sign.md", "JB"), ("layouts/desk.json", "{}"),
+            for (path, text) in [("snippets/hello.md", "Hello"), ("snippets/sign.md", "Camille"), ("layouts/desk.json", "{}"),
                                  ("quicklinks.json", #"[{"a":1},{"b":2}]"#), ("mcp.sock", ""), ("Clipboard/history.sqlite", "x")] {
                 let url = source.appendingPathComponent(path)
                 try files.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -19319,7 +19319,7 @@ final class SelfTest {
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         _ = await waitUntil(timeout: 1) { !search.isSearching }
 
-        // What skil.li does, in the Catalog (JB: "emoji" found nothing):
+        // What skil.li does, in the Catalog (asked: "emoji" found nothing):
         // the entry found, ↩ opens Catalog at its row.
         for character in "emoji" { await pressKey(character) }
         let emojiFound = await waitUntil(timeout: 1) {

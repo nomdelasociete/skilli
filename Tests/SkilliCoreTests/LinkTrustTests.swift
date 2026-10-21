@@ -1,7 +1,7 @@
 @testable import SkilliCore
 import XCTest
 
-/// D6 (JB 2026-10-17): a link that asks first offers Always ⌘↩; Always
+/// D6 (2026-10-17): a link that asks first offers Always ⌘↩; Always
 /// trusts that entry only, so its next link runs at once. What asks in
 /// its own card anyway, settings and pastes of the user's copies are
 /// never trusted.

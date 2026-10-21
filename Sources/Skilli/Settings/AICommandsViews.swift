@@ -400,7 +400,7 @@ private struct CommandRow: View {
 // MARK: - Editor
 
 /// One command: name, prompt with variables, About You, model, shortcut.
-/// Nothing is written until Save (JB 2026-10-17): the draft, its
+/// Nothing is written until Save (2026-10-17): the draft, its
 /// shortcuts (`ShortcutStore.stage`), Reset to Default and Duplicate all
 /// stay in the editor; Cancel or esc leaves everything as it was.
 struct CommandEditor: View {

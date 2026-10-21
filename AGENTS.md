@@ -90,10 +90,10 @@ xcodebuild -project Skilli.xcodeproj -scheme Skilli -destination 'platform=macOS
 - Do not launch the normal app from an agent unless asked: it installs a global
   event tap and may remap Caps Lock. The user launches from Xcode or `run`.
 
-### Where tests run: JB's Mac or the Mac mini
+### Where tests run: the developer's Mac or the Mac mini
 
 The keyboard self-tests take the keyboard, the focus and the screen for
-minutes. **Never run them on JB's Mac while JB is using it**; run them on the
+minutes. **Never run them on the developer's Mac while the developer is using it**; run them on the
 Mac mini, driven from here:
 
 | Where | What | Command |
@@ -102,7 +102,7 @@ Mac mini, driven from here:
 | This Mac, any time (no keys, no windows; restarts skil.li ~2 s) | Clipboard store, search, OCR; setup drawn off screen; live decisions (Ask, emoji, clipboard and files by meaning, nothing written) | `./script/build_and_run.sh selftest clipboard` / `selftest setup` / `selftest decide` |
 | Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote` (all) |
 
-Nothing else that opens skil.li runs on JB's Mac: `selftest` refuses other
+Nothing else that opens skil.li runs on the developer's Mac: `selftest` refuses other
 scopes and `benchmark` refuses outright unless `SKILLI_LOCAL_UI=1` (a Mac
 nobody is using); `remote-benchmark` runs the benchmark on the mini. Agents
 started from a session are told so in their brief.
@@ -154,7 +154,7 @@ makes every rebuild lose it. Permissions needed at runtime:
 
 - **Accessibility** — event tap (`.defaultTap`), reading the selection via AX,
   posting synthetic ⌘C/⌘V/Escape. The only permission the first-launch
-  setup asks for, with the user's SI (D7, JB 2026-10-17); every other one
+  setup asks for, with the user's SI (D7, 2026-10-17); every other one
   is asked where its feature first needs it, in place (`Permission.askedFrom`:
   macOS's own question there, or its list in System Settings once
   refused; Full Disk Access through Settings → Privacy). See Setup below.
@@ -203,12 +203,12 @@ never the Mac App Store.
 ### Releases
 
 To release: the `release` skill (`.claude/skills/release`). What it runs,
-`script/release/publish.sh` from a clean checkout of main (JB, 2026-10-18:
+`script/release/publish.sh` from a clean checkout of main (2026-10-18:
 "distributed from our website and ideally from brew"). It runs on GitHub's
-Macs (JB, 2026-10-19: not his Mac, and the Mac mini is for other apps'
+Macs (2026-10-19: not the developer's Mac, and the Mac mini is for other apps'
 tests): `.github/workflows/release.yml`, started by hand (`gh workflow run
 release.yml`), on the `xcode-27` runner (macOS 27, Xcode 27.1, free for a
-public repository), in the `release` environment: JB approves each run,
+public repository), in the `release` environment: the maintainer approves each run,
 `main` only, and every credential is there (secrets `DEVELOPER_ID_P12` and
 its password, `NOTARY_API_KEY`, `SPARKLE_ED_PRIVATE_KEY`,
 `HOMEBREW_TAP_TOKEN`, `SKILLI_KLIPY_KEY`; variables `NOTARY_KEY_ID`,
@@ -326,7 +326,7 @@ SkilliCore (framework + SwiftPM library, no AppKit)
 Budgets, checked with `./script/build_and_run.sh remote-benchmark` (Release,
 on the Mac mini, its lock taken; the benchmark shows the launcher again and
 again, so `benchmark` on this Mac refuses unless `SKILLI_LOCAL_UI=1` on a Mac
-nobody is using — JB 2026-10-16 saw it flash on his screen):
+nobody is using — it flashed on a developer's screen, 2026-10-16):
 
 | Path | Budget | Last measured |
 |------|--------|---------------|
@@ -341,7 +341,7 @@ nobody is using — JB 2026-10-16 saw it flash on his screen):
 "(mini)": measured 2026-10-16 on the Mac mini, three runs each of
 `remote-benchmark` and `remote speed`, interleaved with main (a4af3f8:
 1.4–1.5 ms / 3.8–4.1 ms a key, 26.4–26.7 MB idle / 34 MB after). The
-older numbers were JB's Mac's (M-series), where the same build reads
+older numbers were the developer's Mac's (M-series), where the same build reads
 about 1.2 MB more memory (main: 27.6 MB there); the mini's typing times
 move with its load (same build: 1.7 ms / 4.9 ms a busy hour earlier):
 compare like for like, a build against main in the same hour.
@@ -438,7 +438,7 @@ per-show work.
 - **The name is skil.li**, lowercase with its dot, wherever a person reads
   it, a sentence's start included: the app's menus, Finder, the Dock,
   permission lists, the DMG and its window, downloaded files, release
-  titles, the website, docs, commits' user-facing text (JB, 2026-10-18:
+  titles, the website, docs, commits' user-facing text (2026-10-18:
   "Skil.li, skilli, skil.li… c'est quoi ce laisser-aller ?"). `Skilli` /
   `skilli` only where a dot cannot go and nobody reads it: the bundle ID,
   the module, `Skilli.app`'s file and executable, the repository, the cask
@@ -446,17 +446,17 @@ per-show work.
   CFBundleName and CFBundleDisplayName stay `Skilli`, the file's name,
   which Finder requires before it shows the localized one
   (`LSHasLocalizedDisplayName`).
-- **SI is the word for AI** (JB, 2026-10-13, `docs/website-design.md`):
+- **SI is the word for AI** (2026-10-13, `docs/website-design.md`):
   every user-facing "AI" says SI ("SI Accounts", "SI Command", "SI · Fix
   Spelling & Grammar", "Sent to your SI"), and pointing at it reveals
   "AI" in place, as the website's `si-label.js` does. `Brand.intelligence`,
   `SIText` (SwiftUI) and `SIRevealLabel` (AppKit) in
   `Sources/Skilli/Design/SILabel.swift`. Never rename, remove or question
-  it; pane names by job (Ask, Commands, Tools) are JB's and stay.
+  it; pane names by job (Ask, Commands, Tools) are the maintainer's and stay.
 - Source of truth: `assets/brand/` (Halo menthe, glass S) and its README.
   The app uses static exports in `Sources/Skilli/Resources/Assets.xcassets`;
   no WebView, shader or animated mark anywhere in the app. One exception,
-  asked by JB on 2026-10-13: the S at the top of Settings → General turns
+  asked on 2026-10-13: the S at the top of Settings → General turns
   toward the pointer (below); a 3D transform on the static PNG, never a
   loop, a light sweep or a 3D engine.
 - `AppIcon`: `Sources/Skilli/Resources/AppIcon.icon` (Icon Composer, 2026-10-18):
@@ -507,9 +507,9 @@ per-show work.
   (no "SI", "MCP" in a title; such words only in help text). Caps Lock held
   is the **Hyper Key** (✦), the name Mac users know (Raycast, Karabiner,
   Hyperkey), in the app, docs and site; never "Super Key", the Windows key
-  on Linux and Windows (JB 2026-10-17: "it's hyper key and not super key"). The
+  on Linux and Windows (2026-10-17: "it's hyper key and not super key"). The
   sidebar is five blocks split by a gap, no headers (`SettingsPane.blocks`,
-  JB 2026-10-15): General, Keys, Privacy, Backup · Launcher, Clipboard,
+  2026-10-15): General, Keys, Privacy, Backup · Launcher, Clipboard,
   Snippets, Emoji, Windows · Calendar, Reminders, GitHub, Your Details · Ask,
   Commands, Tools, Skillies, SI Accounts · Catalog, About. Keys holds Caps Lock as
   the Hyper Key (✦) and every shortcut; General the launcher's keys, how
@@ -536,14 +536,14 @@ per-show work.
   Commands then Built In, Import and the files under Advanced. A missing
   permission (Microphone, Screen Recording) shows beside
   the feature that needs it, only while not granted (`PermissionRow`).
-  General, Keys, Backup, GitHub and Your Details follow them too (JB's
+  General, Keys, Backup, GitHub and Your Details follow them too (the
   panes audit, 2026-10-15). A feature pane's first row is how it is
   reached, read-only keycaps lined up with the recorders (`ReachRow`,
   Ask's "⇥" pattern): GitHub "pr" and its alias, Back Up skil.li Now's
   alias, Ask's ✦A in Your Details; Keys draws ⇪ → ✦. The launcher's keys
-  are the first row of General and of Launcher (JB, 2026-10-16: "the
+  are the first row of General and of Launcher (2026-10-16: "the
   most important command … should not be buried"), and the first of Keys'
-  shortcuts list, under its name (JB: "why put the open skil.li again in
+  shortcuts list, under its name (asked: "why put the open skil.li again in
   the keys section": never a second block above the Hyper Key): one entry
   of the store, `launcherEntry`, "Open skil.li", never a copy. General: Open skil.li, Set Up
   skil.li… only while Accessibility is off (D7), Open at
@@ -674,7 +674,7 @@ per-show work.
   (`SettingsSkill`) is a resource (`skilli://skills/set-up-skilli.md`) and
   a prompt (`set-up-skilli`) of skil.li's MCP server, named in its
   instructions; nothing is written in the agents' own folders.
-- Search (JB, 2026-10-16: "it's becoming quite packed"): a native search
+- Search (2026-10-16: "it's becoming quite packed"): a native search
   field atop the sidebar, as System Settings has (`SettingsSidebar`,
   `SettingsSearchField`); ⌘F takes it and a letter typed while the
   sidebar's list has the keys goes into it (`SettingsWindow`).
@@ -686,7 +686,7 @@ per-show work.
   entry (`SettingsSearch.entries`: what skil.li does and what the user
   made — commands, snippets, skillies, quicklinks, layouts) by its title,
   then its one line and the words people type for it, opening Catalog at
-  its row (JB 2026-10-16: "emoji" found nothing). Case and accents
+  its row (2026-10-16: "emoji" found nothing). Case and accents
   ignored; the words typed start words of the name, in any order
   ("skil.li" is also "skilli", SI also "ai"), then the pane's line, then
   inside a word (3 letters or more); no synonyms. Built when a search
@@ -733,7 +733,7 @@ per-show work.
 - Inside a chain, what is still held from its first chord does not count,
   nor Hyper (`Chord.inChain`, `Chord.chain` in SkilliCore): ✦K then ✦Y
   (Caps Lock kept down) is `hyper+k y`, ⌘Space then ⌘Space (⌘ kept down)
-  is `cmd+space space`, the same shortcut as with ⌘ let go (JB,
+  is `cmd+space space`, the same shortcut as with ⌘ let go (asked
   2026-10-16: the same key several times). The engine (`handle`, `bind`),
   the recorder and `ShortcutStore.validated` apply it; files saved before
   are repaired on load (`ShortcutConfig.normalizingChains`). So a modifier
@@ -741,7 +741,7 @@ per-show work.
   `cmd+k u`). A binding is never both an action and the start of a chain
   (no waiting to tell them apart: it would slow the launcher). Test chains
   the way people type them: Hyper held for every key.
-- No two actions on one shortcut (JB, 2026-10-16). `ShortcutStore.validated`
+- No two actions on one shortcut (2026-10-16). `ShortcutStore.validated`
   is the one check (recorder, Settings' fields, Catalog, ⌘K Set Shortcut…,
   the settings tools): refused when the keys equal or start another of
   skil.li's shortcuts, or when their first key belongs to a `KeyOwner`
@@ -770,8 +770,8 @@ per-show work.
   (`KeyOwner.replacedBy`): ⌃⌘Space, each app's Edit → Emoji & Symbols,
   is Search Emoji's by default (`SkilliAction.searchEmoji`, entry
   "emoji", the launcher straight in the picker; again closes it), as
-  Raycast takes it (JB, 2026-10-16); and Spotlight's ⌘Space may be the
-  launcher's (`SystemShortcuts.launcher`, recommended by the welcome, JB
+  Raycast takes it (2026-10-16); and Spotlight's ⌘Space may be the
+  launcher's (`SystemShortcuts.launcher`, recommended by the welcome, asked
   2026-10-18/19: "Raycast was able to override Spotlight's ⌘Space during
   the setup… that is exactly what I asked"). Once the launcher has ⌘Space,
   from anywhere (welcome, Settings → Keys, a setting tool), skil.li turns
@@ -859,7 +859,7 @@ per-show work.
   through Kill Process's card (it confirms, then goes: the app gone is
   the answer); Set Shortcut… (or Change Shortcut ✦S…: the card asks for
   the keys and the next ones pressed are its `openApp` shortcut, the Keys
-  pane's recorder, esc cancels, then it says them; JB 2026-10-16); Copy
+  pane's recorder, esc cancels, then it says them; 2026-10-16); Copy
   Name, Copy Path. A running app's row says "· running": `AppIndex` keeps the
   running bundle paths (KVO on `runningApplications`, nothing read on a
   key) and matches the resolved path, since Safari runs from its cryptex.
@@ -893,7 +893,7 @@ per-show work.
 
 ### Root search ("our way": fewer knobs than Raycast)
 
-- JB, 2026-10-15: Jev and learning rank; ↑ brings back recent searches;
+- 2026-10-15: Jev and learning rank; ↑ brings back recent searches;
   nothing found = Ask (the last row is always Ask “…”); Pin from ⌘K; only
   two settings: which screen, and when it resets. Pure parts in SkilliCore
   (`RootSearch.swift`: `RecentSearches`, `LauncherPins`, `LauncherRank`,
@@ -989,7 +989,7 @@ per-show work.
 ### Catalog ("?")
 
 - One list of everything skil.li does (`CatalogEntry`, `FeatureCatalog` in
-  SkilliCore; JB 2026-10-15): the launcher's "?" mode and Settings →
+  SkilliCore; 2026-10-15): the launcher's "?" mode and Settings →
   Catalog read the same entries (`AppDelegate.catalogInput`), never a copy. Each entry: its name (the launcher row's own
   title), one line in the user's words (third person, no period, ≤ 80
   characters, "SI" never "AI"), its group (Find, Do, Write, Stay on Top,
@@ -1124,7 +1124,7 @@ per-show work.
 - Settings → Backup (`BackupCenter`, `BackupPlan` in SkilliCore): a plain
   zip ("skil.li Backup 2026-10-15 at 09.05.12.zip", made with `ditto` as
   the Finder does) of `~/Library/Application Support/skil.li` (never
-  `mcp.sock`, never the clipboard history: JB, 2026-10-15) and the
+  `mcp.sock`, never the clipboard history: 2026-10-15) and the
   `Preferences.*` defaults in `Settings.plist`, minus this Mac's own state
   (`Preferences.machineKeys`: setup done, screens, launcher place, backup
   folder). API keys and sensitive form fields stay in the Keychain: never
@@ -1147,7 +1147,7 @@ per-show work.
 
 ### Interactions: the six rules
 
-JB, 2026-10-17, validated the interactions review
+2026-10-17, validated the interactions review
 (`docs/interactions-review.md`): every flow, new or changed, is checked
 against these.
 
@@ -1241,14 +1241,14 @@ the launcher and the self-test call:
 
 ### What is seen done is not said
 
-- JB, 2026-10-15: "some actions need to be done without validation that it
+- 2026-10-15: "some actions need to be done without validation that it
   has been done… it's too much". A success the user sees on screen is not
   announced: a layout put back (a card only when a window could not be
   put back, `LayoutReport.hasFailures`), a window placed, an app quit or
   killed (Kill Process, ⌘K Quit, Ask "kill …"), a timer started (the menu
   bar counts), hidden files shown or hidden, disks ejected, do it here
   done, a skillie that printed nothing.
-- JB, 2026-10-17 (rule 3): a choice the user just made is not announced
+- 2026-10-17 (rule 3): a choice the user just made is not announced
   either. Nothing said for a copy they chose (⌘C, ⇧⌘C, ⌘K Copy…, Copy
   Link, the contact card, the calculator), a sound output or a microphone
   chosen, a volume set, a Bluetooth device connected (its "Connecting…"
@@ -1283,7 +1283,7 @@ the launcher and the self-test call:
   when no mapping exists at all; otherwise leave Caps Lock alone. Remove only
   a mapping skil.li installed, and do it on quit.
 - The keys of any Mac text field work in every text input of skil.li
-  (JB 2026-10-20: ⌘← and ⌥← did nothing): ← → with ⌥ or ⌘, ⇧ to select,
+  (2026-10-20: ⌘← and ⌥← did nothing): ← → with ⌥ or ⌘, ⇧ to select,
   ⌘↑ ⌘↓, ⌃A ⌃E, ⌥⌫ ⌘⌫. What a key does is macOS's own key bindings'
   (`KeyBindings`: Cocoa's standard ones and the user's
   DefaultKeyBinding.dict), never a list written here. The launcher's
@@ -1297,7 +1297,7 @@ the launcher and the self-test call:
   (`KeyRouter.repeatForAI`); any other ⌘ or ⌃ key still closes the card
   and goes on. Settings' search field takes ⌘↓ to the end (an
   NSSearchField ignores it). ⌘K's filter stays type-to-filter, without a
-  caret (JB 2026-10-20). `rootsearch` presses them all as a keyboard does
+  caret (2026-10-20). `rootsearch` presses them all as a keyboard does
   (`caretKeysEditEverywhere`): launcher over another app, Settings' search
   and a SwiftUI field, the card.
 - ⌃N / ⌃P are ↓ / ↑ in every launcher list and in ⌘K's
@@ -1308,7 +1308,7 @@ the launcher and the self-test call:
   modes, Ask on the words typed; in a mode, the mode's own where it applies
   (By Meaning in the clipboard, files, history and snippets, By Feeling in
   the emoji, Processes on an app of several in Kill, Details on an event),
-  else the selected row's actions, as ⌘K. Never Ask inside a mode (JB
+  else the selected row's actions, as ⌘K. Never Ask inside a mode (asked
   2026-10-17: the filter may be a password or a skillie's argument): the
   Catalog's "nothing fits, ⇥ asks" went with it. The footer says ⇥ only
   where it does something of its own.
@@ -1399,7 +1399,7 @@ thing itself; never type or press Return blind in another app.
 
 ### Ask never acts on a regex reading of a sentence
 
-JB, 2026-10-16: "garde mon ordi hors veille pendant une heure trente" kept
+2026-10-16: "garde mon ordi hors veille pendant une heure trente" kept
 the Mac awake one hour; a regex had read "une heure" and dropped "trente".
 Word lists patched one sentence at a time are the bug, not the fix:
 "regex is dangerous and not the manifesto. jev will be doing it way
@@ -1411,7 +1411,7 @@ better".
   among fixed options, all asked in one request, put together in code.
   The model never computes a number. A timer's length and name, a volume
   level and Keep Awake's length ride in the route's own request
-  (`AskRouter.speculativeValues`, `Decision.values`; D8, JB 2026-10-17:
+  (`AskRouter.speculativeValues`, `Decision.values`; D8, 2026-10-17:
   one request instead of two, more tokens per ask); plans, contacts,
   schedules and apps keep their second request.
 - A value that can be said several ways is one option, never parts: a
@@ -1422,7 +1422,7 @@ better".
   the split is unique (an end time: its hour and its minutes).
 - How sure is the least sure part used; under `AskValues.sureFrom` (0.6)
   what is undone as easily as it is done (a timer, the volume, Keep
-  Awake: D5, JB 2026-10-17) is done all the same and the card says what
+  Awake: D5, 2026-10-17) is done all the same and the card says what
   it understood with ⌘Z for 10 s (`offerUndo`: "Keep Awake On · For 1 h
   30, until 15:42"; ⌘Z cancels the timer, puts the level back, lets the
   Mac sleep or keeps it as it was); a reminder or an event says what it
@@ -1454,7 +1454,7 @@ better".
   least sure of them. What it says is not among them: the card shows it
   once done, ⌘Z takes it back. Extras (a list, a calendar, an alert, a
   priority) are kept only when sure.
-- A value Ask needs and the request did not give (JB 2026-10-17, rule 6:
+- A value Ask needs and the request did not give (2026-10-17, rule 6:
   "never a dead end that makes the user retype") is asked in the card,
   never a failure card: `AskValues.Missing` (how long, which level, which
   app, who, what about them, what a reminder says, when, which day, how
@@ -1478,7 +1478,7 @@ better".
   stopped).
 - `selftest decide` (`askReadsValues`, `askReadsAnswersInTheCard`,
   `askReadsPlans`, `askReadsContacts`, `askReadsSchedulesAndApps`) runs
-  the sentences JB said, French and English, on both real models, and
+  the sentences said for real, French and English, on both real models, and
   typed answers alone; `selftest card` drives the same paths with the
   model's answers given (`plansRead`, `askAsksForWhatIsMissing` with
   `replyValuesOverride` for the answer).
@@ -1581,7 +1581,7 @@ re-investigating.
   not tell where the text is, beside the focused field when it is one (at
   most 320 pt tall, `CardAnchor`), else the launcher's place (never the
   mouse): a whole document or web area is no place (Codex's on a second
-  screen sent the card anywhere, JB 2026-10-16). The
+  screen sent the card anywhere, 2026-10-16). The
   place is pinned once per show: the card only grows (down under a
   selection or from the launcher, up above a selection), it never jumps.
 - Follow-ups in the card (`CardConversation` in SkilliCore,
@@ -1594,7 +1594,7 @@ re-investigating.
   oldest turns dropped past ~80k characters) then the new question. ⌘↩
   hands Claude Code or Codex the whole conversation. Return copies the
   latest answer; the conversation ends with the card. `selftest card`/`ai`.
-  A changed text follows up too (JB, 2026-10-18: "when the LLM does not do
+  A changed text follows up too (2026-10-18: "when the LLM does not do
   what we ask"): after a rewrite, an insert or a copy (Fix Spelling, a
   translation…), and after "Nothing to change", "Follow up ⇥" asks what to
   change; the same writer changes it again with the exchange so far
@@ -1628,7 +1628,7 @@ re-investigating.
   duplicated, deleted (their shortcut entries go too; at once, Undo ⌘Z
   for 10 s puts back the file and its shortcuts: `UndoableDeletes.command`).
   The editor writes
-  nothing until Save (JB, 2026-10-17): New Command opens a draft
+  nothing until Save (2026-10-17): New Command opens a draft
   (`draft()`, no file), Duplicate a draft copy of what the editor holds
   (the original stays as saved), Reset to Default puts the built-in in
   the draft; its shortcuts are the store's staged ones
@@ -1638,7 +1638,7 @@ re-investigating.
   changes). `selftest settings` (`commandEditorChangesNothingUntilSave`)
   presses each button. About You lives in `prompts/about-you.md`, edited
   in Settings → Your Details. "SI" is gone
-  from the app (JB, 2026-10-15): a launcher row is the command's own name,
+  from the app (2026-10-15): a launcher row is the command's own name,
   "Command" beside it.
 - Prompts are `PromptTemplate`s (SkilliCore): unknown `{words}` stay as typed;
   `{selection}` and `{clipboard}` are sent between `"""` (`AIPrompt.quoted`).
@@ -1871,7 +1871,7 @@ re-investigating.
   launcher's Contacts mode ("@" or "contact …", Search Contacts) lists them
   with where they matched; the best two (a name or a company) also show in
   any search. Return shows the contact's card, the same from Ask's "qui
-  est …" (`ContactCardView`, a `CardContent` in the card; JB 2026-10-16:
+  est …" (`ContactCardView`, a `CardContent` in the card; 2026-10-16:
   the Markdown one was "designed pretty badly and useless"): as Apple's
   Contacts shows one, the photo (`ContactBook.thumbnail`) or the monogram
   on Contacts' gray, the name, job · department · company, then each
@@ -1947,7 +1947,7 @@ re-investigating.
   window (2–30 min, Advanced), the next meeting in its own menu bar item (never, as
   it starts, 5, 10 (default), 30 min or 1 h before, or always; only
   meetings with a call by default). Its moments look apart at a glance
-  (JB 2026-10-16: "i don't know if i'm very late or just still have
+  (2026-10-16: "i don't know if i'm very late or just still have
   time"; `MeetingBar` in SkilliCore: the state, words, glyph and the
   moments it changes; `MeetingWatch.appearance` draws it): coming, a
   template calendar and "Weekly sync · in 12 min" ("at 14:30" an hour or
@@ -2015,7 +2015,7 @@ re-investigating.
   blurred and darkened under the card, menu bar and Dock included; a
   click on the dark lets it go. The card takes the keyboard unless the
   user was typing in the last second; with the screens dark it takes it
-  even then (JB 2026-10-16: ↩ joins, esc dismisses, hands on the keys),
+  even then (2026-10-16: ↩ joins, esc dismisses, hands on the keys),
   the keys of its first half second swallowed and any other key doing
   nothing while it is dark. "When a meeting starts": nothing more, or
   joined at once (then no alert On time for it; not for a call the user
@@ -2108,7 +2108,7 @@ re-investigating.
   merge — write access or admin bypass —, else the maintainers' turn;
   BLOCKED says why from the review decision and the checks; BEHIND,
   DIRTY, UNSTABLE are never ready; UNKNOWN is "GitHub is checking"; the
-  merge queue is testing). No heuristics of our own on top (JB,
+  merge queue is testing). No heuristics of our own on top (asked
   2026-10-15: "there's an official way"), and their unread notifications.
   Pull requests come from one GraphQL request (`GitHubInbox.query`: commit
   statuses such as Woodpecker's and Vercel's included, the repository's
@@ -2223,7 +2223,7 @@ re-investigating.
   "exporte en PDF dans mes documents" through Ask in TextEdit and in Word
   (skipped when Word is not activated: read-only).
 - "Do it here" sees the window (`ScreenControl.pictureNeed` / `isUnsure`,
-  `WindowPicture` in SkilliCore; JB 2026-10-15): where what was read says
+  `WindowPicture` in SkilliCore; 2026-10-15): where what was read says
   too little, Jev gets one picture of the window in front with the words,
   in the same request. Too little is measured: things to press with no
   words (`ScreenItem.isWordless`: an icon-only button; every one is
@@ -2256,7 +2256,7 @@ re-investigating.
   (icon-only buttons, a canvas), each goal in words then with the picture;
   report and captures in `dist/remote/doit-vision-*`.
 - "Do it here" clicks what it sees and thinks first
-  (docs/click-what-you-see.md; JB 2026-10-18: "unleash skil.li
+  (docs/click-what-you-see.md; 2026-10-18: "unleash skil.li
   capabilities in every app", Chess as the showcase). With a picture, the
   target question also offers `spot` (`ScreenControl.spotID`): something
   only drawn (a board, a map, a canvas). `pickSpot` finds it in two looks,
@@ -2282,7 +2282,7 @@ re-investigating.
   ("Click the button “pion blanc, e2”") is that item
   (`ScreenControl.named`), whatever Jev ranked; the outbound gate still
   applies. A line that clicks an item by its words that no item read is
-  (`ScreenControl.unread`; JB's Chess answered 15 of 73 elements in the
+  (`ScreenControl.unread`; a real Chess game answered 15 of 73 elements in the
   look's 2 s, “b5” not among them, and a pawn was clicked) reads the
   window again first: a look cut short (`UIReader.snapshot`'s
   `cutShort`) every 300 ms with 6 s each for 12 s, then stops; a whole
@@ -2301,11 +2301,11 @@ re-investigating.
   (`dist/remote/chess-*`, `/tmp/skilli-chess.json` picks what;
   `"grounding": N` replays each request "do it here" sent, N times each
   way of asking: `dist/remote/chess-grounding.json`; `"slowLooks": N`
-  cuts the N looks after a move's first press to 15 elements, as JB's
-  slow Chess; `"hideTarget": true` never reads a plan's second square;
+  cuts the N looks after a move's first press to 15 elements, as a
+  slow real Chess game; `"hideTarget": true` never reads a plan's second square;
   `"slowProbe": N` picks up the f1 bishop N times and reads
   the window every 500 ms: `dist/remote/chess-slow.json`).
-- "Do it here" from anywhere (docs/do-it-here-from-anywhere.md; JB
+- "Do it here" from anywhere (docs/do-it-here-from-anywhere.md; asked
   2026-10-19: what the Chess showcase unlocks, skillies first): not only
   Ask starts it. `AIActionController.doItHere` runs it for a link or a
   tool, in the app named (`ControlTarget.bringForward`: running by bundle
@@ -2527,8 +2527,8 @@ re-investigating.
   A display's fingerprint: maker, model, EDID serial (CoreGraphics), the
   text serial and week of manufacture (I/O Registry `DisplayAttributes`
   on Apple silicon), and macOS's id for it
-  (`CGDisplayCreateUUIDFromDisplayID`). Never its name alone: JB's
-  Samsung calls itself "SAMSUNG". A serial makes it sure (`unit`);
+  (`CGDisplayCreateUUIDFromDisplayID`). Never its name alone: a
+  Samsung display calls itself "SAMSUNG". A serial makes it sure (`unit`);
   without one, or with one that two connected displays share, only the
   model (`model`), told apart by macOS's id. Nothing is saved before it
   is looked over: "save layout Coding", the New Window Layout command,
@@ -2667,7 +2667,7 @@ re-investigating.
   Decisions in one Choice, both names in each option, "read it as a
   native speaker would"; only what was typed is sent. ↩ types the emoji in
   the app in front, ⌘↩ copies it.
-- Search Menu Items ("m ", "menus "; `MenuSearch` in SkilliCore, JB
+- Search Menu Items ("m ", "menus "; `MenuSearch` in SkilliCore, asked
   2026-10-16: "sometimes it's not useful to use AI"): the menu items of
   the app in front (the panel never activates skil.li, so it is still the
   one the user was in), read by `MenuReader` off the main thread when the
@@ -2679,7 +2679,7 @@ re-investigating.
   the app: one line says so with its keys (`onFailure`). Nothing leaves
   the Mac. Not "menu ": "menu bar" finds apps. Its shortcut can be
   recorded (`SkilliAction.searchMenus`, none by default).
-- The picker is a grid (`EmojiGridView`, JB 2026-10-16 after Raycast's):
+- The picker is a grid (`EmojiGridView`, 2026-10-16 after Raycast's):
   eight across, one fixed size (no column setting). It draws the
   launcher's rows; the hidden table stays the selection every action
   reads (↩, ⌘↩, ⌘K, the self-tests), the grid shows it and ←→↑↓ move it
@@ -2691,7 +2691,7 @@ re-investigating.
   `script/emoji_order.py` (macOS keeps its own only in undocumented binary
   files): run it again when Unicode adds emoji. macOS's names keyed
   "…@CH-SKU" (China's flags) are left out: never typed as is.
-- Symbols in the picker (JB 2026-10-19: "apple logo" found nothing; "do
+- Symbols in the picker (2026-10-19: "apple logo" found nothing; "do
   it better", never a copy of Raycast's list): macOS names emoji only,
   and the Apple logo (U+F8FF, private use) nowhere, neither in CoreEmoji
   nor in the Character Viewer's `CharacterDB.sqlite3`. So skil.li writes
@@ -2714,7 +2714,7 @@ re-investigating.
   every key, took ~6.5 ms); the first open reads and folds them, ~14 ms. `selftest emoji` (`emojiPickerFindsSymbols`):
   "apple logo" first, its keys beside it, ↩ types it,
   `launcher-emoji-symbols-light/-dark.png`.
-- One feature, one pane (JB 2026-10-16: "having emoji stuff in
+- One feature, one pane (2026-10-16: "having emoji stuff in
   multiple places is not a good thing"): Settings → Emoji (`EmojiPane`)
   holds all of it, in the rules' order: Search Emoji's shortcut (⌃⌘Space)
   and the launcher's prefix, the skin tone; Find emoji by feeling with ⇥
@@ -2722,7 +2722,7 @@ re-investigating.
   asks) and Words learned with Forget; what leaves the Mac (the
   `emoji` flow is the pane's, with that switch). Keys and Catalog still
   list it, as they list everything; no other pane holds an emoji setting.
-- Emoji skin tone (Settings → Emoji, `emojiSkinTone`, JB
+- Emoji skin tone (Settings → Emoji, `emojiSkinTone`, asked
   2026-10-16 after Raycast's): `EmojiSkinTone.apply` puts the modifier
   after each person or hand (`isEmojiModifierBase`; ✌️ loses its U+FE0F)
   and keeps it only when Apple Color Emoji draws one glyph, so a family
@@ -2737,7 +2737,7 @@ re-investigating.
   counts them and Forget empties them at once, nothing asked: Undo ⌘Z for
   10 s brings them back (`forgetSaid`, `restoreSaid`).
 - Search GIFs (`GIF`, `Klipy`, `GIFRecents`, `GIFPaste` in SkilliCore;
-  `GIFLibrary`, `GIFGridView`, `FileSearch.gifs`; JB 2026-10-19 after
+  `GIFLibrary`, `GIFGridView`, `FileSearch.gifs`; 2026-10-19 after
   Raycast's GIF Search, docs/gif-search.md): "gif " / "gifs " or Search
   GIFs (a recordable shortcut, none by default: `SkilliAction.searchGIFs`)
   is a grid, four across, a mint chip. Klipy only (Tenor's API closed
@@ -2774,7 +2774,7 @@ re-investigating.
   Release build by `script/release/build.sh` (`SKILLI_KLIPY_KEY`: the
   `release` environment's secret on GitHub Actions; on a Mac, the key
   inside its own `daily` skil.li, which `daily` carries over; never in the
-  repository nor the keychain, JB 2026-10-19; Info.plist `SkilliKlipyKey`);
+  repository nor the keychain, 2026-10-19; Info.plist `SkilliKlipyKey`);
   none: only the GIFs on this Mac, the grid says so.
   Settings → GIFs (`GIFsPane`): the shortcut, the prefix, where Klipy's
   GIFs come from, Advanced: Your Klipy key (Remove at once, ⌘Z saves it
@@ -2792,7 +2792,7 @@ re-investigating.
   ("10 km en miles", "32 °F to °C", "1,5 Go en Mo", "100 km/h in mph",
   "3 jours en heures"); the time elsewhere ("heure à Tokyo", "time in New
   York"). ↩ types the result (without grouping) in the app in front, like
-  a clip, a snippet or an emoji (D4, JB 2026-10-17); ⌘↩ and ⌘C copy it,
+  a clip, a snippet or an emoji (D4, 2026-10-17); ⌘↩ and ⌘C copy it,
   nothing said. ⌘K: Paste Result ↩, Copy Result ⌘↩. A lone number or a
   word is not a calculation. `selftest calc` (`launcherCalculates`): the
   footer, ⌘K, ↩ pasted in the test window, ⌘↩ and ⌘C copied silently.
@@ -2868,8 +2868,8 @@ re-investigating.
   settings. `selftest calc` decides as a dry run (Chess "unused" 2 h; the
   test form with unsaved work: `Skilli testform <state> edited`).
 - Raycast imports (`RaycastImport` in SkilliCore): **no button in the
-  app since 2026-10-15** (JB: not tried for real yet; bring them back
-  only when he asks). The code stays, covered by `selftest imports`.
+  app since 2026-10-15** (not tried for real yet; bring them back
+  only when the maintainer asks). The code stays, covered by `selftest imports`.
   Snippets: reads the JSON Raycast's Export Snippets saves
   (`[{name, text, keyword}]`): each one a snippet file; a keyword already
   used is left off; placeholders skil.li does not fill yet ({uuid},
@@ -3050,7 +3050,7 @@ re-investigating.
   busiest, a name filters, "3000" shows what listens on the port
   (`ps -axo pid=,pcpu=,rss=,comm=`, `lsof -nP -iTCP:<port> -sTCP:LISTEN
   -Fp`, parsed in `ProcessListing`). Return closes the launcher and the
-  app quits at once (D2, JB 2026-10-17: it asks to save itself), without
+  app quits at once (D2, 2026-10-17: it asks to save itself), without
   a word (only a refusal is said); apps quit through `terminate`, so they
   can save. ⇧Return force quits and asks ("Force Quit Gather and its 6
   other processes?", ↩ Force Quit, esc Cancel): what is not saved is
@@ -3091,7 +3091,7 @@ re-investigating.
   and `images/`. A copy of the same content moves up instead of adding a
   row (SHA-256). Retention: 1 day, 1 week, 1 month (default), unlimited or N
   days, pruned at launch and then hourly (`ClipboardHistory.poll`), never
-  when the setting changes (JB, 2026-10-17: a shorter choice deleted
+  when the setting changes (2026-10-17: a shorter choice deleted
   older copies at once): the pane (and `set_setting`) only changes it,
   and a line under it says what the next pass removes ("812 copies are
   older than a week: they go within the hour.",
@@ -3112,7 +3112,7 @@ re-investigating.
   `selftest clipboard` runs the store, search, OCR and policy checks on a
   scratch store and a private pasteboard: no keys, safe while the Mac is in
   use.
-- Previews by kind (JB 2026-10-16: "social preview for websites, color
+- Previews by kind (2026-10-16: "social preview for websites, color
   preview for colors, jev details for screenshots"). What a text copy is
   comes from the whole copy (`CopiedValue` in SkilliCore), never from
   something inside a sentence: a color's grammar (`CopiedColor`: #RGB to
@@ -3177,7 +3177,7 @@ re-investigating.
   while previews are off, then the card with picture, icon and title, no
   cookie sent back although the page sets one, only GETs, the files gone
   with the copy, each row shown in under 8 ms.
-- Images by what they show (Settings → Clipboard, both on by default; JB
+- Images by what they show (Settings → Clipboard, both on by default; asked
   2026-10-15): Jev sees a 512 px JPEG of each image once (`ImageTagger`,
   `JevImages`, TypeSafe's image questions) and picks its kind
   (`ImageTags`: screenshot, code, chat, document, invoice, chart, diagram,
@@ -3212,8 +3212,8 @@ re-investigating.
   the live text fills Ask's question (typing stops listening and keeps the
   text), Return stops, 0.4 s of silence settles the last word, Ask runs.
   Language: Settings → Ask, else the keyboard layout's language (people
-  speak what they type; JB's first system language is English, his
-  keyboard French). macOS asks for the microphone once and downloads each
+  speak what they type, as with an English system and a French
+  keyboard). macOS asks for the microphone once and downloads each
   language model once. The self-test speaks with `say` into a file
   (`voiceFileOverride`); French voices say English names the French way, so
   its sentences are all French.
@@ -3238,7 +3238,7 @@ re-investigating.
   clipboard, said in one line. Measured on the mini: "Martin" alone,
   "Martaing" told. `selftest dictation` (TextEdit, the test window, a
   stand-in Secure Input).
-- Welcome (`Sources/Skilli/Setup`, spec `docs/onboarding.md`, JB
+- Welcome (`Sources/Skilli/Setup`, spec `docs/onboarding.md`, asked
   2026-10-18: "at least on par with Raycast, Arc… VERY IMPORTANT"): seven
   steps of doing, not reading (`WelcomeModel`, `WelcomeView`,
   `WelcomeStages`): welcome; Accessibility; the Hyper Key held (live,
@@ -3253,7 +3253,7 @@ re-investigating.
   a practice sentence fixed with ✦K G (✦U without SI) and taken back with
   ⌘Z ("Try it"); what was set up, line by line, missing ones saying where
   (`WelcomeModel.setUp`), and Open at login (on by default, applied on
-  Start only). It says from its first step that it sets things up (JB
+  Start only). It says from its first step that it sets things up (asked
   2026-10-20: a colleague thought it was "just for show"). Steps needing the key tap
   are left out while Accessibility is off. A done live step moves on by
   itself. A Caps Lock tap sends Escape: the welcome ignores it as Back for
@@ -3317,7 +3317,7 @@ re-investigating.
   All and Quit Other Apps ask anyway. The rest only opens or reads, or is
   seen at once and undone as easily: it runs at once. A link skil.li does
   not know, or whose target is gone, says so in the card.
-  Trust (D6, JB 2026-10-17: "Always from links, per entry, after the
+  Trust (D6, 2026-10-17: "Always from links, per entry, after the
   first ↩"; `LinkTrust`, `TrustedLink` in SkilliCore): that card offers
   Always ⌘↩ and says what it does; Always trusts that entry only (its
   Catalog id; a skillie with the same arguments, others ask again), and
@@ -3402,11 +3402,11 @@ re-investigating.
 
 ## Status
 
-`docs/MANIFESTO.md` holds the principles every feature answers to (JB,
+`docs/MANIFESTO.md` holds the principles every feature answers to (asked
 2026-10-15; rewritten 2026-10-18: every claim true today, the interaction
 rules folded in, "taught once, then quiet"). Its words are chosen one by
-one: change them only with JB. `docs/FEATURES.md` lists everything skil.li does, one section per Settings
-pane in the sidebar's order (JB 2026-10-16): how each feature is reached,
+one: change them only with the maintainer. `docs/FEATURES.md` lists everything skil.li does, one section per Settings
+pane in the sidebar's order (2026-10-16): how each feature is reached,
 what it does, its settings. Add a feature there in the same change that
 builds it; `FeaturesDocTests` fails when a Catalog entry, a setting or a
 pane is missing from it.

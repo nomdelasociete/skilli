@@ -116,7 +116,7 @@ public enum BluetoothRoute {
     }
 
     /// The device a few words point to: its name first ("airpods" →
-    /// "AirPods Pro de JB"), else its kind ("clavier" → the keyboard). Nil
+    /// "AirPods Pro de Camille"), else its kind ("clavier" → the keyboard). Nil
     /// when nothing fits, or several equally.
     public static func match(_ text: String, among devices: [(name: String, kind: Kind)]) -> Int? {
         let filler: Set<String> = ["le", "la", "les", "l", "un", "une", "des", "du", "de", "d", "mes", "mon", "ma", "the", "my", "to",

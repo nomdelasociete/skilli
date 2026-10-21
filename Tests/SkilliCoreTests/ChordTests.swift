@@ -52,7 +52,7 @@ final class ChordTests: XCTestCase {
         XCTAssertEqual(try Chord(parsing: "hyper+u").description, "✦ U")
         XCTAssertEqual(try Chord(parsing: "t").description, "T")
     }
-    /// JB, 2026-10-16: the same key twice in a chain (⌘Space Space), with ⌘
+    /// 2026-10-16: the same key twice in a chain (⌘Space Space), with ⌘
     /// kept down or let go: what is still held from the first chord does
     /// not count on the next ones, nor Hyper.
     func testInChainDropsWhatIsStillHeldFromTheFirstChord() throws {

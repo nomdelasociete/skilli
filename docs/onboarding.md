@@ -1,6 +1,6 @@
 # Welcome to skil.li: the first launch
 
-JB, 2026-10-18: "the onboarding must be at least on par with Raycast, Arc
+2026-10-18: "the onboarding must be at least on par with Raycast, Arc
 browser or the best of the best in class. It's VERY IMPORTANT because the
 software is huge and has many capabilities."
 
@@ -118,7 +118,7 @@ points that decide this design:
 
 ### 1. Welcome
 
-JB, 2026-10-20: a colleague who went through it "thought that it was
+2026-10-20: a colleague who went through it "thought that it was
 just for show and not for setup". So it says from the start that it sets
 things up, and at the end what it set.
 
@@ -191,11 +191,11 @@ things up, and at the end what it set.
 
 ### 4. The launcher: its key, chosen, then pressed
 
-JB, 2026-10-18: "the rights, then the primary shortcuts, then show around
+2026-10-18: "the rights, then the primary shortcuts, then show around
 with the chosen keys"; "Raycast was able to override Spotlight's ⌘Space
 during the setup".
 
-- **Stage:** three ways to open skil.li, side by side (JB, 2026-10-19:
+- **Stage:** three ways to open skil.li, side by side (2026-10-19:
   "recommend ⌘ Space, then Hyper Key Space or custom"):
   - **⌘ Space**, "Instead of Spotlight", marked Recommended;
   - **✦ Space**, "With your Hyper Key" (the default until a choice);
@@ -311,7 +311,7 @@ The one step that only shows: its title says so ("Try it: …").
 
 - **No other permission:** D7. Microphone, Calendar, Contacts and the
   rest are asked where they are first used.
-- **No import from Raycast:** hidden until JB has tried it, 2026-10-15.
+- **No import from Raycast:** hidden until the maintainer has tried it, 2026-10-15.
 - **No account, no email, no newsletter, no telemetry.**
 - **No use-case quiz:** the keys are the same for everyone.
 - **No feature tour slides:** NN/g found they do not help. The Catalog is
@@ -340,4 +340,4 @@ The one step that only shows: its title says so ("Try it: …").
 - It checks that the guide panel sits inside System Settings' window
   frame and follows it.
 - Captures from the mini are judged by eye, two or three rounds, before
-  JB sees them (AGENTS.md → Design).
+  the maintainer sees them (AGENTS.md → Design).

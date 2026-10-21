@@ -1,4 +1,4 @@
-/// Keys → Restore Defaults asks first and says what goes (JB 2026-10-17:
+/// Keys → Restore Defaults asks first and says what goes (2026-10-17:
 /// one click erased every custom shortcut): the shortcuts the user added,
 /// and the built-in ones whose keys were changed.
 public enum RestoreDefaults {

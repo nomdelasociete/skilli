@@ -1,7 +1,7 @@
 import Foundation
 
 /// The meeting in the menu bar (Settings → Calendar), its three moments
-/// told apart at a glance (JB, 2026-10-16: "i don't know if i'm very late
+/// told apart at a glance (2026-10-16: "i don't know if i'm very late
 /// or just still have time"):
 /// - coming: a calendar, "Weekly sync · in 12 min" ("at 14:30" an hour or
 ///   more away);

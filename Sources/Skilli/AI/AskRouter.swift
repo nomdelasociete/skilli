@@ -205,7 +205,7 @@ enum AskRouter {
     }
 
     /// The values a timer, the volume or Keep Awake act with, asked with
-    /// the route (D8, JB 2026-10-17: one request, more tokens; plans and
+    /// the route (D8, 2026-10-17: one request, more tokens; plans and
     /// the rest keep their second request).
     static func speculativeValues(_ instruction: String) -> [AskValues.Question] {
         AskValues.durationQuestions + AskValues.levelQuestions + [AskValues.labelQuestion(spans: AskValues.spans(of: instruction))]

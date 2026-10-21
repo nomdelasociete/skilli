@@ -1,6 +1,6 @@
-# skil.li's release, built on GitHub's Macs instead of JB's or the Mac mini:
+# skil.li's release, built on GitHub's Macs instead of the developer's Mac or the Mac mini:
 # the same scripts (script/release/publish.sh), Xcode 27, every credential
-# from the `release` environment, which waits for JB's approval and takes
+# from the `release` environment, which waits for the maintainer's approval and takes
 # only `main`. Started by hand: Actions → Release → Run workflow, or
 # `gh workflow run release.yml`. The secrets are set once with
 # script/release/ci-secrets.sh.

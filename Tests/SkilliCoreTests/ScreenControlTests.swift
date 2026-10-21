@@ -220,7 +220,7 @@ final class ScreenControlTests: XCTestCase {
         XCTAssertNil(ScreenControl.named(by: "Click the queen's side pawn", among: items))
     }
 
-    /// JB's Chess run, 2026-10-18 20:49:58: after “fou blanc, f1” was
+    /// a real Chess run, 2026-10-18 20:49:58: after “fou blanc, f1” was
     /// pressed, Chess answered 15 of its 73 elements in time (rank 1, most
     /// of rank 2), the plan's “b5” not among them.
     private static let cutShortBoard: [ScreenItem] = {
@@ -280,7 +280,7 @@ final class ScreenControlTests: XCTestCase {
         var plan = PlanProgress(["Click the button “fou blanc, f1”", "Click the button “b5”"])
         XCTAssertEqual(plan.next, "Click the button “fou blanc, f1”")
         XCTAssertTrue(plan.step(acted: [f1]))
-        // JB's run: a pawn clicked for “b5” left the move unplayed, and
+        // the real run: a pawn clicked for “b5” left the move unplayed, and
         // the run said done.
         XCTAssertFalse(plan.step(acted: [b2]))
         XCTAssertFalse(plan.isFinished)

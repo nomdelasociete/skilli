@@ -1,6 +1,6 @@
 # skil.li interactions review
 
-2026-10-17. JB validated the whole plan the same day: the six rules are in
+2026-10-17. The maintainer validated the whole plan the same day: the six rules are in
 AGENTS.md (Interactions: the six rules) and every decision below took the
 recommendation.
 
@@ -8,7 +8,7 @@ skil.li asks and announces too much, and its cards take keys from the app you ar
 
 ## The rules
 
-Six checks turn the manifesto's "No surprises" and "What you see done is not announced" into something every flow can be measured against. JB's example (a "Copied" card after choosing Copy Phone Number) breaks rule 3.
+Six checks turn the manifesto's "No surprises" and "What you see done is not announced" into something every flow can be measured against. The maintainer's example (a "Copied" card after choosing Copy Phone Number) breaks rule 3.
 
 1. **Ask only before sending, deleting for good, paying or overwriting.** Nothing else asks.
 2. **Reversible things happen at once**, with ⌘Z for a few seconds instead of a question.
@@ -54,7 +54,7 @@ Ranked by how often you hit it times how much it hurts. Size: S is under half a 
 
 ## Decisions
 
-Nine choices change how skil.li behaves; everything else in the fix plan follows the rules. JB took the recommendation for each (2026-10-17).
+Nine choices change how skil.li behaves; everything else in the fix plan follows the rules. The maintainer took the recommendation for each (2026-10-17).
 
 | # | Decision | Options | Decided |
 | --- | --- | --- | --- |

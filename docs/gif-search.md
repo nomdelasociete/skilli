@@ -2,7 +2,7 @@
 
 Proposal, 2026-10-19.
 
-**Status**: phase 1 built the same day, Klipy and On this Mac (JB: "do
+**Status**: phase 1 built the same day, Klipy and On this Mac (asked: "do
 klipy and gifs on this mac"); AGENTS.md → Search GIFs says how it works.
 Not built yet: Favorites, ⇥ by feeling, Ask opening the grid,
 `search_gifs`, GIPHY, more than the first 48 of a search. Starting point: Raycast's
@@ -269,7 +269,7 @@ the user decides.
   Undo; ⇥ sends nothing
   with the switch off. Captures light and dark: empty, a search, long
   titles, nothing found, the network down. Judged by eye 2–3 rounds before
-  JB sees it.
+  the maintainer sees it.
 - `remote-benchmark`: a key in the GIF mode, memory after 100 tiles shown
   and after closing.
 - Paste into the real apps above, by hand on the mini, once.
@@ -278,12 +278,12 @@ the user decides.
 
 1. **Search and paste**: the mode, the grid, Klipy, ↩ / ⌘↩ / ⇧⌘C, Recently
    Used, the Markdown fallback, Settings → GIFs, PrivacyMap, `selftest gifs`.
-   The one entry point JB tries first: `gif `.
+   The one entry point tried first: `gif `.
 2. **Keep**: Favorites (ids), ⌘K's full list, Ask opening the grid,
    `search_gifs`.
 3. **By feeling**: ⇥ on words, on the selection, Words learned.
 
-## What JB does (only he can)
+## What the maintainer does (only they can)
 
 1. Create the account at partner.klipy.com, add the platform "skil.li
    for macOS", create its key; ads off, the content filter set.

@@ -1,6 +1,6 @@
 # Click what you see — "do it here" in any app, Chess as the showcase
 
-Status: spec and measures, 2026-10-18. Asked by JB the same day: "the aim
+Status: spec and measures, 2026-10-18. Asked the same day: "the aim
 for this demo is to unleash skil.li capabilities in every app", with macOS
 Chess, not a website, as the showcase. Ask: "joue le prochain coup", and
 skil.li plays the next move in Chess.app. Nothing chess-specific in
@@ -247,7 +247,7 @@ down, so the ring shows the mirrored square, visible in the recording).
 
 ## Grounding a plan's line (2026-10-19)
 
-JB's retest on the mini (2026-10-18, 20:46–20:51, build of PR #11)
+the retest on the mini (2026-10-18, 20:46–20:51, build of PR #11)
 played e4 and Nf3 through Ask, but Jev's target question ranked
 "Partie › Partager › Mail" first at each first line of a move (60 %,
 57 %, 75 %, 76 %, 66 %), the piece Claude's plan named second (27 %,
@@ -259,7 +259,7 @@ within a third of it (else the user is asked).
 Where it comes from:
 
 - **The menus grow.** Chess opened by the user: once its game has a move
-  (or JB's game, from the start), Partie's Partager submenu (AirDrop,
+  (or the real game, from the start), Partie's Partager submenu (AirDrop,
   Mail, Messages, Notes, Freeform) and Enregistrer sous… are enabled: 28 to
   31 menu items read. A game from the New Game sheet, what the self-test
   demos played, reads 12 to 15, without them: why the demos never showed
@@ -287,7 +287,7 @@ probability for the item the plan's line names, mean (least–most).
 | “cavalier blanc, b1” (31, sharing) | 24 % (22–28), Mail first 60–68 % | 94 % (92–96) | **99 %** |
 | “c3” (15) | 64 % (63–67) | 99 % (98–100) | **100 %** |
 
-The first run (the same game's two moves, e4 then Nf3, as JB's) also
+The first run (the same game's two moves, e4 then Nf3, as in the real game) also
 left out of the options the items the gate refuses: with the guide kept,
 the planned piece stayed at 60 % (47–71) for e2 and 28 % (21–38) for g1,
 where "do it here" would have asked the user 4 times in 5 (under 40 %,
@@ -330,7 +330,7 @@ d4 in 9.6 s, typing included).
 
 Seen on the way, not fixed here:
 
-- JB's third move (20:49:58): after "fou blanc, f1" was pressed, the next
+- The third move (20:49:58): after "fou blanc, f1" was pressed, the next
   looks read 15 of Chess's ~73 elements in 2.2 s (Accessibility slow
   there), "b5" was not among them, Jev chose scroll, then clicked "pion
   blanc, b2" at 12 %, and the run counted its two lines done: no move
@@ -342,7 +342,7 @@ Seen on the way, not fixed here:
 
 ## A plan's line whose item was not read (2026-10-19)
 
-JB's third move of the retest, from the mini's log (build of PR #11,
+The third move of the retest, from the mini's log (build of PR #11,
 "play the next move"):
 
 | Time | What happened |
@@ -369,7 +369,7 @@ Why the reads got slow (what the logs show):
 - **Not the user.** The cursor was hidden from 20:49:51 (typing) to
   20:50:18: no mouse over the board.
 - **Rare.** Of the 817 looks in the mini's log (2026-10-18 17:49 to
-  2026-10-19 06:52: self-tests and JB's retest), these two are the only
+  2026-10-19 06:52: self-tests and the retest), these two are the only
   ones over a second.
 - **What Chess did meanwhile is not in its log**: nothing from its main
   thread between `startSelection` (20:49:58.60) and 20:50:09.85, when it
@@ -419,7 +419,7 @@ Decided (`ComputerControl.run`, `ScreenControl.unread`, `PlanProgress`):
 
 Measured on the mini (2026-10-19, chess scope, Opus plans, Jev grounds):
 
-- **Cut short as JB's Chess** (`"modes": ["claude-ax:opus"], "moves": 3,
+- **Cut short as the real Chess game** (`"modes": ["claude-ax:opus"], "moves": 3,
   "slowLooks": 2`: once a move's first square is pressed, the next two
   looks give 15 elements and say they were cut short): 3/3 moves played,
   each at its first try, 8.4–9.4 s a move. Each time the plan's second
@@ -446,7 +446,7 @@ Measured on the mini (2026-10-19, chess scope, Opus plans, Jev grounds):
   the f1 bishop pressed 3.5 s later and the window read every 500 ms
   for 12 s. 0/8 rounds slow: every read 72–73 elements in 36–47 ms,
   menus read or not. Neither game had Partie › Partager enabled (15 menu
-  items, 31 in JB's game), so JB's state was not met; the cause stays
+  items, 31 in the real game), so that state was not met; the cause stays
   open, the fix does not depend on it.
 - `remote control`: 10/10 (forms, icons by picture, Safari, TextEdit's
   and Word's export through Ask, Your Details).

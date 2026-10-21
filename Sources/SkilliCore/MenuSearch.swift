@@ -1,6 +1,6 @@
 import Foundation
 
-/// Search Menu Items ("m " in the launcher, JB 2026-10-16: "like Raycast",
+/// Search Menu Items ("m " in the launcher, 2026-10-16: "like Raycast",
 /// "sometimes it's not useful to use AI"): the menu items of the app in
 /// front found by their names as typed, without a model. Ask still finds
 /// one by meaning (`MenuCandidates`).

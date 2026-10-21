@@ -211,7 +211,7 @@ command can name apps where it is the default (`apps: [Mail, Slack]`).
 4. **Voice and per-app** — spoken instructions and answers, app variants.
 5. **Gallery** — website page with one-click install.
 
-## Decisions for JB
+## Decisions to take
 
 - Order of the phases (proposal above: 1 → 2 → 3 → 4 → 5).
 - Decide engine: an OpenAI API key for the Decisions API, a TypeSafe key for

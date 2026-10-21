@@ -45,7 +45,7 @@ What Raycast does not do, and skil.li should own:
   your own key to Pro (Sept 2026). skil.li uses the user's Claude
   subscription or key, and their decision key, with no credits.
 
-## JB's examples, and how each will run
+## The maintainer's examples, and how each will run
 
 1. **"Où est le menu pour exporter en PDF ?"** — typed or spoken in any
    app. Decide routes it to *find in app*; skil.li reads the app's menu
@@ -142,7 +142,7 @@ agent, not only from a list.
   - when Decide is unsure, the top three routes as keycaps;
   - a preview of the selection in the launcher, so Tab says what it will
     work on.
-- **A2. Ask, then go on** (wanted, JB 2026-10-12): a conversation started
+- **A2. Ask, then go on** (wanted, 2026-10-12): a conversation started
   with Ask continues in the user's own AI:
   - done: follow-ups in the card itself (⇥ after an answer, the same
     conversation, its context kept);
@@ -176,7 +176,7 @@ Budgets to hold, measured by the self-test and benchmark:
 | Menu found | ≤ 0.5 s |
 | Slack message ready to send | ≤ 2 s |
 
-## Decisions (JB, 2026-10-11)
+## Decisions (2026-10-11)
 
 1. Order: A, then B1, then B2.
 2. Raycast Script Commands are not read in place: an import turns them

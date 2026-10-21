@@ -22,14 +22,14 @@ final class AudioRouteTests: XCTestCase {
         XCTAssertEqual(AudioRoute.title(name: "MacBook Pro Microphone", output: false), "Microphone: MacBook Pro Microphone")
         XCTAssertEqual(AudioRoute.description(name: "AirPods Pro", transport: .bluetooth, output: true),
                        "Play the sound through Bluetooth headphones or speaker, named “AirPods Pro”: where it plays, not how loud")
-        XCTAssertEqual(AudioRoute.symbol(name: "AirPods Pro de JB", transport: .bluetooth, output: true), "airpodspro")
+        XCTAssertEqual(AudioRoute.symbol(name: "AirPods Pro de Camille", transport: .bluetooth, output: true), "airpodspro")
         XCTAssertEqual(AudioRoute.symbol(name: "SAMSUNG", transport: .display, output: true), "tv")
         XCTAssertEqual(AudioRoute.symbol(name: "SAMSUNG", transport: .display, output: false), "mic.fill")
     }
 
     func testMatchByNameThenKind() {
         let outputs: [(name: String, transport: AudioRoute.Transport)] = [
-            ("MacBook Pro Speakers", .builtIn), ("AirPods Pro de JB", .bluetooth), ("LG UltraFine", .display), ("NDI Audio", .virtual)
+            ("MacBook Pro Speakers", .builtIn), ("AirPods Pro de Camille", .bluetooth), ("LG UltraFine", .display), ("NDI Audio", .virtual)
         ]
         XCTAssertEqual(AudioRoute.match("airpods", among: outputs, output: true), 1)
         XCTAssertEqual(AudioRoute.match("les AirPods", among: outputs, output: true), 1)
