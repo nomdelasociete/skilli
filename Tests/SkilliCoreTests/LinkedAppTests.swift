@@ -27,7 +27,7 @@ final class LinkedAppTests: XCTestCase {
         let documented = ["all-in-one", "capture-area", "capture-previous-area", "capture-fullscreen", "capture-window", "self-timer",
                           "scrolling-capture", "pin", "record-screen", "capture-text", "open-annotate", "open-from-clipboard",
                           "toggle-desktop-icons", "hide-desktop-icons", "show-desktop-icons", "open-history", "restore-recently-closed",
-                          "open-settings"]
+                          "open-settings", "add-quick-access-overlay"]
         XCTAssertEqual(paths.subtracting(documented), [])
         XCTAssertEqual(Set(documented).subtracting(paths), [])
     }
@@ -45,6 +45,77 @@ final class LinkedAppTests: XCTestCase {
         XCTAssertEqual(pin.path, "pin")
         XCTAssertEqual(pin.url(extra: [.init("filepath", "/Users/me/Desktop/CleanShot 2026-10-20 at 09.05.12@2x.png")])?.absoluteString,
                        "cleanshot://pin?filepath=/Users/me/Desktop/CleanShot%202026-10-20%20at%2009.05.12@2x.png")
+    }
+
+    /// cleanshot.com/docs-api: `pin` and `open-annotate` open PNG and
+    /// JPEG images, `add-quick-access-overlay` those and MP4 videos.
+    func testFileTypesAsCleanShotOpensThem() throws {
+        XCTAssertTrue(CleanShot.images.contains("/Users/me/Desktop/Shot 1.png"))
+        XCTAssertTrue(CleanShot.images.contains("Photo.JPG"))
+        XCTAssertTrue(CleanShot.images.contains("photo.jpeg"))
+        XCTAssertFalse(CleanShot.images.contains("/Users/me/Movies/Clip.mp4"))
+        XCTAssertFalse(CleanShot.images.contains("Picture.heic"))
+        XCTAssertFalse(CleanShot.images.contains("animation.gif"))
+        // No extension, or only a dot at the start: no type.
+        XCTAssertFalse(CleanShot.images.contains("/Users/me/png"))
+        XCTAssertFalse(CleanShot.images.contains(".png"))
+        XCTAssertFalse(CleanShot.images.contains("/Users/me/Shot.png.zip"))
+        XCTAssertTrue(CleanShot.imagesAndVideos.contains("/Users/me/Movies/Clip.MP4"))
+        XCTAssertTrue(CleanShot.imagesAndVideos.contains("Shot.png"))
+        XCTAssertFalse(CleanShot.imagesAndVideos.contains("Clip.mov"))
+
+        XCTAssertEqual(try command("pin").files, CleanShot.images)
+        XCTAssertEqual(try command("open-annotate").files, CleanShot.images)
+        XCTAssertEqual(try command("pin-latest-screenshot").files, CleanShot.images)
+        XCTAssertEqual(try command("quick-access").files, CleanShot.imagesAndVideos)
+        // Capture Text reads the text in a file too, its line breaks kept.
+        let text = try command("capture-text")
+        XCTAssertEqual(text.files, CleanShot.images)
+        XCTAssertEqual(text.url(variant: text.variant(id: "nolinebreaks"), extra: [.init("filepath", "/Users/me/Desktop/Receipt.png")])?.absoluteString,
+                       "cleanshot://capture-text?linebreaks=false&filepath=/Users/me/Desktop/Receipt.png")
+        XCTAssertNil(try command("capture-area").files)
+        XCTAssertNil(try command("open-from-clipboard").files)
+    }
+
+    /// ⌘K on a file skil.li lists: only what CleanShot opens for its type,
+    /// on the version installed.
+    func testFileActionsFollowTheFilesType() {
+        let app = LinkedApp.cleanShot
+        func offered(_ file: String, _ version: String? = "5.0.1") -> [String] {
+            app.fileActions(opening: file, version: version).map(\.action.title)
+        }
+        XCTAssertEqual(offered("/Users/me/Library/Application Support/skil.li/clipboard/images/1B2C.png"),
+                       ["Annotate in CleanShot", "Pin in CleanShot", "Add to CleanShot Quick Access"])
+        XCTAssertEqual(offered("/Users/me/Pictures/Portrait.JPEG"), ["Annotate in CleanShot", "Pin in CleanShot", "Add to CleanShot Quick Access"])
+        XCTAssertEqual(offered("/Users/me/Movies/Demo.mp4"), ["Add to CleanShot Quick Access"])
+        XCTAssertEqual(offered("/Users/me/Documents/Notes.txt"), [])
+        XCTAssertEqual(offered("/Users/me/Pictures/Loop.gif"), [])
+        // Annotate and Quick Access came with 3.8.1, pin before.
+        XCTAssertEqual(offered("/Users/me/Desktop/Shot.png", "3.6"), ["Pin in CleanShot"])
+        XCTAssertEqual(offered("/Users/me/Movies/Demo.mp4", "3.6"), [])
+        // Each runs its own command.
+        XCTAssertEqual(app.fileActions(opening: "Shot.png", version: nil).map(\.command.id),
+                       ["cleanshot.open-annotate", "cleanshot.pin", "cleanshot.quick-access"])
+    }
+
+    /// The Finder selection's commands: its file as `filepath` on the
+    /// documented paths.
+    func testSelectedFileCommandsOpenItsFile() throws {
+        let annotate = try command("annotate-selected-image")
+        XCTAssertEqual(annotate.path, "open-annotate")
+        XCTAssertEqual(annotate.input, .finderSelection)
+        XCTAssertEqual(try command("pin-selected-image").path, "pin")
+        XCTAssertEqual(try command("pin-selected-image").input, .finderSelection)
+        let quickAccess = try command("quick-access")
+        XCTAssertEqual(quickAccess.input, .finderSelection)
+        XCTAssertEqual(quickAccess.url(extra: [.init("filepath", "/Users/me/Movies/Demo 1.mp4")])?.absoluteString,
+                       "cleanshot://add-quick-access-overlay?filepath=/Users/me/Movies/Demo%201.mp4")
+        XCTAssertFalse(quickAccess.runs(onVersion: "3.6"))
+        XCTAssertTrue(quickAccess.runs(onVersion: "3.8.1"))
+        // Every file action names a command that takes files.
+        for action in LinkedApp.cleanShot.fileActions {
+            XCTAssertNotNil(LinkedApp.command(id: "cleanshot.\(action.command)")?.files, action.command)
+        }
     }
 
     func testVersionsGateWhatCleanShotTakes() throws {

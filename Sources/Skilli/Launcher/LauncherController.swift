@@ -455,6 +455,9 @@ final class LauncherController: NSObject {
     /// launcher opened; its editor in Shortcuts.
     var onRunShortcut: ((AppleShortcut, ShortcutInput) -> Void)?
     var onEditShortcut: ((AppleShortcut) -> Void)?
+    /// ⌘K on a clipboard image or a file found: a linked app's command on
+    /// it (Pin in CleanShot), under the action's title.
+    var onOpenFile: ((URL, AppLinkCommand, String) -> Void)?
     /// The launcher opens: what its rows come from may be read again, off
     /// the main thread (Wi-Fi, Bluetooth).
     var onShow: (() -> Void)?

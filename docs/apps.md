@@ -2,9 +2,11 @@
 
 Status: 2026-10-21. Built: CleanShot X's commands in the launcher, the
 Catalog, ⌘K, keys, links, Ask and agents, with the front window and the
-latest screenshot (Order 1 and 3); Settings → Apps (Order 2); the user's
-shortcuts in Apple's Shortcuts app, the same way (Next apps 1). Still
-proposed: files into CleanShot and the next apps.
+latest screenshot (Order 1 and 3); Settings → Apps (Order 2); files into
+CleanShot: ⌘K on clipboard images and files found, the Finder selection's
+rows, agents' and skillies' `file` (Order 4); the user's shortcuts in
+Apple's Shortcuts app, the same way (Next apps 1). Still proposed: the
+next apps.
 
 Asked for: everything CleanShot X does, from skil.li, so that Raycast is no
 longer needed for it; and one place for the apps skil.li drives through
@@ -48,6 +50,8 @@ only while CleanShot X is installed.
 | Annotate Clipboard Image | `open-from-clipboard` | — |
 | **Annotate Latest Screenshot** (skil.li) | `open-annotate?filepath=` | — |
 | **Pin Latest Screenshot** (skil.li) | `pin?filepath=` | — |
+| **Annotate Selected Image** · **Pin Selected Image** (skil.li) | `open-annotate` · `pin` `?filepath=` the file selected in Finder | — |
+| **Add Selected File to Quick Access** (skil.li) | `add-quick-access-overlay?filepath=` the file selected in Finder | — |
 | Annotate File… · Pin File… | `open-annotate` · `pin` (CleanShot asks for the file) | — |
 | Toggle · Hide · Show Desktop Icons | `toggle-` · `hide-` · `show-desktop-icons` | — |
 | Capture History | `open-history` | — |
@@ -56,10 +60,23 @@ only while CleanShot X is installed.
 
 "Latest screenshot" is the file Paste Latest Screenshot already finds.
 
-Phase 2, files into CleanShot (⌘K on what skil.li already lists): an image in
-the clipboard history, an image or MP4 in Search Files, the Finder selection →
-Annotate in CleanShot · Pin in CleanShot · Quick Access Overlay
-(`add-quick-access-overlay?filepath=`, PNG, JPEG, MP4).
+Files into CleanShot (built, Order 4): what skil.li already lists, sent to
+CleanShot's own windows. The types are CleanShot's (cleanshot.com/docs-api,
+read again 2026-10-21): `pin` and `open-annotate` open PNG and JPEG
+(`filepath` optional: without it CleanShot asks), `add-quick-access-overlay`
+PNG, JPEG and MP4 (`filepath` required, 3.8.1+); a type CleanShot does not
+open is never offered.
+
+| Where | What |
+|---|---|
+| ⌘K on an image in the clipboard history (or one file copied in Finder) | Annotate in CleanShot · Pin in CleanShot · Add to CleanShot Quick Access: the history's own file (`ClipboardStore.imageURL`), nothing copied |
+| ⌘K on a file in Search Files | the same, by its type: a PNG or JPEG all three, an MP4 Quick Access only, anything else none |
+| The Finder selection | three rows (Annotate Selected Image, Pin Selected Image, Add Selected File to Quick Access), each a key, a link, Ask and agents as every CleanShot command: one file, Finder in front, read through Finder's scripting (its `selection`; macOS asks once, Automation) |
+| Agents and skillies | `run_action` with `file` (a full path) on the commands that open one: `cleanshot.open-annotate`, `cleanshot.pin`, `cleanshot.quick-access`, `cleanshot.capture-text` (its text copied, `variant` its line breaks), and the selected and latest ones (the file given instead of what they read) |
+
+The Finder selection is three rows rather than one with ⌘K variants, as
+the latest screenshot's two are: each is found by what it does ("annotate
+sel…", "pin sel…"), and takes its own key and link.
 
 Raycast's two others, done our way, later:
 
@@ -160,5 +177,6 @@ real.
 2. Done: Settings → Apps with CleanShot's page.
 3. Done: Capture / Record Front Window, Latest Screenshot rows (the frame
    checked with a real capture, one display).
-4. Files into CleanShot (⌘K on clipboard images, files, Finder selection).
+4. Done: files into CleanShot (⌘K on clipboard images and files found, the
+   Finder selection's rows, `run_action` with `file`).
 5. Done: Shortcuts. Then the next apps.

@@ -24,12 +24,13 @@ enum AutomationAccess {
         case unknown
     }
 
-    /// Every app skil.li scripts: `SystemCommands` (System Events, Finder),
+    /// Every app skil.li scripts: `SystemCommands` (System Events, Finder;
+    /// `FinderSelection`, the file selected),
     /// `CalendarBook.openInCalendar` (Calendar, the event's day),
     /// `MailSelection` (Mail, the message selected).
     static let targets = [
         Target(bundleID: "com.apple.systemevents", name: "System Events", uses: "Dark mode, restart, shut down, log out"),
-        Target(bundleID: "com.apple.finder", name: "Finder", uses: "Empty the Trash"),
+        Target(bundleID: "com.apple.finder", name: "Finder", uses: "Empty the Trash, the selected file sent to CleanShot"),
         Target(bundleID: "com.apple.iCal", name: "Calendar", uses: "An event shown on its day"),
         Target(bundleID: "com.apple.mail", name: "Mail", uses: "“This email” in a reminder")
     ]

@@ -78,31 +78,53 @@ enum LinkedApps {
         return icon
     }
 
-    /// Its link, with what skil.li read for it; throws what is missing.
+    /// What the installed apps do with `file` (⌘K on a clipboard image or
+    /// a file found): only what its type and their versions take.
+    static func fileActions(for file: URL) -> [(action: LinkedApp.FileAction, command: AppLinkCommand)] {
+        installed().flatMap { $0.app.fileActions(opening: file.path, version: $0.version) }
+    }
+
+    /// Its link, with what skil.li read for it, or `file` (⌘K on a file,
+    /// an agent's) in place of what its input reads; throws what is missing.
     @MainActor
-    static func url(for command: AppLinkCommand, variant: AppLinkCommand.Variant?, frontWindow: () throws -> CGRect,
-                    latestScreenshot: () -> URL?) throws -> URL {
+    static func url(for command: AppLinkCommand, variant: AppLinkCommand.Variant?, file: URL? = nil, frontWindow: () throws -> CGRect,
+                    latestScreenshot: () -> URL?, finderSelection: () throws -> URL) throws -> URL {
         guard let app = command.app else { throw SystemCommands.Failure(message: "skil.li no longer knows “\(command.title)”.") }
         guard let installed = installed(app.id) else { throw SystemCommands.Failure(message: "\(app.name) is not installed on this Mac.") }
         guard command.runs(onVersion: installed.version), AppVersion.isAtLeast(installed.version, variant?.since) else {
             throw SystemCommands.Failure(message: "\(app.name) \(installed.version ?? "") does not take “\(variant?.title ?? command.title)”: update it.")
         }
+        /// `filepath`, once its type is one the link takes.
+        func filepath(_ file: URL) throws -> [AppLinkCommand.Parameter] {
+            guard let files = command.files else { throw SystemCommands.Failure(message: "“\(command.title)” takes no file.") }
+            guard files.contains(file.lastPathComponent) else {
+                throw SystemCommands.Failure(message: "“\(command.title)” opens \(files.said): “\(file.lastPathComponent)” is not one.")
+            }
+            var isFolder: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: file.path, isDirectory: &isFolder), !isFolder.boolValue else {
+                throw SystemCommands.Failure(message: "“\(file.lastPathComponent)” is no longer at \(file.deletingLastPathComponent().path).")
+            }
+            return [.init("filepath", file.path)]
+        }
         var extra: [AppLinkCommand.Parameter] = []
-        switch command.input {
-        case .none:
-            break
-        case .frontWindow:
-            let frame = try frontWindow()
-            guard let place = CleanShot.frame(of: frame, screens: NSScreen.screens.map(\.frame)) else {
-                throw SystemCommands.Failure(message: "The window in front is on no display.")
+        if let file {
+            extra = try filepath(file)
+        } else {
+            switch command.input {
+            case .none:
+                break
+            case .frontWindow:
+                let frame = try frontWindow()
+                guard let place = CleanShot.frame(of: frame, screens: NSScreen.screens.map(\.frame)) else {
+                    throw SystemCommands.Failure(message: "The window in front is on no display.")
+                }
+                extra = place
+            case .latestScreenshot:
+                guard let file = latestScreenshot() else { throw SystemCommands.Failure(message: "No screenshot found to open in \(app.name).") }
+                extra = try filepath(file)
+            case .finderSelection:
+                extra = try filepath(finderSelection())
             }
-            extra = place
-        case .latestScreenshot:
-            guard let file = latestScreenshot() else { throw SystemCommands.Failure(message: "No screenshot found to open in \(app.name).") }
-            guard CleanShot.imageExtensions.contains(file.pathExtension.lowercased()) else {
-                throw SystemCommands.Failure(message: "\(app.name) opens PNG and JPEG images: “\(file.lastPathComponent)” is neither.")
-            }
-            extra = [.init("filepath", file.path)]
         }
         guard let url = command.url(variant: variant, extra: extra) else { throw SystemCommands.Failure(message: "“\(command.title)” has no link.") }
         return url

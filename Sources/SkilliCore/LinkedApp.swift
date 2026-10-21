@@ -22,6 +22,29 @@ public struct LinkedApp: Identifiable, Sendable {
     /// CleanShot keeps its switch out of its defaults and ignores links
     /// while it is off, asking nothing (checked on CleanShot X 5.0.1).
     public let allowance: String?
+    /// ⌘K on a file skil.li lists (an image in the clipboard history, a
+    /// file found): what the app does with it, offered where its type fits.
+    public let fileActions: [FileAction]
+
+    /// One of the app's commands on a file skil.li already has: "Pin in
+    /// CleanShot" runs `cleanshot.pin` with it.
+    public struct FileAction: Sendable {
+        /// The command's name after the app's id ("pin").
+        public let command: String
+        /// As ⌘K lists it, the app named: "Pin in CleanShot".
+        public let title: String
+        public let symbol: String
+    }
+
+    /// The file actions that open `file` (by its extension) on the
+    /// installed version, each with its command.
+    public func fileActions(opening file: String, version: String?) -> [(action: FileAction, command: AppLinkCommand)] {
+        fileActions.compactMap { action in
+            guard let command = commands.first(where: { $0.id == "\(id).\(action.command)" }), command.runs(onVersion: version),
+                  command.files?.contains(file) == true else { return nil }
+            return (action, command)
+        }
+    }
 
     /// A few of an app's commands under one title ("Capture"), by their
     /// name after the app's id ("capture-area").
@@ -60,6 +83,29 @@ public struct AppLinkCommand: Hashable, Sendable {
         case frontWindow
         /// The newest screenshot's file, as `filepath`.
         case latestScreenshot
+        /// The file selected in Finder, as `filepath`.
+        case finderSelection
+    }
+
+    /// The files a link's `filepath` takes, by extension, and how the user
+    /// reads them ("PNG and JPEG images").
+    public struct FileTypes: Hashable, Sendable {
+        /// Lowercased, without the dot: "png".
+        public let extensions: Set<String>
+        public let said: String
+
+        public init(_ extensions: Set<String>, said: String) {
+            self.extensions = extensions
+            self.said = said
+        }
+
+        /// A path or a file name, by its extension in any case
+        /// ("Shot.PNG"); none takes no type.
+        public func contains(_ file: String) -> Bool {
+            let name = file.split(separator: "/").last.map(String.init) ?? file
+            guard let dot = name.lastIndex(of: "."), dot != name.startIndex else { return false }
+            return extensions.contains(name[name.index(after: dot)...].lowercased())
+        }
     }
 
     /// The same command with more said: "Capture Area" then copy
@@ -112,9 +158,12 @@ public struct AppLinkCommand: Hashable, Sendable {
     public let variants: [Variant]
     /// The app's version that first took what `input` adds.
     public let since: String?
+    /// The files its link takes as `filepath`; nil: none. An agent's
+    /// `file` goes there, instead of what `input` reads (or the app asks).
+    public let files: FileTypes?
 
     public init(id: String, path: String, title: String, oneLine: String, symbol: String, keywords: [String] = [], input: Input = .none,
-                variants: [Variant] = [], since: String? = nil) {
+                variants: [Variant] = [], since: String? = nil, files: FileTypes? = nil) {
         self.id = id
         self.path = path
         self.title = title
@@ -124,6 +173,7 @@ public struct AppLinkCommand: Hashable, Sendable {
         self.input = input
         self.variants = variants
         self.since = since
+        self.files = files
     }
 
     /// The app's id ("cleanshot").
@@ -190,7 +240,12 @@ extension LinkedApp {
     public static let cleanShot = LinkedApp(
         id: "cleanshot", name: "CleanShot X", shortName: "CleanShot", bundleID: "pl.maketheweb.cleanshotx", scheme: "cleanshot",
         commands: CleanShot.commands, groups: CleanShot.groups,
-        allowance: "Its commands run while Allow URL scheme API is on, in CleanShot → Settings → Advanced."
+        allowance: "Its commands run while Allow URL scheme API is on, in CleanShot → Settings → Advanced.",
+        fileActions: [
+            .init(command: "open-annotate", title: "Annotate in CleanShot", symbol: "pencil.tip.crop.circle"),
+            .init(command: "pin", title: "Pin in CleanShot", symbol: "pin"),
+            .init(command: "quick-access", title: "Add to CleanShot Quick Access", symbol: "rectangle.on.rectangle")
+        ]
     )
 }
 
@@ -199,6 +254,7 @@ extension LinkedApp {
 /// screenshot).
 public enum CleanShot {
     static let capture = ["cleanshot", "screenshot", "capture", "capture d'écran", "copie d'écran", "screen", "écran"]
+    static let selected = ["cleanshot", "selected", "selection", "sélection", "sélectionné", "finder", "file", "fichier"]
 
     /// After the capture: what CleanShot does with it (`action=`, 4.7+).
     static let afterCapture: [AppLinkCommand.Variant] = [
@@ -217,11 +273,16 @@ public enum CleanShot {
         ("advanced", "Advanced"), ("about", "About")
     ].map { .init(id: $0.0, title: "Open \($0.1)", label: $0.1, symbol: "gearshape", query: [.init("tab", $0.0)], since: "4.7") }
 
+    /// What `pin`, `open-annotate` and `capture-text` open.
+    public static let images = AppLinkCommand.FileTypes(["png", "jpg", "jpeg"], said: "PNG and JPEG images")
+    /// What `add-quick-access-overlay` opens.
+    public static let imagesAndVideos = AppLinkCommand.FileTypes(["png", "jpg", "jpeg", "mp4"], said: "PNG and JPEG images and MP4 videos")
+
     private static func command(_ name: String, path: String? = nil, _ title: String, _ oneLine: String, _ symbol: String,
                                 _ keywords: [String], input: AppLinkCommand.Input = .none, variants: [AppLinkCommand.Variant] = [],
-                                since: String? = nil) -> AppLinkCommand {
+                                since: String? = nil, files: AppLinkCommand.FileTypes? = nil) -> AppLinkCommand {
         AppLinkCommand(id: "cleanshot.\(name)", path: path ?? name, title: title, oneLine: oneLine, symbol: symbol,
-                       keywords: ["cleanshot"] + keywords, input: input, variants: variants, since: since)
+                       keywords: ["cleanshot"] + keywords, input: input, variants: variants, since: since, files: files)
     }
 
     public static let commands: [AppLinkCommand] = [
@@ -253,7 +314,7 @@ public enum CleanShot {
                     .init(id: "linebreaks", title: "Capture Text with Line Breaks", label: "Line Breaks", symbol: "text.alignleft", query: [.init("linebreaks", "true")]),
                     .init(id: "nolinebreaks", title: "Capture Text on One Line", label: "One Line", symbol: "text.justify.leading",
                           query: [.init("linebreaks", "false")])
-                ], since: "3.8.1"),
+                ], since: "3.8.1", files: images),
         command("record-screen", "Record Screen", "Records a video or a GIF of the area you select", "record.circle",
                 ["cleanshot", "record", "recording", "video", "vidéo", "gif", "enregistrer", "enregistrement", "screencast"]),
         command("record-front-window", path: "record-screen", "Record Front Window", "Records a video or a GIF of the window in front",
@@ -264,14 +325,23 @@ public enum CleanShot {
         command("annotate-latest-screenshot", path: "open-annotate", "Annotate Latest Screenshot",
                 "Opens your last screenshot in CleanShot's editor", "pencil.and.outline",
                 ["cleanshot", "annotate", "annoter", "edit", "last", "latest", "dernière", "screenshot", "capture"],
-                input: .latestScreenshot, since: "3.8.1"),
+                input: .latestScreenshot, since: "3.8.1", files: images),
+        command("annotate-selected-image", path: "open-annotate", "Annotate Selected Image",
+                "Opens the image selected in Finder in CleanShot's editor", "pencil.and.scribble",
+                selected + ["annotate", "annoter", "edit", "image"], input: .finderSelection, since: "3.8.1", files: images),
         command("open-annotate", "Annotate Image…", "Opens an image you choose in CleanShot's editor", "photo.badge.plus",
-                ["cleanshot", "annotate", "annoter", "edit", "image", "file", "fichier"], since: "3.8.1"),
+                ["cleanshot", "annotate", "annoter", "edit", "image", "file", "fichier"], since: "3.8.1", files: images),
         command("pin-latest-screenshot", path: "pin", "Pin Latest Screenshot", "Keeps your last screenshot floating above every window",
                 "pin", ["cleanshot", "pin", "épingler", "float", "last", "latest", "dernière", "screenshot", "capture"],
-                input: .latestScreenshot),
+                input: .latestScreenshot, files: images),
+        command("pin-selected-image", path: "pin", "Pin Selected Image", "Keeps the image selected in Finder floating above every window",
+                "pin.fill", selected + ["pin", "épingler", "float", "image"], input: .finderSelection, files: images),
         command("pin", "Pin Image…", "Keeps an image you choose floating above every window", "pin.circle",
-                ["cleanshot", "pin", "épingler", "float", "image", "file", "fichier"]),
+                ["cleanshot", "pin", "épingler", "float", "image", "file", "fichier"], files: images),
+        command("quick-access", path: "add-quick-access-overlay", "Add Selected File to Quick Access",
+                "Opens the image or video selected in Finder in Quick Access", "rectangle.on.rectangle",
+                selected + ["quick access", "overlay", "accès rapide", "image", "video", "vidéo", "mp4"], input: .finderSelection,
+                since: "3.8.1", files: imagesAndVideos),
         command("toggle-desktop-icons", "Toggle Desktop Icons", "Hides the files on your desktop, or shows them again", "eye",
                 ["cleanshot", "desktop", "icons", "bureau", "icônes", "clean", "hide", "show", "masquer"]),
         command("hide-desktop-icons", "Hide Desktop Icons", "Hides the files on your desktop before a capture", "eye.slash",
@@ -324,8 +394,8 @@ public enum CleanShot {
         .init(title: "Capture", commands: ["capture-area", "capture-front-window", "capture-window", "capture-fullscreen", "capture-previous-area",
                                            "self-timer", "scrolling-capture", "all-in-one", "capture-text"]),
         .init(title: "Record", commands: ["record-screen", "record-front-window"]),
-        .init(title: "Annotate and Pin", commands: ["open-from-clipboard", "annotate-latest-screenshot", "open-annotate", "pin-latest-screenshot",
-                                                    "pin"]),
+        .init(title: "Annotate and Pin", commands: ["open-from-clipboard", "annotate-latest-screenshot", "annotate-selected-image", "open-annotate",
+                                                    "pin-latest-screenshot", "pin-selected-image", "pin", "quick-access"]),
         .init(title: "Desktop Icons", commands: ["toggle-desktop-icons", "hide-desktop-icons", "show-desktop-icons"]),
         .init(title: "History and Settings", commands: ["open-history", "restore-recently-closed", "open-settings"])
     ]
@@ -358,9 +428,6 @@ public enum CleanShot {
         guard command.id == "cleanshot.capture-text", let id = lineBreaks.variant else { return nil }
         return command.variant(id: id)
     }
-
-    /// The image types CleanShot opens (`pin`, `open-annotate`).
-    public static let imageExtensions: Set<String> = ["png", "jpg", "jpeg"]
 }
 
 private extension CGRect {
