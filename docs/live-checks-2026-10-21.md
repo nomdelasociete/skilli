@@ -69,14 +69,14 @@ headphones move to that Mac), then the same tool to disconnect it.
 ## Quicklinks: Reuse an open tab
 
 Only Safari and Chrome's family are scripted (`BrowserTabReuse`); the test
-Mac's default browser is Arc, so a quicklink opens a new tab there by
-design. Running it needs Safari or Chrome made the default browser there,
+Mac's default browser is one `BrowserTabReuse` does not script, so a
+quicklink opens a new tab there by design. Running it needs Safari or Chrome made the default browser there,
 which macOS confirms with a click, and the browser's Automation permission
 for skil.li. Not run.
 
 ## Wi-Fi off, Restart Wi-Fi
 
-The test Mac is online through Wi-Fi only (no Ethernet link up): turning
+The test Mac has no wired link: turning
 Wi-Fi off would cut the session that runs the test, and a Restart Wi-Fi
 skillie turns it off first. Not run: needs the test Mac on a cable. What
 runs without switching anything is already covered: the launcher's one
