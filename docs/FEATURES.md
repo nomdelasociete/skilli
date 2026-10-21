@@ -409,7 +409,8 @@ Only the apps installed on this Mac are listed.
   capture: Copy, Save, Annotate, Pin or Upload it; on Scrolling Capture:
   start at once, auto-scroll; on Capture Text: with or without line
   breaks; on CleanShot Settings: each tab. Each one, variants too, takes a
-  shortcut, a link, Ask ("fais une capture de la fenêtre") and agents.
+  shortcut, a link, Ask ("fais une capture de la fenêtre"), agents and
+  skillies (`run_action` with its variant; an upload asks every time).
 - **Where to allow it**: CleanShot runs them while its API is allowed
   (CleanShot → Settings → Advanced → Allow URL scheme API); while it is
   off, CleanShot ignores them without a word. The pane says where to turn

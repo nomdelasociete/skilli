@@ -94,6 +94,15 @@ final class LinkedAppTests: XCTestCase {
         XCTAssertFalse(FeatureCatalog.entries().contains { $0.group == .apps })
     }
 
+    func testAnUploadIsSeenWhateverItsPathOrCase() throws {
+        func uploads(_ text: String) throws -> Bool { CleanShot.uploads(try XCTUnwrap(URL(string: text))) }
+        XCTAssertTrue(try uploads("cleanshot://capture-area?action=upload"))
+        XCTAssertTrue(try uploads("CleanShot://capture-fullscreen?x=1&ACTION=Upload"))
+        XCTAssertFalse(try uploads("cleanshot://capture-area?action=copy"))
+        XCTAssertFalse(try uploads("cleanshot://capture-area"))
+        XCTAssertFalse(try uploads("https://example.com/?action=upload"))
+    }
+
     func testLinksRunThemAtOnceAndNeverTrustThem() {
         XCTAssertFalse(SkilliLink.asksFirst(.appLink("cleanshot.capture-area")))
         XCTAssertFalse(LinkTrust.canTrust(.appLink("cleanshot.capture-area")))
