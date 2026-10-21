@@ -134,7 +134,7 @@ public enum SettingsTable {
 
     /// The panes, by id, in the sidebar's order (`SettingsPane`).
     public static let panes = ["general", "keys", "privacy", "backup", "launcher", "clipboard", "snippets", "emoji", "gifs", "windows", "calendar",
-                               "reminders", "github", "yourDetails", "ask", "commands", "tools", "skillies", "aiAccounts", "catalog", "about"]
+                               "reminders", "github", "apps", "yourDetails", "ask", "commands", "tools", "skillies", "aiAccounts", "catalog", "about"]
 
     /// `Preferences` properties no pane shows, and why.
     public static let notInPanes: [String: String] = [
@@ -322,6 +322,11 @@ public enum SettingsTable {
         setting("github", "githubAccount", "GitHub", .text(maxLength: 0), access: .paneOnly(Why.signIn), preference: .some(nil)),
         setting("github", "relayToken", "Live updates token", .text(maxLength: 0), access: .paneOnly(Why.secret), preference: .some(nil),
                 secret: true, note: "Under Advanced, with Live updates from."),
+
+        // Apps
+        setting("apps", "cleanShotTextLineBreaks", "Line breaks in Capture Text",
+                .choice(CleanShot.TextLineBreaks.allCases.map { SettingOption($0.rawValue, $0.title) }),
+                note: "CleanShot X's Capture Text from its row, a shortcut or Ask (⌘K on its row offers both); shown while CleanShot X is installed."),
 
         // Your Details
         setting("yourDetails", "otherDetails", "Your other details", .list(item: "“Field: value”, a SIRET, a VAT number…", adds: true),

@@ -99,4 +99,31 @@ final class LinkedAppTests: XCTestCase {
         XCTAssertFalse(LinkTrust.canTrust(.appLink("cleanshot.capture-area")))
         XCTAssertEqual(SkilliLink.parse(SkilliLink.run("system:link:cleanshot.capture-area").url), .run("system:link:cleanshot.capture-area"))
     }
+
+    /// Settings → Apps lists every command once, under its group.
+    func testEveryCommandIsInOneGroup() {
+        for app in LinkedApp.all {
+            let grouped = app.grouped.flatMap(\.commands).map(\.id)
+            XCTAssertEqual(grouped.count, app.groups.flatMap(\.commands).count, "\(app.id): a group names a command it does not have")
+            XCTAssertEqual(Set(grouped).count, grouped.count, "\(app.id): a command in two groups")
+            XCTAssertEqual(Set(grouped), Set(app.commands.map(\.id)), "\(app.id): a command in no group")
+            XCTAssertTrue(app.grouped.allSatisfy { !$0.commands.isEmpty })
+        }
+    }
+
+    /// Capture Text's line breaks (Settings → Apps): CleanShot's own
+    /// setting, or one of its two variants when ⌘K does not say.
+    func testCaptureTextLineBreaksPickAVariant() throws {
+        let text = try command("capture-text")
+        XCTAssertNil(CleanShot.defaultVariant(of: text, lineBreaks: .asSet))
+        XCTAssertEqual(text.url(variant: CleanShot.defaultVariant(of: text, lineBreaks: .kept))?.absoluteString,
+                       "cleanshot://capture-text?linebreaks=true")
+        XCTAssertEqual(text.url(variant: CleanShot.defaultVariant(of: text, lineBreaks: .joined))?.absoluteString,
+                       "cleanshot://capture-text?linebreaks=false")
+        // Only Capture Text.
+        XCTAssertNil(CleanShot.defaultVariant(of: try command("capture-area"), lineBreaks: .joined))
+        for option in CleanShot.TextLineBreaks.allCases {
+            XCTAssertEqual(option.variant.flatMap(text.variant(id:))?.id, option.variant)
+        }
+    }
 }

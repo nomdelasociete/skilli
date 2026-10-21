@@ -161,6 +161,7 @@ final class Preferences {
         static let catalogOff = "Preferences.catalogOff"
         static let skilliesInMenuBar = "Preferences.skilliesInMenuBar"
         static let githubUnderSearch = "Preferences.githubUnderSearch"
+        static let cleanShotTextLineBreaks = "Preferences.cleanShotTextLineBreaks"
         static let launcherPlace = "Preferences.launcherPlace"
         static let launcherScreen = "Preferences.launcherScreen"
         static let launcherReset = "Preferences.launcherReset"
@@ -543,6 +544,12 @@ final class Preferences {
         didSet { save(catalogOff.sorted(), Key.catalogOff) }
     }
 
+    /// Settings → Apps: what CleanShot X's Capture Text does with line
+    /// breaks when ⌘K does not say: as CleanShot is set, or one way.
+    var cleanShotTextLineBreaks: CleanShot.TextLineBreaks {
+        didSet { save(cleanShotTextLineBreaks.rawValue, Key.cleanShotTextLineBreaks) }
+    }
+
     /// Settings → Skillies: the inline skillies shown in the menu bar, by
     /// path, in the order they were added.
     var skilliesInMenuBar: [String] {
@@ -636,6 +643,7 @@ final class Preferences {
         catalogOff = Set(defaults.stringArray(forKey: Key.catalogOff) ?? [])
         skilliesInMenuBar = defaults.stringArray(forKey: Key.skilliesInMenuBar) ?? []
         githubUnderSearch = defaults.object(forKey: Key.githubUnderSearch) as? Bool ?? true
+        cleanShotTextLineBreaks = defaults.string(forKey: Key.cleanShotTextLineBreaks).flatMap(CleanShot.TextLineBreaks.init(rawValue:)) ?? .asSet
         launcherPlace = defaults.data(forKey: Key.launcherPlace).flatMap { try? JSONDecoder().decode(LauncherPlace.self, from: $0) }
         launcherScreen = defaults.string(forKey: Key.launcherScreen).flatMap(LauncherScreen.init(rawValue:)) ?? .pointer
         launcherReset = defaults.string(forKey: Key.launcherReset).flatMap(LauncherReset.init(rawValue:)) ?? .immediately

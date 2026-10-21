@@ -543,6 +543,7 @@ final class SelfTest {
             guard await focusTestWindow() else { return finish() }
             await cleanShotRouting()
             if !aborted { await cleanShotFromLauncher() }
+            if !aborted { await appsPaneShown() }
             return finish()
         }
 
@@ -1250,6 +1251,156 @@ final class SelfTest {
         record(name, passed,
                "⌘K: \(actions.joined(separator: ", ")); opened \(link?.absoluteString ?? "nothing"), expected the frame \(expected.map { "\($0.name)=\($0.value)" }.joined(separator: "&")) (dry run)",
                ran?.milliseconds)
+    }
+
+
+    /// Settings → Apps (docs/apps.md): CleanShot X's row (its version,
+    /// where to allow it), Capture Text's line breaks in the link it opens
+    /// (dry run), its commands by group with their shortcuts: one recorded
+    /// on a row and on a variant (⎋ or another pane leaves none behind), one variant's
+    /// shown under its command; Show in search off takes a command out of
+    /// the launcher's results. Light and dark, top and bottom, nothing past
+    /// the window. Not installed: the pane lists none.
+    private func appsPaneShown() async {
+        let name = "Settings → Apps: CleanShot X's row, Line breaks in Capture Text in its link, its commands by group with shortcuts (recorded on a row and a variant, ⎋ leaves none) and Show in search; light and dark, within the window"
+        let settings = context.settings
+        let preferences = context.preferences
+        let store = context.shortcuts
+        settings.show(pane: .apps)
+        guard await waitUntil(timeout: 2, { settings.isVisible }) != nil else {
+            record(name, false, "Settings did not open", nil)
+            return
+        }
+        await pause(500)
+        guard let installed = LinkedApps.installed("cleanshot") else {
+            // Not installed: none of its rows is drawn.
+            let rows = CleanShot.commands.filter { settings.search.frames[SettingsSearch.entryAnchor(FeatureCatalog.appLinkEntryID($0.id))] != nil }
+            let overflow = settings.paneOverflow()
+            await captureSettingsBothWays(as: "settings-apps-none")
+            await closeSettings()
+            record(name, overflow <= 1 && rows.isEmpty,
+                   "CleanShot X is not installed here: its rows drawn \(rows.count); past the window \(Int(overflow)) pt", nil)
+            return
+        }
+        guard let commands = context.aiActions.systemCommands else {
+            await closeSettings()
+            record(name, false, "no SystemCommands", nil)
+            return
+        }
+        let savedOff = preferences.catalogOff
+        let savedLines = preferences.cleanShotTextLineBreaks
+        let savedLink = commands.openAppLink
+        var added: [String] = []
+        defer {
+            preferences.catalogOff = savedOff
+            preferences.cleanShotTextLineBreaks = savedLines
+            commands.openAppLink = savedLink
+            for id in added { store.remove(id) }
+        }
+        let overflow = settings.paneOverflow()
+        await captureSettingsBothWays(as: "settings-apps")
+
+        // The last group's last row, opened by Settings' search.
+        let restore = LinkedApp.command(id: "cleanshot.restore-recently-closed")
+        let restoreEntry = FeatureCatalog.appLinkEntryID("cleanshot.restore-recently-closed")
+        settings.search.reveal(SettingsSearch.entryAnchor(restoreEntry), in: .apps)
+        let landed = await waitUntil(timeout: 2) { settings.search.landed == SettingsSearch.entryAnchor(restoreEntry) } != nil
+        let inSight = await waitUntil(timeout: 1) { settings.anchorVisibility(SettingsSearch.entryAnchor(restoreEntry)) > 0.95 } != nil
+
+        // A variant's shortcut, under its command: Capture and Copy on ✦K X.
+        var variantRow = false
+        var variantProblem = ""
+        if let area = LinkedApp.command(id: "cleanshot.capture-area"), area.variant(id: "copy") != nil,
+           let chords = try? [Chord(parsing: "hyper+k"), Chord(parsing: "x")] {
+            let id = store.add(.mac(.appLink(area, variant: "copy")))
+            added.append(id)
+            do {
+                try store.setKeys(chords, for: id)
+                variantRow = true
+            } catch {
+                variantProblem = " (\(error.localizedDescription))"
+            }
+            settings.scrollPaneToTop()
+            await pause(400)
+            await captureSettingsBothWays(as: "settings-apps-variant")
+        }
+
+        // Recording on a row without a shortcut, as a click on it does; ⎋
+        // leaves none behind. Then on a variant, as its context menu does.
+        var recorded = false
+        var leftBehind = true
+        if let restore {
+            let action = SkilliAction.mac(.appLink(restore, variant: nil))
+            settings.appShortcuts.record(action, store)
+            await pause(300)
+            recorded = store.recordingID != nil
+            if settings.scrollPaneToBottom() { await pause(300) }
+            await captureSettingsBothWays(as: "settings-apps-recording")
+            store.cancelRecording()
+            await pause(300)
+            leftBehind = store.entryID(for: action) != nil
+            // Recording, then another pane: it stops, nothing left behind.
+            settings.appShortcuts.record(action, store)
+            await pause(300)
+            recorded = recorded && store.recordingID != nil
+            settings.show(pane: .general)
+            await pause(400)
+            leftBehind = leftBehind || store.recordingID != nil || store.entryID(for: action) != nil
+            settings.show(pane: .apps)
+            await pause(400)
+        }
+        if let text = LinkedApp.command(id: "cleanshot.capture-text") {
+            let action = SkilliAction.mac(.appLink(text, variant: "nolinebreaks"))
+            settings.appShortcuts.record(action, store)
+            await pause(300)
+            recorded = recorded && store.recordingID != nil
+            store.cancelRecording()
+            await pause(300)
+            leftBehind = leftBehind || store.entryID(for: action) != nil
+        }
+
+        // Show in search off: the row dims, the launcher no longer lists it.
+        var offWorks = false
+        if let restore {
+            func listed() async -> Bool {
+                guard await focusTestWindow(), await openLauncher() else { return false }
+                for character in "restore recently" { await pressKey(character) }
+                await pause(300)
+                let rows = context.launcher.resultTitles
+                await closeLauncher()
+                return rows.contains(restore.title)
+            }
+            settings.show(pane: .apps)
+            preferences.catalogOff.insert(restoreEntry)
+            await pause(300)
+            if settings.scrollPaneToBottom() { await pause(300) }
+            await captureSettingsBothWays(as: "settings-apps-bottom")
+            let hidden = !(await listed())
+            preferences.catalogOff.remove(restoreEntry)
+            let back = await listed()
+            offWorks = hidden && back
+        }
+
+        // Capture Text's line breaks, in the link it opens (nothing captured).
+        commands.openAppLink = { _ in }
+        var links: [String] = []
+        if let text = LinkedApp.command(id: "cleanshot.capture-text"), text.runs(onVersion: installed.version) {
+            for option in CleanShot.TextLineBreaks.allCases {
+                preferences.cleanShotTextLineBreaks = option
+                commands.lastAppLink = nil
+                _ = try? await commands.run(.appLink(text, variant: nil))
+                links.append(commands.lastAppLink?.absoluteString ?? "nothing")
+            }
+        }
+        let linesWork = links == ["cleanshot://capture-text", "cleanshot://capture-text?linebreaks=true", "cleanshot://capture-text?linebreaks=false"]
+
+        settings.scrollPaneToTop()
+        await closeSettings()
+        record(name, overflow <= 1 && landed && inSight && variantRow && recorded && !leftBehind && offWorks && linesWork,
+               "CleanShot X \(installed.version ?? "?"); past the window \(Int(overflow)) pt; search opens its last row: \(landed), in sight \(inSight); "
+                   + "a variant's row: \(variantRow)\(variantProblem); recording on a row and a variant: \(recorded), ⎋ or another pane left one: \(leftBehind); "
+                   + "Show in search off leaves the results and comes back: \(offWorks); Capture Text's links: \(links.joined(separator: ", "))",
+               nil)
     }
 
     // MARK: - Ask's calendar and reminders
@@ -19425,6 +19576,11 @@ final class SelfTest {
             + Permission.allCases.map { (SettingsSearch.permissionAnchor($0.rawValue), SettingsPane.privacy.rawValue) }
             + context.shortcuts.config.shortcuts.map { (SettingsSearch.shortcutAnchor($0.id), SettingsPane.keys.rawValue) }
             + [(SettingsSearch.shortcutAnchor(ShortcutStore.launcherOpenSettingsID), SettingsPane.launcher.rawValue)]
+            // A linked app's commands, in Apps.
+            + MacAction.appLinks().compactMap { action -> (anchor: String, pane: String)? in
+                guard case .appLink(let command, _) = action else { return nil }
+                return (SettingsSearch.entryAnchor(FeatureCatalog.appLinkEntryID(command.id)), SettingsPane.apps.rawValue)
+            }
         var failures: [String] = []
         var instead: [String] = []
         var slowest = Duration.zero
@@ -19620,8 +19776,8 @@ final class SelfTest {
         for open in [false, true] {
             Advanced.startsOpen = open
             for dark in [false, true] {
-                for pane in [SettingsPane.general, .keys, .backup, .github, .yourDetails, .ask, .aiAccounts, .tools, .commands, .calendar, .reminders,
-                             .windows]
+                for pane in [SettingsPane.general, .keys, .backup, .github, .apps, .yourDetails, .ask, .aiAccounts, .tools, .commands, .calendar,
+                             .reminders, .windows]
                 where !open || withAdvanced.contains(pane) {
                     await shoot(pane, dark: dark, as: "settings-\(pane.rawValue)-\(dark ? "dark" : "light")\(open ? "-advanced" : "")")
                 }

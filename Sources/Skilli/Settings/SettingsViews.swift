@@ -94,6 +94,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     case calendar
     case reminders
     case github
+    case apps
     case yourDetails
     case ask
     case commands
@@ -108,7 +109,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     static let blocks: [[SettingsPane]] = [
         [.general, .keys, .privacy, .backup],
         [.launcher, .clipboard, .snippets, .emoji, .gifs, .windows],
-        [.calendar, .reminders, .github, .yourDetails],
+        [.calendar, .reminders, .github, .apps, .yourDetails],
         [.ask, .commands, .tools, .skillies, .aiAccounts],
         [.catalog, .about]
     ]
@@ -130,6 +131,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .calendar: "Calendar"
         case .reminders: "Reminders"
         case .github: "GitHub"
+        case .apps: "Apps"
         case .yourDetails: "Your Details"
         case .ask: "Ask"
         case .commands: "Commands"
@@ -156,6 +158,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .calendar: "Your next meeting, one key away, in the launcher and the menu bar."
         case .reminders: "What you have to do, said in one sentence."
         case .github: "Your pull requests and notifications in the launcher: what is ready, what waits for you."
+        case .apps: "The apps skil.li drives: their commands in the launcher, on a key, in Ask."
         case .yourDetails: "Forms filled in for you and your people, and commands that know who you are."
         case .ask: "Say what you want, in any app: skil.li answers, or does it for you."
         case .commands: "Your prompts, on any text, from any app."
@@ -182,6 +185,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .calendar: "calendar"
         case .reminders: "checklist"
         case .github: "arrow.triangle.pull"
+        case .apps: "app.connected.to.app.below.fill"
         case .yourDetails: "person.text.rectangle.fill"
         case .ask: "sparkles"
         case .commands: "wand.and.stars"
@@ -210,6 +214,8 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .calendar: .red
         case .reminders: .orange
         case .github: .gray
+        // The Catalog's "In Your Apps" group is indigo.
+        case .apps: .indigo
         case .yourDetails: .yellow
         case .ask: .purple
         case .commands: .mint
@@ -255,6 +261,7 @@ struct SettingsRootView: View {
     let context: SettingsContext
     let markTilt: MarkTilt
     let catalog: CatalogPaneModel
+    let appShortcuts: NewShortcut
     /// The search atop the sidebar; the panes' rows find it in the
     /// environment (`settingAnchor`).
     let search: SettingsSearchModel
@@ -300,6 +307,7 @@ struct SettingsRootView: View {
             case .calendar: AgendaPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .reminders: RemindersPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .github: GitHubPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
+            case .apps: AppsPane(preferences: preferences, context: context, newShortcut: appShortcuts)
             case .yourDetails: FormsPane(preferences: preferences, context: context, aiCommands: context.aiCommands,
                                          open: { navigation.pane = $0 })
             case .ask: AskPane(preferences: preferences, context: context, shortcuts: context.shortcuts, toolSettings: context.toolSettings,

@@ -83,15 +83,18 @@ public enum SettingsSearch {
         }
     }
 
-    /// A Catalog entry's row in Settings → Catalog.
+    /// A Catalog entry's row in Settings → Catalog, and a linked app's
+    /// command's in Apps.
     public static func entryAnchor(_ id: String) -> String { "entry.\(id)" }
 
-    /// Every Catalog entry, in the Catalog pane: its title, then its one
-    /// line and the words people type for it ("emoji", "smiley").
+    /// Every Catalog entry, in the Catalog pane (a linked app's command in
+    /// Apps, where its settings are): its title, then its one line and the
+    /// words people type for it ("emoji", "smiley").
     public static func entries(_ entries: [CatalogEntry]) -> [Named] {
         entries.map { entry in
-            Named(pane: "catalog", anchor: entryAnchor(entry.id), title: entry.title,
-                  detail: ([entry.oneLine, entry.prefix ?? ""] + entry.otherWords).joined(separator: " "))
+            let pane = if case .appLink = entry.run { "apps" } else { "catalog" }
+            return Named(pane: pane, anchor: entryAnchor(entry.id), title: entry.title,
+                         detail: ([entry.oneLine, entry.prefix ?? ""] + entry.otherWords).joined(separator: " "))
         }
     }
 
@@ -155,6 +158,7 @@ public enum SettingsSearch {
         "agendaAlertWithoutCall": "agendaAlerts",
         "agendaHiddenCalendars": "",
         "githubAccount": "",
+        "cleanShotTextLineBreaks": "",
         "scheduledAsks": "",
         "skilliesInMenuBar": "skillies",
         "section.backups": "backupFolder"

@@ -32,6 +32,9 @@ final class SystemCommands {
     var openAppLink: @MainActor (URL) -> Void = { NSWorkspace.shared.open($0) }
     /// The last linked app's link opened, for the self-test.
     var lastAppLink: URL?
+    /// The variant a linked app's command runs when none is said (Settings
+    /// → Apps: Capture Text's line breaks).
+    var appLinkDefault: @MainActor (AppLinkCommand) -> AppLinkCommand.Variant? = { _ in nil }
     var onChange: (() -> Void)?
     /// Where Keep Awake is kept, so a restart of skil.li (an update, a
     /// crash) takes it again: macOS lets go of it with the process.
@@ -103,10 +106,11 @@ final class SystemCommands {
         case .volume(let level):
             return try Self.setVolume(level)
         case .appLink(let command, _):
-            let url = try LinkedApps.url(for: command, variant: action.appLinkVariant, frontWindow: { try windows.frontWindowFrame() },
+            let variant = action.appLinkVariant ?? appLinkDefault(command)
+            let url = try LinkedApps.url(for: command, variant: variant, frontWindow: { try windows.frontWindowFrame() },
                                          latestScreenshot: { ImageFolderWatcher.latestScreenshot(in: screenshotFolders()) })
             lastAppLink = url
-            Log.trace("App link \(command.id)\(action.appLinkVariant.map { "/\($0.id)" } ?? "")")
+            Log.trace("App link \(command.id)\(variant.map { "/\($0.id)" } ?? "")")
             openAppLink(url)
             // Seen at once in the app: nothing said.
             return ""
