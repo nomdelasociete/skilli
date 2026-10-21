@@ -87,12 +87,15 @@ public enum SettingsSearch {
     /// command's in Apps.
     public static func entryAnchor(_ id: String) -> String { "entry.\(id)" }
 
-    /// Every Catalog entry, in the Catalog pane (a linked app's command in
-    /// Apps, where its settings are): its title, then its one line and the
+    /// Every Catalog entry, in the Catalog pane (a linked app's command and
+    /// a shortcut of the user's in Apps, where their settings are): its title, then its one line and the
     /// words people type for it ("emoji", "smiley").
     public static func entries(_ entries: [CatalogEntry]) -> [Named] {
         entries.map { entry in
-            let pane = if case .appLink = entry.run { "apps" } else { "catalog" }
+            let pane = switch entry.run {
+            case .appLink, .shortcut: "apps"
+            default: "catalog"
+            }
             return Named(pane: pane, anchor: entryAnchor(entry.id), title: entry.title,
                          detail: ([entry.oneLine, entry.prefix ?? ""] + entry.otherWords).joined(separator: " "))
         }

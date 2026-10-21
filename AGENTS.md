@@ -307,7 +307,8 @@ SkilliCore (framework + SwiftPM library, no AppKit)
 | `Sources/SkilliCore/LauncherCommand.swift` | Built-in launcher commands (Settings, Quit, Kill a Process, Clipboard History); the rows (`LauncherItem`) stay in `Sources/Skilli/Launcher/LauncherCommand.swift` |
 | `Sources/SkilliCore/FeatureCatalog.swift`, `LauncherPrefix.swift` | The Catalog ("?"): everything skil.li does, one list; the modes' prefixes, read by the launcher and the Catalog |
 | `Sources/Skilli/Settings/CatalogPane.swift`, `Sources/Skilli/Launcher/CatalogReach.swift` | Settings → Catalog on the same list (search, alias, shortcut, On); an entry's shortcut action, shared with the "?" |
-| `Sources/Skilli/Snippets/*` | `SnippetLibrary` (Markdown files), `SnippetExpander` (keywords as you type, insert at the caret) |
+| `Sources/Skilli/Snippets/*` | `SnippetLibrary` (Markdown files), `SnippetExpander` (keywords as you type, insert at the caret, the preview's values) |
+| `Sources/Skilli/Launcher/ClipboardPreviewView.swift`, `SnippetPreviewView.swift`, `PreviewParts.swift` | The previews beside the narrowed list (Clipboard History, Search Snippets) and the parts they share |
 | `Sources/Skilli/Clipboard/*` | `ClipboardStore` (SQLite FTS5 + images and link previews folders), `ClipboardHistory` (watch, keep, OCR, paste back), `ClipboardLinks` (link previews: the request, the cache) |
 | `Sources/Skilli/Settings/*` | Settings window, SwiftUI panes, `Preferences`, login item |
 | `Sources/Skilli/Shortcuts/*` | `ShortcutConfig` (defaults, JSON), `ShortcutStore` (edit, validate, record) |
@@ -564,14 +565,21 @@ per-show work.
   token under Advanced. Your Details: the card (Contacts in its place
   while missing), your other details, About You, what leaves, then the
   people and what forms get from the card.
-  Apps (docs/apps.md): only the linked apps installed, each with its row
-  (its icon, name, version, where the user lets skil.li drive it,
-  `LinkedApp.allowance`, and Open, which opens the app: nothing on the Mac
-  says whether CleanShot's API is on), its options (CleanShot: Line breaks
-  in Capture Text), then its commands by group (`LinkedApp.groups`), the
-  long list last, each with its shortcut (right-click: a variant's) and
-  Show in search (the Catalog's `catalogOff`); Settings' search opens a
-  linked app's command there. Keys and Catalog list the same commands.
+  Apps (docs/apps.md): a list of the apps skil.li drives that are
+  installed (CleanShot X, Shortcuts): a row each (its own icon, its
+  commands and how many on keys, a chevron); a click pushes the app's
+  page in the pane (`AppsPaneModel.page`, "‹ Apps" atop the page goes
+  back, the window's title is the app's). A page: its header (icon, name,
+  version, `LinkedApp.allowance`: nothing on the Mac says whether
+  CleanShot's API is on; Open, which opens the app), its options
+  (CleanShot: Line breaks in Capture Text), then its commands by group
+  (`LinkedApp.groups`) or Shortcuts' shortcuts, the long list last: a grey
+  symbol, the title, keycaps only when it has keys, and on hover a ⋯ menu
+  (a right-click too): Add / Change / Remove Shortcut, Add a Shortcut for
+  a variant (shown under its command once it has keys), Hide from Search
+  (the Catalog's `catalogOff`; dimmed, "Hidden from search"). Recording
+  stops when the page goes. Settings' search opens the page holding the
+  row (`beforeReveal`). Keys and Catalog list the same commands.
   Clipboard and Snippets too: Clipboard's first rows are ✦C, Paste in
   Sequence's ✦K V and "cb" as a keycap, then Keep clipboard history (Paste
   from Other Apps only while missing), Keep screenshots too and its
@@ -2492,6 +2500,34 @@ re-investigating.
   best first. Only on ⇥ and with Settings → Snippets → Find snippets by
   meaning with ⇥ on (default). `selftest snippets` (keys; ⇥ on the user's
   key), `selftest decide` (both providers).
+  Search Snippets looks like Clipboard History (2026-10-21, spec
+  `docs/snippet-preview.md`): the list narrows to 290 pt beside a
+  preview (`LauncherController.setSplit`, one split for both modes), each
+  row the name and its keyword as a keycap at the right edge
+  (`ResultCellView.setTrailingKeycap`; no alias keycap beside a preview:
+  Information says it; root search keeps "Snippet · ;addr"). `SnippetPreviewView`, made from the clipboard preview's parts
+  (`PreviewParts.swift`: `SoftTile`, `PreviewText`, `PreviewInformation`),
+  shows the snippet as it would type now: `Snippet.expansion`, the pieces
+  `expanded` joins, with the expander's own values
+  (`SnippetExpander.preview`): filled placeholders on a rounded accent
+  wash (`PreviewText.wash`, drawn by a TextKit 1 layout manager),
+  `{cursor}` a thin accent caret, `{clipboard}` the current copy only when
+  Paste from Other Apps is Allow (a preview never makes macOS ask; else
+  the token as written on a grey wash); code monospaced under its
+  language (`CodeLanguage`, cached by snippet). Then Information, only
+  what is known, a row left out when empty: Keyword, Expands (the Expand
+  setting's title, "Off", or "Not in <app>" when the app in front is one
+  where keywords stay as typed), Placeholders (as written), Alias,
+  Shortcut (Settings → Keys), Size (of what types now), Modified (the
+  file's date, read with the folder: `SnippetLibrary.modified`). The
+  Expands line and the shortcuts are read as the mode opens; nothing on
+  the selection path reads a file or the network. Nothing found or no
+  snippet: a quiet `text.quote` tile, the list's line on two lines beside
+  it. `selftest snippets` (`snippetsFoundByMeaning`): split, keycaps, ↓
+  follows, `{date}` filled, the clipboard filled or left as written,
+  the caret, every Information row, shown in under 8 ms, code, the quiet
+  tile, ⇥'s pick in the pane, the list whole again after esc;
+  `launcher-snippets(-code, -empty, -meaning)-light/-dark.png`.
 - Windows (`WindowLayout` in SkilliCore for the geometry, `WindowManager`
   for the moving): halves, quarters, thirds, two thirds, maximize, almost
   maximize, center, next and previous display, restore. ✦W then a key
@@ -3138,7 +3174,8 @@ re-investigating.
   in front (every format it was copied with), ⇧Return plain text (an
   image's OCR text), ⌘Return only copies, ⌘⌫ forgets at once (Undo ⌘Z
   for 10 s, the card under the launcher). The list narrows to
-  290 pt beside a preview (`ClipboardPreviewView`) made for each kind of
+  290 pt beside a preview (`ClipboardPreviewView`, its parts in
+  `PreviewParts.swift`, shared with Search Snippets') made for each kind of
   copy (below), then Information (copied as a relative date, times copied:
   `copies` column, added to older files on open). ⇥ searches by meaning
   (`ClipboardHistory.searchByMeaning`, `ClipboardMeaning`): the last 240

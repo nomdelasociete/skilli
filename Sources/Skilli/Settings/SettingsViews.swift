@@ -261,7 +261,7 @@ struct SettingsRootView: View {
     let context: SettingsContext
     let markTilt: MarkTilt
     let catalog: CatalogPaneModel
-    let appShortcuts: NewShortcut
+    let apps: AppsPaneModel
     /// The search atop the sidebar; the panes' rows find it in the
     /// environment (`settingAnchor`).
     let search: SettingsSearchModel
@@ -307,7 +307,7 @@ struct SettingsRootView: View {
             case .calendar: AgendaPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .reminders: RemindersPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .github: GitHubPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
-            case .apps: AppsPane(preferences: preferences, context: context, newShortcut: appShortcuts)
+            case .apps: AppsPane(preferences: preferences, context: context, model: apps)
             case .yourDetails: FormsPane(preferences: preferences, context: context, aiCommands: context.aiCommands,
                                          open: { navigation.pane = $0 })
             case .ask: AskPane(preferences: preferences, context: context, shortcuts: context.shortcuts, toolSettings: context.toolSettings,
@@ -326,7 +326,8 @@ struct SettingsRootView: View {
             case .about: AboutPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             }
         }
-        .navigationTitle(pane.title)
+        // An app's page in Apps: its name, the way back beside it.
+        .navigationTitle(pane == .apps ? apps.title ?? pane.title : pane.title)
     }
 }
 

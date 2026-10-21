@@ -537,6 +537,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Task { await self.snippetExpander.insert(snippet) }
             }
         }
+        // Search Snippets' preview: what the expander would type now, when
+        // keywords expand, the file's date.
+        launcher.snippetPreviewPieces = { [weak self] snippet in
+            self?.snippetExpander.preview(of: snippet) ?? (snippet.expansion([:]), [])
+        }
+        launcher.snippetExpands = { [preferences] in
+            guard preferences.snippetExpansion else { return "Off" }
+            if let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier,
+               preferences.snippetExcludedApps.contains(id) {
+                return "Not in \(app.localizedName ?? "this app")"
+            }
+            return preferences.snippetExpansionMode.title
+        }
+        launcher.snippetModified = { [snippetLibrary] snippet in snippetLibrary.modified(snippet.id) }
         launcher.snippetMeaningAvailable = { [weak self] in
             guard let self else { return false }
             return self.preferences.snippetMeaningSearch && !AskRouter.keys(self.ai).isEmpty
