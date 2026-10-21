@@ -4,11 +4,11 @@ import XCTest
 final class GitHubInboxTests: XCTestCase {
     /// GitHub's answer to `GitHubInbox.query`, shaped like the real one.
     private func response(viewer: [String], search: [String] = [], errors: String? = nil) -> Data {
-        let data = #"{"viewer":{"login":"jb","pullRequests":{"nodes":[\#(viewer.joined(separator: ","))]}},"search":{"nodes":[\#(search.joined(separator: ","))]}}"#
+        let data = #"{"viewer":{"login":"camille","pullRequests":{"nodes":[\#(viewer.joined(separator: ","))]}},"search":{"nodes":[\#(search.joined(separator: ","))]}}"#
         return Data((errors.map { #"{"data":null,"errors":[{"message":"\#($0)"}]}"# } ?? #"{"data":\#(data)}"#).utf8)
     }
 
-    private func node(_ number: Int, repo: String = "nomdelasociete/skilli", author: String = "jb", draft: Bool = false, archived: Bool = false,
+    private func node(_ number: Int, repo: String = "nomdelasociete/skilli", author: String = "camille", draft: Bool = false, archived: Bool = false,
                       decision: String? = "APPROVED", mergeState: String = "CLEAN", mergeable: String = "MERGEABLE", rollup: String? = nil,
                       contexts: [String] = [], reviewers: [String] = [], created: String = "2026-10-10T08:00:00Z",
                       permission: String = "WRITE") -> String {
@@ -43,12 +43,12 @@ final class GitHubInboxTests: XCTestCase {
             node(8, mergeState: "BLOCKED", rollup: "FAILURE", contexts: [checkFailed, checkGreen])
         ], search: [
             // Waiting for my review, in another repository; and #1 again.
-            node(9, repo: "nimbus-hq/nimbus", author: "lea", decision: "REVIEW_REQUIRED", mergeState: "BLOCKED", reviewers: ["jb"]),
+            node(9, repo: "nimbus-hq/nimbus", author: "lea", decision: "REVIEW_REQUIRED", mergeState: "BLOCKED", reviewers: ["camille"]),
             node(1, rollup: "SUCCESS", contexts: [checkGreen]),
             "{}"
         ])
         let (login, pullRequests) = try GitHubInbox.pullRequests(fromResponse: data)
-        XCTAssertEqual(login, "jb")
+        XCTAssertEqual(login, "camille")
         let byNumber = Dictionary(uniqueKeysWithValues: pullRequests.map { ($0.number, $0) })
         // Once each; the archived one and the empty search node left out.
         XCTAssertEqual(pullRequests.count, 8)

@@ -3394,7 +3394,7 @@ re-investigating.
 ## Workflow
 
 - `git fetch --all --prune` and `git status -sb` before changing code.
-- Branches `jb/<topic>`; never push to `main`. Open a PR.
+- Branches `<handle>/<topic>`; never push to `main`. Open a PR.
 - Run `test` and `benchmark` before pushing; paste benchmark deltas in the PR
   when a hot path changed.
 - If you only ran compile-only validation, say so. Event tap, Hyper,

@@ -79,8 +79,8 @@ final class CopiedValueTests: XCTestCase {
         XCTAssertEqual(CopiedValue.read("https://skil.li/docs?a=1#top"), .link(URL(string: "https://skil.li/docs?a=1#top")!))
         XCTAssertEqual(CopiedValue.read("  http://example.com\n"), .link(URL(string: "http://example.com")!))
         XCTAssertEqual(CopiedValue.read("www.apple.com/fr/"), .link(URL(string: "https://www.apple.com/fr/")!))
-        for text in ["skil.li", "Look at https://skil.li", "https://skil.li and https://apple.com", "mailto:jb@example.com",
-                     "file:///Users/me/notes.txt", "ftp://example.com/file", "https://", "https://jb:secret@example.com/"] {
+        for text in ["skil.li", "Look at https://skil.li", "https://skil.li and https://apple.com", "mailto:camille@example.com",
+                     "file:///Users/me/notes.txt", "ftp://example.com/file", "https://", "https://me:secret@example.com/"] {
             if case .link = CopiedValue.read(text) { XCTFail("not a link: \(text)") }
         }
     }
@@ -91,8 +91,8 @@ final class CopiedValueTests: XCTestCase {
     }
 
     func testEmailPhoneAndAddress() {
-        XCTAssertEqual(CopiedValue.read("jb@example.com"), .email("jb@example.com"))
-        XCTAssertEqual(CopiedValue.read("mailto:jb@example.com"), .email("jb@example.com"))
+        XCTAssertEqual(CopiedValue.read("camille@example.com"), .email("camille@example.com"))
+        XCTAssertEqual(CopiedValue.read("mailto:camille@example.com"), .email("camille@example.com"))
         XCTAssertEqual(CopiedValue.read("+33 6 12 34 56 78"), .phone("+33 6 12 34 56 78"))
         XCTAssertEqual(CopiedValue.read("(415) 555-0132"), .phone("(415) 555-0132"))
         guard case .address(let address) = CopiedValue.read("1 Infinite Loop, Cupertino, CA 95014") else {
@@ -101,7 +101,7 @@ final class CopiedValueTests: XCTestCase {
         XCTAssertEqual(address.lines, ["1 Infinite Loop", "Cupertino", "CA 95014"])
         XCTAssertEqual(address.city, "Cupertino")
         // Inside a sentence, none of them.
-        for text in ["Write to jb@example.com tomorrow", "Call me at +33 6 12 34 56 78 tonight", "2026", "12345",
+        for text in ["Write to camille@example.com tomorrow", "Call me at +33 6 12 34 56 78 tonight", "2026", "12345",
                      "We met at 1 Infinite Loop, Cupertino, CA 95014 and talked for hours about everything"] {
             switch CopiedValue.read(text) {
             case .email, .phone, .address: XCTFail("not a value: \(text)")
@@ -154,7 +154,7 @@ final class CopiedValueSpeedTests: XCTestCase {
     func testReadingACopyIsFast() {
         let prose = String(repeating: "Réunion demain à 9h avec l'équipe produit (salle 3), puis déjeuner. ", count: 60)
         let code = (0..<120).map { "    let value\($0) = compute(\($0)) { $0 * 2 };" }.joined(separator: "\n")
-        let texts = ["#3E8E7E", "https://skil.li/docs", "jb@example.com", "+33 6 12 34 56 78", "1 Infinite Loop, Cupertino, CA 95014",
+        let texts = ["#3E8E7E", "https://skil.li/docs", "camille@example.com", "+33 6 12 34 56 78", "1 Infinite Loop, Cupertino, CA 95014",
                      prose, code, "Billet SNCF Paris Gare de Lyon → Lyon Part-Dieu, départ 14:05, voiture 12 place 47", "ok"]
         _ = texts.map(CopiedValue.read)
         let start = ContinuousClock.now

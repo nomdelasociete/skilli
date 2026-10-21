@@ -9821,7 +9821,7 @@ final class SelfTest {
         context.aiActions.openURL = { opened.append($0) }
         context.aiActions.decisionKeysOverride = [:]
         // French typography: a no-break space before the colon.
-        context.ai.testEngine = FakeTextEngine(chunks: ["Objet\u{00A0}: Commande\n\nBonjour François,\nLa commande arrive lundi.\nJB"], delay: .milliseconds(20))
+        context.ai.testEngine = FakeTextEngine(chunks: ["Objet\u{00A0}: Commande\n\nBonjour François,\nLa commande arrive lundi.\nCamille"], delay: .milliseconds(20))
         defer {
             book.testRecords = nil
             context.aiActions.openURL = { NSWorkspace.shared.open($0) }
@@ -12121,7 +12121,7 @@ final class SelfTest {
         person.givenName = "Jean-François"
         person.familyName = "Martaing"
         person.organization = "Nimbus SAS"
-        person.emails = [.init("work", "jb@example.com")]
+        person.emails = [.init("work", "camille@example.com")]
         return [person]
     }()
 
@@ -13863,8 +13863,8 @@ final class SelfTest {
 
         _ = try? await tools.call("press_ui", arguments: ["id": id(boxLine)], run: nil)
         let ticked = await waitUntil(timeout: 1) { self.rememberBox.state == .on } != nil
-        _ = try? await tools.call("set_ui_value", arguments: ["id": id(fieldLine), "text": "jb@example.com"], run: nil)
-        let filled = await waitUntil(timeout: 1) { self.emailField.stringValue == "jb@example.com" } != nil
+        _ = try? await tools.call("set_ui_value", arguments: ["id": id(fieldLine), "text": "camille@example.com"], run: nil)
+        let filled = await waitUntil(timeout: 1) { self.emailField.stringValue == "camille@example.com" } != nil
 
         guard await focusTestWindow() else { return }
         window.makeFirstResponder(textView)
@@ -14806,7 +14806,7 @@ final class SelfTest {
     private func snippetsExpandAndInsert() async {
         let name = "Snippets: “;sgt” expands with the caret at {cursor} and the clipboard kept; “addr” waits for its word to end; the launcher types one"
         let library = context.snippets
-        let signature = library.save(Snippet(id: "", name: "Selftest Signature", keyword: ";sgt", text: "Bien à toi,\nJB {cursor}!"))
+        let signature = library.save(Snippet(id: "", name: "Selftest Signature", keyword: ";sgt", text: "Bien à toi,\nCamille {cursor}!"))
         let address = library.save(Snippet(id: "", name: "Selftest Address", keyword: "addr", text: "12 rue des Lilas"))
         // As soon as it is typed, the default: whatever this Mac's settings say.
         let preferences = context.preferences
@@ -14827,7 +14827,7 @@ final class SelfTest {
         setClipboard(sentinel)
         let before = context.snippetExpander.expansions
         for character in ";sgt" { await pressKey(character) }
-        let expected = "Merci. Bien à toi,\nJB !"
+        let expected = "Merci. Bien à toi,\nCamille !"
         let expanded = await waitUntil(timeout: 2) { self.textView.string == expected } != nil
         await pause(500)
         let caret = textView.selectedRange().location == (expected as NSString).length - 1
@@ -15036,7 +15036,7 @@ final class SelfTest {
         _ = add("Signature pro", ";sig", "Jean-François Martaing\nCEO, Nimbus")
         _ = add("Merci rapide", ";mer", "Merci beaucoup, je regarde ça et je reviens vers toi.")
         let no = add("Refus poli", ";non", "Merci pour la proposition, mais ce ne sera pas possible pour nous cette fois-ci.")
-        let calendly = add("Lien Calendly", ";cal", "https://calendly.com/jb/30min")
+        let calendly = add("Lien Calendly", ";cal", "https://calendly.com/camille/30min")
         let vat = add("Numéro de TVA", ";tva", "FR 12 345678901")
         _ = add("Code wifi", ";wifi", "Réseau Bureau-5G, mot de passe dans 1Password")
         _ = add("Bio courte", ";bio", "Fondateur de Nimbus, j'aide les équipes à déployer leurs outils.")
@@ -15081,7 +15081,7 @@ final class SelfTest {
             library.save(Snippet(id: "", name: "IBAN perso", keyword: ";iban", text: ibanText)),
             library.save(Snippet(id: "", name: "Adresse bureau", keyword: ";bur", text: "14 avenue de l'Opéra, 75001 Paris")),
             library.save(Snippet(id: "", name: "Refus poli", keyword: ";non", text: "Merci, mais ce ne sera pas possible cette fois-ci.")),
-            library.save(Snippet(id: "", name: "Lien Calendly", keyword: ";cal", text: "https://calendly.com/jb/30min"))
+            library.save(Snippet(id: "", name: "Lien Calendly", keyword: ";cal", text: "https://calendly.com/camille/30min"))
         ]
         let launcher = context.launcher
         let keys = userDecisionKeys

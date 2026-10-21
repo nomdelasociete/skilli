@@ -11,7 +11,7 @@ final class BluetoothRouteTests: XCTestCase {
         XCTAssertEqual(BluetoothRoute.Kind(major: 0x05, minor: 0x20, name: "Magic Trackpad de Jean-François"), .trackpad)
         XCTAssertEqual(BluetoothRoute.Kind(major: 0x05, minor: 0x02, name: "Xbox Wireless Controller"), .gamepad)
         XCTAssertEqual(BluetoothRoute.Kind(major: 0x02, minor: 3, name: "iPhone"), .phone)
-        XCTAssertEqual(BluetoothRoute.Kind(major: 0x01, minor: 3, name: "Jb’s MacBook Pro"), .computer)
+        XCTAssertEqual(BluetoothRoute.Kind(major: 0x01, minor: 3, name: "Camille’s MacBook Pro"), .computer)
         XCTAssertEqual(BluetoothRoute.Kind(major: 0x07, minor: 1, name: "Apple Watch de Jean-François"), .watch)
         XCTAssertEqual(BluetoothRoute.Kind(major: 0x1F, minor: 0, name: "AirPods"), .headphones, "unclassified, known by its name")
     }
