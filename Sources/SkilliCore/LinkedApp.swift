@@ -298,6 +298,12 @@ public struct AppLinkCommand: Hashable, Sendable {
         return Self.url(scheme: scheme, path: path, query: query + (variant?.query ?? []) + extra)
     }
 
+    /// Its link in `app`, known or not yet (an app shown before it is
+    /// added).
+    public func url(in app: LinkedApp, variant: Variant? = nil) -> URL? {
+        Self.url(scheme: app.scheme, path: path, query: query + (variant?.query ?? []))
+    }
+
     /// `scheme://host/rest?…`, or `scheme:/rest?…` for a path that starts
     /// with "/"; `+` in a value encoded too (some apps read it as a space).
     static func url(scheme: String, path: String, query: [Parameter]) -> URL? {

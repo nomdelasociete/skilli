@@ -365,26 +365,38 @@ private struct AppPageView: View {
         let commands = installed.app.commands.filter { $0.runs(onVersion: installed.version) }
         let groups = installed.app.grouped.map { group in (title: group.title, commands: group.commands.filter { commands.contains($0) }) }
             .filter { !$0.commands.isEmpty }
+        let header = AppPageHeader(app: app, detail: AppsCount.line(commands.count, "command", keys: 0), note: installed.app.allowance,
+                                   tooOld: commands.isEmpty ? installed.app.minimumVersion : nil) { model.page = nil }
+        let hasOptions = installed.app.id == LinkedApp.cleanShot.id && commands.contains(where: { $0.id == "cleanshot.capture-text" })
         // Its options first, under its header.
-        Section {
-            if installed.app.id == LinkedApp.cleanShot.id, commands.contains(where: { $0.id == "cleanshot.capture-text" }) {
-                Picker("Line breaks in Capture Text", selection: $preferences.cleanShotTextLineBreaks) {
-                    ForEach(CleanShot.TextLineBreaks.allCases, id: \.self) { Text($0.title).tag($0) }
+        if hasOptions || groups.isEmpty {
+            Section {
+                if hasOptions {
+                    Picker("Line breaks in Capture Text", selection: $preferences.cleanShotTextLineBreaks) {
+                        ForEach(CleanShot.TextLineBreaks.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .settingAnchor("cleanShotTextLineBreaks")
                 }
-                .settingAnchor("cleanShotTextLineBreaks")
+            } header: {
+                header
             }
-        } header: {
-            AppPageHeader(app: app, detail: AppsCount.line(commands.count, "command", keys: 0), note: installed.app.allowance,
-                          tooOld: commands.isEmpty ? installed.app.minimumVersion : nil) { model.page = nil }
         }
-        // The long list last: the commands, by group.
+        // The long list last: the commands, by group; with no options, the
+        // header atop the first (an empty section would shrink its title).
         ForEach(Array(groups.enumerated()), id: \.element.title) { position, group in
             Section {
                 ForEach(group.commands, id: \.id) { command in
                     commandRows(command, shortcuts: shortcuts)
                 }
             } header: {
-                Text(group.title)
+                if position == 0, !hasOptions {
+                    VStack(alignment: .leading, spacing: 0) {
+                        header
+                        Text(group.title)
+                    }
+                } else {
+                    Text(group.title)
+                }
             } footer: {
                 if position == groups.count - 1 {
                     Text("A hidden command leaves the launcher's results; its keys, Ask and links still run it.")
@@ -752,13 +764,13 @@ private struct AppCandidateCard: View {
                     Text(details(installed: installed != nil))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let documentation = app.documentation, let url = URL(string: documentation) {
+                        Link("Links documented at \(url.host() ?? documentation)", destination: url)
+                            .font(.caption)
+                    }
                 }
                 Spacer()
                 Text("from \(source)").font(.caption).foregroundStyle(.secondary)
-            }
-            if let documentation = app.documentation, let url = URL(string: documentation) {
-                Link("Links documented at \(url.host() ?? documentation)", destination: url)
-                    .font(.caption)
             }
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(app.commands, id: \.id) { command in
@@ -792,7 +804,7 @@ private struct AppCandidateCard: View {
                     Text(command.title)
                     if command.asksFirst { AsksFirstTag() }
                 }
-                Text(command.url()?.absoluteString ?? command.path)
+                Text(command.url(in: app)?.absoluteString ?? command.path)
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
@@ -802,13 +814,19 @@ private struct AppCandidateCard: View {
                         Image(systemName: "arrow.turn.down.right")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
-                        Text(variant.title).font(.caption)
-                        if variant.asksFirst { AsksFirstTag() }
-                        Text(command.url(variant: variant)?.absoluteString ?? "")
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 6) {
+                                Text(variant.title).font(.callout)
+                                if variant.asksFirst { AsksFirstTag() }
+                            }
+                            Text(command.url(in: app, variant: variant)?.absoluteString ?? "")
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
+                    .padding(.top, 2)
                 }
             }
         }
