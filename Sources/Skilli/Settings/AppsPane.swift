@@ -275,9 +275,10 @@ private struct AppPageView: View {
         }
     }
 
-    /// The shortcut `id` when it has keys: a variant's row shows only then.
+    /// The shortcut `id` when it has keys or is recording: a variant's row
+    /// shows only then (its keys are typed in it).
     private func withKeys(_ id: String?) -> String? {
-        guard let id, store.config.shortcuts.first(where: { $0.id == id })?.chords != nil else { return nil }
+        guard let id, store.recordingID == id || store.config.shortcuts.first(where: { $0.id == id })?.chords != nil else { return nil }
         return id
     }
 

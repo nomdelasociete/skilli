@@ -60,6 +60,9 @@ final class SettingsSearchModel {
     /// Before a row is looked for in `pane`: true when that makes the
     /// pane draw anew (Apps pushes the app's page holding it).
     @ObservationIgnored var beforeReveal: (_ pane: SettingsPane, _ anchor: String) -> Bool = { _, _ in false }
+    /// `pane` still reads what its rows show (Apps' shortcuts): a row not
+    /// there yet is waited for, within the reveal's 2 s.
+    @ObservationIgnored var revealIsLoading: (_ pane: SettingsPane) -> Bool = { _ in false }
     /// The pane on screen back to its top.
     @ObservationIgnored var scrollToTop: () -> Void = {}
     @ObservationIgnored weak var field: NSSearchField?
@@ -228,6 +231,8 @@ final class SettingsSearchModel {
             land(anchor)
         } else if (closedAdvanced[anchor] ?? 0) > 0 {
             // Its Advanced opens (it saw `revealing`): the row lands as it appears.
+        } else if let pane = revealPane, revealIsLoading(pane) {
+            // Its rows are being read: the row lands as it appears.
         } else {
             giveUp()
         }

@@ -1803,11 +1803,13 @@ final class SelfTest {
         let listOverflow = settings.paneOverflow()
         await captureSettingsBothWays(as: "settings-apps-list")
         guard let installed = LinkedApps.installed("cleanshot") else {
-            // Not installed: none of its rows is drawn.
+            // Not installed: none of its rows is drawn; Shortcuts' page all the same.
             let rows = CleanShot.commands.filter { settings.search.frames[SettingsSearch.entryAnchor(FeatureCatalog.appLinkEntryID($0.id))] != nil }
+            let shortcuts = await appsShortcutsPage()
+            model.page = nil
             await closeSettings()
-            record(name, listOverflow <= 1 && rows.isEmpty,
-                   "CleanShot X is not installed here: its rows drawn \(rows.count); past the window \(Int(listOverflow)) pt", nil)
+            record(name, listOverflow <= 1 && rows.isEmpty && shortcuts.works,
+                   "CleanShot X is not installed here: its rows drawn \(rows.count); past the window \(Int(listOverflow)) pt; \(shortcuts.said)", nil)
             return
         }
         guard let commands = context.aiActions.systemCommands else {
@@ -1983,28 +1985,38 @@ final class SelfTest {
         }
         let linesWork = links == ["cleanshot://capture-text", "cleanshot://capture-text?linebreaks=true", "cleanshot://capture-text?linebreaks=false"]
 
-        // Shortcuts' page: its shortcuts as read now.
+        let shortcuts = await appsShortcutsPage()
+
+        settings.scrollPaneToTop()
+        await closeSettings()
+        let fits = listOverflow <= 1 && pageOverflow <= 1
+        record(name, fits && pushed && keysShown && menuWorks && hiddenWorks && recorded && !leftBehind && landed && inSight && back && linesWork
+                   && shortcuts.works,
+               "CleanShot X \(installed.version ?? "?"); past the window: list \(Int(listOverflow)), page \(Int(pageOverflow)) pt; "
+                   + "its row pushes its page: \(pushed); keys on a command and a variant: \(keysShown)\(keysProblem); ⋯ on hover: \(moreShown), its menu: \(hoverMenu.joined(separator: ", ")); "
+                   + "hidden leaves the results and comes back: \(hiddenWorks); recording: \(recorded), ⎋ or going back left one: \(leftBehind); "
+                   + "search lands on the page's row: \(landed), in sight \(inSight); ‹ Apps: \(back); Capture Text's links: \(links.joined(separator: ", ")); "
+                   + shortcuts.said,
+               nil)
+    }
+
+    /// Settings → Apps → Shortcuts: every shortcut as read now drawn as a
+    /// row, nothing past the window; captured light and dark, top and bottom.
+    private func appsShortcutsPage() async -> (works: Bool, said: String) {
+        let settings = context.settings
+        let model = settings.apps
         model.page = .shortcuts
         _ = await waitUntil(timeout: 5) { !model.readingShortcuts }
         await pause(500)
-        let shortcutsOverflow = settings.paneOverflow()
+        let overflow = settings.paneOverflow()
         await captureSettingsBothWays(as: "settings-apps-shortcuts")
         if settings.scrollPaneToBottom() {
             await pause(300)
             await captureSettingsBothWays(as: "settings-apps-shortcuts-bottom")
         }
-        let shortcutRows = model.shortcuts.filter { settings.search.frames[SettingsSearch.entryAnchor(FeatureCatalog.shortcutEntryID($0.id))] != nil }.count
-
-        settings.scrollPaneToTop()
-        await closeSettings()
-        let fits = listOverflow <= 1 && pageOverflow <= 1 && shortcutsOverflow <= 1
-        record(name, fits && pushed && keysShown && menuWorks && hiddenWorks && recorded && !leftBehind && landed && inSight && back && linesWork,
-               "CleanShot X \(installed.version ?? "?"); past the window: list \(Int(listOverflow)), page \(Int(pageOverflow)), Shortcuts \(Int(shortcutsOverflow)) pt; "
-                   + "its row pushes its page: \(pushed); keys on a command and a variant: \(keysShown)\(keysProblem); ⋯ on hover: \(moreShown), its menu: \(hoverMenu.joined(separator: ", ")); "
-                   + "hidden leaves the results and comes back: \(hiddenWorks); recording: \(recorded), ⎋ or going back left one: \(leftBehind); "
-                   + "search lands on the page's row: \(landed), in sight \(inSight); ‹ Apps: \(back); Capture Text's links: \(links.joined(separator: ", ")); "
-                   + "Shortcuts' page: \(model.shortcuts.count) shortcuts, \(shortcutRows) rows drawn",
-               nil)
+        let rows = model.shortcuts.filter { settings.search.frames[SettingsSearch.entryAnchor(FeatureCatalog.shortcutEntryID($0.id))] != nil }.count
+        return (overflow <= 1 && rows == model.shortcuts.count,
+                "Shortcuts' page: \(model.shortcuts.count) shortcuts, \(rows) rows drawn, past the window \(Int(overflow)) pt")
     }
 
     // MARK: - Ask's calendar and reminders

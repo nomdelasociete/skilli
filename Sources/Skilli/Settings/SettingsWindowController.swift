@@ -48,6 +48,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             defer { self.apps.page = page }
             return self.apps.page != page
         }
+        // Shortcuts' page while the list is read: its row may come with it.
+        search.revealIsLoading = { [weak self] pane in
+            pane == .apps && self?.apps.page == .shortcuts && self?.apps.readingShortcuts == true
+        }
         search.scrollToTop = { [weak self] in self?.scrollDetailToTop() }
         catalog.onAllRowsShown = { [weak self] in
             guard let self, self.pendingSection != nil else { return }
@@ -324,6 +328,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         // A command editor closed with the window: its unsaved shortcuts
         // go with it, as on Cancel.
         search.shortcuts?.discardStaged()
+        // An Apps row recording: stopped, a shortcut added for it without
+        // keys gone (its page's onDisappear may not run as the window goes).
+        if let store = search.shortcuts {
+            if store.recordingID != nil { store.cancelRecording() }
+            apps.newShortcut.recordingEnded(store)
+        }
     }
 
     private func makeWindow() -> NSWindow {
