@@ -992,6 +992,16 @@ struct ShortcutSections: View {
                                 Button(action.title) { store.beginRecording(store.add(action)) }
                             }
                         }
+                        // Every launcher command, by the "?"'s groups.
+                        Menu("Launcher Commands") {
+                            ForEach(ActionCatalog.launcherCommands, id: \.group) { group in
+                                Section(group.group) {
+                                    ForEach(group.actions, id: \.id) { action in
+                                        Button(action.title) { store.beginRecording(store.add(action)) }
+                                    }
+                                }
+                            }
+                        }
                         if !context.windowLayouts().isEmpty {
                             Section("Window Layouts") {
                                 ForEach(context.windowLayouts(), id: \.id) { layout in
@@ -1010,6 +1020,22 @@ struct ShortcutSections: View {
                             Section("Skillies") {
                                 ForEach(context.scriptCommands().map { SkilliAction.mac(.script($0)) }, id: \.id) { action in
                                     Button(action.title) { store.beginRecording(store.add(action)) }
+                                }
+                            }
+                        }
+                        // The user's own lists, as long as they make them:
+                        // a submenu each.
+                        if !context.snippets.all.isEmpty {
+                            Menu("Snippets") {
+                                ForEach(context.snippets.all) { snippet in
+                                    Button(snippet.name) { store.beginRecording(store.add(.snippet(snippet.id))) }
+                                }
+                            }
+                        }
+                        if !context.quicklinks.links.isEmpty {
+                            Menu("Quicklinks") {
+                                ForEach(context.quicklinks.links) { link in
+                                    Button(link.name) { store.beginRecording(store.add(.quicklink(link.id))) }
                                 }
                             }
                         }

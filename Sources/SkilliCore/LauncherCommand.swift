@@ -274,3 +274,27 @@ public struct LauncherCommand: Sendable {
         LauncherRank.score(query, names: candidates.prefix(1), keywords: candidates.dropFirst())
     }
 }
+
+extension LauncherCommand.ID {
+    /// What a shortcut on it runs, as `shortcuts.json` names it: the id it
+    /// had before every command took a shortcut ("clipboard.history" for
+    /// ✦C), else "cmd." and its own ("cmd.searchSnippets"). Never changed:
+    /// the user's file names them.
+    public var shortcutID: String {
+        switch self {
+        case .openSettings: "settings.open"
+        case .clipboardHistory: "clipboard.history"
+        case .pasteInSequence: "clipboard.sequence"
+        case .emoji: SystemShortcuts.emojiSearch
+        case .searchGIFs: "gifs.search"
+        case .searchMenus: "menus.search"
+        default: "cmd." + rawValue
+        }
+    }
+
+    /// The command a shortcut's id names (`shortcutID`).
+    public init?(shortcutID: String) {
+        guard let command = Self.allCases.first(where: { $0.shortcutID == shortcutID }) else { return nil }
+        self = command
+    }
+}

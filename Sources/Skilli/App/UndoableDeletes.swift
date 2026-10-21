@@ -83,11 +83,15 @@ final class UndoableDeletes {
 
     // MARK: - Settings
 
-    /// Settings → Snippets → Delete: its file goes; ⌘Z writes it back.
-    func snippet(_ snippet: Snippet, in library: SnippetLibrary) {
+    /// Settings → Snippets → Delete: its file and its shortcuts go; ⌘Z
+    /// puts both back.
+    func snippet(_ snippet: Snippet, in library: SnippetLibrary, shortcuts: ShortcutStore) {
+        let entries = shortcuts.config.shortcuts.filter { $0.action == .snippet(snippet.id) }
         guard let deleted = library.delete(snippet.id) else { return }
+        shortcuts.removeEntries(for: .snippet(snippet.id))
         offer("Snippet Deleted", UndoDelete.details(snippet.name, snippet.keyword.isEmpty ? "" : " (\(snippet.keyword))")) {
             library.restore(deleted)
+            shortcuts.restore(entries)
             Self.shownAgain()
         }
     }
@@ -108,11 +112,15 @@ final class UndoableDeletes {
         }
     }
 
-    /// Settings → Catalog → Quicklinks → Delete.
-    func quicklink(_ link: Quicklink, in store: QuicklinkStore) {
+    /// Settings → Catalog → Quicklinks → Delete: the quicklink and its
+    /// shortcuts; ⌘Z puts both back.
+    func quicklink(_ link: Quicklink, in store: QuicklinkStore, shortcuts: ShortcutStore) {
+        let entries = shortcuts.config.shortcuts.filter { $0.action == .quicklink(link.id) }
         guard let removed = store.delete(link.id) else { return }
+        shortcuts.removeEntries(for: .quicklink(link.id))
         offer("Quicklink Deleted", UndoDelete.details(link.name, link.keyword.isEmpty ? "" : " (\(link.keyword))")) {
             store.restore(removed)
+            shortcuts.restore(entries)
             Self.shownAgain()
         }
     }

@@ -122,7 +122,7 @@ struct SnippetsPane: View {
                 },
                 delete: {
                     // At once; ⌘Z in the card puts it back (rule 2).
-                    context.deletes.snippet(snippet, in: library)
+                    context.deletes.snippet(snippet, in: library, shortcuts: context.shortcuts)
                     snippets = library.all
                     editing = nil
                 },

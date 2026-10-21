@@ -508,6 +508,8 @@ final class SettingTools {
             return Plan(summary: "\(pane): Quicklinks − \(Self.describe(link))",
                         said: "\(pane): Quicklinks − \(Self.describe(link, withAddress: false))") { [weak self] in
                 self?.quicklinks.delete(link.id)
+                // Its shortcuts with it, as Settings deletes them.
+                self?.shortcuts.removeEntries(for: .quicklink(link.id))
                 Self.notify("quicklinks")
                 return "Done: the quicklink \(link.name) is gone."
             }
@@ -648,6 +650,7 @@ final class SettingTools {
             snippet = try self.snippet(named: try Self.text("name", in: arguments))
             return Plan(summary: "\(pane) − \(Self.describe(snippet))", said: "\(pane) − \(Self.describe(snippet, withText: false))") { [weak self] in
                 self?.snippets.delete(snippet.id)
+                self?.shortcuts.removeEntries(for: .snippet(snippet.id))
                 Self.notify("snippets")
                 return "Done: the snippet \(snippet.name) is gone."
             }

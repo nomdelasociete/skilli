@@ -538,6 +538,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return await self.snippetLibrary.searchByMeaning(request, keys: AskRouter.keys(self.ai))
         }
         actions.onPasteInSequence = { [weak self] in self?.pasteInSequence() }
+        // Every launcher command, snippet and quicklink takes a shortcut:
+        // what opens no mode runs as its row does, a snippet is typed.
+        actions.onCommand = { [weak self] command in self?.run(command) }
+        actions.onSnippet = { [weak self] snippet in
+            guard let self else { return }
+            Task { await self.snippetExpander.insert(snippet) }
+        }
+        SkilliAction.snippetName = { [snippetLibrary] id in snippetLibrary.snippet(id)?.name }
+        SkilliAction.quicklinkName = { [quicklinkStore] id in quicklinkStore.links.first { $0.id == id }?.name }
         launcher.filesByMeaningAvailable = { [weak self] in
             guard let self else { return false }
             return self.preferences.fileMeaningSearch && !AskRouter.keys(self.ai).isEmpty
@@ -1018,7 +1027,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             + ActionCatalog.settingsPanes() + ActionCatalog.appLinks()
             + editorProjects.all().prefix(12).map { SkilliAction.mac(.project($0)) }
             + scriptLibrary.all().filter { $0.arguments.allSatisfy(\.optional) }.map { SkilliAction.mac(.script($0)) }
-        return actions.map { ($0, $0.title) } + arranger.layouts().map { (.windowLayout($0.id), "Window Layout · \($0.name)") }
+            + ActionCatalog.launcherCommands.flatMap(\.actions)
+            + snippetLibrary.all.map { SkilliAction.snippet($0.id) } + quicklinkStore.links.map { SkilliAction.quicklink($0.id) }
+        // Clipboard History is in skil.li's own list and the launcher's.
+        var seen = Set<String>()
+        return actions.filter { seen.insert($0.id).inserted }.map { ($0, $0.title) }
+            + arranger.layouts().map { (.windowLayout($0.id), "Window Layout · \($0.name)") }
     }
 
     /// A Mac command or a window place from the launcher or a shortcut: a
@@ -1162,10 +1176,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                          caller: "Window Layout", run: nil, seconds: 5)
     }
 
-    /// ⌘K → Set Shortcut… on an app: the card asks for the keys and the
-    /// next ones pressed are its shortcut (the same recorder as Settings →
-    /// Keys: conflicts refused, esc cancels); then it says them. A shortcut
-    /// added for it and left without keys goes again.
+    /// ⌘K → Set Shortcut… on an app or a "?" entry: the card asks for the
+    /// keys and the next ones pressed are its shortcut (the same recorder
+    /// as Settings → Keys: conflicts refused, esc cancels); then it says
+    /// them. A shortcut added for it and left without keys goes again.
     func recordShortcut(for action: SkilliAction, named name: String) {
         let existing = shortcuts.entryID(for: action)
         let id = existing ?? shortcuts.add(action)
@@ -1184,7 +1198,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if existing == nil, chords == nil { self.shortcuts.remove(id) }
             if let error = self.shortcuts.lastError, error.id == id { return error.message }
             guard let chords else { return "" }
-            return "\(chords.map { $0.keycaps.joined() }.joined(separator: " ")) opens \(name)."
+            let does = if case .openApp = action { "opens" } else { "runs" }
+            return "\(chords.map { $0.keycaps.joined() }.joined(separator: " ")) \(does) \(name)."
         }
     }
 
@@ -1424,8 +1439,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings.showNew(.command)
         case .pasteInSequence:
             pasteInSequence()
+        case .copyAvailability:
+            // From a shortcut: the launcher's row shows it itself.
+            aiActions.showAgenda(.availability)
         case .killProcess, .clipboardHistory, .searchSnippets, .emoji, .searchGIFs, .switchWindow, .searchMenus, .searchTabs, .searchFiles, .searchProjects, .searchHistory,
-             .homebrew, .searchContacts, .agenda, .copyAvailability, .reminders, .github, .catalog:
+             .homebrew, .searchContacts, .agenda, .reminders, .github, .catalog:
             // Handled in the launcher: it turns into that mode.
             break
         case .welcome:
