@@ -143,7 +143,8 @@ real.
    | Keys | Add Shortcut → Shortcuts → each: as it is, With the Selection |
    | Links | `skilli://run/system:shortcut:<identifier>`, asked first, Always offered |
    | Ask | by name, its own question; unsure (under 85 %): asked first |
-   | Agents | `list_shortcuts`, `run_shortcut` (name, input): the text it gave back |
+   | Agents | `list_shortcuts`, `run_shortcut` (name, input or selection): the text it gave back |
+   | Skillies | `open` its link, or `"$SKILLI_CLI" call run_shortcut name=… input=…` (waits, exit 0/1/2; skillies/README.md) |
 
 2. Apps with documented schemes, to check one by one: Slack, Zoom (already
    parsed in Agenda), Notion.

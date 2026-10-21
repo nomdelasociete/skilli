@@ -388,10 +388,12 @@ final class SkilliTools {
                        description: "The shortcuts the user made in Apple's Shortcuts app, one name per line. Through them you reach what any app lets Shortcuts do.",
                        group: .actions, risk: .read, parameters: []),
         ToolDefinition(name: "run_shortcut", title: "Run a shortcut",
-                       description: "Runs one of the user's shortcuts (Apple's Shortcuts app) by its name, with a text as its input if it takes one; returns the text it gave back.",
+                       description: "Runs one of the user's shortcuts (Apple's Shortcuts app) by its name, with a text as its input if it takes one (or the user's selected text); returns the text it gave back.",
                        group: .actions, risk: .changes,
                        parameters: [.init(name: "name", description: "Its name, as list_shortcuts gives it."),
-                                    .init(name: "input", description: "The text it works on.", isRequired: false)]),
+                                    .init(name: "input", description: "The text it works on.", isRequired: false),
+                                    .init(name: "selection", description: "true: the text selected in the user's app is its input (instead of input).",
+                                          options: ["true", "false"], isRequired: false)]),
         ToolDefinition(name: "create_skillie", title: "Create a skillie",
                        description: "Writes a new skillie: a script the user then finds in skil.li's launcher by its title, Ask can run and you can run with run_skillie. Give the code without a shebang; it receives its arguments as $1, $2… (argv). To act in apps, it opens one skil.li link a step, done in order, each asked first: open \"skilli://do?app=TextEdit&goal=exporte%20en%20PDF%20dans%20mes%20documents\" (the goal as the user would ask it, percent-encoded; app optional). When what follows depends on whether a step worked, wait for it instead: \"$SKILLI_CLI\" call do_in_app app=TextEdit goal=\"exporte en PDF dans mes documents\" exits 0 when done, 1 otherwise, its first line saying how it ended (asked in the card like any agent's call). Keep it small and safe; it runs on the user's Mac.",
                        group: .actions, risk: .changes,
@@ -959,7 +961,16 @@ final class SkilliTools {
             guard let shortcut = all.first(where: { $0.name.localizedCaseInsensitiveCompare(wanted) == .orderedSame }) ?? all.first(where: { $0.id == wanted }) else {
                 throw Failure(message: "No shortcut “\(wanted)” in the Shortcuts app. Use list_shortcuts.")
             }
-            let input = (try? text("input")).flatMap { $0.isEmpty ? nil : $0 }
+            var input = (try? text("input")).flatMap { $0.isEmpty ? nil : $0 }
+            if (try? text("selection")) == "true" {
+                // As get_selection reads it: the command's, else the app's now.
+                var selected = run?.read?.text
+                if selected == nil { selected = await selection.read()?.text }
+                guard let selected, !selected.isEmpty else {
+                    throw Failure(message: "Nothing is selected: “\(shortcut.name)” not run.")
+                }
+                input = selected
+            }
             do {
                 let output = try await AppleShortcuts.run(shortcut, input: input)
                 return output.map { String($0.suffix(8_000)) } ?? "Done."

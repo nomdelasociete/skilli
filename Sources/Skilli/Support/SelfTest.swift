@@ -1402,12 +1402,87 @@ final class SelfTest {
         let unknown = (try? await tools.call("run_shortcut", arguments: ["name": "No Such Shortcut Selftest"], run: nil)) == nil
         details.append("list_shortcuts: \(listed), run_shortcut: “\(ran)”, an unknown one refused: \(unknown)")
 
+        // From a skillie (skillies/README.md): its row's link, and the
+        // agents' action with an input or the selection.
+        let fromSkillies = await shortcutFromSkillies(shortcut)
+        details.append(fromSkillies.detail)
+
         // A shortcut left by a run that stopped was allowed already.
         let passed = found && accessory == "Shortcuts" && working && (askedOnce || why.hasPrefix("left")) && !covered
             && actions.starts(with: ["Run", "Run with the Selection", "Edit in Shortcuts"])
             && actions.contains("Copy Link") && withSelection == "echo:zebra" && plain == "echo:" && keyed == "echo:zebra" && asked
-            && linked == "echo:" && asked2 == "echo:zebra" && listed && ran == "echo:camille" && unknown
+            && linked == "echo:" && asked2 == "echo:zebra" && listed && ran == "echo:camille" && unknown && fromSkillies.passed
         record(name, passed, details.joined(separator: "; ") + "; launcher-shortcut-row.png, launcher-shortcut-actions.png", nil)
+    }
+
+    /// The test shortcut run from three skillies, as the launcher runs
+    /// them: `open "skilli://run/system:shortcut:<id>"` (the link asks in the
+    /// card, ↩), then `"$SKILLI_CLI" call run_shortcut` with `input=` and
+    /// with `selection=true` (each call asked in the skillie's card, ↩),
+    /// branching on its exit; each one's last line in the card.
+    private func shortcutFromSkillies(_ shortcut: AppleShortcut) async -> (passed: Bool, detail: String) {
+        guard let links = context.links else { return (false, "from skillies: no link runner") }
+        let popover = context.aiActions.popover
+        let settings = context.tools.settings
+        let (mode, right) = (settings.mode, settings.override(for: "run_shortcut"))
+        // Ask Before Changes, run_shortcut not made Always: each call asks.
+        settings.mode = .auto
+        settings.setOverride(nil, for: "run_shortcut")
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-shortcut-skillies-\(getpid())", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        links.opensFromMacOS = true
+        defer {
+            settings.mode = mode
+            settings.setOverride(right, for: "run_shortcut")
+            links.opensFromMacOS = false
+            try? FileManager.default.removeItem(at: folder)
+        }
+        func skillie(_ name: String, _ body: String) -> ScriptCommand? {
+            let file = folder.appendingPathComponent("\(name).sh")
+            let text = "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Shortcut From Skillie \(name)\n# @skilli.mode compact\n\(body)\n"
+            try? text.write(to: file, atomically: true, encoding: .utf8)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+            return ScriptCommand.parse(text, path: file.path)
+        }
+        /// Run as the launcher does, the test window's text `selected`; ↩
+        /// on each card that asks (after the moment an unprompted card
+        /// leaves to the app); the card's text once it says `expected`.
+        func run(_ command: ScriptCommand?, selected: String, expecting expected: String) async -> String {
+            guard let command else { return "not a skillie" }
+            guard await focusTestWindow() else { return "no focus" }
+            window.makeFirstResponder(textView)
+            textView.string = selected
+            textView.selectAll(nil)
+            var asked = 0
+            var seen: (text: String, at: ContinuousClock.Instant)?
+            context.aiActions.runScript?(command, false)
+            _ = await waitUntil(timeout: 40) {
+                if popover.isVisible, popover.phase == .approving {
+                    if seen?.text != popover.shownText {
+                        seen = (popover.shownText, .now)
+                    } else if let at = seen?.at, .now - at > .milliseconds(900) {
+                        seen = (popover.shownText + " answered", .now)
+                        asked += 1
+                        Task { await self.pressKey(nil, code: CGKeyCode(kVK_Return)) }
+                    }
+                }
+                return popover.isVisible && popover.shownText == expected
+            }
+            let said = popover.isVisible ? popover.shownText : "no card"
+            if popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+            _ = await waitUntil(timeout: 2) { !popover.isVisible }
+            return "asked \(asked)×, “\(said)”"
+        }
+        let call = { (argument: String) in
+            "if said=$(\"$SKILLI_CLI\" call run_shortcut name=\"\(Self.echoShortcut)\" \(argument) 2>&1); then echo \"Got: $said\"; else echo \"Failed: ${said%%$'\\n'*}\"; fi"
+        }
+        let link = await run(skillie("Link", "open \"\(SkilliLink.run(FeatureCatalog.shortcutEntryID(shortcut.id)).url.absoluteString)\""),
+                             selected: "", expecting: "echo:")
+        let input = await run(skillie("Input", call("input=zebra")), selected: "", expecting: "Got: echo:zebra")
+        let selection = await run(skillie("Selection", call("selection=true")), selected: "camille", expecting: "Got: echo:camille")
+        let passed = [link, input, selection].allSatisfy { $0.hasPrefix("asked 1×") }
+            && link.hasSuffix("“echo:”") && input.hasSuffix("“Got: echo:zebra”") && selection.hasSuffix("“Got: echo:camille”")
+        return (passed, "from skillies: open its link \(link); call with input= \(input); call with selection=true \(selection)")
     }
 
     /// The test shortcut, imported as a person would: its file signed by

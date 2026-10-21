@@ -63,6 +63,29 @@ fi
 `SKILLI_SOCKET` and `SKILLI_SKILLIE` are read by `$SKILLI_CLI` itself:
 nothing to do with them. Details: [`docs/do-it-here-from-anywhere.md`](../docs/do-it-here-from-anywhere.md).
 
+## Run the user's shortcuts
+
+Every shortcut made in Apple's Shortcuts app is a skil.li row. A skillie
+runs one in two ways:
+
+```bash
+open "skilli://run/system:shortcut:0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F501"  # its row's link (⌘K → Copy Link)
+said=$("$SKILLI_CLI" call run_shortcut name="Morning Routine" input="$1")  # waits, its text in $said
+```
+
+- The link runs it as its row does, asked first in skil.li's card (a
+  shortcut can do anything; Always there lets links run it at once). The
+  script does not wait for it.
+- `call run_shortcut` waits: `name` as the launcher shows it, `input` the
+  text it works on, or `selection=true` for the text selected in the app
+  in front. Exit 0: done, what it gave back on standard output. Exit 1: not
+  run or failed (declined, no such shortcut, nothing selected, Shortcuts'
+  own error), why on the first line of standard error. Exit 2: the call
+  is written wrong. Asked in the skillie's card as any agent's call is,
+  unless the user's tool rights allow "Run a shortcut".
+- The first time a shortcut hands its result back, Shortcuts itself asks
+  ("Allow … to produce 1 text item?"); the call waits for that answer too.
+
 ## Install
 
 Download a script from the collection, inspect it, and put it in your local

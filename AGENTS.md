@@ -3389,8 +3389,12 @@ re-investigating.
   is, With the Selection), links (asked first, Always offered: a shortcut
   can do anything), Ask (a question of its own, `shortcut0`…, by name;
   ≥ 60 % beats the agent, ≥ 85 % a reminder or an answer too; asked
-  first under 85 %; what Ask was asked on is its input) and agents (`list_shortcuts`, `run_shortcut` with an
-  optional input, the text it gave back). Read with Apple's tool
+  first under 85 %; what Ask was asked on is its input), agents
+  (`list_shortcuts`, `run_shortcut` with an optional `input` or
+  `selection=true`, the text it gave back) and skillies
+  (skillies/README.md: `open` its row's link, or `"$SKILLI_CLI" call
+  run_shortcut name=… input=…|selection=true`, which waits and exits 0,
+  1 or 2). Read with Apple's tool
   (`shortcuts list --show-identifiers`, "Name (identifier)") off the
   main thread at launch and each time the launcher opens, with the
   radios; a change redraws the rows; a key never runs it. Run by
@@ -3417,7 +3421,9 @@ re-investigating.
   `remote apps` imports a test shortcut it signs (`shortcuts sign`, then
   opened and added in Shortcuts), answers Shortcuts' question once
   (Always Allow), runs it from the launcher (↩, ⌘K with the selection), a
-  key on the selection, its link (asked), Ask and `run_shortcut`, then
+  key on the selection, its link (asked), Ask, `run_shortcut`, and three
+  scratch skillies (its link opened, `call` with `input=`, with
+  `selection=true`, each asked in the card), then
   deletes it in Shortcuts (Edit → Delete) and quits Shortcuts when it
   opened it; `selftest decide`: Ask picks made-up shortcuts by name, and
   none for something else (decided only).

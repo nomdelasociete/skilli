@@ -199,8 +199,9 @@ The search panel you open from anywhere. ✦Space.
   (the text selected where the launcher opened is its input), Edit in
   Shortcuts. Each one takes an alias, a key (Keys → Add Shortcut →
   Shortcuts, as it is or with the selection), a link (asked first: a
-  shortcut can do anything), Ask ("lance mon raccourci du matin") and
-  agents. A shortcut made, renamed or deleted shows the next time the
+  shortcut can do anything), Ask ("lance mon raccourci du matin"),
+  agents and skillies (its link, or `$SKILLI_CLI call run_shortcut` with
+  an input or the selection). A shortcut made, renamed or deleted shows the next time the
   launcher opens.
 - **Links**: `skilli://run/…` runs any Catalog row from any app (⌘K →
   Copy Link); what takes the Mac away asks first, and Always ⌘↩ in that

@@ -5,21 +5,21 @@ import XCTest
 /// `shortcuts list --show-identifiers` prints, the editor's link, what a
 /// run gave back, and their Catalog entries, links and trust.
 final class AppleShortcutTests: XCTestCase {
-    private let morning = AppleShortcut(id: "1FAC915F-6972-49A0-A7D8-0C04A41148DE", name: "Morning Routine")
+    private let morning = AppleShortcut(id: "0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F501", name: "Morning Routine")
 
     func testTheListReadsEachNameAndIdentifier() {
         let output = """
-        Morning Routine (1FAC915F-6972-49A0-A7D8-0C04A41148DE)
-        Text Camille (Work) (A473694F-910E-45EF-AC21-7E7A0ECDC5A2)
-        Résumé & Notes + (FAE05B15-3685-4063-BC62-736AE00C6CF1)
+        Morning Routine (0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F501)
+        Text Camille (Work) (0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F502)
+        Résumé & Notes + (0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F503)
 
         Without an identifier
         Broken (not-a-uuid)
         """
         let shortcuts = AppleShortcut.list(output)
         XCTAssertEqual(shortcuts.map(\.name), ["Morning Routine", "Text Camille (Work)", "Résumé & Notes +"])
-        XCTAssertEqual(shortcuts.map(\.id), ["1FAC915F-6972-49A0-A7D8-0C04A41148DE", "A473694F-910E-45EF-AC21-7E7A0ECDC5A2",
-                                             "FAE05B15-3685-4063-BC62-736AE00C6CF1"])
+        XCTAssertEqual(shortcuts.map(\.id), ["0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F501", "0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F502",
+                                             "0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F503"])
         XCTAssertEqual(AppleShortcut.list(""), [])
     }
 
@@ -27,11 +27,11 @@ final class AppleShortcutTests: XCTestCase {
         // A key saved before the list was read knows only the identifier.
         XCTAssertEqual(AppleShortcut(id: morning.id, name: ""), morning)
         XCTAssertEqual(Set([morning, AppleShortcut(id: morning.id, name: "Renamed")]).count, 1)
-        XCTAssertNotEqual(AppleShortcut(id: "A473694F-910E-45EF-AC21-7E7A0ECDC5A2", name: "Morning Routine"), morning)
+        XCTAssertNotEqual(AppleShortcut(id: "0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F502", name: "Morning Routine"), morning)
     }
 
     func testRunsByItsIdentifier() {
-        XCTAssertEqual(morning.runArguments, ["run", "1FAC915F-6972-49A0-A7D8-0C04A41148DE"])
+        XCTAssertEqual(morning.runArguments, ["run", "0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F501"])
         XCTAssertEqual(AppleShortcut.listArguments, ["list", "--show-identifiers"])
     }
 
@@ -63,7 +63,7 @@ final class AppleShortcutTests: XCTestCase {
         let entries = FeatureCatalog.entries(FeatureCatalog.Input(shortcuts: [morning]))
         let entry = try XCTUnwrap(entries.first { $0.run == .shortcut(morning.id) })
         // Its launcher row's learning id: the same alias, pin and link.
-        XCTAssertEqual(entry.id, "system:shortcut:1FAC915F-6972-49A0-A7D8-0C04A41148DE")
+        XCTAssertEqual(entry.id, "system:shortcut:0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F501")
         XCTAssertEqual(entry.id, FeatureCatalog.shortcutEntryID(morning.id))
         XCTAssertEqual(entry.title, "Morning Routine")
         XCTAssertEqual(entry.group, .apps)
@@ -91,7 +91,7 @@ final class AppleShortcutTests: XCTestCase {
         let entry = CatalogEntry(id: id, title: morning.name, oneLine: FeatureCatalog.shortcutLine, group: .apps, symbol: "square.2.layers.3d",
                                  run: run)
         XCTAssertEqual(SkilliLink.link(for: entry).url.absoluteString,
-                       "skilli://run/system:shortcut:1FAC915F-6972-49A0-A7D8-0C04A41148DE")
+                       "skilli://run/system:shortcut:0B7E5C2A-1D34-4E6F-8A90-B1C2D3E4F501")
         XCTAssertEqual(SkilliLink.parse(SkilliLink.link(for: entry).url), .run(id))
     }
 }
