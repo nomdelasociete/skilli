@@ -337,9 +337,13 @@ final class LauncherController: NSObject {
     private var kept: Kept?
     /// Self-test hook: the alias each row shows.
     var shownAliases: [String?] { results.map { aliasByID[$0.learningID] } }
-    /// The keycaps at the rows' right edge as drawn (a snippet's keyword).
+    /// The keycaps at the rows' right edge as drawn (a snippet's keyword),
+    /// and the alias keycaps after their names.
     var shownTrailingKeycaps: [String?] {
         results.indices.map { (tableView.view(atColumn: 0, row: $0, makeIfNecessary: false) as? ResultCellView)?.trailingText }
+    }
+    var shownAliasCaps: [String?] {
+        results.indices.map { (tableView.view(atColumn: 0, row: $0, makeIfNecessary: false) as? ResultCellView)?.aliasText }
     }
     /// Where ⌘K's links go (Messages, Phone, mail); self-tests keep them.
     var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
@@ -4036,7 +4040,9 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             guard let cell = view as? ResultCellView else { return false }
             configure(cell, for: results[row])
             let id = results[row].learningID
-            cell.setAlias(aliasByID[id])
+            // Beside a preview a row is its name (and a snippet's keyword):
+            // the preview says the alias, the name needs the room.
+            cell.setAlias(beside == nil ? aliasByID[id] : nil)
             cell.setPinned(mode == nil && pinsNow.ids.contains(id))
             cell.setTrailingKeycap(mode == .snippets ? Self.keywordCap(results[row]) : nil)
         }

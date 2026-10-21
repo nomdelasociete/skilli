@@ -127,7 +127,7 @@ private final class WashLayoutManager: NSLayoutManager {
             color.setFill()
             enumerateEnclosingRects(forGlyphRange: glyphs, withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
                                     in: container) { rect, _ in
-                let wash = rect.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -2.5, dy: 0)
+                let wash = rect.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -2.5, dy: 0.5)
                 NSBezierPath(roundedRect: wash, xRadius: 4, yRadius: 4).fill()
             }
         }

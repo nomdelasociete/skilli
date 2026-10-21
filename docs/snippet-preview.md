@@ -33,9 +33,10 @@ of it. Fixed frames: a row change fills views in place, no Auto Layout.
 
 The snippet's name, its keyword as a keycap at the right edge (where the
 full list put "first words · keyword"; the preview says the rest). No
-keyword, nothing on the right. Its launcher alias, when it has one, stays
-a keycap after the name as on every row. Outside the mode (root search)
-a snippet row is unchanged: "Snippet · ;addr".
+keyword, nothing on the right. No alias keycap beside a preview (the
+first captures cut "Confirmation datée" to "Confirmatio…" between two
+caps): the preview says the alias. Outside the mode (root search) a
+snippet row is unchanged: "Snippet · ;addr", its alias a keycap.
 
 ## The preview
 

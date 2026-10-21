@@ -15932,7 +15932,11 @@ final class SelfTest {
             library.save(Snippet(id: "", name: "Lien Calendly", keyword: ";cal", text: "https://calendly.com/camille/30min")),
             library.save(Snippet(id: "", name: "Confirmation datée", keyword: ";conf", text: datedText)),
             library.save(Snippet(id: "", name: "Garde Swift", keyword: ";gs",
-                                 text: "guard let url = URL(string: address) else {\n    return nil\n}\nlet data = try Data(contentsOf: url)"))
+                                 text: "guard let url = URL(string: address) else {\n    return nil\n}\nlet data = try Data(contentsOf: url)")),
+            // Long and without a keyword: the fade, no Keyword nor Expands.
+            library.save(Snippet(id: "", name: "Relance devis", keyword: "", text: (["Bonjour Margot,", ""]
+                + Array(repeating: "Je me permets de revenir vers vous au sujet du devis envoyé la semaine dernière pour la refonte du site de Lumière, "
+                    + "dont nous avions parlé ensemble.", count: 6) + ["", "Bien à vous,", "Camille"]).joined(separator: "\n")))
         ]
         let dated = seeded[4]
         let launcher = context.launcher
@@ -15993,6 +15997,10 @@ final class SelfTest {
             && (!shortcutSet || info["Shortcut"] == "⌃⌥⌘8") && info["Size"]?.contains("characters") == true && info["Modified"] != nil
         let fast = preview.lastShowTime < .milliseconds(8)
         let showTime = preview.lastShowTime
+        let datedDetail = "“\(preview.shownTyped.replacingOccurrences(of: "\n", with: "⏎"))”, filled \(preview.shownFilled), "
+            + "unfilled \(preview.shownUnfilled), caret \(preview.shownCaret); \(preview.shownInfo.map { "\($0.0): \($0.1)" }.joined(separator: ", "))"
+        // Beside the preview, a row is its name and its keyword: no alias cap.
+        let nameOnly = launcher.shownTrailingKeycaps.first == ";conf" && launcher.shownAliasCaps.first == .some(nil)
         await captureLauncherBothWays(as: "launcher-snippets")
         for _ in 0..<"confirm".count { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
 
@@ -16001,6 +16009,13 @@ final class SelfTest {
         let code = await waitUntil(timeout: 1) { preview.shownID == seeded[5].id && preview.shownCode } != nil
         await captureLauncherBothWays(as: "launcher-snippets-code")
         for _ in 0..<"garde".count { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+
+        // Long, no keyword: no keycap, no Keyword nor Expands; it fades.
+        for character in "relance" { await pressKey(character) }
+        let long = await waitUntil(timeout: 1) { preview.shownID == seeded[6].id } != nil
+            && launcher.shownTrailingKeycaps.first == .some(nil) && !preview.shownInfo.contains { $0.0 == "Keyword" || $0.0 == "Expands" }
+        await captureLauncherBothWays(as: "launcher-snippets-long")
+        for _ in 0..<"relance".count { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
 
         // Nothing found: the quiet tile, no information.
         for character in "zzqxw" { await pressKey(character) }
@@ -16032,15 +16047,13 @@ final class SelfTest {
         }
         await closeLauncher()
         let whole = preview.isHidden && launcher.tableView.frame.width > 600
-        let paneDetail = "split: \(split), keycaps: \(caps), ↓ followed: \(followed); dated shown: \(datedShown), typed as now: \(typedRight) "
-            + "(“\(preview.shownTyped.replacingOccurrences(of: "\n", with: "⏎"))”), clipboard readable: \(readable), filled: \(filledRight) "
-            + "(\(preview.shownFilled), unfilled \(preview.shownUnfilled), caret \(preview.shownCaret)), information: \(informed) "
-            + "(\(preview.shownInfo.map { "\($0.0): \($0.1)" }.joined(separator: ", ")), shortcut set: \(shortcutSet)), shown in \(showTime.compact): \(fast); "
-            + "code: \(code), nothing found quiet: \(quiet), plain: \(plain); list whole again: \(whole)"
-        record(name, mode && split && capped && followed && datedShown && typedRight && filledRight && informed && fast && code && quiet
+        let paneDetail = "split: \(split), keycaps: \(caps), ↓ followed: \(followed); dated shown: \(datedShown), name and keyword only: \(nameOnly), "
+            + "typed as now: \(typedRight), clipboard readable: \(readable), filled: \(filledRight), information: \(informed) (shortcut set: \(shortcutSet)): "
+            + "\(datedDetail); shown in \(showTime.compact): \(fast); code: \(code), long without a keyword: \(long), nothing found quiet: \(quiet), plain: \(plain); list whole again: \(whole)"
+        record(name, mode && split && capped && followed && datedShown && nameOnly && typedRight && filledRight && informed && fast && code && long && quiet
                && filtered && plain && meaningPassed && whole,
                "mode: \(mode) (\(listed) snippets), \(paneDetail), “adresse” first: \(filtered); \(meaningDetail); "
-               + "launcher-snippets(-code, -empty)-light/-dark.png", nil)
+               + "launcher-snippets(-code, -long, -empty, -meaning)-light/-dark.png", nil)
     }
 
     /// ✦K V pastes the newest copy, again the one before, again the one
