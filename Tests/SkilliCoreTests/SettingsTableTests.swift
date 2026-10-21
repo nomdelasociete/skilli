@@ -30,7 +30,7 @@ final class SettingsTableTests: XCTestCase {
     }
 
     func testEverySettableEntryHasToolsThatExist() {
-        let known = Set(SettingsTable.Tool.all + ["create_skillie", "create_skill"])
+        let known = Set(SettingsTable.Tool.all + ["create_skillie", "create_skill", "create_app_link"])
         XCTAssertEqual(Set(SettingsTable.Tool.all).count, SettingsTable.Tool.all.count)
         for entry in SettingsTable.entries {
             switch entry.access {

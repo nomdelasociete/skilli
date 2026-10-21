@@ -280,7 +280,7 @@ private struct AppsListView: View {
                         Spacer(minLength: 8)
                     }
                     .padding(.vertical, 2)
-                    .settingAnchor("appFile.\(problem.file)")
+                    .settingAnchor(problem.file == problems.first?.file ? "appFiles" : "appFile.\(problem.file)")
                 }
             } header: {
                 Text(problems.count == 1 ? "An App File Left Out" : "\(problems.count) App Files Left Out")

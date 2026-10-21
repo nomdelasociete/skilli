@@ -547,6 +547,7 @@ final class SelfTest {
             if !aborted { await cleanShotFromLauncher() }
             if !aborted { await cleanShotFromSkillies() }
             if !aborted { await cleanShotOpensFiles() }
+            if !aborted { await appFilesFromFiles() }
             if !aborted { await appsPaneShown() }
             if !aborted { await appleShortcutsRun() }
             return finish()
@@ -2037,6 +2038,251 @@ final class SelfTest {
                 AXUIElementPerformAction(unsafeDowncast(button, to: AXUIElement.self), kAXPressAction as CFString)
             }
         }
+    }
+
+    /// App files (docs/apps.md, "App files"), dry run, in the self-test's
+    /// own Apps folder: a test app's file (TextEdit's bundle id, a scheme
+    /// of its own, its links made up), a file that is not one and one that
+    /// names CleanShot X's id. The test app is read, the two others left
+    /// out with why; its commands are launcher rows (↩ opens its link), ⌘K
+    /// lists its variant, the Catalog lists them, `run_action` runs them (a
+    /// variant too) and what asks first asks (esc: nothing opened), its
+    /// link runs and the asking one asks, Ask runs one and asks for the
+    /// other; Settings → Apps lists it and the two files left out, its page
+    /// (Its Links, Show File); an import link shows an app whole, Add
+    /// writes its file; `create_app_link` refuses a scheme the app does not
+    /// open and adds Notes' links. Links read, nothing opened.
+    private func appFilesFromFiles() async {
+        let name = "App files: a test app read, a broken file and a clash left out with why; its rows (↩), ⌘K variant, Catalog, run_action (variant; asks first, esc), its links (one asks), Ask (one asks); Settings → Apps lists it and the files left out, its page; an import link shows it whole, Add writes it; create_app_link refuses a scheme the app does not open, adds Notes' links"
+        guard let commands = context.aiActions.systemCommands, let folder = LinkedApps.folder else {
+            record(name, false, "no SystemCommands or no Apps folder", nil)
+            return
+        }
+        let manager = FileManager.default
+        let launcher = context.launcher
+        let popover = context.aiActions.popover
+        let toolSettings = context.tools.settings
+        func write(_ object: [String: Any], as file: String) -> Bool {
+            guard let text = try? LinkedAppFile.text(object) else { return false }
+            return (try? text.write(to: folder.appendingPathComponent(file), atomically: true, encoding: .utf8)) != nil
+        }
+        let app: [String: Any] = [
+            "id": "selftest-notes", "name": "Selftest Notes", "shortName": "Selftest", "bundleID": "com.apple.TextEdit", "scheme": "x-skilli-selftest",
+            "documentation": "https://example.com/selftest-notes/links", "note": "Its links are made up for the self-test: nothing opens them.",
+            "commands": [
+                ["id": "today", "path": "show/today", "title": "Selftest Today", "description": "Shows today's selftest notes",
+                 "words": ["zebrafish", "aujourd'hui"], "symbol": "sun.max", "group": "Show"],
+                ["id": "new-note", "path": "x-callback-url/create", "title": "New Selftest Note", "description": "Opens a new selftest note",
+                 "symbol": "square.and.pencil", "query": [["name": "open_note", "value": "yes"]],
+                 "variants": [["id": "pinned", "title": "New Pinned Selftest Note", "label": "Pinned", "symbol": "pin",
+                               "query": [["name": "pin", "value": "yes"]]]], "group": "Write"],
+                ["id": "share", "path": "/share/all", "title": "Share Selftest Notes", "description": "Sends every selftest note away",
+                 "symbol": "square.and.arrow.up", "asksFirst": true, "group": "Write"]
+            ]
+        ]
+        var broken = app
+        broken["id"] = "selftest-broken"
+        broken["commands"] = [["id": "open", "path": "open", "description": "Opens it"]]
+        var clash = app
+        clash["id"] = "cleanshot"
+        try? manager.createDirectory(at: folder, withIntermediateDirectories: true)
+        guard write(app, as: "Selftest Notes.json"), write(broken, as: "Broken.json"), write(clash, as: "Clash.json") else {
+            record(name, false, "could not write the test files in \(folder.path)", nil)
+            return
+        }
+        let saved = (link: commands.openAppLink, mode: toolSettings.mode, action: toolSettings.override(for: "run_action"),
+                     create: toolSettings.override(for: "create_app_link"))
+        commands.openAppLink = { _ in }
+        commands.lastAppLink = nil
+        toolSettings.mode = .auto
+        toolSettings.setOverride(.always, for: "run_action")
+        toolSettings.setOverride(.always, for: "create_app_link")
+        defer {
+            commands.openAppLink = saved.link
+            toolSettings.mode = saved.mode
+            toolSettings.setOverride(saved.action, for: "run_action")
+            toolSettings.setOverride(saved.create, for: "create_app_link")
+            context.aiActions.decisionOverride = nil
+            for file in (try? manager.contentsOfDirectory(atPath: folder.path)) ?? [] {
+                try? manager.removeItem(at: folder.appendingPathComponent(file))
+            }
+            LinkedApps.readFiles(force: true)
+            LinkedApps.read()
+            launcher.reloadSources()
+        }
+        LinkedApps.read()
+        launcher.reloadSources()
+        var details: [String] = []
+        let read = LinkedApps.installed("selftest-notes") != nil
+        let problems = LinkedApps.problems.sorted { $0.file < $1.file }
+        let leftOut = problems.map(\.file) == ["Broken.json", "Clash.json"]
+            && problems.first?.message.contains("“title” is missing") == true && problems.last?.message.contains("CleanShot X's already") == true
+        details.append("read: \(read); left out: " + problems.map { "\($0.file) “\($0.message)”" }.joined(separator: ", "))
+        let today = "x-skilli-selftest://show/today"
+        let pinned = "x-skilli-selftest://x-callback-url/create?open_note=yes&pin=yes"
+
+        // A launcher row: found by its title, ↩ opens its link.
+        var rowRan = false
+        var accessory = ""
+        if await focusTestWindow(), await openLauncher() {
+            for character in "selftest today" { await pressKey(character) }
+            if await waitUntil(timeout: 1, { launcher.topResultName == "Selftest Today" }) != nil {
+                accessory = launcher.resultAccessories.first ?? ""
+                await pressKey(nil, code: CGKeyCode(kVK_Return))
+                rowRan = await waitUntil(timeout: 2) { commands.lastAppLink?.absoluteString == today } != nil
+            } else {
+                details.append("top row “\(launcher.topResultName ?? "none")”")
+                await closeLauncher()
+            }
+        }
+        details.append("its row ↩: \(rowRan) (\(accessory))")
+
+        // ⌘K on a row lists its variant, which opens the variant's link.
+        var variantRan = false
+        var listed: [String] = []
+        if let note = LinkedApp.command(id: "selftest-notes.new-note") {
+            let actions = launcher.actions(for: .system(.appLink(note, variant: nil), title: note.title))
+            listed = actions.map(\.title)
+            commands.lastAppLink = nil
+            actions.first { $0.title == "New Pinned Selftest Note" }?.run()
+            variantRan = await waitUntil(timeout: 2) { commands.lastAppLink?.absoluteString == pinned } != nil
+        }
+        details.append("⌘K: \(listed.prefix(4).joined(separator: ", ")), the variant ran: \(variantRan)")
+
+        // The Catalog.
+        let entries = FeatureCatalog.entries(context.settings.freshContext().catalogInput())
+        let inCatalog = entries.contains { $0.id == "system:link:selftest-notes.today" && $0.group == .apps }
+        details.append("in the Catalog: \(inCatalog)")
+
+        // Agents and skillies: a variant; what asks first asks, esc opens nothing.
+        commands.lastAppLink = nil
+        let call = await skilliCall("run_action", #"{"id":"selftest-notes.new-note","variant":"pinned"}"#)
+        let called = await waitUntil(timeout: 2) { commands.lastAppLink?.absoluteString == pinned } != nil && call.status == 0
+        commands.lastAppLink = nil
+        _ = await waitUntil(timeout: 2) { !popover.isVisible }
+        async let share = skilliCall("run_action", #"{"id":"selftest-notes.share"}"#)
+        let callAsked = await waitUntil(timeout: 3) { popover.isVisible && popover.phase == .approving } != nil
+        let callTitle = popover.shownTitle
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let declined = await share
+        await pause(300)
+        let callOpenedNothing = commands.lastAppLink == nil && declined.status == 1
+        details.append("run_action variant: \(called); share asked: \(callAsked) “\(callTitle)”, esc → exit \(declined.status), opened nothing \(callOpenedNothing)")
+
+        // Its links: one runs at once, the one that asks first asks.
+        var linkRan = false
+        var linkAsked = false
+        if let links = context.links {
+            _ = await waitUntil(timeout: 2) { !popover.isVisible }
+            commands.lastAppLink = nil
+            await links.openNow(SkilliLink.run("system:link:selftest-notes.today").url)
+            linkRan = await waitUntil(timeout: 2) { commands.lastAppLink?.absoluteString == today } != nil
+            commands.lastAppLink = nil
+            let opening = Task { await links.openNow(SkilliLink.run("system:link:selftest-notes.share").url) }
+            linkAsked = await waitUntil(timeout: 2) { links.log.last == "asked system:link:selftest-notes.share" } != nil
+            await pause(300)
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            await opening.value
+            linkAsked = linkAsked && links.log.last == "declined system:link:selftest-notes.share" && commands.lastAppLink == nil
+        }
+        details.append("link runs: \(linkRan), the asking one asked and declined: \(linkAsked)")
+
+        // Ask: one runs, the one that asks first asks in the card.
+        var askRan = false
+        var askAsked = false
+        if let todayCommand = LinkedApp.command(id: "selftest-notes.today"), let shareCommand = LinkedApp.command(id: "selftest-notes.share") {
+            for (command, expectRun) in [(todayCommand, true), (shareCommand, false)] {
+                let action = MacAction.appLink(command, variant: nil)
+                context.aiActions.decisionOverride = AskRouter.Decision(route: .command, confidence: 0.95, menu: [], routes: [(.command, 0.95)],
+                                                                        command: (action, 0.95), commands: [(action, 0.95)], label: "Test")
+                commands.lastAppLink = nil
+                _ = await waitUntil(timeout: 2) { !popover.isVisible }
+                guard await focusTestWindow(), await openAsk() else { continue }
+                for character in "selftest" { await pressKey(character) }
+                await pressKey(nil, code: CGKeyCode(kVK_Return))
+                if expectRun {
+                    askRan = await waitUntil(timeout: 4) { commands.lastAppLink?.absoluteString == today } != nil
+                } else {
+                    askAsked = await waitUntil(timeout: 4) { popover.isVisible && popover.shownQuestion?.text.contains("Share Selftest Notes") == true } != nil
+                    await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                    await pause(400)
+                    askAsked = askAsked && commands.lastAppLink == nil
+                }
+            }
+            context.aiActions.decisionOverride = nil
+        }
+        details.append("Ask runs: \(askRan), asks first: \(askAsked)")
+
+        // Settings → Apps: the list with it and the files left out, its page.
+        let settings = context.settings
+        let model = settings.apps
+        model.page = nil
+        settings.show(pane: .apps)
+        _ = await waitUntil(timeout: 2) { settings.isVisible }
+        await pause(600)
+        let listOverflow = settings.paneOverflow()
+        let rowShown = !Self.axElements(roles: [kAXButtonRole], where: { $0 == "Selftest Notes" }).isEmpty
+        let leftOutShown = !Self.axElements(roles: [kAXStaticTextRole], where: { $0 == "Broken.json" }).isEmpty
+        await captureSettingsBothWays(as: "settings-apps-files-list")
+        if settings.scrollPaneToBottom() {
+            await pause(300)
+            await captureSettingsBothWays(as: "settings-apps-files-list-bottom")
+        }
+        model.page = .linked("selftest-notes")
+        await pause(600)
+        let pageOverflow = settings.paneOverflow()
+        let pageRows = ["Selftest Today", "New Selftest Note", "Share Selftest Notes"].allSatisfy { title in
+            !Self.axElements(roles: [kAXStaticTextRole], where: { $0 == title }).isEmpty
+        }
+        let pageButtons = ["Its Links", "Show File", "Open Selftest"].allSatisfy { title in
+            !Self.axElements(roles: [kAXButtonRole], where: { $0 == title }).isEmpty
+        }
+        await captureSettingsBothWays(as: "settings-apps-file-page")
+        model.page = nil
+        await pause(300)
+        details.append("Settings: its row \(rowShown), files left out \(leftOutShown), its page's rows \(pageRows), buttons \(pageButtons); past the window: list \(Int(listOverflow)), page \(Int(pageOverflow)) pt")
+
+        // An import link: the app whole before Add; Add writes its file.
+        var imported: [String: Any] = app
+        imported["id"] = "selftest-import"
+        imported["name"] = "Selftest Import"
+        imported["shortName"] = "Import"
+        imported["bundleID"] = "com.apple.Notes"
+        imported["scheme"] = "notes"
+        var sheet = false
+        var pressed = false
+        var added = false
+        if let text = try? LinkedAppFile.text(imported), let request = AppFileLink.parse(AppFileLink.importLink(for: [text])) {
+            await model.receive(request)
+            sheet = await waitUntil(timeout: 2) { NSApp.windows.contains { $0.isVisible && $0.isSheet } } != nil && model.pendingImport.count == 1
+            await pause(500)
+            await captureSettingsBothWays(as: "settings-apps-import")
+            pressed = Self.pressLastButton(labelled: "Add App")
+            added = await waitUntil(timeout: 2) { LinkedApp.app(id: "selftest-import") != nil } != nil
+                && manager.fileExists(atPath: folder.appendingPathComponent("selftest-import.json").path)
+            _ = await waitUntil(timeout: 2) { !NSApp.windows.contains { $0.isVisible && $0.isSheet } }
+        }
+        await closeSettings()
+        details.append("import: sheet \(sheet), Add pressed \(pressed), written and read \(added) \(model.importErrors.joined(separator: " "))")
+        try? manager.removeItem(at: folder.appendingPathComponent("selftest-import.json"))
+        LinkedApps.readFiles(force: true)
+
+        // create_app_link: a scheme Notes does not open is refused; Notes' own is added.
+        let commandsJSON = #"[{\"id\":\"open\",\"path\":\"showNote\",\"title\":\"Selftest Agent Note\",\"description\":\"Opens a note\"}]"#
+        let refused = await skilliCall("create_app_link",
+                                       #"{"app":"Notes","scheme":"x-not-notes","documentation":"https://example.com/notes-links","id":"selftest-agent","commands":"\#(commandsJSON)"}"#)
+        let refusedRight = refused.status == 1 && refused.output.contains("does not open") && LinkedApp.app(id: "selftest-agent") == nil
+        let created = await skilliCall("create_app_link",
+                                       #"{"app":"Notes","scheme":"notes","documentation":"https://example.com/notes-links","id":"selftest-agent","commands":"\#(commandsJSON)"}"#)
+        let createdRight = created.status == 0 && LinkedApp.command(id: "selftest-agent.open") != nil
+            && manager.fileExists(atPath: folder.appendingPathComponent("selftest-agent.json").path)
+        details.append("create_app_link: refused \(refusedRight) “\(refused.output.prefix(70))”, added \(createdRight) “\(created.output.prefix(70))”")
+
+        let passed = read && leftOut && rowRan && accessory == "Selftest Notes" && variantRan && listed.contains("New Pinned Selftest Note") && inCatalog
+            && called && callAsked && callOpenedNothing && linkRan && linkAsked && askRan && askAsked
+            && rowShown && leftOutShown && pageRows && pageButtons && listOverflow <= 1 && pageOverflow <= 1
+            && sheet && pressed && added && refusedRight && createdRight
+        record(name, passed, details.joined(separator: "; "), nil)
     }
 
     /// Settings → Apps (docs/apps.md), as the user goes through it: the

@@ -327,6 +327,9 @@ public enum SettingsTable {
         setting("apps", "cleanShotTextLineBreaks", "Line breaks in Capture Text",
                 .choice(CleanShot.TextLineBreaks.allCases.map { SettingOption($0.rawValue, $0.title) }),
                 note: "CleanShot X's Capture Text from its row, a shortcut or Ask (⌘K on its row offers both); shown while CleanShot X is installed."),
+        setting("apps", "appFiles", "Your app files", .list(item: "an app and the links it documents", adds: true), access: .tools(["create_app_link"]),
+                preference: .some(nil),
+                note: "Files in ~/Library/Application Support/skil.li/Apps, each an app the list then shows with its commands; run_action runs them. A file left out is said in the pane, with why."),
 
         // Your Details
         setting("yourDetails", "otherDetails", "Your other details", .list(item: "“Field: value”, a SIRET, a VAT number…", adds: true),

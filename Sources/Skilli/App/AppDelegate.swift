@@ -17,9 +17,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// keep theirs in memory.
     private let recentSearches: RecentSearchStore
     private lazy var launcher = LauncherController(index: appIndex, usage: usage, learning: learning, recentSearches: recentSearches)
-    private lazy var settings = SettingsWindowController(preferences: preferences) { [unowned self] in
-        self.makeSettingsContext()
-    }
+    private lazy var settings: SettingsWindowController = {
+        let settings = SettingsWindowController(preferences: preferences) { [unowned self] in
+            self.makeSettingsContext()
+        }
+        // An app added from a link: its rows at once.
+        settings.apps.onAppsChanged = { [unowned self] in self.launcher.reloadSources() }
+        return settings
+    }()
     /// The self-test keeps its own Keychain item: never the user's API key.
     private lazy var ai = AIStore(
         preferences: preferences,
@@ -983,6 +988,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startToolServer() {
         guard let toolSocketPath else { return }
         toolServer.tools.performAction = { [weak self] action in self?.actions.perform(action, triggeredAt: .now) }
+        toolServer.tools.appsChanged = { [weak self] in self?.launcher.reloadSources() }
         toolServer.tools.findApp = { [weak self] name in
             // The app's own name, give or take case, accents and a version
             // ("Affinity Designer" → "Affinity Designer 2"): never whatever

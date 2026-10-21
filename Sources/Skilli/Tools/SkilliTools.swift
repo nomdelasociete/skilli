@@ -194,6 +194,8 @@ final class SkilliTools {
     var github: GitHubBook?
     /// skil.li actions (CleanShot, text case) run like a shortcut would.
     var performAction: ((SkilliAction) -> Void)?
+    /// An app added (create_app_link): the launcher's rows follow.
+    var appsChanged: (() -> Void)?
     /// Finds an installed app by name ("Notes", "Calculatrice").
     var findApp: ((String) -> URL?)?
     /// Installed apps whose name is close to a text, best first.
@@ -973,6 +975,9 @@ final class SkilliTools {
 
         case "create_app_link":
             let name = try text("app")
+            guard (arguments["documentation"] as? String)?.isEmpty == false else {
+                throw Failure(message: "Give “documentation”: the address of the app's own page that documents these links. skil.li adds only those.")
+            }
             guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: name) ?? findApp?(name),
                   let bundleID = Bundle(url: url)?.bundleIdentifier else {
                 throw Failure(message: "No app called “\(name)” is installed: skil.li adds the links of apps on this Mac. Call list_apps.")
@@ -980,6 +985,7 @@ final class SkilliTools {
             let built = try Self.appFile(arguments, bundleID: bundleID)
             do {
                 let app = try LinkedApps.add(built.text)
+                appsChanged?()
                 return "Added \(app.name) (\(app.file ?? "")): \(app.commands.map { "\($0.id) “\($0.title)”" }.joined(separator: ", ")). The user finds them in the launcher and Settings → Apps; run_action runs them."
             } catch {
                 throw Failure(message: error.localizedDescription)
