@@ -1257,7 +1257,7 @@ final class SelfTest {
     /// Settings → Apps (docs/apps.md): CleanShot X's row (its version,
     /// where to allow it), Capture Text's line breaks in the link it opens
     /// (dry run), its commands by group with their shortcuts: one recorded
-    /// on a row and on a variant (⎋ leaves none behind), one variant's
+    /// on a row and on a variant (⎋ or another pane leaves none behind), one variant's
     /// shown under its command; Show in search off takes a command out of
     /// the launcher's results. Light and dark, top and bottom, nothing past
     /// the window. Not installed: the pane lists none.
@@ -1272,11 +1272,19 @@ final class SelfTest {
             return
         }
         await pause(500)
-        guard let installed = LinkedApps.installed("cleanshot"), let commands = context.aiActions.systemCommands else {
+        guard let installed = LinkedApps.installed("cleanshot") else {
+            // Not installed: none of its rows is drawn.
+            let rows = CleanShot.commands.filter { settings.search.frames[SettingsSearch.entryAnchor(FeatureCatalog.appLinkEntryID($0.id))] != nil }
             let overflow = settings.paneOverflow()
             await captureSettingsBothWays(as: "settings-apps-none")
             await closeSettings()
-            record(name, overflow <= 1, "CleanShot X is not installed here: nothing listed; past the window \(Int(overflow)) pt", nil)
+            record(name, overflow <= 1 && rows.isEmpty,
+                   "CleanShot X is not installed here: its rows drawn \(rows.count); past the window \(Int(overflow)) pt", nil)
+            return
+        }
+        guard let commands = context.aiActions.systemCommands else {
+            await closeSettings()
+            record(name, false, "no SystemCommands", nil)
             return
         }
         let savedOff = preferences.catalogOff
@@ -1331,6 +1339,15 @@ final class SelfTest {
             store.cancelRecording()
             await pause(300)
             leftBehind = store.entryID(for: action) != nil
+            // Recording, then another pane: it stops, nothing left behind.
+            settings.appShortcuts.record(action, store)
+            await pause(300)
+            recorded = recorded && store.recordingID != nil
+            settings.show(pane: .general)
+            await pause(400)
+            leftBehind = leftBehind || store.recordingID != nil || store.entryID(for: action) != nil
+            settings.show(pane: .apps)
+            await pause(400)
         }
         if let text = LinkedApp.command(id: "cleanshot.capture-text") {
             let action = SkilliAction.mac(.appLink(text, variant: "nolinebreaks"))
@@ -1381,7 +1398,7 @@ final class SelfTest {
         await closeSettings()
         record(name, overflow <= 1 && landed && inSight && variantRow && recorded && !leftBehind && offWorks && linesWork,
                "CleanShot X \(installed.version ?? "?"); past the window \(Int(overflow)) pt; search opens its last row: \(landed), in sight \(inSight); "
-                   + "a variant's row: \(variantRow)\(variantProblem); recording on a row and a variant: \(recorded), ⎋ left one: \(leftBehind); "
+                   + "a variant's row: \(variantRow)\(variantProblem); recording on a row and a variant: \(recorded), ⎋ or another pane left one: \(leftBehind); "
                    + "Show in search off leaves the results and comes back: \(offWorks); Capture Text's links: \(links.joined(separator: ", "))",
                nil)
     }

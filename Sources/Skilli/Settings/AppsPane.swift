@@ -70,6 +70,12 @@ struct AppsPane: View {
         }
         .formStyle(.grouped)
         .onChange(of: store.recordingID) { newShortcut.recordingEnded(store) }
+        // Another pane, or Settings closed: nothing goes on recording out
+        // of sight, and a shortcut added for it without keys goes.
+        .onDisappear {
+            if store.recordingID != nil { store.cancelRecording() }
+            newShortcut.recordingEnded(store)
+        }
     }
 
     /// A command's row, then a row for each of its variants that has a
