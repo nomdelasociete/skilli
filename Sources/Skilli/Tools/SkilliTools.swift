@@ -230,7 +230,8 @@ final class SkilliTools {
     nonisolated static let approve = "approve"
     nonisolated static let doInApp = "do_in_app"
 
-    nonisolated static let actions: [String: SkilliAction] = {
+    /// run_action's ids, read each time: the linked apps' files can change.
+    nonisolated static var actions: [String: SkilliAction] {
         var actions: [String: SkilliAction] = [
             "text.uppercase": .transformSelection(.uppercase),
             "text.lowercase": .transformSelection(.lowercase),
@@ -241,14 +242,32 @@ final class SkilliTools {
             for command in app.commands { actions[command.id] = .mac(.appLink(command, variant: nil)) }
         }
         return actions
-    }()
+    }
 
     /// What a linked app's command can be told more (run_action's
     /// `variant`): CleanShot's "copy", "pin", "autoscroll", a settings tab.
-    nonisolated static let actionVariants: [String] = {
+    nonisolated static var actionVariants: [String] {
         var seen = Set<String>()
         return LinkedApp.all.flatMap(\.commands).flatMap(\.variants).map(\.id).filter { seen.insert($0).inserted }
-    }()
+    }
+
+    /// run_action as agents see it now: CleanShot X's commands, then those
+    /// of the apps written in files, each "id (Title)".
+    nonisolated static func runActionDefinition() -> ToolDefinition {
+        let others = LinkedApp.all.filter { $0.id != LinkedApp.cleanShot.id }.map { app in
+            "\(app.name): " + app.commands.map { "\($0.id) (\($0.title)" + ($0.variants.isEmpty ? "" : "; variants \($0.variants.map(\.id).joined(separator: ", "))") + ")" }
+                .joined(separator: ", ")
+        }
+        return ToolDefinition(name: "run_action", title: "Run a skil.li action",
+                              description: "Runs a skil.li action: CleanShot X's captures (an area, the front window, the screen, scrolling), recordings, text recognition, annotating or pinning an image (the latest screenshot, the one selected in Finder, or a file), Quick Access, desktop icons, its history; or changing the case of the selection. A CleanShot command takes a variant: what happens to a capture (copy, save, annotate, pin, upload: asked first, it leaves the Mac), scrolling's start or autoscroll, text with linebreaks or nolinebreaks, a settings tab. Annotating (cleanshot.open-annotate), pinning (cleanshot.pin) and text recognition (cleanshot.capture-text) take a PNG or JPEG file, Quick Access (cleanshot.quick-access) a PNG, JPEG or MP4."
+                                + (others.isEmpty ? "" : " The other apps skil.li drives through their links: " + others.joined(separator: ". ") + "."),
+                              group: .actions, risk: .changes,
+                              parameters: [.init(name: "id", description: "The action.", options: actions.keys.sorted()),
+                                           .init(name: "variant", description: "What the app's command does more; leave out for its plain run.",
+                                                 options: actionVariants, isRequired: false),
+                                           .init(name: "file", description: "The file's full path, for the commands that open one; instead of the Finder selection, the latest screenshot or CleanShot asking.",
+                                                 isRequired: false)])
+    }
 
     nonisolated static let definitions: [ToolDefinition] = [
         ToolDefinition(name: "get_selection", title: "Read the selection",
@@ -293,14 +312,8 @@ final class SkilliTools {
                        group: .commands, risk: .harmless,
                        parameters: [.init(name: "id", description: "Command id from list_commands."),
                                     .init(name: "text", description: "The text to work on.")]),
-        ToolDefinition(name: "run_action", title: "Run a skil.li action",
-                       description: "Runs a skil.li action: CleanShot X's captures (an area, the front window, the screen, scrolling), recordings, text recognition, annotating or pinning an image (the latest screenshot, the one selected in Finder, or a file), Quick Access, desktop icons, its history; or changing the case of the selection. A CleanShot command takes a variant: what happens to a capture (copy, save, annotate, pin, upload: asked first, it leaves the Mac), scrolling's start or autoscroll, text with linebreaks or nolinebreaks, a settings tab. Annotating (cleanshot.open-annotate), pinning (cleanshot.pin) and text recognition (cleanshot.capture-text) take a PNG or JPEG file, Quick Access (cleanshot.quick-access) a PNG, JPEG or MP4.",
-                       group: .actions, risk: .changes,
-                       parameters: [.init(name: "id", description: "The action.", options: actions.keys.sorted()),
-                                    .init(name: "variant", description: "What the CleanShot command does more; leave out for its plain run.",
-                                          options: actionVariants, isRequired: false),
-                                    .init(name: "file", description: "The file's full path, for the commands that open one; instead of the Finder selection, the latest screenshot or CleanShot asking.",
-                                          isRequired: false)]),
+        // Read again where agents get it (`live`): the apps' files change.
+        runActionDefinition(),
         ToolDefinition(name: "update_app", title: "Update an app",
                        description: "Updates an app the right way: its own “Check for Updates…” menu item, else the App Store's Updates page, else Homebrew (brew upgrade --cask). Without a name: the app in front.",
                        group: .apps, risk: .changes,
@@ -417,6 +430,16 @@ final class SkilliTools {
                                     .init(name: "arguments", description: "Its text arguments' placeholders, in order (3 at most).", isArray: true, isRequired: false),
                                     .init(name: "needs_confirmation", description: "true when it changes or deletes things: skil.li asks first.",
                                           options: ["false", "true"], isRequired: false)]),
+        ToolDefinition(name: "create_app_link", title: "Add an app's links",
+                       description: "Adds an app skil.li drives through the links it documents itself (its URL scheme), as it drives CleanShot X: each command becomes a launcher row, a key, an Ask answer and a run_action id (\"<id>.<command id>\"). Only links the app's own documentation gives (pass its address), and only ones that work without the user's own ids (a team, channel or meeting number). The app must be on this Mac and open that scheme. Each command: {\"id\": \"new-window\" (lowercase, hyphens), \"path\": what follows scheme:// (\"action/new_window\"; one starting with / gives scheme:/…), \"title\": \"New Warp Window\", \"description\": one line, no period, \"words\": other words people type, in English and French, \"symbol\": an SF Symbol name, \"query\": [{\"name\": …, \"value\": …}] its fixed parameters in order, \"variants\": [{\"id\", \"title\", \"label\", \"query\"}] the same command saying more (⌘K lists them), \"asksFirst\": true when it sends, deletes, pays or calls someone (asked every time from links, Ask and agents), \"group\": its heading in Settings}. skil.li shows the user the whole app before adding it.",
+                       group: .actions, risk: .changes,
+                       parameters: [.init(name: "app", description: "The app as it is installed (list_apps): skil.li reads its bundle id."),
+                                    .init(name: "scheme", description: "The URL scheme it documents, without “://”: “warp”."),
+                                    .init(name: "documentation", description: "The https address of the app's own page that documents these links."),
+                                    .init(name: "commands", description: "The commands, as a JSON array of objects (see the description)."),
+                                    .init(name: "id", description: "Short, lowercase, hyphens: what its commands' ids start with. Default: from its name.", isRequired: false),
+                                    .init(name: "minimum_version", description: "The oldest version of the app its links work on (“5.0”), when its documentation says.", isRequired: false),
+                                    .init(name: "note", description: "What the app needs first for its links to work, one line, in the user's words.", isRequired: false)]),
         ToolDefinition(name: "create_skill", title: "Write a skill",
                        description: "Writes a skill for Ask's agent in the user's skills folder (~/Library/Application Support/skil.li/skills/<name>/SKILL.md): when to use it, then how the user wants that job done. Ask's agent then uses it when a request fits. Instructions only: it has no shell or files.",
                        group: .actions, risk: .changes,
@@ -595,13 +618,19 @@ final class SkilliTools {
     )
 
     nonisolated static func definition(_ name: String) -> ToolDefinition? {
-        name == approve ? approveDefinition : definitions.first { $0.name == name }
+        name == approve ? approveDefinition : definitions.first { $0.name == name }.map(live)
+    }
+
+    /// A definition as it is now: run_action lists the linked apps' commands
+    /// read last.
+    nonisolated static func live(_ definition: ToolDefinition) -> ToolDefinition {
+        definition.name == "run_action" ? runActionDefinition() : definition
     }
 
     /// Tools an agent may see: a run's groups, or everything outside a run.
     static func available(for run: AgentContext?) -> [ToolDefinition] {
-        guard let run else { return definitions }
-        return definitions.filter { $0.group.map(run.groups.contains) ?? true } + [approveDefinition]
+        guard let run else { return definitions.map(live) }
+        return definitions.filter { $0.group.map(run.groups.contains) ?? true }.map(live) + [approveDefinition]
     }
 
     /// `open_url` with an unusual scheme can do more than open a page.
@@ -615,6 +644,18 @@ final class SkilliTools {
 
     /// What the approval card shows under the question.
     static func summary(of definition: ToolDefinition, arguments: [String: Any]) -> String {
+        // An app's links, whole: each command with the very link it opens.
+        if definition.name == "create_app_link" {
+            guard let built = try? appFile(arguments, bundleID: nil), let app = try? LinkedAppFile.read(Data(built.text.utf8), file: "") else {
+                return "Not an app file skil.li can read: it will say why."
+            }
+            let commands = app.commands.map { command in
+                "\(command.title)\(command.asksFirst ? " (asks first)" : ""): \(command.url()?.absoluteString ?? command.path)"
+                    + command.variants.map { "\n  \($0.title)\($0.asksFirst ? " (asks first)" : ""): \(command.url(variant: $0)?.absoluteString ?? "")" }.joined()
+            }
+            let text = (["\(app.name), \(app.scheme) links" + (app.documentation.map { ", documented at \($0)" } ?? "")] + commands).joined(separator: "\n")
+            return text.count > 2_000 ? String(text.prefix(2_000)) + "…" : text
+        }
         let values = definition.parameters.compactMap { parameter -> String? in
             guard let value = arguments[parameter.name] else { return nil }
             let text = (value as? String) ?? (value as? [String])?.joined(separator: ", ") ?? "\(value)"
@@ -694,7 +735,11 @@ final class SkilliTools {
             guard let url = URL(string: value), url.scheme != nil, NSWorkspace.shared.urlForApplication(toOpen: url) != nil else {
                 throw Failure(message: "No app opens “\(value)”.")
             }
-            if CleanShot.uploads(url) { try await askUpload(name, run) }
+            if CleanShot.uploads(url) {
+                try await askUpload(name, run)
+            } else if let asked = LinkedApp.asksFirst(url) {
+                try await askFirst(asked.command, variant: asked.variant, name, run)
+            }
             openURL(url)
             return "Opened."
 
@@ -926,6 +971,20 @@ final class SkilliTools {
             )
             return "Created the skillie “\(command.title)” (\((command.path as NSString).lastPathComponent)): the user finds it in the launcher; run_skillie runs it."
 
+        case "create_app_link":
+            let name = try text("app")
+            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: name) ?? findApp?(name),
+                  let bundleID = Bundle(url: url)?.bundleIdentifier else {
+                throw Failure(message: "No app called “\(name)” is installed: skil.li adds the links of apps on this Mac. Call list_apps.")
+            }
+            let built = try Self.appFile(arguments, bundleID: bundleID)
+            do {
+                let app = try LinkedApps.add(built.text)
+                return "Added \(app.name) (\(app.file ?? "")): \(app.commands.map { "\($0.id) “\($0.title)”" }.joined(separator: ", ")). The user finds them in the launcher and Settings → Apps; run_action runs them."
+            } catch {
+                throw Failure(message: error.localizedDescription)
+            }
+
         case "create_skill":
             guard let folder = skillsFolder else { throw Failure(message: "Skills are not available.") }
             let name = AgentSkill.name(from: try text("name"))
@@ -1144,8 +1203,16 @@ final class SkilliTools {
                     let known = command.variants.map(\.id).joined(separator: ", ")
                     throw Failure(message: known.isEmpty ? "“\(id)” takes no variant." : "“\(id)” has no variant “\(asked)”: \(known).")
                 }
-                if variant.id == "upload" { try await askUpload(name, run) }
                 action = .mac(.appLink(command, variant: variant.id))
+            }
+            // What its app's file says asks first, asked every time (CleanShot's upload).
+            if case .mac(.appLink(let command, let variant)) = action, command.asksFirst(variant: variant.flatMap(command.variant(id:))) {
+                let picked = variant.flatMap(command.variant(id:))
+                if picked?.id == "upload", command.appID == LinkedApp.cleanShot.id {
+                    try await askUpload(name, run)
+                } else {
+                    try await askFirst(command, variant: picked, name, run)
+                }
             }
             if let path = file {
                 // Opened here, so what does not fit is said to the agent.
@@ -1166,6 +1233,34 @@ final class SkilliTools {
         }
     }
 
+    /// create_app_link's arguments as an app file (`LinkedAppFile`): its
+    /// text, read back as any file is. `bundleID`: the installed app's; nil
+    /// in the approval's summary, before it is looked up.
+    nonisolated static func appFile(_ arguments: [String: Any], bundleID: String?) throws -> (text: String, object: [String: Any]) {
+        func value(_ key: String) -> String? {
+            (arguments[key] as? String).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+        }
+        guard let name = value("app") else { throw Failure(message: "Missing “app”.") }
+        let commandsText = value("commands") ?? ""
+        guard let commands = try? JSONSerialization.jsonObject(with: Data(commandsText.utf8)) as? [Any] else {
+            throw Failure(message: "“commands” must be a JSON array of command objects.")
+        }
+        // "Visual Studio Code" → "visual-studio-code".
+        let made = name.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+            .split { !$0.isLetter && !$0.isNumber }.joined(separator: "-")
+        var object: [String: Any] = [
+            "id": value("id") ?? String(made.prefix(32)),
+            "name": (name as NSString).deletingPathExtension,
+            "bundleID": bundleID ?? "com.example.app",
+            "scheme": (value("scheme") ?? "").replacingOccurrences(of: "://", with: "").replacingOccurrences(of: ":", with: ""),
+            "commands": commands
+        ]
+        if let documentation = value("documentation") { object["documentation"] = documentation }
+        if let minimum = value("minimum_version") { object["minimumVersion"] = minimum }
+        if let note = value("note") { object["note"] = note }
+        return (try LinkedAppFile.text(object), object)
+    }
+
     /// A capture sent to CleanShot Cloud leaves the Mac: asked in the card
     /// every time, whatever the tool's rights (`run_action`'s upload,
     /// `open_url` with `action=upload`). Asked under its own name
@@ -1175,6 +1270,17 @@ final class SkilliTools {
         let approval = await confirm?("Upload the capture to CleanShot Cloud?", "CleanShot X sends it to its cloud and copies its link.",
                                       "Upload", "\(tool).upload", run, false) ?? .deny
         guard approval != .deny else { throw Failure(message: "Not uploaded: the user declined.") }
+    }
+
+    /// A linked app's command its file says asks first: asked in the card
+    /// every time, whatever the tool's rights, under its own name
+    /// ("run_action.zoom.join"), as an upload is.
+    private func askFirst(_ command: AppLinkCommand, variant: AppLinkCommand.Variant?, _ tool: String, _ run: AgentContext?) async throws {
+        let title = variant?.title ?? command.title
+        let app = command.app?.name ?? "its app"
+        let approval = await confirm?("Run “\(title)” in \(app)?", "\(command.oneLine). Its app asks first.", "Run",
+                                      "\(tool).\(command.id)", run, false) ?? .deny
+        guard approval != .deny else { throw Failure(message: "Not run: the user declined.") }
     }
 
     /// Bluetooth may be used; never asked: macOS's own question now, as

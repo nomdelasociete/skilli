@@ -27,9 +27,16 @@ final class SystemCommands {
     /// Where screenshots are: macOS's folder, and the one Settings →
     /// Clipboard watches (the self-test's own).
     var screenshotFolders: @MainActor () -> [URL] = { [ImageFolderWatcher.screenshotsFolder] }
-    /// Opens a linked app's link (CleanShot X's): the self-test reads it
+    /// Opens a linked app's link (CleanShot X's) in the app it names,
+    /// whichever app macOS gives its scheme to: the self-test reads it
     /// instead, nothing captured.
-    var openAppLink: @MainActor (URL) -> Void = { NSWorkspace.shared.open($0) }
+    var openAppLink: @MainActor (URL) -> Void = { url in
+        guard let app = LinkedApps.installed().first(where: { $0.app.scheme == url.scheme?.lowercased() }) else {
+            NSWorkspace.shared.open(url)
+            return
+        }
+        NSWorkspace.shared.open([url], withApplicationAt: app.url, configuration: NSWorkspace.OpenConfiguration())
+    }
     /// The last linked app's link opened, for the self-test.
     var lastAppLink: URL?
     /// The file selected in Finder (Pin Selected Image): the self-test

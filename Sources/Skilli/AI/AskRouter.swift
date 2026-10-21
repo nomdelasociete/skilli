@@ -263,6 +263,9 @@ enum AskRouter {
         }
         let mentionsRepeat = AskSchedule.mentionsRepeat(instruction)
         if mentionsRepeat { questions.append(scheduleQuestion) }
+        // The linked apps installed, by name: CleanShot X's what it does.
+        let appCommandsSaid = (["CleanShot X's screenshots, recordings, text recognition"]
+            + LinkedApps.installed().map(\.app).filter { $0.id != LinkedApp.cleanShot.id }.map { "\($0.name)'s" }).joined(separator: ", ")
         // Sound devices by position: their ids ("BuiltInSpeakerDevice")
         // read as words and pulled every "son" toward the speakers.
         let sounds = MacAction.sounds()
@@ -274,7 +277,7 @@ enum AskRouter {
         }
         questions.append(DecisionQuestion(
             name: "command",
-            instructions: "Which Mac command, window placement, sound device or app command (CleanShot X's screenshots, recordings, text recognition) does the user ask for? A sound device is where the sound plays, named or described: a screen or TV (l'écran, la télé) plays through its own speakers. Answer none when it is not one of these.",
+            instructions: "Which Mac command, window placement, sound device or app command (\(appCommandsSaid)) does the user ask for? A sound device is where the sound plays, named or described: a screen or TV (l'écran, la télé) plays through its own speakers. Answer none when it is not one of these.",
             options: (MacAction.all + MacAction.appLinks()).map { .init(value: $0.rawValue, description: $0.description) }
                 + [.init(value: volumeLevel, description: "Set the sound's volume to a level they say, also when they turn it up or down to a level: le son à 30 %, baisse le son à 20, monte le volume à 80, volume à fond, à la moitié")]
                 + AppAction.allCases.map { .init(value: $0.rawValue, description: $0.description) }

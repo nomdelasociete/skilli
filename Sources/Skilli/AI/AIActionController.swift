@@ -555,6 +555,13 @@ final class AIActionController {
                         await volumeAsked(answers["instruction"] ?? "")
                         return
                     }
+                    // What its app's file says asks first asks, however sure.
+                    if case .appLink(let link, _) = command, link.asksFirst(variant: command.appLinkVariant) {
+                        let options = ["Run", "Cancel"]
+                        let question = "Run “\(command.title)” in \(link.app?.name ?? "its app")?"
+                        guard await ask(PromptQuestion(id: "confirm", question: question, options: options, defaultValue: options[0]),
+                                        position: (1, 1)) == options[0] else { return }
+                    }
                     close()
                     if case .script(let script) = command, (decision?.command?.probability ?? 0) < 0.85 {
                         runScript?(script, true)

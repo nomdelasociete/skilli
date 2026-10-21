@@ -360,6 +360,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.mode = mode
         // The self-test's sensitive form fields never touch the user's.
         if case .selftest = mode { FormSecrets.prefix = "selftest-" }
+        // The linked apps' files before the shortcuts, which name their
+        // commands by id: a few small files, read once here. The
+        // self-test keeps its own folder; the benchmark reads skil.li's only.
+        switch mode {
+        case .normal: break
+        case .selftest:
+            LinkedApps.folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/Apps", isDirectory: true)
+        case .benchmark: LinkedApps.folder = nil
+        }
+        LinkedApps.readFiles(force: true)
         switch mode {
         case .normal:
             shortcuts = ShortcutStore(fileURL: ShortcutStore.defaultFileURL)
@@ -1386,7 +1396,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `skilli://commands/import?…` from a web page or a shared link:
     /// Settings → Commands shows what it would add, and nothing is added
-    /// until the user says so. Every other `skilli://` link runs what it
+    /// until the user says so; `skilli://apps/import?…` the same in
+    /// Settings → Apps. Every other `skilli://` link runs what it
     /// names (`LinkRunner`: asked first when it must; one skil.li does not
     /// know says so). The self-test and benchmark ignore links.
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -1396,6 +1407,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         for url in urls {
+            // An app's links (`skilli://apps/import`): Settings → Apps shows it whole first.
+            if let request = AppFileLink.parse(url) {
+                settings.apps.page = nil
+                settings.show(pane: .apps)
+                Task { await settings.apps.receive(request) }
+                continue
+            }
             guard let request = CommandLink.parse(url) else {
                 Log.actions.notice("Link \(url.host() ?? "", privacy: .public)")
                 links.open(url)

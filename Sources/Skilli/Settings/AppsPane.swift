@@ -41,6 +41,95 @@ final class AppsPaneModel {
         }
     }
 
+    // MARK: Import
+
+    /// An app a link would add, read and checked, shown whole before Add.
+    struct ImportCandidate: Identifiable {
+        let id = UUID()
+        let app: LinkedApp
+        let text: String
+        /// "a link", or the site it came from.
+        let source: String
+    }
+
+    var pendingImport: [ImportCandidate] = []
+    var importErrors: [String] = []
+    /// The apps added from the last import, for the self-test.
+    private(set) var added: [LinkedApp] = []
+    var isImporting: Bool {
+        get { !pendingImport.isEmpty || !importErrors.isEmpty }
+        set { if !newValue { pendingImport = []; importErrors = [] } }
+    }
+
+    /// A `skilli://apps/import` link: the apps it carries, then the ones it
+    /// points to (https, small files only); each checked as it would be read.
+    func receive(_ request: AppFileLink.Request) async {
+        prepareImport(request.files.map { ($0, "a link") })
+        for url in request.urls {
+            do {
+                prepareImport([(try await Self.download(url), url.host() ?? url.absoluteString)])
+            } catch {
+                importErrors.append("\(url.absoluteString): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func prepareImport(_ files: [(text: String, source: String)]) {
+        for (text, source) in files {
+            do {
+                let app = try LinkedApps.check(text)
+                guard !pendingImport.contains(where: { $0.app.id == app.id || $0.app.bundleID == app.bundleID || $0.app.scheme == app.scheme }) else {
+                    importErrors.append("\(app.name) is twice in this link.")
+                    continue
+                }
+                pendingImport.append(ImportCandidate(app: app, text: text, source: source))
+            } catch {
+                importErrors.append("From \(source): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// A plain GET: no cookies, no cache (a web page chose the address).
+    private static func download(_ url: URL) async throws -> String {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.finishTasksAndInvalidate() }
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 200 else { throw SystemCommands.Failure(message: "the server answered \(status)") }
+        guard data.count <= LinkedAppFile.largest, let text = String(data: data, encoding: .utf8) else {
+            throw SystemCommands.Failure(message: "not an app file")
+        }
+        return text
+    }
+
+    /// Adds every pending app (its file, as the link gave it); one that
+    /// cannot be added any more is said.
+    @discardableResult
+    func confirmImport() -> [LinkedApp] {
+        var added: [LinkedApp] = []
+        var failed: [String] = []
+        for candidate in pendingImport {
+            do {
+                added.append(try LinkedApps.add(candidate.text))
+            } catch {
+                failed.append("\(candidate.app.name): \(error.localizedDescription)")
+            }
+        }
+        pendingImport = []
+        importErrors = failed
+        self.added = added
+        changed += 1
+        onAppsChanged?()
+        return added
+    }
+
+    /// Bumped when an app was added here: the list draws it.
+    private(set) var changed = 0
+    /// The launcher's rows follow (set by the app).
+    var onAppsChanged: (() -> Void)?
+
     /// The page holding the row anchored `anchor`: a linked app's command
     /// or option, one of the user's shortcuts. Nil: none of the pages.
     static func page(for anchor: String) -> AppsPage? {
@@ -61,6 +150,10 @@ struct AppsPaneApp: Identifiable {
     let shortName: String
     let url: URL
     let version: String?
+    /// Where the app documents its links (an app file's).
+    var documentation: URL?
+    /// The user's file it comes from, in the Apps folder.
+    var file: URL?
 
     var id: AppsPage { page }
 
@@ -68,7 +161,9 @@ struct AppsPaneApp: Identifiable {
     @MainActor
     static func installed() -> [AppsPaneApp] {
         let linked = LinkedApps.installed().map {
-            AppsPaneApp(page: .linked($0.app.id), name: $0.app.name, shortName: $0.app.shortName, url: $0.url, version: $0.version)
+            AppsPaneApp(page: .linked($0.app.id), name: $0.app.name, shortName: $0.app.shortName, url: $0.url, version: $0.version,
+                        documentation: $0.app.documentation.flatMap(URL.init(string:)),
+                        file: $0.app.file.flatMap { name in LinkedApps.folder?.appendingPathComponent(name) })
         }
         let shortcuts = NSWorkspace.shared.urlForApplication(withBundleIdentifier: AppleShortcut.bundleID).map {
             AppsPaneApp(page: .shortcuts, name: "Shortcuts", shortName: "Shortcuts", url: $0,
@@ -96,6 +191,8 @@ struct AppsPane: View {
     @Bindable var model: AppsPaneModel
 
     var body: some View {
+        // An app added from a link: the list again, with it.
+        let _ = model.changed
         let apps = AppsPaneApp.installed()
         Group {
             if let page = model.page, let app = apps.first(where: { $0.page == page }) {
@@ -107,6 +204,9 @@ struct AppsPane: View {
         }
         // Another pane: the list again when it comes back.
         .onDisappear { model.page = nil }
+        .sheet(isPresented: $model.isImporting) {
+            AppImportSheet(model: model)
+        }
     }
 }
 
@@ -153,9 +253,46 @@ private struct AppsListView: View {
             } header: {
                 PaneHeader(pane: .apps)
             }
+            problems
         }
         .formStyle(.grouped)
         .onAppear { model.readShortcuts() }
+    }
+
+    /// The user's app files left out, each with why: last, as long lists are.
+    @ViewBuilder
+    private var problems: some View {
+        let problems = LinkedApps.problems
+        if !problems.isEmpty {
+            Section {
+                ForEach(problems, id: \.file) { problem in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(problem.file)
+                            Text(problem.message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 8)
+                    }
+                    .padding(.vertical, 2)
+                    .settingAnchor("appFile.\(problem.file)")
+                }
+            } header: {
+                Text(problems.count == 1 ? "An App File Left Out" : "\(problems.count) App Files Left Out")
+            } footer: {
+                HStack {
+                    Text("Fixed and saved, a file is read again as the launcher opens.")
+                    Spacer()
+                    Button("Show in Finder") { LinkedApps.revealFolder() }
+                        .controlSize(.small)
+                }
+            }
+        }
     }
 
     /// "22 commands · 2 on keys", "14 shortcuts · 1 on a key".
@@ -240,7 +377,8 @@ private struct AppPageView: View {
                 .settingAnchor("cleanShotTextLineBreaks")
             }
         } header: {
-            AppPageHeader(app: app, detail: AppsCount.line(commands.count, "command", keys: 0), note: installed.app.allowance) { model.page = nil }
+            AppPageHeader(app: app, detail: AppsCount.line(commands.count, "command", keys: 0), note: installed.app.allowance,
+                          tooOld: commands.isEmpty ? installed.app.minimumVersion : nil) { model.page = nil }
         }
         // The long list last: the commands, by group.
         ForEach(Array(groups.enumerated()), id: \.element.title) { position, group in
@@ -330,6 +468,8 @@ private struct AppPageHeader: View {
     let app: AppsPaneApp
     let detail: String?
     let note: String?
+    /// The version its links need, when the one here is older.
+    var tooOld: String?
     let back: () -> Void
 
     var body: some View {
@@ -364,6 +504,11 @@ private struct AppPageHeader: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
+            if let tooOld {
+                Text("Its links need \(app.shortName) \(tooOld) or later: update it.")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
             if let note {
                 Text(note)
                     .font(.callout)
@@ -371,8 +516,18 @@ private struct AppPageHeader: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Button("Open \(app.shortName)") { app.open() }
-                .padding(.top, 4)
+            HStack(spacing: 8) {
+                Button("Open \(app.shortName)") { app.open() }
+                if let documentation = app.documentation {
+                    Button("Its Links") { NSWorkspace.shared.open(documentation) }
+                        .help("Where \(app.shortName) documents its links: \(documentation.host() ?? "")")
+                }
+                if let file = app.file {
+                    Button("Show File") { NSWorkspace.shared.activateFileViewerSelecting([file]) }
+                        .help("Your \(file.lastPathComponent), in skil.li's Apps folder")
+                }
+            }
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
@@ -506,5 +661,171 @@ private struct AppItemRow: View {
             Divider()
             Button("Edit in Shortcuts") { NSWorkspace.shared.open(edit) }
         }
+    }
+}
+
+// MARK: - Import
+
+/// What a `skilli://apps/import` link would add, whole, before anything is
+/// added: each app, then every command with the very link it opens.
+private struct AppImportSheet: View {
+    let model: AppsPaneModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let count = model.pendingImport.count
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(count == 1 ? "Add This App?" : count == 0 ? "Nothing to Add" : "Add These \(count) Apps?")
+                    .font(.title3.weight(.semibold))
+                Text("skil.li will open these links in the app, from the launcher, your keys, Ask and agents. Add only apps you trust.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(20)
+
+            // As tall as the apps, up to a point; then it scrolls.
+            ViewThatFits(in: .vertical) {
+                candidates
+                ScrollView { candidates }
+            }
+            .frame(maxHeight: 460)
+
+            Divider()
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    model.isImporting = false
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                if count > 0 {
+                    Button(count == 1 ? "Add App" : "Add \(count) Apps") {
+                        model.confirmImport()
+                        if model.importErrors.isEmpty { dismiss() }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(14)
+        }
+        .frame(width: 560)
+    }
+
+    private var candidates: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(model.importErrors, id: \.self) { error in
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(model.pendingImport) { candidate in
+                AppCandidateCard(app: candidate.app, source: candidate.source)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// One app of an import: who it is, where its links are documented, and
+/// each command with its link (a variant's under it), what asks first said.
+private struct AppCandidateCard: View {
+    let app: LinkedApp
+    let source: String
+
+    var body: some View {
+        let installed = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleID)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                if let installed {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: installed.path))
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 32, height: 32)
+                } else {
+                    Image(systemName: "app.dashed")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 32)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(app.name).font(.headline)
+                    Text(details(installed: installed != nil))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("from \(source)").font(.caption).foregroundStyle(.secondary)
+            }
+            if let documentation = app.documentation, let url = URL(string: documentation) {
+                Link("Links documented at \(url.host() ?? documentation)", destination: url)
+                    .font(.caption)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(app.commands, id: \.id) { command in
+                    commandRow(command)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+        }
+        .padding(12)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// "us.zoom.xos · zoommtg links · 2 commands · 5.0 or later".
+    private func details(installed: Bool) -> String {
+        var parts = [app.bundleID, "\(app.scheme) links", AppsCount.line(app.commands.count, "command", keys: 0)]
+        if let minimum = app.minimumVersion { parts.append("\(minimum) or later") }
+        if !installed { parts.append("not on this Mac") }
+        return parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private func commandRow(_ command: AppLinkCommand) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: command.symbol)
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(command.title)
+                    if command.asksFirst { AsksFirstTag() }
+                }
+                Text(command.url()?.absoluteString ?? command.path)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(command.variants, id: \.id) { variant in
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Image(systemName: "arrow.turn.down.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Text(variant.title).font(.caption)
+                        if variant.asksFirst { AsksFirstTag() }
+                        Text(command.url(variant: variant)?.absoluteString ?? "")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// "Asks first": what a link, Ask or an agent runs only once allowed.
+private struct AsksFirstTag: View {
+    var body: some View {
+        Text("Asks first")
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.orange)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(.orange.opacity(0.12), in: Capsule())
     }
 }

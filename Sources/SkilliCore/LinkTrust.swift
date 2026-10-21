@@ -51,7 +51,8 @@ public struct LinkTrust: Equatable, Sendable {
 
     /// Never trusted, whatever the user chose: what asks in its own card
     /// anyway (Empty Trash, Restart, Shut Down, Log Out, Quit All, Quit
-    /// Other Apps: `SystemCommand.asksAnyway`), skil.li's own settings (a
+    /// Other Apps: `SystemCommand.asksAnyway`), a linked app's command that
+    /// asks first, skil.li's own settings (a
     /// pane, Reset Launcher Position: a change of settings asks every
     /// time, as agents' do), and what hands the user's copies to the app
     /// in front (Paste in Sequence, Paste Latest Screenshot: a page that
@@ -61,7 +62,10 @@ public struct LinkTrust: Equatable, Sendable {
         case .system(let command): command.asksAnyway || command == .pasteLatestScreenshot
         case .command(let id): id == .pasteInSequence || id == .resetLauncherPosition
         case .settings: true
-        case .window, .type, .ask, .askByVoice, .dictate, .transform, .prompt, .snippet, .skillie, .quicklink, .layout, .appLink, .shortcut: false
+        // A linked app's command that asks first asks every time (CleanShot's
+        // upload, docs/apps.md).
+        case .appLink(let id): LinkedApp.command(id: id)?.asksFirst ?? false
+        case .window, .type, .ask, .askByVoice, .dictate, .transform, .prompt, .snippet, .skillie, .quicklink, .layout, .shortcut: false
         }
     }
 
