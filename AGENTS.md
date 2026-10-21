@@ -510,7 +510,7 @@ per-show work.
   on Linux and Windows (2026-10-17: "it's hyper key and not super key"). The
   sidebar is five blocks split by a gap, no headers (`SettingsPane.blocks`,
   2026-10-15): General, Keys, Privacy, Backup · Launcher, Clipboard,
-  Snippets, Emoji, Windows · Calendar, Reminders, GitHub, Your Details · Ask,
+  Snippets, Emoji, Windows · Calendar, Reminders, GitHub, Apps, Your Details · Ask,
   Commands, Tools, Skillies, SI Accounts · Catalog, About. Keys holds Caps Lock as
   the Hyper Key (✦) and every shortcut; General the launcher's keys, how
   skil.li looks (glass) and the launcher's place on the screen; Launcher its shortcuts, search
@@ -560,6 +560,14 @@ per-show work.
   token under Advanced. Your Details: the card (Contacts in its place
   while missing), your other details, About You, what leaves, then the
   people and what forms get from the card.
+  Apps (docs/apps.md): only the linked apps installed, each with its row
+  (its icon, name, version, where the user lets skil.li drive it,
+  `LinkedApp.allowance`, and Open, which opens the app: nothing on the Mac
+  says whether CleanShot's API is on), its options (CleanShot: Line breaks
+  in Capture Text), then its commands by group (`LinkedApp.groups`), the
+  long list last, each with its shortcut (right-click: a variant's) and
+  Show in search (the Catalog's `catalogOff`); Settings' search opens a
+  linked app's command there. Keys and Catalog list the same commands.
   Clipboard and Snippets too: Clipboard's first rows are ✦C, Paste in
   Sequence's ✦K V and "cb" as a keycap, then Keep clipboard history (Paste
   from Other Apps only while missing), Keep screenshots too and its

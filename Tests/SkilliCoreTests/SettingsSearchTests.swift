@@ -17,6 +17,7 @@ final class SettingsSearchTests: XCTestCase {
         ("calendar", "Calendar", "Your next meeting, one key away, in the launcher and the menu bar."),
         ("reminders", "Reminders", "What you have to do, said in one sentence."),
         ("github", "GitHub", "Your pull requests and notifications in the launcher: what is ready, what waits for you."),
+        ("apps", "Apps", "The apps skil.li drives: their commands in the launcher, on a key, in Ask."),
         ("yourDetails", "Your Details", "Forms filled in for you and your people, and commands that know who you are."),
         ("ask", "Ask", "Say what you want, in any app: skil.li answers, or does it for you."),
         ("commands", "Commands", "Your prompts, on any text, from any app."),
@@ -67,6 +68,20 @@ final class SettingsSearchTests: XCTestCase {
         let entries = FeatureCatalog.entries(input)
         XCTAssertGreaterThan(entries.count, 90)
         XCTAssertEqual(Set(SettingsSearch.entries(entries).map(\.anchor)).count, entries.count, "one anchor each")
+    }
+
+    /// A linked app's command is found in Apps, where its shortcut and
+    /// its switch are; Catalog keeps the rest.
+    func testALinkedAppsCommandOpensApps() {
+        let entries = FeatureCatalog.entries(FeatureCatalog.Input(appLinks: CleanShot.commands))
+        let index = SettingsSearch.Index(panes: panes, entries: SettingsSearch.entries(entries))
+        let found = index.search("capture area")
+        XCTAssertEqual(found.first?.pane, "apps", "\(found.map(\.pane))")
+        XCTAssertEqual(found.first?.hits.first?.anchor, SettingsSearch.entryAnchor("system:link:cleanshot.capture-area"))
+        XCTAssertEqual(index.search("line breaks").first?.hits.first?.anchor, "cleanShotTextLineBreaks")
+        let named = SettingsSearch.entries(entries)
+        XCTAssertTrue(named.filter { $0.anchor.hasPrefix("entry.system:link:") }.allSatisfy { $0.pane == "apps" })
+        XCTAssertTrue(named.filter { !$0.anchor.hasPrefix("entry.system:link:") }.allSatisfy { $0.pane == "catalog" })
     }
 
     func testASettingByItsNameCaseAndAccentsIgnored() {

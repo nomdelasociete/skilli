@@ -1,9 +1,9 @@
 # Apps skil.li drives — CleanShot X first
 
-Status: 2026-10-20. Built: CleanShot X's commands in the launcher, the
+Status: 2026-10-21. Built: CleanShot X's commands in the launcher, the
 Catalog, ⌘K, keys, links, Ask and agents, with the front window and the
-latest screenshot (Order 1 and 3). Still proposed: Settings → Apps, files
-into CleanShot, Shortcuts and the next apps.
+latest screenshot (Order 1 and 3); Settings → Apps (Order 2). Still
+proposed: files into CleanShot, Shortcuts and the next apps.
 
 Asked for: everything CleanShot X does, from skil.li, so that Raycast is no
 longer needed for it; and one place for the apps skil.li drives through
@@ -90,14 +90,23 @@ One pane for every app skil.li drives through its links, in the block with
 Calendar, Reminders and GitHub. "The apps skil.li drives: their commands in
 the launcher, on a key, in Ask."
 
-- One row per installed app it knows: icon, name, version, one state line
-  ("Ready", or "Allow skil.li in CleanShot → Advanced" with Open, which opens
-  CleanShot itself: its own settings link needs the API already allowed).
-- An app's page: its own options first (CleanShot: Capture Text keeps line
-  breaks), then its commands, a long list last: each with its key and Show in
-  search.
+- One row per installed app it knows: icon, name, version, one line on
+  where to allow it, and Open, which opens CleanShot itself: its own
+  settings link needs the API already allowed.
+- Whether the API is on cannot be read (checked 2026-10-21 on CleanShot X
+  5.0.1): turning Allow URL scheme API off changes nothing in CleanShot's
+  defaults (`allowURLSchemesAPI` stays as it was), and a link is then
+  ignored, no question asked. So the line never says "Ready" or "Off": it
+  says where the switch is.
+- An app's page: its own options first (CleanShot: Line breaks in Capture
+  Text: as set in CleanShot, kept, or joined on one line, for its row, a
+  key and Ask; ⌘K still offers both), then its commands by group (Capture,
+  Record, Annotate and Pin, Desktop Icons, History and Settings), a long
+  list last: each with its key and Show in search; a right-click gives a
+  variant a key (Capture and Copy…), shown under its command.
 - Apps not installed are not listed: no promises.
-- Keys and the Catalog index the same commands; their settings live here only.
+- Keys and the Catalog index the same commands; their settings live here
+  only. Settings' search opens a command here.
 
 ## Next apps
 
@@ -120,7 +129,7 @@ real.
 
 1. Done: CleanShot rows in the launcher, Catalog, ⌘K variants, links, agents
    (replaces `ActionCatalog.cleanShot`).
-2. Settings → Apps with CleanShot's page.
+2. Done: Settings → Apps with CleanShot's page.
 3. Done: Capture / Record Front Window, Latest Screenshot rows (the frame
    checked with a real capture, one display).
 4. Files into CleanShot (⌘K on clipboard images, files, Finder selection).
