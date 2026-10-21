@@ -182,7 +182,11 @@ final class SettingsSearchModel {
         selected = id
         if let item = row.item {
             reveal(item.anchor, in: row.pane)
-        } else if navigation.pane == row.pane {
+            return
+        }
+        // The pane itself: its top (Apps: its list, not an app's page).
+        _ = beforeReveal(row.pane, row.id)
+        if navigation.pane == row.pane {
             scrollToTop()
         } else {
             navigation.pane = row.pane

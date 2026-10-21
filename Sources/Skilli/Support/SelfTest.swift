@@ -2006,7 +2006,7 @@ final class SelfTest {
         let settings = context.settings
         let model = settings.apps
         model.page = .shortcuts
-        _ = await waitUntil(timeout: 5) { !model.readingShortcuts }
+        let read = await waitUntil(timeout: 5) { !model.readingShortcuts } != nil
         await pause(500)
         let overflow = settings.paneOverflow()
         await captureSettingsBothWays(as: "settings-apps-shortcuts")
@@ -2015,8 +2015,8 @@ final class SelfTest {
             await captureSettingsBothWays(as: "settings-apps-shortcuts-bottom")
         }
         let rows = model.shortcuts.filter { settings.search.frames[SettingsSearch.entryAnchor(FeatureCatalog.shortcutEntryID($0.id))] != nil }.count
-        return (overflow <= 1 && rows == model.shortcuts.count,
-                "Shortcuts' page: \(model.shortcuts.count) shortcuts, \(rows) rows drawn, past the window \(Int(overflow)) pt")
+        return (read && overflow <= 1 && rows == model.shortcuts.count,
+                "Shortcuts' page: read \(read ? "" : "not ")in 5 s, \(model.shortcuts.count) shortcuts, \(rows) rows drawn, past the window \(Int(overflow)) pt")
     }
 
     // MARK: - Ask's calendar and reminders
