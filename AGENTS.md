@@ -3496,7 +3496,11 @@ re-investigating.
   scratch folder, the benchmark reads none). `LinkedApp.builtIn`
   (CleanShot X) wins any clash (id, bundle id or scheme), then skil.li's
   files, then the user's by name; `LinkedApp.all` is the built-in ones then
-  the files' (`LinkedApp.useFiles`). Read in `AppDelegate.init` before
+  the files' (`LinkedApp.useFiles`). A command is found by its app's short
+  name and its words; skil.li's own files' words never outrank skil.li's
+  commands as root search ranks them (a tie goes to the shorter title:
+  "settings" in Zed's words opened Zed's settings;
+  `testSkilliFilesNeverOutrankSkilliOwnCommands`). Read in `AppDelegate.init` before
   the shortcuts (a key names a command by id), then with the radios when
   a file's date changed (`LinkedApps.readFiles`). A command's link:
   `scheme://host/rest?…` from `path` (one that starts with "/":
