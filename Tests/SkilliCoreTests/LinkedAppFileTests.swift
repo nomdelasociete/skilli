@@ -148,6 +148,23 @@ final class LinkedAppFileTests: XCTestCase {
         }
     }
 
+    /// A shipped app's words never take skil.li's own: a tie goes to the
+    /// shorter title, and "settings" opened Zed's instead of skil.li's.
+    func testSkilliFilesDoNotTakeSkilliOwnWords() throws {
+        let folder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/Skilli/Resources/Apps")
+        let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }
+        let apps = LinkedAppFile.load(try files.map { LinkedAppFile.Source(name: $0.lastPathComponent, data: try Data(contentsOf: $0), shipped: true) }).apps
+        let own = Set(LauncherCommand.all.flatMap(\.keywords).map(CatalogEntry.fold) + FeatureCatalog.entries().flatMap(\.otherWords))
+        for app in apps {
+            for command in app.commands {
+                // Its app's name aside: CleanShot's is found by "cleanshot" too.
+                let taken = command.keywords.dropFirst().map(CatalogEntry.fold).filter(own.contains)
+                XCTAssertEqual(taken, [], "\(command.id) takes skil.li's own words")
+            }
+        }
+    }
+
     func testEveryWrongThingIsSaidAndTheFileLeftOut() {
         let wrong: [(Data, String)] = [
             (Data("{ not json".utf8), "Not JSON"),

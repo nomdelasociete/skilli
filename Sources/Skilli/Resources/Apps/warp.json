@@ -10,7 +10,12 @@
       "path": "settings",
       "title": "Warp Settings",
       "description": "Opens Warp's settings",
-      "words": ["terminal", "settings", "preferences", "réglages", "préférences", "paramètres"],
+      "words": [
+        "terminal",
+        "réglages warp",
+        "préférences warp",
+        "paramètres warp"
+      ],
       "symbol": "gearshape",
       "group": "Settings"
     },
@@ -19,7 +24,16 @@
       "path": "settings/appearance",
       "title": "Warp Appearance",
       "description": "Opens Warp's theme, font and window settings",
-      "words": ["terminal", "appearance", "theme", "font", "colors", "apparence", "thème", "police", "couleurs"],
+      "words": [
+        "terminal",
+        "theme",
+        "font",
+        "colors",
+        "apparence warp",
+        "thème",
+        "police",
+        "couleurs"
+      ],
       "symbol": "paintpalette",
       "group": "Settings"
     },
@@ -28,7 +42,13 @@
       "path": "settings/mcp",
       "title": "Warp MCP Servers",
       "description": "Opens the MCP servers Warp's agent uses",
-      "words": ["mcp", "servers", "serveurs", "tools", "outils", "agent"],
+      "words": [
+        "mcp",
+        "servers",
+        "serveurs",
+        "tools",
+        "outils"
+      ],
       "symbol": "server.rack",
       "group": "Settings"
     },
@@ -37,7 +57,12 @@
       "path": "settings/warp_agent",
       "title": "Warp Agent Settings",
       "description": "Opens the settings of Warp's AI agent",
-      "words": ["ai", "agent", "ia", "assistant", "réglages"],
+      "words": [
+        "warp ai",
+        "ia warp",
+        "agent warp",
+        "réglages agent warp"
+      ],
       "symbol": "sparkles",
       "group": "Settings"
     },
@@ -46,7 +71,10 @@
       "path": "settings/environments",
       "title": "Warp Environments",
       "description": "Opens Warp's environments settings",
-      "words": ["environments", "environnements", "settings", "réglages"],
+      "words": [
+        "environments",
+        "environnements"
+      ],
       "symbol": "shippingbox",
       "group": "Settings"
     },
@@ -55,7 +83,11 @@
       "path": "settings/platform",
       "title": "Warp Platform",
       "description": "Opens Warp's platform settings",
-      "words": ["platform", "plateforme", "api", "settings", "réglages"],
+      "words": [
+        "platform",
+        "plateforme",
+        "api"
+      ],
       "symbol": "square.stack.3d.up",
       "group": "Settings"
     },
@@ -64,7 +96,16 @@
       "path": "settings/billing_and_usage",
       "title": "Warp Billing and Usage",
       "description": "Opens your Warp plan, billing and usage",
-      "words": ["billing", "usage", "plan", "credits", "facturation", "abonnement", "utilisation", "crédits"],
+      "words": [
+        "billing",
+        "usage",
+        "plan",
+        "credits",
+        "facturation",
+        "abonnement",
+        "utilisation",
+        "crédits"
+      ],
       "symbol": "creditcard",
       "group": "Account"
     },
@@ -73,7 +114,13 @@
       "path": "settings/teams",
       "title": "Warp Team Settings",
       "description": "Opens your Warp team and its members",
-      "words": ["team", "teams", "members", "équipe", "membres"],
+      "words": [
+        "team",
+        "teams",
+        "members",
+        "équipe",
+        "membres"
+      ],
       "symbol": "person.3",
       "group": "Account"
     }
