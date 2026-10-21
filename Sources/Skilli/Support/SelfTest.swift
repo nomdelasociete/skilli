@@ -12413,8 +12413,10 @@ final class SelfTest {
         // Nothing to change (the rows that point to where the first one is
         // made): no chevron, no popover.
         let readOnlyIDs = model.entries.filter { !model.isEditable($0) }.map(\.id)
-        // The "make your first" rows, and Auto Quit, set in its own pane.
-        let readOnly = Set(readOnlyIDs).isSubset(of: ["catalog.snippets", "catalog.skillies", "catalog.quicklinks", "catalog.autoQuit"])
+        // The "make your first" rows, Auto Quit, set in its own pane, and
+        // Do It Here and Ask on a Schedule: their shortcut was Ask's (#12).
+        let readOnly = Set(readOnlyIDs).isSubset(of: ["catalog.snippets", "catalog.skillies", "catalog.quicklinks", "catalog.autoQuit",
+                                                      "catalog.doItHere", "catalog.askSchedule"])
 
         // The end: quicklinks, then the aliases the rows do not hold.
         model.search = ""
