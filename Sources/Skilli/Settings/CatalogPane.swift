@@ -35,8 +35,11 @@ final class CatalogPaneModel {
 
     func load(_ input: FeatureCatalog.Input) {
         let start = ContinuousClock.now
-        entries = FeatureCatalog.entries(input)
-        skillies = input.skillies
+        let entries = FeatureCatalog.entries(input)
+        // Read again as the pane opens; set only when it changed, or the
+        // pane is drawn twice for nothing.
+        if entries != self.entries { self.entries = entries }
+        if input.skillies != skillies { skillies = input.skillies }
         lastLoad = .now - start
     }
 
@@ -438,7 +441,13 @@ private struct CatalogRow: View {
                 }
             }
             .opacity(off ? 0.45 : 1)
-            Spacer(minLength: 8)
+            // The width the right side leaves, without a Spacer: weighed
+            // against one, the two lines of text were measured at several
+            // widths, in each of the ~130 rows.
+            // 18 pt: the Spacer's 8 and the spacing it took.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, 18)
+            .layoutPriority(1)
             if off {
                 Text("Off")
                     .font(.caption.weight(.medium))

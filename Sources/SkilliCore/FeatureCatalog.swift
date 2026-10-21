@@ -4,7 +4,7 @@ import Foundation
 /// the user's words, what the user wants it for (its group), what is typed
 /// to reach it, and what Return does. The launcher's "?" shows them, and
 /// Settings → Catalog lists the same entries.
-public struct CatalogEntry: Identifiable, Sendable {
+public struct CatalogEntry: Identifiable, Equatable, Sendable {
     /// What the user wants, in the Catalog's order.
     public enum Group: String, CaseIterable, Sendable {
         case find, act, write, stayOnTop, apps, yours, skilli
