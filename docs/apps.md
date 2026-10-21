@@ -2,8 +2,9 @@
 
 Status: 2026-10-21. Built: CleanShot X's commands in the launcher, the
 Catalog, ⌘K, keys, links, Ask and agents, with the front window and the
-latest screenshot (Order 1 and 3); Settings → Apps (Order 2). Still
-proposed: files into CleanShot, Shortcuts and the next apps.
+latest screenshot (Order 1 and 3); Settings → Apps (Order 2); the user's
+shortcuts in Apple's Shortcuts app, the same way (Next apps 1). Still
+proposed: files into CleanShot and the next apps.
 
 Asked for: everything CleanShot X does, from skil.li, so that Raycast is no
 longer needed for it; and one place for the apps skil.li drives through
@@ -116,9 +117,36 @@ French, symbol, URL template, variants, what asks first). Each app is added
 only after its link format is read in its own documentation and run once for
 real.
 
-1. **Shortcuts** (Apple, `/usr/bin/shortcuts list` / `run`): every shortcut the
-   user made is a row. That reaches every app's App Intents without skil.li
-   knowing them.
+1. Done: **Shortcuts** (Apple, `/usr/bin/shortcuts list` / `run`): every
+   shortcut in the user's Shortcuts library (made, or added from its
+   Gallery) is a row. That reaches every app's App Intents
+   without skil.li knowing them. Read in `shortcuts help run` / `list` and
+   the Shortcuts User Guide ("Run shortcuts from the command line", "Open
+   and create a shortcut using a URL scheme", 2026-10-21):
+   - `shortcuts list --show-identifiers`: "Name (identifier)" a line. Read
+     as the launcher opens, off the main thread; rows run by identifier.
+   - `shortcuts run <identifier>`: exits 0, or 1 with its error. Its input
+     is the standard input, read as text ("a path piped is treated as
+     text"; `-i` would make files of it); its output, what it prints.
+   - A shortcut that asks for something waits for the user: 300 s at most.
+   - Seen on macOS 27 (not in the guide): the first time a shortcut hands
+     what it made to the tool, Shortcuts asks in its own window ("Allow
+     “…” to produce 1 text item?": deny, allow once, always allow);
+     the run waits for the answer. The input asks nothing.
+   - `shortcuts://open-shortcut?name=…` opens its editor (Edit in
+     Shortcuts).
+
+   | Where | What |
+   |---|---|
+   | Launcher | a row each, by name, Shortcuts' icon; ↩ runs it, its text in the card |
+   | ⌘K | Run with the Selection (the text read as the launcher opened), Edit in Shortcuts |
+   | Catalog | In Your Apps, `system:shortcut:<identifier>`: alias, pin, Off |
+   | Keys | Add Shortcut → Shortcuts → each: as it is, With the Selection |
+   | Links | `skilli://run/system:shortcut:<identifier>`, asked first, Always offered |
+   | Ask | by name, its own question; unsure (under 85 %): asked first |
+   | Agents | `list_shortcuts`, `run_shortcut` (name, input or selection): the text it gave back |
+   | Skillies | `open` its link, or `"$SKILLI_CLI" call run_shortcut name=… input=…` (waits, exit 0/1/2; skillies/README.md) |
+
 2. Apps with documented schemes, to check one by one: Slack, Zoom (already
    parsed in Agenda), Notion.
 3. App files: `~/Library/Application Support/skil.li/Apps/*.json`, written by
@@ -133,4 +161,4 @@ real.
 3. Done: Capture / Record Front Window, Latest Screenshot rows (the frame
    checked with a real capture, one display).
 4. Files into CleanShot (⌘K on clipboard images, files, Finder selection).
-5. Shortcuts, then the next apps.
+5. Done: Shortcuts. Then the next apps.

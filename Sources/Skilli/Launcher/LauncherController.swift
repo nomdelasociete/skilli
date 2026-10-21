@@ -451,6 +451,10 @@ final class LauncherController: NSObject {
     /// Mac commands with their title now ("Allow Sleep" while kept awake).
     var systemCommands: (() -> [(command: MacAction, title: String)])?
     var onSystemCommand: ((MacAction) -> Void)?
+    /// ⌘K on a shortcut's row: run with the text selected where the
+    /// launcher opened; its editor in Shortcuts.
+    var onRunShortcut: ((AppleShortcut, ShortcutInput) -> Void)?
+    var onEditShortcut: ((AppleShortcut) -> Void)?
     /// The launcher opens: what its rows come from may be read again, off
     /// the main thread (Wi-Fi, Bluetooth).
     var onShow: (() -> Void)?
@@ -654,6 +658,31 @@ final class LauncherController: NSObject {
         enterMode(next, filter: "")
         // Opened straight: esc goes back to the app.
         modeBack = nil
+    }
+
+    /// A quicklink's shortcut: the launcher with its keyword typed, as its
+    /// row picked by name puts it; the text selected, once read, is its
+    /// query (its row says so, ↩ searches). One that takes no query opens
+    /// its page. Again closes it.
+    func toggle(into link: Quicklink, triggeredAt: ContinuousClock.Instant) {
+        guard link.takesQuery, !link.keyword.isEmpty else {
+            if isVisible { hide() }
+            // Out of the event tap: opening may ask the browser for its tabs.
+            DispatchQueue.main.async { [weak self] in
+                if let url = link.address(for: "") { self?.onOpenURL?(url) }
+            }
+            return
+        }
+        let typed = link.keyword + " "
+        if isVisible, mode == nil, searchField.stringValue == typed {
+            hide()
+            return
+        }
+        if !isVisible { show(triggeredAt: triggeredAt, keeping: { _ in false }) }
+        leaveMode(update: false)
+        searchField.stringValue = typed
+        searchField.currentEditor()?.selectedRange = NSRange(location: (typed as NSString).length, length: 0)
+        updateResults(query: typed)
     }
 
     /// `keeping`: whether what it held when it closed may come back (Settings
@@ -2940,8 +2969,10 @@ final class LauncherController: NSObject {
 
     // MARK: - Aliases
 
-    /// The mode a command turns the launcher into, if it does.
-    static func mode(for id: LauncherCommand.ID) -> Mode? {
+    /// The mode a command turns the launcher into, if it does. Read in
+    /// the event tap too: a shortcut into a mode runs inline
+    /// (`SkilliAction.runsInline`).
+    nonisolated static func mode(for id: LauncherCommand.ID) -> Mode? {
         switch id {
         case .killProcess: .kill
         case .clipboardHistory: .clipboard
@@ -3067,6 +3098,8 @@ final class LauncherController: NSObject {
         case .quicklink(let id): catalogMade.quicklinks.first { $0.id == id }.map { LauncherItem.quicklink($0, query: "") }
         case .layout(let id): catalogMade.layouts.first { $0.id == id }.map(LauncherItem.layout)
         case .appLink(let id): catalogMade.appLinks.first { $0.id == id }.map { LauncherItem.system(.appLink($0, variant: nil), title: $0.title) }
+        case .shortcut(let id):
+            catalogMade.shortcuts.first { $0.id == id }.map { LauncherItem.system(.shortcut($0, withSelection: false), title: $0.name) }
         case .type, .askByVoice, .dictate, .transform, .settings: nil
         }
     }
@@ -3159,7 +3192,7 @@ final class LauncherController: NSObject {
         case .type, .settings, .ask, .askByVoice, .dictate, .quicklink: "Open"
         case .snippet: "Paste"
         case .layout: "Apply"
-        case .system, .window, .transform, .prompt, .skillie, .appLink: "Run"
+        case .system, .window, .transform, .prompt, .skillie, .appLink, .shortcut: "Run"
         }
     }
 
@@ -3216,11 +3249,12 @@ final class LauncherController: NSObject {
             list += aliasActions(for: item)
             if takesPin(item) { list.append(pinAction(for: item)) }
         }
-        if catalogAction(entry) != nil {
+        if let action = catalogAction(entry) {
+            // Its keys, recorded right away and said in the card, as on
+            // an app's row.
             list.append(LauncherAction(title: catalogShortcut(entry) == nil ? "Set Shortcut…" : "Change Shortcut…", symbol: "keyboard") { [weak self] in
-                // Open first: hiding hands the focus back to the previous app.
-                self?.onSettingsPane?(.keys, nil)
                 self?.hide()
+                self?.onSetShortcut?(action, entry.title)
             })
         }
         // Its link: another app, Shortcuts or a Stream Deck runs it.
@@ -4017,6 +4051,10 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
         case .system(.appLink(let command, let variant), let title):
             let action = MacAction.appLink(command, variant: variant)
             cell.configure(title: title, accessory: action.kind, icon: LinkedApps.icon(for: command.appID) ?? CommandIcon.image(for: action.symbol))
+        // Shortcuts' icon: each one runs there.
+        case .system(.shortcut(let shortcut, let withSelection), let title):
+            let action = MacAction.shortcut(shortcut, withSelection: withSelection)
+            cell.configure(title: title, accessory: action.kind, icon: AppleShortcuts.icon ?? CommandIcon.image(for: action.symbol))
         case .system(let command, let title):
             cell.configure(title: title, accessory: command.kind, icon: CommandIcon.image(for: command.symbol))
         case .process(let group, let port):

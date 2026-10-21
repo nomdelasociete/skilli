@@ -992,6 +992,16 @@ struct ShortcutSections: View {
                                 Button(action.title) { store.beginRecording(store.add(action)) }
                             }
                         }
+                        // Every launcher command, by the "?"'s groups.
+                        Menu("Launcher Commands") {
+                            ForEach(ActionCatalog.launcherCommands, id: \.group) { group in
+                                Section(group.group) {
+                                    ForEach(group.actions, id: \.id) { action in
+                                        Button(action.title) { store.beginRecording(store.add(action)) }
+                                    }
+                                }
+                            }
+                        }
                         if !context.windowLayouts().isEmpty {
                             Section("Window Layouts") {
                                 ForEach(context.windowLayouts(), id: \.id) { layout in
@@ -1013,6 +1023,22 @@ struct ShortcutSections: View {
                                 }
                             }
                         }
+                        // The user's own lists, as long as they make them:
+                        // a submenu each.
+                        if !context.snippets.all.isEmpty {
+                            Menu("Snippets") {
+                                ForEach(context.snippets.all) { snippet in
+                                    Button(snippet.name) { store.beginRecording(store.add(.snippet(snippet.id))) }
+                                }
+                            }
+                        }
+                        if !context.quicklinks.links.isEmpty {
+                            Menu("Quicklinks") {
+                                ForEach(context.quicklinks.links) { link in
+                                    Button(link.name) { store.beginRecording(store.add(.quicklink(link.id))) }
+                                }
+                            }
+                        }
                         // An app's commands: a submenu each, the
                         // variants of a command in its own.
                         ForEach(LinkedApps.installed(), id: \.app.id) { installed in
@@ -1030,6 +1056,20 @@ struct ShortcutSections: View {
                                                     store.beginRecording(store.add(.mac(.appLink(command, variant: variant.id))))
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // The user's shortcuts in Apple's Shortcuts app: a
+                        // submenu each, run as it is or on the selection.
+                        if !AppleShortcuts.all().isEmpty {
+                            Menu("Shortcuts") {
+                                ForEach(AppleShortcuts.all(), id: \.id) { shortcut in
+                                    Menu(shortcut.name) {
+                                        Button(shortcut.name) { store.beginRecording(store.add(.mac(.shortcut(shortcut, withSelection: false)))) }
+                                        Button("With the Selection") {
+                                            store.beginRecording(store.add(.mac(.shortcut(shortcut, withSelection: true))))
                                         }
                                     }
                                 }

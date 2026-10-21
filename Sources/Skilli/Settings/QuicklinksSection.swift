@@ -8,8 +8,9 @@ import SwiftUI
 struct QuicklinksSection: View {
     @Bindable var preferences: Preferences
     let store: QuicklinkStore
-    /// Delete: at once, ⌘Z in the card puts it back.
+    /// Delete: at once, its shortcuts too; ⌘Z in the card puts it back.
     let deletes: UndoableDeletes
+    let shortcuts: ShortcutStore
     /// The list changed: the Catalog's rows read it again.
     var onChange: () -> Void = {}
     @State private var links: [Quicklink] = []
@@ -23,10 +24,11 @@ struct QuicklinksSection: View {
 
     /// The list and the browser read now: the section is drawn whole at
     /// once (opened at its end, it stays there).
-    init(preferences: Preferences, store: QuicklinkStore, deletes: UndoableDeletes, onChange: @escaping () -> Void = {}) {
+    init(preferences: Preferences, store: QuicklinkStore, deletes: UndoableDeletes, shortcuts: ShortcutStore, onChange: @escaping () -> Void = {}) {
         self.preferences = preferences
         self.store = store
         self.deletes = deletes
+        self.shortcuts = shortcuts
         self.onChange = onChange
         _links = State(initialValue: store.links)
         _browser = State(initialValue: BrowserTabReuse.defaultBrowser())
@@ -99,7 +101,12 @@ struct QuicklinksSection: View {
                 .fixedSize()
                 Spacer()
                 Button("Reset to Defaults") {
+                    let before = store.links.map(\.id)
                     store.resetToDefaults()
+                    // The ones gone take their shortcuts with them.
+                    for id in before where !store.links.contains(where: { $0.id == id }) {
+                        shortcuts.removeEntries(for: .quicklink(id))
+                    }
                     links = store.links
                     onChange()
                 }
@@ -145,7 +152,7 @@ struct QuicklinksSection: View {
                     onChange()
                 },
                 delete: {
-                    deletes.quicklink(link, in: store)
+                    deletes.quicklink(link, in: store, shortcuts: shortcuts)
                     links = store.links
                     editing = nil
                     onChange()

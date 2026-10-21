@@ -735,6 +735,25 @@ per-show work.
   last one is emptied. Recording waits
   `ShortcutStore.sequencePause` for the next key of a chain, shown as a
   countdown; Return saves at once.
+- Every launcher command, Mac command, window place and what the user
+  made takes one (2026-10-21: Search Snippets could not; only six
+  launcher commands had an action). `SkilliAction.launcherCommand` for a
+  `LauncherCommand.ID`, id its `shortcutID` ("cmd.searchSnippets", in
+  SkilliCore, unit-tested; the six that had an action keep it and its
+  id, ✦C's "clipboard.history": `SkilliAction.command(_:)`): a command
+  that turns the launcher into a mode opens it straight in that mode
+  (`LauncherController.mode(for:)`, `toggle(into:)`, inline in the tap;
+  again closes it), the others do what their row does (`AppDelegate.run`).
+  `.snippet` ("snippet:<file id>") types it in the app in front, as ↩ on
+  its row; `.quicklink` ("quicklink:<id>") opens the launcher with its
+  keyword typed, as its row picked by name (the selection, once read, is
+  its query and the row says so; one that takes no query opens its page;
+  again closes it). Their titles read the names live
+  (`SkilliAction.snippetName`, `quicklinkName`): renamed, the shortcut
+  stays. Deleting one takes its shortcuts with it (⌘Z puts both back).
+  Keys → Add Shortcut: Launcher Commands (a submenu, by the "?"'s
+  groups), then Snippets and Quicklinks (a submenu each, after Skillies);
+  `add_shortcut` takes them by name or id.
 - Keys → Restore Defaults asks first and names what goes
   (`RestoreDefaults` in SkilliCore, `ShortcutStore.changesFromDefaults`:
   "Your 3 custom shortcuts and 2 changed keys are removed.", destructive
@@ -1046,12 +1065,26 @@ per-show work.
   first group's name is the header above the list, which follows the group
   at the top as the rows scroll. ↩ does what the entry's launcher row does
   (`launch(_:row:flags:)`), or types the start of the words; ⌘K: Run, the
-  alias, Set Shortcut… (Settings → Keys). Entries, shortcuts and keycaps
+  alias, Set Shortcut… (the card asks for the keys, as on an app's row:
+  `AppDelegate.recordShortcut`). Entries, shortcuts and keycaps
   are made once as it opens; a key only filters in memory.
+- What takes a shortcut (`CatalogEntry.shortcutAction`, the "?" and
+  Settings → Catalog alike): every launcher command, Mac command, window
+  place, Ask, Ask by Voice, Dictate, the case changes, and what the user
+  made (a skillie only when it needs no argument). Not what types the
+  start of words (Timer, Calculator), nor the rows that open where the
+  first of something is made, nor Do It Here and Ask on a Schedule: ways
+  of saying what Ask does (`run: .ask`), a shortcut on them recorded
+  Ask's own. No two entries share an action.
 - `selftest catalog` (keys): "?" typed with the layout's own keys, the six
   groups, the header following, "? kill" then ↩ into Kill, Clipboard
   History's prefix, alias and ✦C, ⌘K, an entry Off dimmed and still
-  run; `launcher-catalog*-light/-dark.png`. Links (`linksRunWhatTheyName`):
+  run; `launcher-catalog*-light/-dark.png`. `catalogShortcutsReachEverything`:
+  every entry's action named back by its id and none shared, the ids
+  saved before still loading, none for Do It Here; "? search snippets",
+  ⌘K → Set Shortcut… recording ⌥⇧⌘9 in the card, pressed in the test
+  window Snippets opens, again closes; a snippet's shortcut types it, a
+  quicklink's types its keyword; `launcher-shortcut-snippets-*.png`. Links (`linksRunWhatTheyName`):
   ⌘K → Copy Link in "?" (Clipboard History) and on launcher rows (Left
   Half, a quicklink with its query, Lock Screen), each opened through
   `LinkRunner.openNow`: the history opens, the test window moves, the
@@ -1220,8 +1253,9 @@ the launcher and the self-test call:
   `CalendarBook.remove`/`restore`). An event with invitees still asks
   ("Delete Event?"): deleting it can tell them, and EventKit cannot
   invite them again.
-- Settings: a snippet (its file as written), one of the user's commands
-  (its file and its shortcuts), a quicklink (in its place), a field of
+- Settings: a snippet (its file as written, and its shortcuts), one of
+  the user's commands (its file and its shortcuts), a quicklink (in its
+  place, and its shortcuts), a field of
   Your Details or a person or company with theirs (a locked value such as
   an IBAN back in the Keychain), the Claude API key or a deciding key, a
   connected server (its config, token or OAuth sign-in, its tools' rights
@@ -1238,7 +1272,8 @@ the launcher and the self-test call:
   History, a backup restored, Keys → Restore Defaults, Uninstall… (it
   quits the app too), an event with invitees. Agents' deletes
   (`delete_snippet`, `delete_quicklink`, `delete_reminder`…) wait for the
-  user's OK in the card and offer no undo.
+  user's OK in the card and offer no undo (a snippet's or quicklink's
+  shortcuts go with it there too).
 - While the launcher is open (a copy forgotten), the card shows right
   under its glass, as wide (`AIActionController.openLauncherFrame`,
   `UndoDelete.spot`: above it when the screen has no room below), never
@@ -2424,7 +2459,8 @@ re-investigating.
   `~/Library/Application Support/skil.li/snippets` (front matter `name`,
   `keyword`; the text with `{date}`, `{clipboard}`… and one `{cursor}`).
   Found in the launcher by name, keyword or words (↩ types it, ⌘↩ copies
-  it), by agents (`list_snippets`, `insert_snippet`), and expanded where
+  it), by agents (`list_snippets`, `insert_snippet`), typed by a shortcut
+  of its own (Keys → Add Shortcut → Snippets, its Catalog row), and expanded where
   their keyword is typed: `KeyRouter.onTypedKey` hands `SnippetExpander`
   the keys going on to the app in front (not the launcher's, not with
   Hyper). Settings → Snippets → Expand (`Preferences.snippetExpansionMode`):
@@ -2506,7 +2542,9 @@ re-investigating.
   its keyword in the field for the query; text that matches nothing on the
   Mac offers "Search Google for “…”" before Ask. Only http(s) addresses;
   the query is percent-encoded whole (&, =, #, / too). Opened through
-  `ActionRunner` (the self-test records instead).
+  `ActionRunner` (the self-test records instead). A shortcut of its own
+  (Keys → Add Shortcut → Quicklinks, its Catalog row) opens the launcher
+  with its keyword typed.
   Nothing typed for one that takes a query: the text selected where the
   launcher opened is the query (`quicklinkQuery`, `Quicklink.query(fromSelection:)`:
   one line, 1,000 characters at most), the row says it ("Wikipedia · Tour
@@ -3388,6 +3426,55 @@ re-investigating.
   display), Annotate / Pin Latest Screenshot the newest screenshot's path
   (PNG or JPEG). `SystemCommands.openAppLink` is the self-test's dry run;
   `remote apps` (✦K C, "capture front", ⌘K, the frame) captures nothing.
+- Apple's Shortcuts (docs/apps.md, Next apps 1; `AppleShortcut` in
+  SkilliCore, `AppleShortcuts`): every shortcut in the user's library is a
+  `MacAction.shortcut(shortcut, withSelection:)` (raw value
+  `shortcut:<identifier>`, `…/selection` run on the selection), so the
+  same list serves the launcher's rows (by name, Shortcuts' icon,
+  accessory "Shortcuts"), the Catalog (In Your Apps, entry
+  `system:shortcut:<identifier>`, `FeatureCatalog.Input.shortcuts`),
+  aliases and pins, keys (Add Shortcut → Shortcuts, a submenu each: as it
+  is, With the Selection), links (asked first, Always offered: a shortcut
+  can do anything), Ask (questions of their own, `shortcut0`…, 60 shortcuts each, by name;
+  ≥ 60 % beats the agent, ≥ 85 % a reminder or an answer too; asked
+  first under 85 %; what Ask was asked on is its input), agents
+  (`list_shortcuts`, `run_shortcut` with an optional `input` or
+  `selection=true`, the text it gave back) and skillies
+  (skillies/README.md: `open` its row's link; or `"$SKILLI_CLI" call
+  run_shortcut name=… input=…`, or `… name=… selection=true` for the
+  selected text, each of which waits and exits 0, 1 or 2). Read with Apple's tool
+  (`shortcuts list --show-identifiers`, "Name (identifier)") off the
+  main thread at launch and each time the launcher opens, with the
+  radios; a change redraws the rows; a key never runs it. Run by
+  identifier (`shortcuts run <identifier>`), so a renamed shortcut keeps
+  its keys, alias and learning; a key saved before the first read knows
+  only the identifier, its name comes from the last read
+  (`AppleShortcuts.name(of:)`); `AppleShortcut` is equal by identifier.
+  Input: text on the standard input, which Shortcuts reads as text
+  (`shortcuts help run`; Shortcuts User Guide, "Run shortcuts from the
+  command line"): ⌘K → Run with the Selection takes the text the launcher
+  read as it opened (listed only when it read some), a key with the
+  selection reads it as it runs (none: the card says so, nothing runs).
+  Output: what it printed, text only (`AppleShortcut.shownOutput`), in
+  the card as a skillie's: one line 4 s, more up to 20 s (scrolls);
+  nothing or not text (an image, a file): the card goes, nothing said.
+  The first time a shortcut hands what it made to skil.li, Shortcuts asks
+  in its own window ("Allow “…” to produce 1 text item?": deny, allow
+  once, always allow); the run waits for it, "Running “…”…" in the
+  card, which never covers that window.
+  Errors: Shortcuts' last line, "Error: " taken out. 300 s at most (a
+  shortcut can wait for the user). ⌘K → Edit in Shortcuts opens
+  `shortcuts://open-shortcut?name=…` (Shortcuts User Guide, "Open and
+  create a shortcut using a URL scheme"), the name encoded whole.
+  `remote apps` imports a test shortcut it signs (`shortcuts sign`, then
+  opened and added in Shortcuts), answers Shortcuts' question once
+  (Always Allow), runs it from the launcher (↩, ⌘K with the selection), a
+  key on the selection, its link (asked), Ask, `run_shortcut`, and three
+  scratch skillies (its link opened, `call` with `input=`, with
+  `selection=true`, each asked in the card), then
+  deletes it in Shortcuts (Edit → Delete) and quits Shortcuts when it
+  opened it; `selftest decide`: Ask picks made-up shortcuts by name, and
+  none for something else (decided only).
 - Import: `skilli://commands/import?command=<file>` (repeatable) or
   `?url=https://…` (`CommandLink`, `Config/Info.plist`). Settings →
   Commands shows every command in full before Add; nothing is added from a

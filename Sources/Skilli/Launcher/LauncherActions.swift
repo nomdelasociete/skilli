@@ -36,7 +36,9 @@ extension LauncherController {
             case .system, .window: return .run(item.learningID)
             // The command, not a variant: links run Catalog entries.
             case .appLink(_, nil): return .run(item.learningID)
-            case .sound, .project, .script, .settings, .bluetooth, .volume, .appLink: return nil
+            // Asked first from a link: a shortcut can do anything.
+            case .shortcut(_, false): return .run(item.learningID)
+            case .sound, .project, .script, .settings, .bluetooth, .volume, .appLink, .shortcut: return nil
             }
         case .script(let command, _): return .skillie(skilliePath(command.path), arguments: [])
         case .quicklink(let link, let typed, _):
@@ -214,6 +216,15 @@ extension LauncherController {
             return [first] + LinkedApps.variants(of: command).map { variant in
                 act(variant.title, variant.symbol) { [weak self] in self?.onSystemCommand?(.appLink(command, variant: variant.id)) }
             }
+        // A shortcut: on the text selected where the launcher opened (when
+        // some was), and its editor in Shortcuts.
+        case .system(.shortcut(let shortcut, false), _):
+            var list = [first]
+            if let selected = shownSelection {
+                list.append(act("Run with the Selection", "text.line.first.and.arrowtriangle.forward") { [weak self] in self?.onRunShortcut?(shortcut, .text(selected)) })
+            }
+            list.append(act("Edit in Shortcuts", "square.and.pencil") { [weak self] in self?.onEditShortcut?(shortcut) })
+            return list
         case .command, .saveLayout, .openWindow, .startTimer, .keepAwake, .runningTimer, .createEvent, .addReminder,
              .brewUpgradeAll, .setup, .ask, .siCommand, .system, .scriptArgument, .scriptChoice:
             return [first]

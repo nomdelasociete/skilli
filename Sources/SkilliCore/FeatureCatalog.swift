@@ -49,6 +49,9 @@ public struct CatalogEntry: Identifiable, Equatable, Sendable {
         case layout(String)
         /// A linked app's command, by its id ("cleanshot.capture-area").
         case appLink(String)
+        /// One of the user's shortcuts in Apple's Shortcuts app, by its
+        /// identifier.
+        case shortcut(String)
         /// A pane of skil.li's Settings ("snippets"), and a part of it
         /// after a slash ("catalog/quicklinks"): where the first one is
         /// made.
@@ -96,7 +99,7 @@ public struct CatalogEntry: Identifiable, Equatable, Sendable {
     public var takesAlias: Bool {
         guard !id.hasPrefix("catalog.") else { return false }
         switch run {
-        case .command, .system, .window, .ask, .prompt, .snippet, .skillie, .quicklink, .layout, .appLink: return true
+        case .command, .system, .window, .ask, .prompt, .snippet, .skillie, .quicklink, .layout, .appLink, .shortcut: return true
         case .type, .askByVoice, .dictate, .transform, .settings: return false
         }
     }
@@ -167,17 +170,21 @@ public enum FeatureCatalog {
         /// The commands of the linked apps installed (CleanShot X), that
         /// their versions take.
         public var appLinks: [AppLinkCommand]
+        /// The user's shortcuts in Apple's Shortcuts app, as last read.
+        public var shortcuts: [AppleShortcut]
         /// The word for AI the user reads (`Brand.intelligence`).
         public var intelligence: String
 
         public init(commands: [Command] = [], snippets: [Snippet] = [], skillies: [ScriptCommand] = [], quicklinks: [Quicklink] = [],
-                    layouts: [SavedWindowLayout] = [], appLinks: [AppLinkCommand] = [], intelligence: String = "SI") {
+                    layouts: [SavedWindowLayout] = [], appLinks: [AppLinkCommand] = [], shortcuts: [AppleShortcut] = [],
+                    intelligence: String = "SI") {
             self.commands = commands
             self.snippets = snippets
             self.skillies = skillies
             self.quicklinks = quicklinks
             self.layouts = layouts
             self.appLinks = appLinks
+            self.shortcuts = shortcuts
             self.intelligence = intelligence
         }
     }
@@ -422,12 +429,16 @@ public enum FeatureCatalog {
     }
 
     /// The linked apps' commands, each its launcher row's id
-    /// ("system:link:cleanshot.capture-area").
+    /// ("system:link:cleanshot.capture-area"), then the user's shortcuts
+    /// ("system:shortcut:<identifier>").
     private static func apps(_ input: Input) -> [CatalogEntry] {
         input.appLinks.map { command in
             let app = command.app?.name ?? ""
             return CatalogEntry(id: appLinkEntryID(command.id), title: command.title, oneLine: "\(command.oneLine), in \(app)", group: .apps,
                                 symbol: command.symbol, run: .appLink(command.id), keywords: command.keywords + [app])
+        } + input.shortcuts.map { shortcut in
+            CatalogEntry(id: shortcutEntryID(shortcut.id), title: shortcut.name, oneLine: shortcutLine, group: .apps,
+                         symbol: shortcutSymbol, run: .shortcut(shortcut.id), keywords: AppleShortcut.keywords)
         }
     }
 
@@ -435,6 +446,16 @@ public enum FeatureCatalog {
     public static func appLinkEntryID(_ command: String) -> String {
         "system:link:\(command)"
     }
+
+    /// The Catalog entry, and launcher row, of one of the user's shortcuts.
+    public static func shortcutEntryID(_ identifier: String) -> String {
+        "system:shortcut:\(identifier)"
+    }
+
+    /// A shortcut's line: Shortcuts gives no description of its own.
+    public static let shortcutLine = "Your shortcut, run by Apple's Shortcuts"
+    /// Shortcuts' own glyph, where its icon is not drawn.
+    public static let shortcutSymbol = "square.2.layers.3d"
 
     private static func yours(_ input: Input) -> [CatalogEntry] {
         let skillies = input.skillies.isEmpty

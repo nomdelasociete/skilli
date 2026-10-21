@@ -112,8 +112,9 @@ Default keys:
 
 Settings: Hyper Key · Advanced: Tap Caps Lock alone to send Escape ·
 Shortcuts (every one, recorded by pressing the keys) · Add Shortcut
-(apps, URLs, CleanShot, System Settings panes, sound devices, layouts,
-skillies, projects).
+(apps, URLs, CleanShot, Shortcuts, System Settings panes, sound devices,
+layouts, skillies, projects, every launcher command, snippets,
+quicklinks).
 
 <!-- pane: privacy -->
 ## Privacy
@@ -190,6 +191,19 @@ The search panel you open from anywhere. ✦Space.
   Ask finds one by meaning instead.
 - **System Settings Panes**: "displays", "night shift", "bluetooth"…
   opens that pane.
+- **Shortcuts**: every shortcut in your Shortcuts library is a
+  row by its name, with Shortcuts' icon, under "In Your Apps" in the
+  Catalog; through them, whatever an app lets Shortcuts do. ↩ runs it;
+  what it gives back shows in the card (a line for a moment, more for
+  longer; the first time, Shortcuts asks before handing it over);
+  nothing given back, nothing said. ⌘K: Run with the Selection
+  (the text selected where the launcher opened is its input), Edit in
+  Shortcuts. Each one takes an alias, a key (Keys → Add Shortcut →
+  Shortcuts, as it is or with the selection), a link (asked first: a
+  shortcut can do anything), Ask ("lance mon raccourci du matin"),
+  agents and skillies (its link, or `$SKILLI_CLI call run_shortcut` with
+  an input or the selection). A shortcut made, renamed or deleted shows the next time the
+  launcher opens.
 - **Links**: `skilli://run/…` runs any Catalog row from any app (⌘K →
   Copy Link); what takes the Mac away asks first, and Always ⌘↩ in that
   card lets links run that entry at once (Settings → Catalog → Trusted
@@ -231,7 +245,7 @@ Text you type often, from a keyword or the launcher.
 
 - **Snippets**: saves a text once (with `{date}`, `{clipboard}`,
   `{cursor}`…); its keyword types it anywhere, at once or after a space
-  or ↩. Never in password fields.
+  or ↩, and so does a shortcut of its own. Never in password fields.
 - **Search Snippets** (`snip`): by name, or by what you need with ⇥
   ("my iban"). ↩ types it, ⌘↩ copies it.
 - **New Snippet** in the launcher: this pane, its editor open on a new
@@ -492,7 +506,7 @@ What commands and agents may do on your Mac.
 
 - **skil.li's tools** for agents (Claude Code, Codex, any MCP client):
   the selection, clipboard, apps, menus, windows, files, calendar,
-  reminders, contacts, the screen's controls… through skil.li's MCP
+  reminders, contacts, your shortcuts, the screen's controls… through skil.li's MCP
   server.
 - **Rights** per tool: Default, Always Ask, Always Allow, Block; Set
   Rights With Claude Code / Codex….
@@ -534,10 +548,16 @@ TypeSafe Jev key.
 Everything skil.li can do, and how you reach each one.
 
 - **What skil.li Can Do** (`?` in the launcher): every entry by group,
-  with its prefix, alias and shortcut; ↩ runs it.
+  with its prefix, alias and shortcut; ↩ runs it. Every launcher command
+  and Mac command takes a shortcut, and so do your snippets, quicklinks,
+  layouts, commands and the skillies that need no argument (⌘K → Set
+  Shortcut…, or the entry's popover here): Search Snippets opens
+  straight in your snippets. What only types the start of words (Timer)
+  or opens where the first of something is made takes none.
 - **Aliases**: your own short names for any result.
 - **Quicklinks**: search a site from the launcher (`g skilli`, `yt lofi`);
-  the selection is the query when none is typed; Add from Library….
+  the selection is the query when none is typed; a shortcut of its own
+  opens the launcher with its keyword typed; Add from Library….
   **New Quicklink** in the launcher opens its editor on a new one.
 - **From other apps**: every entry's `skilli://` link (⌘K → Copy Link)
   for Shortcuts, a Stream Deck or a page. What could change your Mac

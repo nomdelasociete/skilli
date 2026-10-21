@@ -264,7 +264,7 @@ struct CatalogPane: View {
 
             // The lists, last, while nothing is searched.
             if whole, !searching {
-                QuicklinksSection(preferences: preferences, store: context.quicklinks, deletes: context.deletes, onChange: reload)
+                QuicklinksSection(preferences: preferences, store: context.quicklinks, deletes: context.deletes, shortcuts: context.shortcuts, onChange: reload)
                 otherAliases
                 trustedLinks
             }
