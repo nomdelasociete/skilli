@@ -1916,8 +1916,10 @@ final class SelfTest {
     /// scratch PNG selected, Pin Selected Image from the launcher's row
     /// pins it; an MP4 selected, Pin says what it opens and Add Selected
     /// File to Quick Access adds it. Read through Finder's scripting, which
-    /// macOS asks for once: not allowed yet for this build, skipped rather
-    /// than left waiting on its question. Dry run.
+    /// macOS asks for once: not allowed yet for this build, Finder's answer
+    /// is stood in for (the file the test selected) rather than left
+    /// waiting on macOS's question; Finder in front, the row and the link
+    /// are real either way. Dry run.
     private func cleanShotOpensFinderSelection(png: URL, mp4: URL, commands: SystemCommands) async {
         let name = "Files into CleanShot X from Finder: Pin Selected Image from the launcher over Finder pins the file selected; an MP4 selected is refused for Pin and added to Quick Access"
         guard let pin = LinkedApp.command(id: "cleanshot.pin-selected-image"), let quickAccess = LinkedApp.command(id: "cleanshot.quick-access") else {
@@ -1926,17 +1928,22 @@ final class SelfTest {
         }
         let finder = AutomationAccess.targets.filter { $0.bundleID == FinderSelection.bundleID }
         let automation = await AutomationAccess.states(of: finder)[FinderSelection.bundleID]
-        guard automation != .notAsked, automation != .denied else {
-            checks.append(Check(name: name, passed: true, skipped: true,
-                                detail: "Automation → Finder is \(automation == .denied ? "refused" : "not asked yet") for this build: the Finder selection was not read",
-                                latencyMs: nil))
-            return
-        }
-        let saved = commands.openAppLink
+        let asksFinder = automation != .notAsked && automation != .denied
+        /// What the test selected last, for the stand-in.
+        final class Selected { var url: URL? }
+        let selected = Selected()
+        let saved = (link: commands.openAppLink, selection: commands.finderSelection)
         commands.openAppLink = { _ in }
-        defer { commands.openAppLink = saved }
+        if !asksFinder {
+            commands.finderSelection = { try FinderSelection.file(selected: { selected.url.map { [$0] } ?? [] }) }
+        }
+        defer {
+            commands.openAppLink = saved.link
+            commands.finderSelection = saved.selection
+        }
         let launcher = context.launcher
         func selectInFinder(_ url: URL) async -> Bool {
+            selected.url = url
             NSWorkspace.shared.activateFileViewerSelecting([url])
             let front = await waitUntil(timeout: 3) { NSWorkspace.shared.frontmostApplication?.bundleIdentifier == FinderSelection.bundleID } != nil
             // Finder selects it once its window is drawn.
@@ -1977,7 +1984,7 @@ final class SelfTest {
         closeFinderWindow(named: png.deletingLastPathComponent().lastPathComponent)
         _ = await focusTestWindow()
         record(name, fromRow && refused.contains(CleanShot.images.said) && quick,
-               "Pin Selected Image from the launcher over Finder: \(rowDetail); an MP4 to Pin: “\(refused)”; to Quick Access: \(quick) (dry run)", nil)
+               "Pin Selected Image from the launcher over Finder: \(rowDetail); an MP4 to Pin: “\(refused)”; to Quick Access: \(quick); Finder's selection \(asksFinder ? "read from Finder" : "stood in for: Automation → Finder is \(automation == .denied ? "refused" : "not asked yet") for this build") (dry run)", nil)
     }
 
     /// `link` is CleanShot's `host` on `file` (as `filepath`), whichever

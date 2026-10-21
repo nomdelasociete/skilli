@@ -3395,8 +3395,9 @@ re-investigating.
   opened. `SystemCommands.openAppLink` is the self-test's dry run;
   `remote apps` (✦K C, "capture front", ⌘K, the frame; ⌘K on scratch
   files by type, a clipboard image pinned by keys, `run_action file=`,
-  the Finder selection pinned from its row over Finder, skipped while
-  Automation → Finder is not allowed for the build) captures nothing.
+  the Finder selection pinned from its row over Finder; Finder's own
+  answer stood in for while Automation → Finder is not allowed for the
+  build, `SystemCommands.finderSelection`) captures nothing.
 - Apple's Shortcuts (docs/apps.md, Next apps 1; `AppleShortcut` in
   SkilliCore, `AppleShortcuts`): every shortcut in the user's library is a
   `MacAction.shortcut(shortcut, withSelection:)` (raw value

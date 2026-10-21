@@ -32,6 +32,9 @@ final class SystemCommands {
     var openAppLink: @MainActor (URL) -> Void = { NSWorkspace.shared.open($0) }
     /// The last linked app's link opened, for the self-test.
     var lastAppLink: URL?
+    /// The file selected in Finder (Pin Selected Image): the self-test
+    /// stands in for Finder's answer where it may not be asked.
+    var finderSelection: @MainActor () throws -> URL = { try FinderSelection.file() }
     /// The variant a linked app's command runs when none is said (Settings
     /// → Apps: Capture Text's line breaks).
     var appLinkDefault: @MainActor (AppLinkCommand) -> AppLinkCommand.Variant? = { _ in nil }
@@ -125,7 +128,7 @@ final class SystemCommands {
     private func openLink(_ command: AppLinkCommand, variant: AppLinkCommand.Variant?, file: URL?) throws {
         let url = try LinkedApps.url(for: command, variant: variant, file: file, frontWindow: { try windows.frontWindowFrame() },
                                      latestScreenshot: { ImageFolderWatcher.latestScreenshot(in: screenshotFolders()) },
-                                     finderSelection: { try FinderSelection.file() })
+                                     finderSelection: finderSelection)
         lastAppLink = url
         Log.trace("App link \(command.id)\(variant.map { "/\($0.id)" } ?? "")\(file == nil ? "" : " on a file")")
         openAppLink(url)

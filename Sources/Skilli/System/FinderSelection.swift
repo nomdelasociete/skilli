@@ -9,8 +9,10 @@ import SkilliCore
 enum FinderSelection {
     static let bundleID = "com.apple.finder"
 
-    /// The one file selected; throws what to do instead.
-    static func file() throws -> URL {
+    /// The one file selected; throws what to do instead. `selected`:
+    /// Finder's answer (the self-test's stand-in where macOS has not let
+    /// skil.li ask Finder yet).
+    static func file(selected: @MainActor () throws -> [URL] = readSelection) throws -> URL {
         guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleID else {
             throw SystemCommands.Failure(message: "Finder is not in front: select the file there first.")
         }
@@ -23,7 +25,7 @@ enum FinderSelection {
 
     /// Every item selected in Finder's front window (or on the desktop),
     /// in its order.
-    private static func selected() throws -> [URL] {
+    static func readSelection() throws -> [URL] {
         let source = """
             tell application id "\(bundleID)"
                 set found to {}
