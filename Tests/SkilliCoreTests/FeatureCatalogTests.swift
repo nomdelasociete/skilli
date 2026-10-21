@@ -11,6 +11,25 @@ final class FeatureCatalogTests: XCTestCase {
         XCTAssertEqual(Set(LauncherCommand.all.map(\.id)), Set(LauncherCommand.ID.allCases), "every command has its row in the launcher")
     }
 
+    /// Every launcher command takes a shortcut: its id in shortcuts.json
+    /// names it back, no two share one, and the ones saved before every
+    /// command took one keep their ids (✦C is "clipboard.history").
+    func testEveryLauncherCommandTakesAShortcut() {
+        for id in LauncherCommand.ID.allCases {
+            XCTAssertEqual(LauncherCommand.ID(shortcutID: id.shortcutID), id, "\(id)")
+        }
+        XCTAssertEqual(Set(LauncherCommand.ID.allCases.map(\.shortcutID)).count, LauncherCommand.ID.allCases.count, "one id each")
+        XCTAssertEqual(LauncherCommand.ID.searchSnippets.shortcutID, "cmd.searchSnippets")
+        let saved: [LauncherCommand.ID: String] = [.openSettings: "settings.open", .clipboardHistory: "clipboard.history",
+                                                   .pasteInSequence: "clipboard.sequence", .emoji: "emoji.search",
+                                                   .searchGIFs: "gifs.search", .searchMenus: "menus.search"]
+        for (id, shortcutID) in saved {
+            XCTAssertEqual(id.shortcutID, shortcutID, "\(id): shortcuts.json files name it so")
+        }
+        XCTAssertNil(LauncherCommand.ID(shortcutID: "cmd.nothing"))
+        XCTAssertNil(LauncherCommand.ID(shortcutID: "searchSnippets"), "only with its prefix")
+    }
+
     func testEveryMacCommandAndWindowPlaceIsThereOnce() {
         for command in SystemCommand.allCases {
             XCTAssertEqual(entries.filter { $0.run == .system(command) }.count, 1, "\(command)")

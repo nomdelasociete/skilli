@@ -30,6 +30,11 @@ final class ActionRunner {
     var onWindowLayout: ((String) -> Void)?
     /// Pastes the next older copy of the clipboard history.
     var onPasteInSequence: (() -> Void)?
+    /// A launcher command that opens no mode: what its row does
+    /// (`AppDelegate.run`).
+    var onCommand: ((LauncherCommand.ID) -> Void)?
+    /// Types a snippet in the app in front.
+    var onSnippet: ((Snippet) -> Void)?
 
     func perform(_ action: SkilliAction, triggeredAt: ContinuousClock.Instant) {
         switch action {
@@ -63,7 +68,26 @@ final class ActionRunner {
             onMac?(action)
         case .windowLayout(let id):
             onWindowLayout?(id)
+        case .launcherCommand(let id):
+            if let mode = LauncherController.mode(for: id) {
+                launcher.toggle(into: mode, triggeredAt: triggeredAt)
+            } else {
+                onCommand?(id)
+            }
+        case .snippet(let id):
+            guard let snippet = launcher.snippets?().first(where: { $0.id == id }) else { return gone(action, "The snippet “\(id)”") }
+            onSnippet?(snippet)
+        case .quicklink(let id):
+            guard let link = launcher.quicklinks?().first(where: { $0.id == id }) else { return gone(action, "This shortcut's quicklink") }
+            launcher.toggle(into: link, triggeredAt: triggeredAt)
         }
+    }
+
+    /// A shortcut on a snippet or quicklink deleted since (by hand in its
+    /// file): it says so, and where to change it.
+    private func gone(_ action: SkilliAction, _ what: String) {
+        Log.actions.notice("Shortcut on something deleted: \(action.id, privacy: .public)")
+        ai.notify("\(what) is no longer in skil.li: change the shortcut in Settings → Keys.", caller: "skil.li", run: nil)
     }
 
     private func transformSelection(_ transform: TextTransform, triggeredAt: ContinuousClock.Instant) async {
