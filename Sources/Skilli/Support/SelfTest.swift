@@ -543,6 +543,7 @@ final class SelfTest {
             guard await focusTestWindow() else { return finish() }
             await cleanShotRouting()
             if !aborted { await cleanShotFromLauncher() }
+            if !aborted { await cleanShotFromSkillies() }
             return finish()
         }
 
@@ -1250,6 +1251,50 @@ final class SelfTest {
         record(name, passed,
                "⌘K: \(actions.joined(separator: ", ")); opened \(link?.absoluteString ?? "nothing"), expected the frame \(expected.map { "\($0.name)=\($0.value)" }.joined(separator: "&")) (dry run)",
                ran?.milliseconds)
+    }
+
+    /// A skillie reaches CleanShot X as agents do (skillies/README.md):
+    /// `Skilli call run_action` with a variant opens its link
+    /// (`action=copy`); a variant it does not take is said with the ones
+    /// it takes; upload asks in the card even with run_action allowed for
+    /// good, and esc opens nothing. Dry run: nothing captured.
+    private func cleanShotFromSkillies() async {
+        let name = "CleanShot X from a skillie: `Skilli call run_action variant=copy` opens capture-area?action=copy; a wrong variant lists the right ones; upload asks every time"
+        guard let commands = context.aiActions.systemCommands else {
+            record(name, false, "no SystemCommands", nil)
+            return
+        }
+        guard LinkedApps.installed("cleanshot") != nil else {
+            record(name, true, "CleanShot X is not installed here: nothing to call", nil)
+            return
+        }
+        let popover = context.aiActions.popover
+        let settings = context.tools.settings
+        let saved = (link: commands.openAppLink, mode: settings.mode, right: settings.override(for: "run_action"))
+        commands.openAppLink = { _ in }
+        commands.lastAppLink = nil
+        settings.mode = .auto
+        settings.setOverride(.always, for: "run_action")
+        defer {
+            commands.openAppLink = saved.link
+            settings.mode = saved.mode
+            settings.setOverride(saved.right, for: "run_action")
+        }
+        guard await focusTestWindow() else { return }
+        let copy = await skilliCall("run_action", #"{"id":"cleanshot.capture-area","variant":"copy"}"#)
+        let opened = await waitUntil(timeout: 2) { commands.lastAppLink?.absoluteString == "cleanshot://capture-area?action=copy" } != nil
+        let wrong = await skilliCall("run_action", #"{"id":"cleanshot.capture-area","variant":"autoscroll"}"#)
+        commands.lastAppLink = nil
+        async let upload = skilliCall("run_action", #"{"id":"cleanshot.capture-area","variant":"upload"}"#)
+        let asked = await waitUntil(timeout: 3) { popover.isVisible && popover.phase == .approving } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let declined = await upload
+        await pause(300)
+        let passed = copy.status == 0 && opened && wrong.status == 1 && wrong.output.contains("copy, save")
+            && asked && declined.status == 1 && declined.output.contains("declined") && commands.lastAppLink == nil
+        record(name, passed,
+               "copy: exit \(copy.status), opened \(opened); wrong variant: exit \(wrong.status) “\(wrong.output.prefix(80))”; upload asked: \(asked), esc → exit \(declined.status) “\(declined.output.prefix(40))”, link \(commands.lastAppLink?.absoluteString ?? "none")",
+               nil)
     }
 
     // MARK: - Ask's calendar and reminders

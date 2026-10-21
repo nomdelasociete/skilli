@@ -3355,7 +3355,8 @@ re-investigating.
   variants; the old `url:cleanshot://…` ids decode to these,
   `SkilliAction.appLink(url:)`), links (run at once: they open CleanShot,
   seen at once; never trusted), Ask (the command question's options) and
-  agents (`run_action` `cleanshot.<command>`). ⌘K on a row lists its
+  agents and skillies (`run_action` `cleanshot.<command>`, `variant` one of
+  its variants' ids; upload asks every time, whatever the rights). ⌘K on a row lists its
   variants (`action=copy|save|annotate|pin|upload`, `start`/`autoscroll`,
   `linebreaks`, `tab`), gated by CleanShot's version (`since`, 4.7 for
   parameters). skil.li's own: Capture / Record Front Window put the front

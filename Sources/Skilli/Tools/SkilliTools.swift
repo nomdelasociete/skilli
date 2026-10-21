@@ -243,6 +243,13 @@ final class SkilliTools {
         return actions
     }()
 
+    /// What a linked app's command can be told more (run_action's
+    /// `variant`): CleanShot's "copy", "pin", "autoscroll", a settings tab.
+    nonisolated static let actionVariants: [String] = {
+        var seen = Set<String>()
+        return LinkedApp.all.flatMap(\.commands).flatMap(\.variants).map(\.id).filter { seen.insert($0).inserted }
+    }()
+
     nonisolated static let definitions: [ToolDefinition] = [
         ToolDefinition(name: "get_selection", title: "Read the selection",
                        description: "The text the user selected in their app (when the command started). Empty if nothing is selected.",
@@ -287,9 +294,11 @@ final class SkilliTools {
                        parameters: [.init(name: "id", description: "Command id from list_commands."),
                                     .init(name: "text", description: "The text to work on.")]),
         ToolDefinition(name: "run_action", title: "Run a skil.li action",
-                       description: "Runs a skil.li action: CleanShot X's captures (an area, the front window, the screen, scrolling), recordings, text recognition, annotating or pinning the latest screenshot, desktop icons, its history; or changing the case of the selection. For CleanShot with more said (the capture copied, saved, pinned), open_url its own link: cleanshot://capture-area?action=copy.",
+                       description: "Runs a skil.li action: CleanShot X's captures (an area, the front window, the screen, scrolling), recordings, text recognition, annotating or pinning the latest screenshot, desktop icons, its history; or changing the case of the selection. A CleanShot command takes a variant: what happens to a capture (copy, save, annotate, pin, upload: asked first, it leaves the Mac), scrolling's start or autoscroll, text with linebreaks or nolinebreaks, a settings tab.",
                        group: .actions, risk: .changes,
-                       parameters: [.init(name: "id", description: "The action.", options: actions.keys.sorted())]),
+                       parameters: [.init(name: "id", description: "The action.", options: actions.keys.sorted()),
+                                    .init(name: "variant", description: "What the CleanShot command does more; leave out for its plain run.",
+                                          options: actionVariants, isRequired: false)]),
         ToolDefinition(name: "update_app", title: "Update an app",
                        description: "Updates an app the right way: its own “Check for Updates…” menu item, else the App Store's Updates page, else Homebrew (brew upgrade --cask). Without a name: the app in front.",
                        group: .apps, risk: .changes,
@@ -1076,7 +1085,23 @@ final class SkilliTools {
 
         case "run_action":
             let id = try text("id")
-            guard let action = Self.actions[id] else { throw Failure(message: "Unknown action “\(id)”.") }
+            guard var action = Self.actions[id] else { throw Failure(message: "Unknown action “\(id)”.") }
+            if let asked = (arguments["variant"] as? String)?.trimmingCharacters(in: .whitespaces), !asked.isEmpty {
+                guard case .mac(.appLink(let command, nil)) = action else {
+                    throw Failure(message: "“\(id)” takes no variant.")
+                }
+                guard let variant = command.variant(id: asked) else {
+                    let known = command.variants.map(\.id).joined(separator: ", ")
+                    throw Failure(message: known.isEmpty ? "“\(id)” takes no variant." : "“\(id)” has no variant “\(asked)”: \(known).")
+                }
+                // The capture leaves the Mac: asked every time, whatever the rights.
+                if variant.id == "upload" {
+                    let approval = await confirm?("Upload the capture to CleanShot Cloud?", "CleanShot X sends it to its cloud and copies its link.",
+                                                  "Upload", name, run, false) ?? .deny
+                    guard approval != .deny else { throw Failure(message: "Not uploaded: the user declined.") }
+                }
+                action = .mac(.appLink(command, variant: variant.id))
+            }
             performAction?(action)
             return "Done."
 

@@ -63,6 +63,29 @@ fi
 `SKILLI_SOCKET` and `SKILLI_SKILLIE` are read by `$SKILLI_CLI` itself:
 nothing to do with them. Details: [`docs/do-it-here-from-anywhere.md`](../docs/do-it-here-from-anywhere.md).
 
+## Use skil.li's other features
+
+Everything the launcher runs, a skillie runs too, two ways:
+
+- **Wait for it**: `"$SKILLI_CLI" call <tool> name=value…`, any of the tools
+  agents get (the same exits as above). CleanShot X's commands are
+  `run_action`, with what happens to the capture as `variant`:
+
+  ```bash
+  "$SKILLI_CLI" call run_action id=cleanshot.capture-front-window variant=copy
+  "$SKILLI_CLI" call run_action id=cleanshot.scrolling-capture variant=autoscroll
+  "$SKILLI_CLI" call run_action id=cleanshot.capture-text variant=nolinebreaks
+  ```
+
+  `variant` takes `copy`, `save`, `annotate`, `pin` or `upload` on a capture
+  (upload asks every time: the capture leaves the Mac), `start` or
+  `autoscroll` on Scrolling Capture, `linebreaks` or `nolinebreaks` on
+  Capture Text, a tab on CleanShot Settings. A wrong one is said, with the
+  ones it takes.
+- **Fire and forget**: `open "skilli://run/<entry>"`, the link ⌘K → Copy Link
+  gives on any row (`skilli://run/system:link:cleanshot.capture-area`). What
+  could change the Mac asks first, as for any link.
+
 ## Install
 
 Download a script from the collection, inspect it, and put it in your local

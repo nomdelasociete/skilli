@@ -200,7 +200,7 @@ The search panel you open from anywhere. ✦Space.
   start at once, auto-scroll; on Capture Text: with or without line breaks;
   on CleanShot Settings: each tab. Each one, variants too, takes a shortcut
   (Keys → Add Shortcut → CleanShot X), a link, Ask ("fais une capture de
-  la fenêtre") and agents. CleanShot runs them once its API is allowed
+  la fenêtre"), agents and skillies (`run_action` with its variant). CleanShot runs them once its API is allowed
   (CleanShot → Settings → Advanced).
 - **Links**: `skilli://run/…` runs any Catalog row from any app (⌘K →
   Copy Link); what takes the Mac away asks first, and Always ⌘↩ in that
