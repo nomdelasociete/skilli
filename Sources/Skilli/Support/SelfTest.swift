@@ -1259,7 +1259,7 @@ final class SelfTest {
     /// it takes; upload asks in the card even with run_action allowed for
     /// good, and esc opens nothing. Dry run: nothing captured.
     private func cleanShotFromSkillies() async {
-        let name = "CleanShot X from a skillie: `Skilli call run_action variant=copy` opens capture-area?action=copy; a wrong variant lists the right ones and opens nothing; upload asks every time, through run_action or open_url"
+        let name = "CleanShot X from a skillie: `Skilli call run_action variant=copy` opens capture-area?action=copy; a wrong variant lists the right ones and opens nothing; upload asks every time, through run_action or open_url, even right after run_action was allowed in the card"
         guard let commands = context.aiActions.systemCommands else {
             record(name, false, "no SystemCommands", nil)
             return
@@ -1304,11 +1304,26 @@ final class SelfTest {
         let askedURL = await waitUntil(timeout: 3) { popover.isVisible && popover.phase == .approving } != nil
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         let declinedURL = await viaURL
+        // run_action asked in the card and allowed there: the upload still
+        // asks on its own (that Allow does not answer for it).
+        settings.setOverride(nil, for: "run_action")
+        commands.lastAppLink = nil
+        _ = await waitUntil(timeout: 2) { !popover.isVisible }
+        async let afterAllow = skilliCall("run_action", #"{"id":"cleanshot.capture-area","variant":"upload"}"#)
+        let toolAsked = await waitUntil(timeout: 3) { popover.isVisible && popover.phase == .approving } != nil
+        let toolTitle = popover.shownTitle
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        _ = await waitUntil(timeout: 2) { !popover.isVisible || popover.shownTitle != toolTitle }
+        let uploadAsked = await waitUntil(timeout: 3) { popover.isVisible && popover.phase == .approving } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let declinedAfterAllow = await afterAllow
+        await pause(300)
         let passed = copy.status == 0 && opened && wrong.status == 1 && wrong.output.contains("copy, save") && wrongOpenedNothing
             && asked && declined.status == 1 && declined.output.contains("declined") && uploadOpenedNothing
             && askedURL && declinedURL.status == 1 && openedURLs.isEmpty
+            && toolAsked && uploadAsked && declinedAfterAllow.status == 1 && commands.lastAppLink == nil
         record(name, passed,
-               "copy: exit \(copy.status), opened \(opened); wrong variant: exit \(wrong.status) “\(wrong.output.prefix(80))”, opened nothing: \(wrongOpenedNothing); upload asked: \(asked), esc → exit \(declined.status) “\(declined.output.prefix(40))”, opened nothing: \(uploadOpenedNothing); open_url upload asked: \(askedURL), esc → exit \(declinedURL.status), opened \(openedURLs.count)",
+               "copy: exit \(copy.status), opened \(opened); wrong variant: exit \(wrong.status) “\(wrong.output.prefix(80))”, opened nothing: \(wrongOpenedNothing); upload asked: \(asked), esc → exit \(declined.status) “\(declined.output.prefix(40))”, opened nothing: \(uploadOpenedNothing); open_url upload asked: \(askedURL), esc → exit \(declinedURL.status), opened \(openedURLs.count); run_action allowed in the card (\(toolAsked)), upload still asked: \(uploadAsked), esc → exit \(declinedAfterAllow.status), link \(commands.lastAppLink?.absoluteString ?? "none")",
                nil)
     }
 

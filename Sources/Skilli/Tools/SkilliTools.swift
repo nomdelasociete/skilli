@@ -1108,10 +1108,12 @@ final class SkilliTools {
 
     /// A capture sent to CleanShot Cloud leaves the Mac: asked in the card
     /// every time, whatever the tool's rights (`run_action`'s upload,
-    /// `open_url` with `action=upload`).
+    /// `open_url` with `action=upload`). Asked under its own name
+    /// ("run_action.upload"): the tool just allowed in the card
+    /// (`MCPService.justAllowed`) never answers for it.
     private func askUpload(_ tool: String, _ run: AgentContext?) async throws {
         let approval = await confirm?("Upload the capture to CleanShot Cloud?", "CleanShot X sends it to its cloud and copies its link.",
-                                      "Upload", tool, run, false) ?? .deny
+                                      "Upload", "\(tool).upload", run, false) ?? .deny
         guard approval != .deny else { throw Failure(message: "Not uploaded: the user declined.") }
     }
 
