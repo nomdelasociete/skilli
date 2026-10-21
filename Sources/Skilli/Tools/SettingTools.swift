@@ -508,6 +508,8 @@ final class SettingTools {
             return Plan(summary: "\(pane): Quicklinks − \(Self.describe(link))",
                         said: "\(pane): Quicklinks − \(Self.describe(link, withAddress: false))") { [weak self] in
                 self?.quicklinks.delete(link.id)
+                // Its shortcuts with it, as Settings deletes them.
+                self?.shortcuts.removeEntries(for: .quicklink(link.id))
                 Self.notify("quicklinks")
                 return "Done: the quicklink \(link.name) is gone."
             }
@@ -648,6 +650,7 @@ final class SettingTools {
             snippet = try self.snippet(named: try Self.text("name", in: arguments))
             return Plan(summary: "\(pane) − \(Self.describe(snippet))", said: "\(pane) − \(Self.describe(snippet, withText: false))") { [weak self] in
                 self?.snippets.delete(snippet.id)
+                self?.shortcuts.removeEntries(for: .snippet(snippet.id))
                 Self.notify("snippets")
                 return "Done: the snippet \(snippet.name) is gone."
             }
@@ -704,7 +707,11 @@ final class SettingTools {
     /// The action `text` names: its id, its name, or an app's name.
     private func action(_ text: String) throws -> SkilliAction {
         let actions = shortcutActions()
-        if let action = SkilliAction(id: text.trimmingCharacters(in: .whitespaces)), actions.contains(where: { $0.action == action }) { return action }
+        if let action = SkilliAction(id: text.trimmingCharacters(in: .whitespaces)) {
+            if actions.contains(where: { $0.action == action }) { return action }
+            // An app by its id ("app:/…"), as a name both an app and a command say.
+            if case .openApp(let path) = action, FileManager.default.fileExists(atPath: path) { return action }
+        }
         let wanted = Self.folded(text)
         // "SI · Fix" is also "Fix"; "Window Layout · Coding" also "Coding".
         func plain(_ title: String) -> String {
@@ -712,6 +719,10 @@ final class SettingTools {
         }
         var exact = actions.filter { Self.folded($0.title) == wanted }
         if exact.isEmpty { exact = actions.filter { plain($0.title) == wanted } }
+        // "Calendar" is skil.li's command and the app: neither is guessed.
+        if exact.count == 1, let app = findApp(text), Self.folded(app.deletingPathExtension().lastPathComponent) == wanted {
+            throw Failure("Two are named “\(text)”: \(exact[0].title) (\(exact[0].action.id)) and the app (\(SkilliAction.openApp(app.path).id)). Pass its id.")
+        }
         if exact.count == 1 { return exact[0].action }
         if exact.isEmpty, let app = findApp(text) { return .openApp(app.path) }
         if exact.count > 1 {
