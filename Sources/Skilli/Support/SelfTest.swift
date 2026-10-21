@@ -20030,7 +20030,11 @@ final class SelfTest {
         // Accessibility makes an app frontmost only once it has finished
         // launching (kAXErrorCannotComplete before): a TextEdit started
         // just now stayed behind.
-        _ = await waitUntil(timeout: 5) { textEdit.isFinishedLaunching }
+        guard await waitUntil(timeout: 5, { textEdit.isFinishedLaunching }) != nil else {
+            record(name, false, "TextEdit never finished launching", nil)
+            await cleanUp(bundleID: bundleID, wasRunning: wasRunning)
+            return
+        }
         let permissions = PermissionCenter()
         permissions.frozenStates = [.accessibility: .granted, .microphone: .notAsked, .reminders: .notAsked, .contacts: .notAsked]
         let setup = SetupWindowController(permissions: permissions, ai: context.ai, preferences: context.preferences)
@@ -20085,7 +20089,11 @@ final class SelfTest {
         // Accessibility makes an app frontmost only once it has finished
         // launching (kAXErrorCannotComplete before): a TextEdit started
         // just now stayed behind, and the check failed before Settings opened.
-        _ = await waitUntil(timeout: 5) { textEdit.isFinishedLaunching }
+        guard await waitUntil(timeout: 5, { textEdit.isFinishedLaunching }) != nil else {
+            record("Settings come to front over another app", false, "TextEdit never finished launching", nil)
+            await cleanUp(bundleID: bundleID, wasRunning: wasRunning)
+            return
+        }
 
         func bringTextEditForward() async -> Bool {
             Self.makeFrontmost(pid: textEditPID)
