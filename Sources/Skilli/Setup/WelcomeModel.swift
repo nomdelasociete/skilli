@@ -52,7 +52,7 @@ final class WelcomeModel {
     /// [["✦", "K"], ["G"]]); the defaults on a first launch.
     var keys: (SkilliAction) -> [[String]] = { _ in [] }
 
-    /// The ways the welcome offers to open skil.li, recommended first (JB,
+    /// The ways the welcome offers to open skil.li, recommended first (asked
     /// 2026-10-19: "recommend ⌘Space, then Hyper Key Space or custom"):
     /// Spotlight's key, whose own shortcut skil.li then turns off
     /// (`SpotlightKey`), and the Hyper Key's; the person's own keys after.

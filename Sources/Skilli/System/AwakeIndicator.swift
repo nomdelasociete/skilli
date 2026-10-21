@@ -65,7 +65,7 @@ final class AwakeIndicator: NSObject {
         allowSleep?()
     }
 
-    /// A full cup (JB 2026-10-16: "the cup should be filled, not empty"):
+    /// A full cup (2026-10-16: "the cup should be filled, not empty"):
     /// the symbol's cup and saucer with the opening of the cup, its
     /// largest closed gap, filled; the handle and the saucer's line kept.
     /// Drawn for 1× and 2× screens.

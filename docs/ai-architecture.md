@@ -20,7 +20,7 @@ capability skil.li has (selection, apps, menus, CleanShot, shortcuts…) is a
 CLI and an MCP server. Prompts are plain files the user owns. Smart by default,
 open by design.
 
-## What we measured on JB's Mac
+## What we measured on the developer's Mac
 
 One-sentence French spelling fix, output only. Details, ranges and how to
 re-measure (`script/ai_bench.py`): [ai-engines.md](ai-engines.md).
@@ -271,13 +271,13 @@ Taken (2026-10-11):
   [ai-engines.md](ai-engines.md)).
 - Grok on SuperGrok is not used for Write (always reasons, 4–14 s);
   `grok-4.7-build-fast` is excluded (code model, expensive).
-- Apple Foundation Models are not counted on (Apple Intelligence off on JB's
-  Mac).
+- Apple Foundation Models are not counted on (Apple Intelligence off on the
+  developer's Mac).
 
 Open:
 
 - Phase order after phase 1 (proposal: 2 → 3 → 4).
-- Decide engine: Ollama ≥ 0.35 for local Jev (global install — JB's call) or a
+- Decide engine: Ollama ≥ 0.35 for local Jev (global install — the maintainer's call) or a
   TypeSafe API key for hosted Jev. Needed for phase 3 only.
 - Fill OpenAI's Sign in with ChatGPT interest form before skil.li ships with
   ChatGPT.

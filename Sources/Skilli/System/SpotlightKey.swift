@@ -3,7 +3,7 @@ import SkilliCore
 
 /// Spotlight's ⌘Space in macOS's own shortcuts (System Settings → Keyboard
 /// → Keyboard Shortcuts… → Spotlight), turned off when the launcher takes
-/// ⌘Space, as Raycast does (JB, 2026-10-19: "that is exactly what I asked"),
+/// ⌘Space, as Raycast does (2026-10-19: "that is exactly what I asked"),
 /// and turned back on once the launcher leaves it, only when skil.li was the
 /// one that turned it off. The one macOS setting skil.li changes.
 @MainActor

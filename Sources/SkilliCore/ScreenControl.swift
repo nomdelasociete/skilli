@@ -386,7 +386,7 @@ public enum ScreenControl {
 
 /// A plan the writer made for "do it here" (one click or key a line) and
 /// how far it got. A line is done only by a step that did what it says
-/// (`ScreenControl.follows`): in JB's Chess run of 2026-10-18 a click on
+/// (`ScreenControl.follows`): in a real Chess run of 2026-10-18 a click on
 /// “pion blanc, b2” counted for "Click the button “b5”", every line looked
 /// done and the run said done with no move played.
 public struct PlanProgress: Equatable, Sendable {

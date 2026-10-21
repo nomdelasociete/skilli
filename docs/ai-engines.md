@@ -1,7 +1,7 @@
 # AI engines — measured, and how to drive them
 
 Lab notes behind [ai-architecture.md](ai-architecture.md): what each engine
-costs in time, tokens and memory on JB's Mac, the exact command lines and
+costs in time, tokens and memory on the developer's Mac, the exact command lines and
 protocols, and the traps found on the way. Read this before touching an engine;
 re-measure with `script/ai_bench.py` instead of redoing the investigation.
 
@@ -56,7 +56,7 @@ What the numbers say:
 - **Grok's latency is server-side thinking.** A spare does not help; it only
   removes the 3.3 s CLI start.
 
-## The spare-process pattern (validated by JB)
+## The spare-process pattern (validated)
 
 - Keep **one spare per engine and model** the user enabled: spawned and
   prepared, nothing sent.
@@ -93,7 +93,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
 | `--include-partial-messages` | `stream_event` lines with `text_delta`s, for streaming into place |
 | `--no-session-persistence` | Otherwise every request is saved in `~/.claude/projects/<cwd>/` and shows up in the user's `claude --resume` |
 | `--tools ""`, `--strict-mcp-config`, `--disable-slash-commands` | No tool schemas, no MCP servers, no skills in the context |
-| `--setting-sources ""` | Skips the user's settings, hooks and `CLAUDE.md`. Without it the user's own instructions leak into answers (JB's global `CLAUDE.md` made the "corrected text" start with a `## Lang` section) |
+| `--setting-sources ""` | Skips the user's settings, hooks and `CLAUDE.md`. Without it the user's own instructions leak into answers (a user's global `CLAUDE.md` made the "corrected text" start with a `## Lang` section) |
 | `--system-prompt` | Replaces Claude Code's ~50k-token system prompt |
 | not `--bare` | `--bare` skips subscription auth: "Not logged in" |
 
@@ -175,7 +175,7 @@ codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignor
   features are always passed that way.
 - Models: `codex debug models` (~0.5 s) prints the plan's catalog: `slug`,
   `visibility` (`list` / `hide`), `supported_reasoning_levels` (low to
-  ultra; luna to max), `supported_in_api`. On JB's plan: gpt-6.1-sol,
+  ultra; luna to max), `supported_in_api`. On the plan tested: gpt-6.1-sol,
   gpt-6-astra, gpt-6-sol, gpt-6-luna, gpt-5.6-sol, gpt-5.6-terra,
   gpt-5.6-luna (listed). Measured answering: gpt-6-luna at low, medium and
   high; gpt-6.1-sol and gpt-6-astra at low and medium.
@@ -208,7 +208,7 @@ request is answered by Anthropic's recommended model on the same stream.
 
 ## ChatGPT — `codex app-server` on the ChatGPT plan
 
-Models on JB's plan (`model/list`): `gpt-6.1-sol` (default), `gpt-6-astra`,
+Models on the plan tested (`model/list`): `gpt-6.1-sol` (default), `gpt-6-astra`,
 `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, plus
 hidden ones. **There is no nano anymore**: OpenAI lists `gpt-6-luna` as the
 replacement for `gpt-5.4-nano` (API deprecations page, 2026-10-01). Effort
@@ -251,7 +251,7 @@ before shipping).
 
 ## Grok — `grok` CLI on the SuperGrok plan
 
-Models on JB's plan (`grok models`): `grok-4.7` (default), `grok-4.7-build-fast`,
+Models on the plan tested (`grok models`): `grok-4.7` (default), `grok-4.7-build-fast`,
 `grok-4.6`, `grok-4.5`. `grok-4.7-build-fast` is built for code and expensive:
 excluded. `grok-4.3` is refused ("unknown model id"). Effort starts at `low`
 (`none` refused), and every model thinks before answering
@@ -279,7 +279,7 @@ Not measured.
 
 ## Apple Foundation Models
 
-`modelNotReady` on JB's Mac: Apple Intelligence is off. Treat as a bonus tier
+`modelNotReady` on the developer's Mac: Apple Intelligence is off. Treat as a bonus tier
 that lights up when available; never a dependency.
 
 ## Benchmarking traps

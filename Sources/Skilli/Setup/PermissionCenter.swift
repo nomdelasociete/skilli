@@ -126,7 +126,7 @@ enum Permission: String, CaseIterable, Identifiable, Sendable {
     var isRequired: Bool { self == .accessibility }
 
     /// In the first-launch setup window, with the user's SI: only
-    /// Accessibility (D7, JB 2026-10-17). Every other permission is asked
+    /// Accessibility (D7, 2026-10-17). Every other permission is asked
     /// where its feature first needs it (`askedFrom`).
     var showsInSetup: Bool { self == .accessibility }
 

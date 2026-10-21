@@ -88,7 +88,7 @@ public enum AudioRoute {
     }
 
     /// The device a few words point to: its name first ("airpods" →
-    /// "AirPods Pro de JB"), else its kind ("haut-parleurs" → built-in,
+    /// "AirPods Pro de Camille"), else its kind ("haut-parleurs" → built-in,
     /// "écran" → HDMI). Nil when nothing fits, or several equally.
     public static func match(_ text: String, among devices: [(name: String, transport: Transport)], output: Bool) -> Int? {
         let words = significantWords(text)

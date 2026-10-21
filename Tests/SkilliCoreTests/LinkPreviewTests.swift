@@ -106,8 +106,8 @@ final class LinkPreviewTests: XCTestCase {
     func testOnlyHTTPLinksWithoutSignInsAreFetched() {
         XCTAssertTrue(LinkPreviews.isFetchable(URL(string: "https://skil.li")!))
         XCTAssertTrue(LinkPreviews.isFetchable(URL(string: "http://127.0.0.1:8080/page")!))
-        XCTAssertFalse(LinkPreviews.isFetchable(URL(string: "https://jb:secret@example.com")!), "a password would be sent")
-        XCTAssertFalse(LinkPreviews.isFetchable(URL(string: "https://jb@example.com")!))
+        XCTAssertFalse(LinkPreviews.isFetchable(URL(string: "https://me:secret@example.com")!), "a password would be sent")
+        XCTAssertFalse(LinkPreviews.isFetchable(URL(string: "https://camille@example.com")!))
         XCTAssertFalse(LinkPreviews.isFetchable(URL(string: "file:///etc/hosts")!))
         XCTAssertFalse(LinkPreviews.isFetchable(URL(string: "skilli://run/cmd:emoji")!))
         XCTAssertFalse(LinkPreviews.isFetchable(URL(string: "javascript:alert(1)")!))

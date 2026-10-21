@@ -18,7 +18,7 @@ final class PrivacyMapTests: XCTestCase {
                           .init(title: "Plan My Day", writer: nil, acts: true)]
         setup.continueIn = .chatGPT
         setup.imageFolder = "Screenshots"
-        setup.githubLogin = "jb"
+        setup.githubLogin = "camille"
         setup.relayHost = "relay.example.com"
         setup.servers = ["linear"]
         setup.webhooks = ["n8n"]
@@ -224,7 +224,7 @@ final class PrivacyMapTests: XCTestCase {
 
     func testGitHubAndYours() {
         XCTAssertEqual(ids(.github, everything), ["github", "relay"])
-        XCTAssertEqual(section(.github, everything).status, "Signed in as @jb")
+        XCTAssertEqual(section(.github, everything).status, "Signed in as @camille")
         XCTAssertEqual(section(.github, everything).rows.last?.note, "relay.example.com")
         XCTAssertEqual(ids(.yours, everything), ["servers", "webhooks", "agents"])
     }
@@ -324,7 +324,7 @@ final class PrivacyMapTests: XCTestCase {
     func testGitHubSaysTheSignInGoesWithEachReadAndTheRelayGetsItsToken() {
         XCTAssertEqual(PrivacyMap.line(for: "github", PrivacyMap.Setup())?.text, "Nothing leaves this Mac: you are not signed in to GitHub.")
         var signedIn = PrivacyMap.Setup()
-        signedIn.githubLogin = "jb"
+        signedIn.githubLogin = "camille"
         XCTAssertEqual(PrivacyMap.line(for: "github", signedIn)?.text,
                        "GitHub gets your sign-in with each read, every minute while the strip or “pr” shows, and what you do there: merge, "
                            + "update a branch, mark read.")

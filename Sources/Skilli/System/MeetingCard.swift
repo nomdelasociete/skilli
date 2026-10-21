@@ -68,7 +68,7 @@ final class MeetingCard {
         if dark { dimmer.show(below: panel.level) } else { dimmer.hide() }
         // Mid-typing, the card alone leaves the keyboard to the app; with
         // the screens dark the app cannot be seen, so the card takes it at
-        // once (JB 2026-10-16: ↩ joins, esc lets it go, hands still on the
+        // once (2026-10-16: ↩ joins, esc lets it go, hands still on the
         // keys), the keys already on their way swallowed.
         let typing = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < 1
         keysFrom = typing ? .now + Self.typingGrace : nil

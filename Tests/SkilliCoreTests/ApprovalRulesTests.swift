@@ -165,7 +165,7 @@ final class ApprovalRulesTests: XCTestCase {
             "iban": "FR7630006000011234567890189",
             "account": "FR76 3000 6000 0112 3456 7890 189",
             "blob": "aB3dE5gH7jK9mN1pQ3sT5vX7zA9cE1gI3kM5",
-            "link": "https://example.com/reset?token=abc123&user=jb#x"
+            "link": "https://example.com/reset?token=abc123&user=me#x"
         ])
         for secret in ["hunter2", "abc", "whatever", "sk-ant", "ghp_", "eyJ", "4111", "FR76", "aB3dE5", "token=", "abc123"] {
             XCTAssertFalse(summary.contains(secret), "\(secret) in \(summary)")

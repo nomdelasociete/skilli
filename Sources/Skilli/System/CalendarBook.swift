@@ -13,7 +13,7 @@ struct CalendarAccount: Identifiable {
     }
 
     let id: String
-    /// "iCloud", "jb@nimbus.example", "On My Mac".
+    /// "iCloud", "camille@nimbus.example", "On My Mac".
     let name: String
     let calendars: [Entry]
     /// Subscribed calendars and birthdays: listed after the accounts.

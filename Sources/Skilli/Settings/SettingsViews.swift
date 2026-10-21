@@ -489,7 +489,7 @@ struct IconTile: View {
 struct GeneralPane: View {
     @Bindable var preferences: Preferences
     let tilt: MarkTilt
-    /// The launcher's keys, its first row (JB, 2026-10-16: the most
+    /// The launcher's keys, its first row (2026-10-16: the most
     /// important command is never buried).
     let shortcuts: ShortcutStore
     /// Accessibility, read alone while it is off (Set Up skil.li…).
@@ -907,7 +907,7 @@ struct ShortcutSections: View {
         var grouped: [String: (title: String, entries: [ShortcutConfig.Entry])] = [:]
         var order: [String] = []
         // The launcher's row first in the list, under its name: one row
-        // among the shortcuts here (JB: not a second block above the Super
+        // among the shortcuts here (asked: not a second block above the Super
         // Key); General and Launcher show it first on their own.
         let launcher = store.launcherEntry?.id
         let entries = store.config.shortcuts.filter { $0.id == launcher } + store.config.shortcuts.filter { $0.id != launcher }

@@ -8,7 +8,7 @@ final class EditorProjectTests: XCTestCase {
           {"folderUri":"file:///Users/me/Documents/Github/skilli"},
           {"fileUri":"file:///Users/me/notes.md"},
           {"workspace":{"id":"abc","configPath":"file:///Users/me/Work/Nimbus%20App.code-workspace"}},
-          {"folderUri":"vscode-remote://ssh-remote%2Bbox/home/jb/app","remoteAuthority":"ssh-remote+box"},
+          {"folderUri":"vscode-remote://ssh-remote%2Bbox/home/me/app","remoteAuthority":"ssh-remote+box"},
           {"folderUri":"file:///Users/me/My%20Project","label":"x"}
         ]}
         """

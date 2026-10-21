@@ -50,14 +50,14 @@ final class SettingsSearchTests: XCTestCase {
 
     // MARK: - What it finds
 
-    /// What skil.li does is in Settings too, in the Catalog (JB: "emoji"
+    /// What skil.li does is in Settings too, in the Catalog (asked: "emoji"
     /// found nothing): every entry by its title, then by its line and the
     /// words people type for it; what the user made among them.
     func testCatalogEntriesAreFound() {
         let input = FeatureCatalog.Input(snippets: [Snippet(id: "s1", name: "Adresse bureau", keyword: "!!adr", text: "3 rue du Port")])
         let index = SettingsSearch.Index(panes: panes, entries: SettingsSearch.entries(FeatureCatalog.entries(input)))
         let emoji = index.search("emoji")
-        // Its own pane first (JB: emoji in one place), then the Catalog's
+        // Its own pane first (asked: emoji in one place), then the Catalog's
         // entry.
         XCTAssertEqual(emoji.map(\.pane).prefix(2), ["emoji", "catalog"], "\(emoji.map(\.pane))")
         XCTAssertEqual(index.search("skin tone").first?.hits.first?.anchor, "emojiSkinTone")

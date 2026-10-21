@@ -1,6 +1,6 @@
 # Do it here from anywhere — links, skillies and agents
 
-Status: built and measured on the mini, 2026-10-19. Asked by JB
+Status: built and measured on the mini, 2026-10-19. Asked
 the same day, after the Chess demo (PR #11): the demo was only a showcase
 of skil.li acting in any app; what does it unlock, for skillies for a
 start? Branch `claude/elastic-wu-f6a44e`, self-test scope `doit`.
@@ -138,7 +138,7 @@ instead (5).
 
 ### 5. A skillie that waits for its step: `$SKILLI_CLI`
 
-JB, 2026-10-20 (docs/showcase-next.md, item 4): a skillie should react to
+2026-10-20 (docs/showcase-next.md, item 4): a skillie should react to
 a step's result, not fire and forget.
 
 ```bash
@@ -227,8 +227,8 @@ fi
 
 ## Not now
 
-- **No button** anywhere (no "Copy Link" for an Ask, no Catalog row): JB
-  has not tried it yet (no untested entry points). Links and the tool are
+- **No button** anywhere (no "Copy Link" for an Ask, no Catalog row): the
+  maintainer has not tried it yet (no untested entry points). Links and the tool are
   reached by those who write them.
 - **Several goals in one link** (`goal=…&goal=…`): one link a step keeps
   each step asked and trusted on its own.

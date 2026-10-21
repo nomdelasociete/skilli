@@ -17,21 +17,21 @@ Done when all three hold.
 
 ## 2. Publish
 
-On GitHub's Macs (`.github/workflows/release.yml`), never on JB's Mac or the Mac mini:
+On GitHub's Macs (`.github/workflows/release.yml`), never on the developer's Mac or the Mac mini:
 
 ```sh
 gh workflow run release.yml --repo nomdelasociete/skilli --ref main
 ```
 
-The run waits for JB's approval (the `release` environment): tell him it is waiting, with its link (`gh run list --workflow release.yml --limit 1`). Then about 15 minutes: archive, two notarizations, the signed feed, the GitHub release, the cask. Done when the run is green and its log ends with `Published skil.li <version> (<build>)` (`gh run watch <id>`; `gh run view <id> --log-failed` when it is not).
+The run waits for the maintainer's approval (the `release` environment): tell the maintainer it is waiting, with its link (`gh run list --workflow release.yml --limit 1`). Then about 15 minutes: archive, two notarizations, the signed feed, the GitHub release, the cask. Done when the run is green and its log ends with `Published skil.li <version> (<build>)` (`gh run watch <id>`; `gh run view <id> --log-failed` when it is not).
 
-- The environment has no secrets yet (`gh secret list --env release --repo nomdelasociete/skilli`): JB runs `script/release/ci-secrets.sh <.p12> <AuthKey_….p8>` once; its header says where each file comes from.
+- The environment has no secrets yet (`gh secret list --env release --repo nomdelasociete/skilli`): the maintainer runs `script/release/ci-secrets.sh <.p12> <AuthKey_….p8>` once; its header says where each file comes from.
 - "The feed already has build N": nothing new was committed since the last release; commit, then run it again.
-- "No Developer ID Application identity": `DEVELOPER_ID_P12` or its password is wrong; JB runs `ci-secrets.sh` again.
+- "No Developer ID Application identity": `DEVELOPER_ID_P12` or its password is wrong; the maintainer runs `ci-secrets.sh` again.
 - A notarization `Invalid`: the log's submission id, then `xcrun notarytool log <id> --key <.p8> --key-id <id> --issuer <issuer>` on a Mac that has the key, or the keychain profile `dsmn-notary`; fix, commit, run again.
 - "Upload failed 3 times": the draft release waits on GitHub, unseen; run it again, it uploads to that draft and publishes it.
 - "No Klipy key": `SKILLI_KLIPY_KEY` is missing from the environment; the build goes on, but its Search GIFs finds only GIFs on the Mac. `ci-secrets.sh … --klipy` asks for it.
-- GitHub's Macs unavailable: `./script/release/publish.sh` from a clean main on a Mac still works, every credential from the login keychain (as before 2026-10-19) except the Klipy key, taken from that Mac's own `daily` skil.li; only with JB's go-ahead.
+- GitHub's Macs unavailable: `./script/release/publish.sh` from a clean main on a Mac still works, every credential from the login keychain (as before 2026-10-19) except the Klipy key, taken from that Mac's own `daily` skil.li; only with the maintainer's go-ahead.
 
 ## 3. Check what users get
 
@@ -41,6 +41,6 @@ The run waits for JB's approval (the `release` environment): tell him it is wait
 
 Done when every check passed on the new build.
 
-## 4. Tell JB
+## 4. Tell the maintainer
 
 The version and build, the release link (`https://github.com/nomdelasociete/skilli/releases/tag/v<version>-<build>`), and what changed for users. His own Mac runs the development build (no updater): deploy it as usual, separately.

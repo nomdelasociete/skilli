@@ -285,7 +285,7 @@ final class ComputerControl {
             readScreen = false
             // The plan's next line clicks an item by its words and this look
             // did not read it: the window read again, or waited for, before
-            // anything is clicked (JB's Chess, 2026-10-18: Chess answered 15
+            // anything is clicked (a real Chess game, 2026-10-18: Chess answered 15
             // of its 73 elements in time, “b5” not among them, and a pawn
             // was clicked instead).
             if let line = planLine, let wanted = ScreenControl.unread(by: line, among: look.items) {

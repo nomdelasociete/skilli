@@ -181,7 +181,7 @@ from [Features](FEATURES.md); keys only where they are the app's defaults
 (✦C, ⌃⌘Space, ✦W, ✦D). Add a card when a feature area ships.
 
 The key is called the **Hyper Key** (✦), the name Mac users know from Raycast,
-Karabiner and Hyperkey (JB 2026-10-17: "everyone calls it hyper key"). Not
+Karabiner and Hyperkey (2026-10-17: "everyone calls it hyper key"). Not
 "Super Key": that is the Windows/logo key on Linux and Windows.
 Privacy copy (FAQ, legal page) says what Settings → Privacy says:
 Ask's request and the names it chooses among, extracts for searches by

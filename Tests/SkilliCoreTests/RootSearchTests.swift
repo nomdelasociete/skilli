@@ -179,7 +179,7 @@ final class LauncherRankTests: XCTestCase {
 
     private let displayRows = [window(.nextDisplay), window(.previousDisplay), mac(.sleepDisplays), pane("Moniteurs", "Displays")]
 
-    /// JB (#137): "display" finds System Settings' Displays first, before
+    /// Asked: "display" finds System Settings' Displays first, before
     /// the window moves whose keyword it is; on a French Mac and an English one.
     func testANameTypedWholeComesBeforeAKeyword() {
         for text in ["display", "displays", "Displays", "moniteur", "moniteurs"] {

@@ -1,7 +1,7 @@
 import Foundation
 
 /// An entry the user lets `skilli://` links run without asking: Always
-/// (⌘↩) in a link's card (D6, JB 2026-10-17: "Always from links, per
+/// (⌘↩) in a link's card (D6, 2026-10-17: "Always from links, per
 /// entry, after the first ↩"). Kept with the tools' rights (`tools.json`),
 /// listed in Settings → Catalog → Trusted Links, each one removable.
 public struct TrustedLink: Codable, Hashable, Sendable, Identifiable {

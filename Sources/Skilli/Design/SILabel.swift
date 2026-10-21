@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// "SI": skil.li's public word for AI (JB, 2026-10-13; the website's
+/// "SI": skil.li's public word for AI (2026-10-13; the website's
 /// `si-label.js`). It stands wherever AI would ("SI Accounts", "SI
 /// Command"); pointing at it reveals "AI" in place. Never replace it.
 enum Brand {

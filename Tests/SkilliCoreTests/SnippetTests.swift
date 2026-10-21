@@ -10,10 +10,10 @@ final class SnippetTests: XCTestCase {
     }
 
     func testHandWrittenFile() {
-        let parsed = Snippet(id: "sig", parsing: "---\ntitle: Signature\nkeyword: !sig\n---\nJB\n— skil.li\n")
+        let parsed = Snippet(id: "sig", parsing: "---\ntitle: Signature\nkeyword: !sig\n---\nCamille\n— skil.li\n")
         XCTAssertEqual(parsed.name, "Signature")
         XCTAssertEqual(parsed.keyword, "!sig")
-        XCTAssertEqual(parsed.text, "JB\n— skil.li")
+        XCTAssertEqual(parsed.text, "Camille\n— skil.li")
         let bare = Snippet(id: "plain", parsing: "Just text\n")
         XCTAssertEqual(bare.name, "plain")
         XCTAssertEqual(bare.keyword, "")
@@ -68,13 +68,13 @@ final class SnippetTests: XCTestCase {
     }
 
     private let address = Snippet(id: "a", name: "Address", keyword: "addr", text: "12 rue des Lilas")
-    private let signature = Snippet(id: "s", name: "Signature", keyword: ";sig", text: "JB{cursor}")
+    private let signature = Snippet(id: "s", name: "Signature", keyword: ";sig", text: "Camille{cursor}")
 
     /// Today's behavior stays the default: a symbol keyword at once, a
     /// letter keyword at its word's end with the space kept.
     func testAsSoonAsTypedIsTodaysBehavior() {
         let snippets = [address, signature]
-        XCTAssertEqual(SnippetMatcher.result(of: "voici ;sig", snippets: snippets, mode: .immediately), "voici JB")
+        XCTAssertEqual(SnippetMatcher.result(of: "voici ;sig", snippets: snippets, mode: .immediately), "voici Camille")
         XCTAssertEqual(SnippetMatcher.result(of: "chez addr ", snippets: snippets, mode: .immediately), "chez 12 rue des Lilas ")
         XCTAssertEqual(SnippetMatcher.result(of: "chez addr, merci", snippets: snippets, mode: .immediately), "chez 12 rue des Lilas, merci")
         XCTAssertEqual(SnippetMatcher.result(of: "address ", snippets: snippets, mode: .immediately), "address ")
@@ -86,7 +86,7 @@ final class SnippetTests: XCTestCase {
         let snippets = [address, signature]
         XCTAssertEqual(SnippetMatcher.result(of: "voici ;sig", snippets: snippets, mode: .afterDelimiterKept), "voici ;sig",
                        "a symbol keyword waits too")
-        XCTAssertEqual(SnippetMatcher.result(of: "voici ;sig ", snippets: snippets, mode: .afterDelimiterKept), "voici JB ")
+        XCTAssertEqual(SnippetMatcher.result(of: "voici ;sig ", snippets: snippets, mode: .afterDelimiterKept), "voici Camille ")
         XCTAssertEqual(SnippetMatcher.result(of: "chez addr ", snippets: snippets, mode: .afterDelimiterKept), "chez 12 rue des Lilas ")
         XCTAssertEqual(SnippetMatcher.result(of: "chez addr, ", snippets: snippets, mode: .afterDelimiterKept), "chez addr, ",
                        "a mark is not a space or ↩")
@@ -99,7 +99,7 @@ final class SnippetTests: XCTestCase {
     func testAfterASpaceOrReturnLeavesItOut() {
         let snippets = [address, signature]
         XCTAssertEqual(SnippetMatcher.result(of: "chez addr ", snippets: snippets, mode: .afterDelimiterRemoved), "chez 12 rue des Lilas")
-        XCTAssertEqual(SnippetMatcher.result(of: ";sig\n", snippets: snippets, mode: .afterDelimiterRemoved), "JB")
+        XCTAssertEqual(SnippetMatcher.result(of: ";sig\n", snippets: snippets, mode: .afterDelimiterRemoved), "Camille")
         XCTAssertEqual(SnippetMatcher.result(of: "addr  x", snippets: snippets, mode: .afterDelimiterRemoved), "12 rue des Lilas x")
     }
 

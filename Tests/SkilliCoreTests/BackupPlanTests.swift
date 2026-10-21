@@ -80,7 +80,7 @@ final class BackupPlanTests: XCTestCase {
     func testWhoSyncsTheFolderByWhereItIs() {
         XCTAssertEqual(BackupPlan.syncService(ofPath: "/Users/me/Library/Mobile Documents/com~apple~CloudDocs/skil.li"), "iCloud")
         XCTAssertEqual(BackupPlan.syncService(ofPath: "/Users/me/Library/CloudStorage/Dropbox/Backups"), "Dropbox")
-        XCTAssertEqual(BackupPlan.syncService(ofPath: "/Users/me/Library/CloudStorage/GoogleDrive-jb@example.com/My Drive"), "Google Drive")
+        XCTAssertEqual(BackupPlan.syncService(ofPath: "/Users/me/Library/CloudStorage/GoogleDrive-camille@example.com/My Drive"), "Google Drive")
         XCTAssertEqual(BackupPlan.syncService(ofPath: "/Users/me/Library/CloudStorage/OneDrive-Personal/skil.li"), "OneDrive")
         XCTAssertNil(BackupPlan.syncService(ofPath: "/Users/me/Documents/skil.li Backups"))
         XCTAssertNil(BackupPlan.syncService(ofPath: "/Volumes/Backup/skil.li"))

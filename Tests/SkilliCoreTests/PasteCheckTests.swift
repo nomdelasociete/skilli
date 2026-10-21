@@ -4,7 +4,7 @@ import XCTest
 final class PasteCheckTests: XCTestCase {
     func testTheProbeIsTheFirstWordsShown() {
         XCTAssertEqual(PasteCheck.probe("FR12345678901"), "FR12345678901")
-        XCTAssertEqual(PasteCheck.probe("\n  Bien à toi,\nJB"), "Bien à toi,")
+        XCTAssertEqual(PasteCheck.probe("\n  Bien à toi,\nCamille"), "Bien à toi,")
         XCTAssertEqual(PasteCheck.probe("12 rue des Lilas, 75011 Paris, France, Europe"), "12 rue des Lilas, 75011 ")
         XCTAssertEqual(PasteCheck.probe("  \n "), "")
     }

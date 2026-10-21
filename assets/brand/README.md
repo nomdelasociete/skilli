@@ -50,7 +50,7 @@ Utiliser la composition PNG statique dans un asset catalog, redimensionnée pour
 
 Aucun WebView, runtime JavaScript ou shader web ne doit être ajouté au launcher ou à la barre des menus pour ce logo. Le PNG suffit aussi comme première intégration des settings.
 
-En tête de Settings → Général (13 octobre 2026, demandé par JB) : le S seul, `3d/skilli-mark-halo@2x.png` (halo cuit dans le verre, lisible en clair comme en sombre), s'incline vers la souris comme le hero du site (±10° en largeur, ±6° en hauteur, amorti). C'est une transformation 3D de l'image fixe, rien qui tourne seul : pas de boucle, pas de reflet qui balaie la lettre, à plat avec « Réduire les animations ». La petite icône en haut de la barre latérale a disparu : à 30 pt, le S ne se lisait pas.
+En tête de Settings → Général (13 octobre 2026) : le S seul, `3d/skilli-mark-halo@2x.png` (halo cuit dans le verre, lisible en clair comme en sombre), s'incline vers la souris comme le hero du site (±10° en largeur, ±6° en hauteur, amorti). C'est une transformation 3D de l'image fixe, rien qui tourne seul : pas de boucle, pas de reflet qui balaie la lettre, à plat avec « Réduire les animations ». La petite icône en haut de la barre latérale a disparu : à 30 pt, le S ne se lisait pas.
 
 ## Barre des menus
 

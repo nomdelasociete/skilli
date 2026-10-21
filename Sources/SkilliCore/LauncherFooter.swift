@@ -1,6 +1,6 @@
 import Foundation
 
-// The launcher's keys (rules 5 and 6, JB 2026-10-17): the footer says the
+// The launcher's keys (rules 5 and 6, 2026-10-17): the footer says the
 // selected row's own ↩, ⇥ only where ⇥ does something, and ⌘K; ⇥ in a mode
 // never asks; esc goes back before it closes. The launcher reads its
 // state, these decide.

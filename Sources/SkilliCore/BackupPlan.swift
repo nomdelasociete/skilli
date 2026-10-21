@@ -111,7 +111,7 @@ public enum BackupPlan {
     }
 
     /// Items of skil.li's folder a backup never holds and a restore never
-    /// touches: the live socket agents use, and the clipboard history (JB,
+    /// touches: the live socket agents use, and the clipboard history (asked
     /// 2026-10-15: settings, skillies and the rest of the folder, never
     /// what was copied).
     public static let neverCopied: Set<String> = ["mcp.sock", "Clipboard"]

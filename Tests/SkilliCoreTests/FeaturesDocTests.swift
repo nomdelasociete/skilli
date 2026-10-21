@@ -1,7 +1,7 @@
 @testable import SkilliCore
 import XCTest
 
-/// `docs/FEATURES.md` lists everything skil.li does (JB 2026-10-16: "a file
+/// `docs/FEATURES.md` lists everything skil.li does (2026-10-16: "a file
 /// in the repo with all the features, sorted, well organised"): one
 /// section per Settings pane, in the sidebar's order (`<!-- pane: id -->`),
 /// every Catalog entry by its title in bold, every setting and search row

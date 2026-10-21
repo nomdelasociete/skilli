@@ -49,7 +49,7 @@ public enum CopiedValue: Equatable, Sendable {
     /// Apple's detectors are slow the first time each is used: used once
     /// off the main thread (at launch), a copy shown later reads at once.
     public static func warmUp() {
-        for text in ["jb@example.com", "+33 6 12 34 56 78", "1 Infinite Loop, Cupertino, CA 95014", "let a = 1;\nlet b = 2;"] {
+        for text in ["camille@example.com", "+33 6 12 34 56 78", "1 Infinite Loop, Cupertino, CA 95014", "let a = 1;\nlet b = 2;"] {
             _ = read(text)
         }
     }
@@ -72,7 +72,7 @@ public enum CopiedValue: Equatable, Sendable {
         return rest.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters)).isEmpty ? match : nil
     }
 
-    /// "jb@example.com", "mailto:jb@example.com".
+    /// "camille@example.com", "mailto:camille@example.com".
     private static func email(_ text: String) -> String? {
         guard text.utf8.count <= 260, text.contains("@"), !text.contains(where: \.isWhitespace) else { return nil }
         guard let match = whole(text, .link), let url = match.url, url.scheme == "mailto" else { return nil }
