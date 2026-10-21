@@ -390,7 +390,7 @@ private struct AppPageView: View {
                 }
             } header: {
                 if position == 0, !hasOptions {
-                    VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 8) {
                         header
                         Text(group.title)
                     }
