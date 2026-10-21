@@ -95,8 +95,8 @@ Everything the launcher runs, a skillie runs too, two ways:
   says the line breaks) open PNG and JPEG images, Quick Access those and
   MP4 videos. The Finder selection's and the latest screenshot's commands
   take `file` too, instead of what they read. A type CleanShot does not open, a
-  file that is not there or a path that is not full exits 1 and says why;
-  nothing opens.
+  file that is not there, a path that is not full or an empty `file` exits 1
+  and says why; nothing opens.
 - **Fire and forget**: `open "skilli://run/<entry>"`, the link ⌘K → Copy Link
   gives on any row (`skilli://run/system:link:cleanshot.capture-area`). What
   could change the Mac asks first, as for any link.

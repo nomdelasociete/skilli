@@ -1127,6 +1127,15 @@ final class SkilliTools {
         case "run_action":
             let id = try text("id")
             guard var action = Self.actions[id] else { throw Failure(message: "Unknown action “\(id)”.") }
+            // Left out: the plain run. Given, it is the file, never ignored
+            // (an empty `file="$1"` would run on the Finder selection).
+            var file: String?
+            if let given = arguments["file"], !(given is NSNull) {
+                guard let path = (given as? String)?.trimmingCharacters(in: .whitespaces), !path.isEmpty else {
+                    throw Failure(message: "“file” is empty: give the file's full path, or leave it out.")
+                }
+                file = path
+            }
             if let asked = (arguments["variant"] as? String)?.trimmingCharacters(in: .whitespaces), !asked.isEmpty {
                 guard case .mac(.appLink(let command, nil)) = action else {
                     throw Failure(message: "“\(id)” takes no variant.")
@@ -1138,7 +1147,7 @@ final class SkilliTools {
                 if variant.id == "upload" { try await askUpload(name, run) }
                 action = .mac(.appLink(command, variant: variant.id))
             }
-            if let path = (arguments["file"] as? String)?.trimmingCharacters(in: .whitespaces), !path.isEmpty {
+            if let path = file {
                 // Opened here, so what does not fit is said to the agent.
                 guard case .mac(.appLink(let command, let variant)) = action, command.files != nil else {
                     throw Failure(message: "“\(id)” takes no file.")

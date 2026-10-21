@@ -1895,6 +1895,9 @@ final class SelfTest {
         let noFile = await skilliCall("run_action", arguments("cleanshot.capture-area", png.path))
         let relative = await skilliCall("run_action", arguments("cleanshot.pin", png.lastPathComponent))
         let gone = await skilliCall("run_action", arguments("cleanshot.pin", folder.appendingPathComponent("Gone.png").path))
+        // An empty `file` (a skillie's "$1" left out): refused, not the
+        // Finder selection.
+        let empty = await skilliCall("run_action", arguments("cleanshot.pin-selected-image", ""))
         let refusedOpenedNothing = commands.lastAppLink == nil
         let quickCall = await skilliCall("run_action", arguments("cleanshot.quick-access", mp4.path))
         let quickOpened = Self.opened(commands.lastAppLink, "add-quick-access-overlay", mp4)
@@ -1906,9 +1909,10 @@ final class SelfTest {
             && commands.lastAppLink?.query()?.hasPrefix("linebreaks=false&") == true
         let skillies = pinCall.status == 0 && pinOpened && wrongType.status == 1 && wrongType.output.contains(CleanShot.images.said)
             && noFile.status == 1 && noFile.output.contains("takes no file") && relative.status == 1 && relative.output.contains("full path")
-            && gone.status == 1 && refusedOpenedNothing && quickCall.status == 0 && quickOpened && textCall.status == 0 && textOpened
+            && gone.status == 1 && empty.status == 1 && empty.output.contains("empty") && refusedOpenedNothing
+            && quickCall.status == 0 && quickOpened && textCall.status == 0 && textOpened
         record(name, byType && mp4Added && clipPinned && skillies,
-               "⌘K, PNG: \(inCleanShot(png).joined(separator: ", ")); MP4: \(inCleanShot(mp4).joined(separator: ", ")); text: \(inCleanShot(text).count) (by type: \(byType)), MP4 → Quick Access: \(mp4Added); clipboard image pinned: \(clipPinned) (\(clipDetail)); run_action pin: exit \(pinCall.status) opened \(pinOpened), an MP4 to Pin: exit \(wrongType.status) “\(wrongType.output.prefix(70))”, Capture Area with a file: exit \(noFile.status), a relative path: exit \(relative.status), a file gone: exit \(gone.status) “\(gone.output.prefix(60))”, opened nothing: \(refusedOpenedNothing); Quick Access an MP4: exit \(quickCall.status) opened \(quickOpened); Capture Text one line on the PNG: exit \(textCall.status) opened \(textOpened) (dry run, CleanShot X \(installed.version ?? "?"))",
+               "⌘K, PNG: \(inCleanShot(png).joined(separator: ", ")); MP4: \(inCleanShot(mp4).joined(separator: ", ")); text: \(inCleanShot(text).count) (by type: \(byType)), MP4 → Quick Access: \(mp4Added); clipboard image pinned: \(clipPinned) (\(clipDetail)); run_action pin: exit \(pinCall.status) opened \(pinOpened), an MP4 to Pin: exit \(wrongType.status) “\(wrongType.output.prefix(70))”, Capture Area with a file: exit \(noFile.status), a relative path: exit \(relative.status), a file gone: exit \(gone.status) “\(gone.output.prefix(60))”, an empty file: exit \(empty.status), opened nothing: \(refusedOpenedNothing); Quick Access an MP4: exit \(quickCall.status) opened \(quickOpened); Capture Text one line on the PNG: exit \(textCall.status) opened \(textOpened) (dry run, CleanShot X \(installed.version ?? "?"))",
                nil)
         await cleanShotOpensFinderSelection(png: png, mp4: mp4, commands: commands)
     }
