@@ -20,9 +20,8 @@ final class CatalogPaneModel {
     var aliasDraft = ""
     /// Why the alias typed was not kept, under its field.
     private(set) var aliasProblem: String?
-    /// A shortcut the popover added to record: it goes if recording ends
-    /// without keys.
-    private(set) var addedShortcut: String?
+    /// A shortcut the popover added to record.
+    @ObservationIgnored private let newShortcut = NewShortcut()
     /// Self-test hook: how long reading the entries took.
     private(set) var lastLoad: Duration?
     /// Every row is in the pane (it draws its first group first, the rest
@@ -135,20 +134,38 @@ final class CatalogPaneModel {
     /// adds one first (as Keys → Add Shortcut does).
     func recordShortcut(_ entry: CatalogEntry, _ store: ShortcutStore) {
         guard let action = shortcutAction(entry) else { return }
+        newShortcut.record(action, store)
+    }
+
+    /// Recording ended: a shortcut added for it and left without keys goes.
+    func recordingEnded(_ store: ShortcutStore) {
+        newShortcut.recordingEnded(store)
+    }
+}
+
+/// A shortcut recorded from a row that shows one per action (Catalog,
+/// Apps): over the action's own, or added first, as Keys → Add Shortcut
+/// does; one added and left without keys (⎋, or refused) goes again.
+@MainActor
+@Observable
+final class NewShortcut {
+    /// The one added for the recording going on.
+    private(set) var added: String?
+
+    func record(_ action: SkilliAction, _ store: ShortcutStore) {
         if let id = store.entryID(for: action) {
             store.beginRecording(id)
             return
         }
         let id = store.add(action)
-        addedShortcut = id
+        added = id
         store.beginRecording(id)
     }
 
-    /// Recording ended: a shortcut added for it and left without keys
-    /// (⎋, or refused) goes again.
+    /// Recording ended (`ShortcutStore.recordingID` changed).
     func recordingEnded(_ store: ShortcutStore) {
-        guard let id = addedShortcut, store.recordingID != id else { return }
-        addedShortcut = nil
+        guard let id = added, store.recordingID != id else { return }
+        added = nil
         if store.config.shortcuts.first(where: { $0.id == id })?.keys == nil {
             store.remove(id)
         }

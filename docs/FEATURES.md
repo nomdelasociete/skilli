@@ -32,14 +32,15 @@ its pane's section. Add a feature here when you build it.
 12. [Calendar](#calendar)
 13. [Reminders](#reminders)
 14. [GitHub](#github)
-15. [Your Details](#your-details)
-16. [Ask](#ask)
-17. [Commands](#commands)
-18. [Tools](#tools)
-19. [Skillies](#skillies)
-20. [SI Accounts](#si-accounts)
-21. [Catalog](#catalog)
-21. [About](#about)
+15. [Apps](#apps)
+16. [Your Details](#your-details)
+17. [Ask](#ask)
+18. [Commands](#commands)
+19. [Tools](#tools)
+20. [Skillies](#skillies)
+21. [SI Accounts](#si-accounts)
+22. [Catalog](#catalog)
+23. [About](#about)
 
 <!-- pane: general -->
 ## General
@@ -189,19 +190,6 @@ The search panel you open from anywhere. ✦Space.
   Ask finds one by meaning instead.
 - **System Settings Panes**: "displays", "night shift", "bluetooth"…
   opens that pane.
-- **CleanShot X** (when installed): every command its API documents is a
-  row with its icon, under "In Your Apps" in the Catalog: Capture Area,
-  Window, Fullscreen, Previous Area, Self-Timer, Scrolling Capture,
-  All-In-One, Record Screen, Capture Text, Annotate Clipboard Image, Annotate
-  Image…, Pin Image…, the desktop icons, Capture History, Restore Recently
-  Closed, CleanShot Settings. skil.li adds Capture and Record Front Window
-  (its frame, nothing to pick) and Annotate or Pin Latest Screenshot. ⌘K on
-  a capture: Copy, Save, Annotate, Pin or Upload it; on Scrolling Capture:
-  start at once, auto-scroll; on Capture Text: with or without line breaks;
-  on CleanShot Settings: each tab. Each one, variants too, takes a shortcut
-  (Keys → Add Shortcut → CleanShot X), a link, Ask ("fais une capture de
-  la fenêtre") and agents. CleanShot runs them once its API is allowed
-  (CleanShot → Settings → Advanced).
 - **Shortcuts**: every shortcut you made in Apple's Shortcuts app is a
   row by its name, with Shortcuts' icon, under "In Your Apps" in the
   Catalog; through them, whatever an app lets Shortcuts do. ↩ runs it;
@@ -416,6 +404,32 @@ what waits for you.
 
 Settings: GitHub (sign in) · Show under the search field · Live updates
 from · Live updates token.
+
+<!-- pane: apps -->
+## Apps
+
+The apps skil.li drives: their commands in the launcher, on a key, in Ask.
+Only the apps installed on this Mac are listed.
+
+- **CleanShot X**: every command its API documents is a launcher row with
+  its icon, under "In Your Apps" in the Catalog: Capture Area, Window,
+  Fullscreen, Previous Area, Self-Timer, Scrolling Capture, All-In-One,
+  Record Screen, Capture Text, Annotate Clipboard Image, Annotate Image…,
+  Pin Image…, the desktop icons, Capture History, Restore Recently Closed,
+  CleanShot Settings. skil.li adds Capture and Record Front Window (its
+  frame, nothing to pick) and Annotate or Pin Latest Screenshot. ⌘K on a
+  capture: Copy, Save, Annotate, Pin or Upload it; on Scrolling Capture:
+  start at once, auto-scroll; on Capture Text: with or without line
+  breaks; on CleanShot Settings: each tab. Each one, variants too, takes a
+  shortcut, a link, Ask ("fais une capture de la fenêtre") and agents.
+- **Where to allow it**: CleanShot runs them while its API is allowed
+  (CleanShot → Settings → Advanced → Allow URL scheme API); while it is
+  off, CleanShot ignores them without a word. The pane says where to turn
+  it on, and Open CleanShot opens it.
+
+Settings: each app (its version, where to allow it) · Line breaks in
+Capture Text · its commands by group, each with its shortcut (right-click:
+a variant's) and Show in search.
 
 <!-- pane: yourDetails -->
 ## Your Details

@@ -3341,11 +3341,11 @@ final class LauncherController: NSObject {
         if code == kVK_Escape || (flags == .command && event.charactersIgnoringModifiers?.lowercased() == "k") {
             closeActions()
         } else if code == kVK_UpArrow {
-            actionPanel.move(by: -1)
+            actionPanel.move(by: -1, wraps: !event.isARepeat)
         } else if code == kVK_DownArrow {
-            actionPanel.move(by: 1)
+            actionPanel.move(by: 1, wraps: !event.isARepeat)
         } else if let step = Self.controlStep(event) {
-            actionPanel.move(by: step)
+            actionPanel.move(by: step, wraps: !event.isARepeat)
         } else if let key = LauncherAction.Key(event) {
             let found = key == .open ? actionPanel.selectedAction
                 : actionsItem.flatMap { action(key, in: actionPanel.actions, for: $0) } ?? LauncherAction.find(key, in: actionPanel.actions)

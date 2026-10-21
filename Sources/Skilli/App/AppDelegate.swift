@@ -728,6 +728,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             selection.press("v", flags: .maskCommand)
         }
         systemCommands.screenshotFolders = { [preferences] in [ImageFolderWatcher.screenshotsFolder, preferences.imageFolder] }
+        systemCommands.appLinkDefault = { [preferences] command in
+            CleanShot.defaultVariant(of: command, lineBreaks: preferences.cleanShotTextLineBreaks)
+        }
         toolServer.tools.contacts = contactBook
         launcher.contacts = contactBook
         aiActions.contacts = contactBook

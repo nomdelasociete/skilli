@@ -53,6 +53,7 @@
 		22BE183A10837002DA7F0985 /* AskScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 590078DE8974AF14C3ECA15C /* AskScheduler.swift */; };
 		22C792FF2363284A10525894 /* ClaudeSubscriptionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51EAE0135FC45452398571B3 /* ClaudeSubscriptionEngine.swift */; };
 		248524430DC784D101D065D4 /* HyperKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 738E57A49A152A4B343380FA /* HyperKey.swift */; };
+		24E0278210384D17E7295196 /* AppsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C84E87B826384FE9FC6322 /* AppsPane.swift */; };
 		264FC3DFE1EF9979B7C3CD91 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = DC502FE7B06F11ADA87636D4 /* Sparkle */; };
 		27E8C7435ADCB89708EFFDDD /* SkilliesPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05AC6607A474F9233EF1A0D6 /* SkilliesPane.swift */; };
 		2ACDC2D0146C5613F3FE1861 /* SkilliCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 512A4230C03E002AF05528B1 /* SkilliCore.framework */; };
@@ -559,6 +560,7 @@
 		B027C956EBA7D0BC36224F02 /* WindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManager.swift; sourceTree = "<group>"; };
 		B50C5D5CE27307D006CE5F16 /* SettingsSkill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSkill.swift; sourceTree = "<group>"; };
 		B5A35E54F69A3211F500FFD3 /* GIFSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFSearch.swift; sourceTree = "<group>"; };
+		B5C84E87B826384FE9FC6322 /* AppsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppsPane.swift; sourceTree = "<group>"; };
 		B752FC084E502F096F34BF53 /* BluetoothDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothDevices.swift; sourceTree = "<group>"; };
 		B7E84276F7B5DFDEB3DFA25C /* LauncherCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherCommand.swift; sourceTree = "<group>"; };
 		B9706AB6F06501953447C098 /* EditorProjects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorProjects.swift; sourceTree = "<group>"; };
@@ -937,6 +939,7 @@
 				FD66CE9CAC47F6338D5DCEFA /* AgendaPane.swift */,
 				CB63022DBB47B70E6F914593 /* AIAccountsPane.swift */,
 				3AD6D29CADF32C24BD18BE7D /* AICommandsViews.swift */,
+				B5C84E87B826384FE9FC6322 /* AppsPane.swift */,
 				3C2C45D756E6D828ED4D1D65 /* AskPane.swift */,
 				9DD8A95FF0986A24770B7574 /* AskScheduleSections.swift */,
 				F233373F6CA7DAA6A2157812 /* BackupPane.swift */,
@@ -1439,6 +1442,7 @@
 				AA7270CC05A8C28765EC6C9A /* AppIndex.swift in Sources */,
 				A5F06C4A1DBB70A6B8E8B0AF /* AppUninstaller.swift in Sources */,
 				A2D21504ED0D1CBDAAA758E5 /* AppleShortcuts.swift in Sources */,
+				24E0278210384D17E7295196 /* AppsPane.swift in Sources */,
 				8A33D74074273BDE6EBA492A /* AskPane.swift in Sources */,
 				B8E516D073F1EFB0D8B172ED /* AskRouter.swift in Sources */,
 				89495F4725B6A1992F55F679 /* AskScheduleSections.swift in Sources */,
