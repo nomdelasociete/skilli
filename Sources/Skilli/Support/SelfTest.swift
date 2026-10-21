@@ -15952,9 +15952,15 @@ final class SelfTest {
         // An alias and a shortcut, for the preview to say.
         preferences.launcherAliases.append(LauncherAlias(id: "snippet:\(dated.id)", alias: "rdv", title: dated.name))
         let shortcutID = store.add(.snippet(dated.id))
+        // The Shortcut row is checked only if its fixture took: a refusal
+        // fails the check and says why.
         var shortcutSet = false
-        if let chords = try? [Chord(parsing: "ctrl+opt+cmd+8")] {
-            shortcutSet = (try? store.setKeys(chords, for: shortcutID)) != nil
+        var shortcutRefused = ""
+        do {
+            try store.setKeys([Chord(parsing: "ctrl+opt+cmd+8")], for: shortcutID)
+            shortcutSet = true
+        } catch {
+            shortcutRefused = store.lastError?.message ?? error.localizedDescription
         }
         let sentinel = "selftest-copy-\(Int.random(in: 100...999))"
         setClipboard(sentinel)
@@ -15994,7 +16000,7 @@ final class SelfTest {
         let expands = !preferences.snippetExpansion ? "Off" : preferences.snippetExpansionMode.title
         let informed = info["Keyword"] == ";conf" && (info["Expands"] == expands || info["Expands"]?.hasPrefix("Not in") == true)
             && info["Placeholders"] == "{date}, {clipboard}, {cursor}" && info["Alias"] == "rdv"
-            && (!shortcutSet || info["Shortcut"] == "⌃⌥⌘8") && info["Size"]?.contains("characters") == true && info["Modified"] != nil
+            && shortcutSet && info["Shortcut"] == "⌃⌥⌘8" && info["Size"]?.contains("characters") == true && info["Modified"] != nil
         let fast = preview.lastShowTime < .milliseconds(8)
         let showTime = preview.lastShowTime
         let datedDetail = "“\(preview.shownTyped.replacingOccurrences(of: "\n", with: "⏎"))”, filled \(preview.shownFilled), "
@@ -16048,7 +16054,7 @@ final class SelfTest {
         await closeLauncher()
         let whole = preview.isHidden && launcher.tableView.frame.width > 600
         let paneDetail = "split: \(split), keycaps: \(caps), ↓ followed: \(followed); dated shown: \(datedShown), name and keyword only: \(nameOnly), "
-            + "typed as now: \(typedRight), clipboard readable: \(readable), filled: \(filledRight), information: \(informed) (shortcut set: \(shortcutSet)): "
+            + "typed as now: \(typedRight), clipboard readable: \(readable), filled: \(filledRight), information: \(informed) (shortcut set: \(shortcutSet)\(shortcutRefused.isEmpty ? "" : ", refused: \(shortcutRefused)")): "
             + "\(datedDetail); shown in \(showTime.compact): \(fast); code: \(code), long without a keyword: \(long), nothing found quiet: \(quiet), plain: \(plain); list whole again: \(whole)"
         record(name, mode && split && capped && followed && datedShown && nameOnly && typedRight && filledRight && informed && fast && code && long && quiet
                && filtered && plain && meaningPassed && whole,
