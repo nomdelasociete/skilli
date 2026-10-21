@@ -190,7 +190,7 @@ The search panel you open from anywhere. ✦Space.
   Ask finds one by meaning instead.
 - **System Settings Panes**: "displays", "night shift", "bluetooth"…
   opens that pane.
-- **Shortcuts**: every shortcut you made in Apple's Shortcuts app is a
+- **Shortcuts**: every shortcut in your Shortcuts library is a
   row by its name, with Shortcuts' icon, under "In Your Apps" in the
   Catalog; through them, whatever an app lets Shortcuts do. ↩ runs it;
   what it gives back shows in the card (a line for a moment, more for

@@ -88,7 +88,7 @@ Everything the launcher runs, a skillie runs too, two ways:
 
 ## Run the user's shortcuts
 
-Every shortcut made in Apple's Shortcuts app is a skil.li row. A skillie
+Every shortcut in the user's Shortcuts library is a skil.li row. A skillie
 runs one in two ways:
 
 ```bash

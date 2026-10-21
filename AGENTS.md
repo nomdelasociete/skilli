@@ -3380,7 +3380,7 @@ re-investigating.
   (PNG or JPEG). `SystemCommands.openAppLink` is the self-test's dry run;
   `remote apps` (✦K C, "capture front", ⌘K, the frame) captures nothing.
 - Apple's Shortcuts (docs/apps.md, Next apps 1; `AppleShortcut` in
-  SkilliCore, `AppleShortcuts`): every shortcut the user made is a
+  SkilliCore, `AppleShortcuts`): every shortcut in the user's library is a
   `MacAction.shortcut(shortcut, withSelection:)` (raw value
   `shortcut:<identifier>`, `…/selection` run on the selection), so the
   same list serves the launcher's rows (by name, Shortcuts' icon,
@@ -3393,9 +3393,9 @@ re-investigating.
   first under 85 %; what Ask was asked on is its input), agents
   (`list_shortcuts`, `run_shortcut` with an optional `input` or
   `selection=true`, the text it gave back) and skillies
-  (skillies/README.md: `open` its row's link, or `"$SKILLI_CLI" call
-  run_shortcut name=… input=…|selection=true`, which waits and exits 0,
-  1 or 2). Read with Apple's tool
+  (skillies/README.md: `open` its row's link; or `"$SKILLI_CLI" call
+  run_shortcut name=… input=…`, or `… name=… selection=true` for the
+  selected text, each of which waits and exits 0, 1 or 2). Read with Apple's tool
   (`shortcuts list --show-identifiers`, "Name (identifier)") off the
   main thread at launch and each time the launcher opens, with the
   radios; a change redraws the rows; a key never runs it. Run by

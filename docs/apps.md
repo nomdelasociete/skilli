@@ -118,7 +118,8 @@ only after its link format is read in its own documentation and run once for
 real.
 
 1. Done: **Shortcuts** (Apple, `/usr/bin/shortcuts list` / `run`): every
-   shortcut the user made is a row. That reaches every app's App Intents
+   shortcut in the user's Shortcuts library (made, or added from its
+   Gallery) is a row. That reaches every app's App Intents
    without skil.li knowing them. Read in `shortcuts help run` / `list` and
    the Shortcuts User Guide ("Run shortcuts from the command line", "Open
    and create a shortcut using a URL scheme", 2026-10-21):

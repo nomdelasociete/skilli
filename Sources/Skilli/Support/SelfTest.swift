@@ -1281,6 +1281,22 @@ final class SelfTest {
         await deleteEchoShortcut(shortcut, shortcutsWasRunning: shortcutsWasRunning)
     }
 
+    /// The shortcuts as Apple's tool lists them now, read off the main
+    /// thread (a process, ~10 ms).
+    private static func readShortcuts() async -> [AppleShortcut] {
+        await Task.detached(priority: .utility) { AppleShortcuts.read() }.value
+    }
+
+    /// Reads the list every 500 ms until `found` says yes or `seconds` pass.
+    private static func pollShortcuts(for seconds: Double, until found: ([AppleShortcut]) -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + .milliseconds(Int(seconds * 1000))
+        while ContinuousClock.now < deadline {
+            if found(await readShortcuts()) { return true }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        return found(await readShortcuts())
+    }
+
     /// Shortcuts' own question before a shortcut hands what it made to
     /// skil.li ("Allow “…” to produce 1 text item?"), answered Always
     /// Allow as a person would, unless the run is `done` first; whether it
@@ -1330,7 +1346,11 @@ final class SelfTest {
 
         // The row: by name, Shortcuts' accessory; ↩ with no input. The
         // first time, Shortcuts asks before handing its text over.
-        guard await focusTestWindow(), await openLauncher() else { return }
+        /// A step that could not start: the check fails, saying where.
+        func stopped(_ step: String) {
+            record(name, false, (details + ["stopped: \(step)"]).joined(separator: "; "), nil)
+        }
+        guard await focusTestWindow(), await openLauncher() else { return stopped("the launcher did not open on the test window") }
         for character in "self-test echo" { await pressKey(character) }
         let found = await waitUntil(timeout: 2) { launcher.topResultName == Self.echoShortcut } != nil
         let accessory = launcher.resultAccessories.first ?? ""
@@ -1343,7 +1363,7 @@ final class SelfTest {
         details.append("row first: \(found) (\(accessory)), footer \(footer); ↩: working card \(working), Shortcuts asked to hand its text over: \(askedOnce) (its Always Allow under the card: \(covered)), then “\(plain)”")
 
         // ⌘K: the selection read as it opened (“zebra”), the editor.
-        guard await selectZebra(), await openLauncher() else { return }
+        guard await selectZebra(), await openLauncher() else { return stopped("the launcher did not open over the selection") }
         for character in "self-test echo" { await pressKey(character) }
         _ = await waitUntil(timeout: 2) { launcher.topResultName == Self.echoShortcut }
         _ = await waitUntil(timeout: 1) { launcher.shownSelection == "zebra" }
@@ -1362,7 +1382,7 @@ final class SelfTest {
         let key = store.add(.mac(.shortcut(shortcut, withSelection: true)))
         try? store.setKeys(Chord.sequence("hyper+k o"), for: key)
         defer { store.remove(key) }
-        guard await selectZebra() else { return }
+        guard await selectZebra() else { return stopped("no focus on the test window for the key") }
         _ = await hyperChord(["k", "o"], trigger: Self.ownTriggerKeyCode)
         let keyed = await cardSays("echo:zebra")
         details.append("✦K O on the selection: “\(keyed)”")
@@ -1372,7 +1392,7 @@ final class SelfTest {
         var asked = false
         if let links = context.links {
             let link = SkilliLink.run(FeatureCatalog.shortcutEntryID(shortcut.id)).url
-            guard await focusTestWindow() else { return }
+            guard await focusTestWindow() else { return stopped("no focus on the test window for the link") }
             textView.string = ""
             let opening = Task { await links.openNow(link) }
             asked = await waitUntil(timeout: 2) { popover.isVisible && popover.shownText.contains("link") && popover.shownTitle.contains(Self.echoShortcut) } != nil
@@ -1456,18 +1476,26 @@ final class SelfTest {
             textView.selectAll(nil)
             var asked = 0
             var seen: (text: String, at: ContinuousClock.Instant)?
+            // The card answered last: ↩ once, however long it stays.
+            var answered: String?
             context.aiActions.runScript?(command, false)
             _ = await waitUntil(timeout: 40) {
-                if popover.isVisible, popover.phase == .approving {
-                    if seen?.text != popover.shownText {
-                        seen = (popover.shownText, .now)
-                    } else if let at = seen?.at, .now - at > .milliseconds(900) {
-                        seen = (popover.shownText + " answered", .now)
-                        asked += 1
-                        Task { await self.pressKey(nil, code: CGKeyCode(kVK_Return)) }
-                    }
+                guard popover.isVisible, popover.phase == .approving else {
+                    answered = nil
+                    return popover.isVisible && popover.shownText == expected
                 }
-                return popover.isVisible && popover.shownText == expected
+                let text = popover.shownText
+                if text == answered { return false }
+                answered = nil
+                if seen?.text != text {
+                    seen = (text, .now)
+                } else if let at = seen?.at, .now - at > .milliseconds(900) {
+                    answered = text
+                    seen = nil
+                    asked += 1
+                    Task { await self.pressKey(nil, code: CGKeyCode(kVK_Return)) }
+                }
+                return false
             }
             let said = popover.isVisible ? popover.shownText : "no card"
             if popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
@@ -1491,7 +1519,7 @@ final class SelfTest {
     /// pressed (Accessibility), then read back. One left by a run that
     /// stopped is used again.
     private func importEchoShortcut() async -> (AppleShortcut?, String) {
-        if let left = AppleShortcuts.read().first(where: { $0.name == Self.echoShortcut }) { return (left, "left by an earlier run") }
+        if let left = await Self.readShortcuts().first(where: { $0.name == Self.echoShortcut }) { return (left, "left by an earlier run") }
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-shortcut-\(getpid())", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -1510,8 +1538,8 @@ final class SelfTest {
             return pressed
         }
         var found: AppleShortcut?
-        _ = await waitUntil(timeout: 15) {
-            found = AppleShortcuts.read().first { $0.name == Self.echoShortcut }
+        _ = await Self.pollShortcuts(for: 15) { list in
+            found = list.first { $0.name == Self.echoShortcut }
             return found != nil
         }
         // Shortcuts came forward to ask: the test window again.
@@ -1556,8 +1584,17 @@ final class SelfTest {
     /// Shortcuts quit again when the test opened it.
     private func deleteEchoShortcut(_ shortcut: AppleShortcut, shortcutsWasRunning: Bool) async {
         let name = "Shortcuts: the test shortcut deleted afterwards (Edit → Delete in Shortcuts)"
-        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: AppleShortcut.bundleID).first else {
-            record(name, false, "Shortcuts is not running", nil)
+        func shortcutsApp() -> NSRunningApplication? {
+            NSRunningApplication.runningApplications(withBundleIdentifier: AppleShortcut.bundleID).first
+        }
+        // Quit meanwhile: its own link opens it again.
+        if shortcutsApp() == nil, let library = URL(string: "shortcuts://") {
+            NSWorkspace.shared.open(library)
+            _ = await waitUntil(timeout: 10) { shortcutsApp() != nil }
+            await pause(1500)
+        }
+        guard let app = shortcutsApp() else {
+            record(name, false, "Shortcuts did not open", nil)
             return
         }
         let root = AXUIElementCreateApplication(app.processIdentifier)
@@ -1615,10 +1652,18 @@ final class SelfTest {
             return
         }
         // A click selects it (Accessibility's press does not); a second
-        // one when the first only brought its window forward.
+        // one when the first only brought its window forward. Only with
+        // Shortcuts in front: a click never lands in another app.
         let point = CGPoint(x: frame.midX, y: frame.midY)
         var delete: MenuReader.Item?
         for _ in 0..<2 where delete == nil {
+            app.activate()
+            guard await waitUntil(timeout: 2, { NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier }) != nil else {
+                let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "none"
+                record(name, false, (steps + ["Shortcuts not in front (\(front) is): nothing clicked"]).joined(separator: ", "), nil)
+                _ = await focusTestWindow()
+                return
+            }
             await post([.mouseMoved, .leftMouseDown, .leftMouseUp], at: point)
             await pause(600)
             delete = MenuReader.items(pid: app.processIdentifier).first {
@@ -1640,7 +1685,7 @@ final class SelfTest {
             return confirmed
         }
         steps.append("asked, Delete pressed: \(confirmed)")
-        let gone = await waitUntil(timeout: 5) { !AppleShortcuts.read().contains(shortcut) } != nil
+        let gone = await Self.pollShortcuts(for: 5) { !$0.contains(shortcut) }
         if gone, !shortcutsWasRunning {
             app.terminate()
             steps.append("Shortcuts quit")

@@ -32,9 +32,10 @@ enum AppleShortcuts {
     /// were when the tool fails, or while another read runs.
     @discardableResult
     static func read() -> [AppleShortcut] {
-        guard reading.withLock({ running in
-            defer { running = true }
-            return !running
+        guard reading.withLock({ running -> Bool in
+            if running { return false }
+            running = true
+            return true
         }) else { return all() }
         defer { reading.withLock { $0 = false } }
         let started = ContinuousClock.now
@@ -109,7 +110,8 @@ enum AppleShortcuts {
 
     /// Apple's tool with `arguments`: its output and errors apart, and its
     /// exit status. Blocks: off the main thread only. Stopped after
-    /// `timeout`.
+    /// `timeout`, with what it started, killed 3 s later if that did not
+    /// stop it (as `ChildProcess.run` stops a skillie): its output must end.
     private static func runTool(_ arguments: [String], input: Data?, timeout: TimeInterval) throws -> (output: Data, errors: String, status: Int32) {
         let child = ChildProcess()
         child.process.executableURL = URL(fileURLWithPath: AppleShortcut.tool)
@@ -120,7 +122,10 @@ enum AppleShortcuts {
         let stdin = input.map { _ in Pipe() }
         child.process.standardInput = stdin ?? FileHandle.nullDevice
         try child.process.run()
-        let stop = DispatchWorkItem { child.terminate() }
+        let stop = DispatchWorkItem {
+            child.terminateGroup()
+            DispatchQueue.global().asyncAfter(deadline: .now() + 3) { child.terminateGroup(SIGKILL) }
+        }
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: stop)
         defer { stop.cancel() }
         // Written and read on their own: a big input or a big output must
@@ -140,6 +145,7 @@ enum AppleShortcuts {
         }
         let data = output.fileHandleForReading.readDataToEndOfFile()
         readErrors.wait()
+        child.closedOutput()
         child.process.waitUntilExit()
         return (data, String(decoding: said.data, as: UTF8.self), child.process.terminationStatus)
     }
