@@ -180,10 +180,18 @@ final class ActionPanelView: NSView {
         if isPrompting { layoutList() } else { apply() }
     }
 
-    func move(by delta: Int) {
+    /// Past an end, round to the other: ↑ on the first action selects the
+    /// last. Not while the key is held (`wraps` false on its repeats): it
+    /// stops at the end instead of spinning past it.
+    func move(by delta: Int, wraps: Bool = true) {
         note = nil
         guard !shown.isEmpty else { return }
-        selected = min(max(selected + delta, 0), shown.count - 1)
+        let next = selected + delta
+        if wraps, !shown.indices.contains(next) {
+            selected = next < 0 ? shown.count - 1 : 0
+        } else {
+            selected = min(max(next, 0), shown.count - 1)
+        }
         layoutList()
     }
 

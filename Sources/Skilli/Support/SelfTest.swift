@@ -3098,9 +3098,10 @@ final class SelfTest {
     }
 
     /// ⌃N and ⌃P move like ↓ and ↑: in the rows, in ⌘K's list, and ⌃P
-    /// in the empty field brings back the newest search acted on.
+    /// in the empty field brings back the newest search acted on. In ⌘K's
+    /// list a press past an end goes round to the other; held, it stops.
     private func controlKeysMoveLikeArrows() async {
-        let name = "Keyboard: ⌃N / ⌃P move like ↓ / ↑ in the results and in ⌘K's list; ⌃P in the empty field brings back the last search"
+        let name = "Keyboard: ⌃N / ⌃P move like ↓ / ↑ in the results and in ⌘K's list, whose ends go round (not when held); ⌃P in the empty field brings back the last search"
         let launcher = context.launcher
         let preferences = context.preferences
         let (savedReset, savedPins) = (preferences.launcherReset, preferences.launcherPins)
@@ -3138,6 +3139,30 @@ final class SelfTest {
         await control("p")
         let back = launcher.selectedActionTitle
         let inActions = listed.count > 1 && first == listed.first && next == listed[1] && back == listed.first && launcher.isShowingActions
+        // Past an end, round to the other; held (a repeat), the key stops there.
+        func arrow(_ code: Int, held: Bool = false) async {
+            if held {
+                let source = CGEventSource(stateID: .hidSystemState)
+                if let repeated = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(code), keyDown: true) {
+                    repeated.flags = []
+                    repeated.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+                    repeated.post(tap: .cghidEventTap)
+                }
+                await pause(12)
+                postKey(CGKeyCode(code), down: false)
+            } else {
+                await pressKey(nil, code: CGKeyCode(code))
+            }
+            await pause(80)
+        }
+        await arrow(kVK_UpArrow, held: true)
+        let heldAtTop = launcher.selectedActionTitle
+        await arrow(kVK_UpArrow)
+        let roundToLast = launcher.selectedActionTitle
+        await arrow(kVK_DownArrow)
+        let roundToFirst = launcher.selectedActionTitle
+        let wraps = listed.count > 1 && heldAtTop == listed.first && roundToLast == listed.last && roundToFirst == listed.first
+            && launcher.isShowingActions
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         await closeLauncher()
         var recalled = false
@@ -3147,9 +3172,11 @@ final class SelfTest {
             await closeLauncher()
         }
         launcher.recentSearches.forgetAll()
-        record(name, rows && inActions && recalled,
+        record(name, rows && inActions && wraps && recalled,
                "“s”: ⌃N ⌃N → \(third ?? "none") (row 3 \(titles.dropFirst(2).first ?? "none")), ⌃P → \(second ?? "none"): \(rows); "
-                   + "⌘K \(listed.prefix(3)): ⌃N → \(next ?? "none"), ⌃P → \(back ?? "none"): \(inActions); ⌃P in the empty field → “7 * 6”: \(recalled)", nil)
+                   + "⌘K \(listed.prefix(3)): ⌃N → \(next ?? "none"), ⌃P → \(back ?? "none"): \(inActions); "
+                   + "↑ held on the first → \(heldAtTop ?? "none"), ↑ → \(roundToLast ?? "none") (last \(listed.last ?? "none")), ↓ → \(roundToFirst ?? "none"): \(wraps); "
+                   + "⌃P in the empty field → “7 * 6”: \(recalled)", nil)
     }
 
     /// Text selected where the launcher opens is a quicklink's query when
