@@ -33,13 +33,39 @@ enum SkilliAction: Hashable, Sendable {
     case mac(MacAction)
     /// A saved window layout, by its file id.
     case windowLayout(String)
+    /// A launcher command: the mode it turns the launcher into ("Search
+    /// Snippets"), or what its row does. The six that had a case of their
+    /// own before keep it (`command(_:)`).
+    case launcherCommand(LauncherCommand.ID)
+    /// One of the user's snippets, by its file id: typed in the app in
+    /// front, as ↩ on its row does.
+    case snippet(String)
+    /// One of the user's quicklinks: the launcher with its keyword typed,
+    /// as its row picked by name puts it.
+    case quicklink(UUID)
+
+    /// A launcher command's action: the case it always had when it has one
+    /// (✦C's `clipboardHistory`), else `launcherCommand`. Its id is the
+    /// command's `shortcutID` either way.
+    static func command(_ id: LauncherCommand.ID) -> SkilliAction {
+        switch id {
+        case .openSettings: .openSettings
+        case .clipboardHistory: .clipboardHistory
+        case .pasteInSequence: .pasteInSequence
+        case .emoji: .searchEmoji
+        case .searchGIFs: .searchGIFs
+        case .searchMenus: .searchMenus
+        default: .launcherCommand(id)
+        }
+    }
 
     /// Runs inside the event tap callback instead of after it. The launcher
     /// must be key before the next key event is routed, or the first letters
     /// typed after the hotkey land in the previous app.
     var runsInline: Bool {
         switch self {
-        case .toggleLauncher, .clipboardHistory, .searchEmoji, .searchMenus, .searchGIFs: true
+        case .toggleLauncher, .clipboardHistory, .searchEmoji, .searchMenus, .searchGIFs, .quicklink: true
+        case .launcherCommand(let id): LauncherController.mode(for: id) != nil
         default: false
         }
     }
@@ -48,18 +74,18 @@ enum SkilliAction: Hashable, Sendable {
     var id: String {
         switch self {
         case .toggleLauncher: "launcher.toggle"
-        case .openSettings: "settings.open"
+        case .openSettings: LauncherCommand.ID.openSettings.shortcutID
         case .transformSelection(let transform): "text.\(transform.rawValue)"
         case .openURL(let url): "url:\(url)"
         case .openApp(let path): "app:\(path)"
         case .aiPrompt(let prompt): "ai.\(prompt)"
         case .askByVoice: "voice.ask"
         case .dictate: "voice.dictate"
-        case .clipboardHistory: "clipboard.history"
-        case .searchEmoji: SystemShortcuts.emojiSearch
-        case .searchMenus: "menus.search"
-        case .searchGIFs: "gifs.search"
-        case .pasteInSequence: "clipboard.sequence"
+        case .clipboardHistory: LauncherCommand.ID.clipboardHistory.shortcutID
+        case .searchEmoji: LauncherCommand.ID.emoji.shortcutID
+        case .searchMenus: LauncherCommand.ID.searchMenus.shortcutID
+        case .searchGIFs: LauncherCommand.ID.searchGIFs.shortcutID
+        case .pasteInSequence: LauncherCommand.ID.pasteInSequence.shortcutID
         case .mac(.window(let layout)): "window.\(layout.rawValue)"
         case .mac(.system(let command)): "mac.\(command.rawValue)"
         case .mac(.sound(let target)): MacAction.sound(target).rawValue
@@ -70,22 +96,26 @@ enum SkilliAction: Hashable, Sendable {
         // load would be dropped); the id still says what it is.
         case .mac(let action): action.rawValue
         case .windowLayout(let id): "layout.\(id)"
+        case .launcherCommand(let command): command.shortcutID
+        // The launcher row's own ids ("snippet:<file id>").
+        case .snippet(let id): "snippet:\(id)"
+        case .quicklink(let id): "quicklink:\(id.uuidString)"
         }
     }
 
     init?(id: String) {
         switch id {
         case "launcher.toggle": self = .toggleLauncher
-        case "settings.open": self = .openSettings
         case "voice.ask": self = .askByVoice
         case "voice.dictate": self = .dictate
-        case "clipboard.history": self = .clipboardHistory
-        case SystemShortcuts.emojiSearch: self = .searchEmoji
-        case "menus.search": self = .searchMenus
-        case "gifs.search": self = .searchGIFs
-        case "clipboard.sequence": self = .pasteInSequence
         default:
-            if id.hasPrefix("text."), let transform = TextTransform(rawValue: String(id.dropFirst(5))) {
+            if let command = LauncherCommand.ID(shortcutID: id) {
+                self = .command(command)
+            } else if id.hasPrefix("snippet:"), id.count > 8 {
+                self = .snippet(String(id.dropFirst(8)))
+            } else if id.hasPrefix("quicklink:"), let link = UUID(uuidString: String(id.dropFirst(10))) {
+                self = .quicklink(link)
+            } else if id.hasPrefix("text."), let transform = TextTransform(rawValue: String(id.dropFirst(5))) {
                 self = .transformSelection(transform)
             } else if id.hasPrefix("url:"), id.count > 4 {
                 // A linked app's own link saved before its commands were
@@ -137,8 +167,17 @@ enum SkilliAction: Hashable, Sendable {
             "Shortcuts · \(MacAction.shortcut(shortcut, withSelection: withSelection).title)"
         case .mac(let action): action.title
         case .windowLayout(let id): "Window Layout · \(id)"
+        case .launcherCommand(let id): LauncherCommand.all.first { $0.id == id }?.title ?? id.rawValue
+        case .snippet(let id): "Snippet · \(Self.snippetName(id) ?? id)"
+        case .quicklink(let id): "Quicklink · \(Self.quicklinkName(id) ?? "deleted")"
         }
     }
+
+    /// The names of what the user made, read as a title is shown: a
+    /// snippet or quicklink renamed keeps its shortcut, under its new name.
+    /// Set once by the app.
+    nonisolated(unsafe) static var snippetName: (String) -> String? = { _ in nil }
+    nonisolated(unsafe) static var quicklinkName: (UUID) -> String? = { _ in nil }
 }
 
 extension SkilliAction {
@@ -198,6 +237,15 @@ enum ActionCatalog {
         .transformSelection(.lowercase),
         .transformSelection(.capitalized)
     ]
+
+    /// Every launcher command, under the Catalog's groups (Find, Do…), in
+    /// its order: the "?" lists them so.
+    static let launcherCommands: [(group: String, actions: [SkilliAction])] =
+        FeatureCatalog.sections(FeatureCatalog.entries().filter { if case .command = $0.run { true } else { false } }).map { section in
+            (section.group.title, section.entries.compactMap { entry in
+                if case .command(let id) = entry.run { SkilliAction.command(id) } else { nil }
+            })
+        }
 
     static let windows: [SkilliAction] = WindowLayout.allCases.map { .mac(.window($0)) }
 

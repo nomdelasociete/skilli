@@ -4,31 +4,33 @@ import SkilliCore
 // both the "?" and Settings → Catalog show and edit, from one place.
 
 extension CatalogEntry {
-    /// The action a global shortcut runs for it, when one can: a skillie
-    /// only when it needs no argument, as Settings → Keys → Add Shortcut
-    /// lists them. Modes and what types words first have none.
+    /// The action a global shortcut runs for it, when one can: every
+    /// launcher command (into its mode, or what its row does), Mac command
+    /// and window place, and what the user made — a snippet typed, a
+    /// quicklink's keyword in the launcher, a skillie only when it needs no
+    /// argument (as Settings → Keys → Add Shortcut lists them). None for
+    /// what types the start of words (Timer), where the first of something
+    /// is made, nor Do It Here and Ask on a Schedule: ways of saying what
+    /// Ask does, their shortcut would be Ask's own.
     func shortcutAction(skillies: [ScriptCommand]) -> SkilliAction? {
         switch run {
-        case .command(.clipboardHistory): return .clipboardHistory
-        case .command(.emoji): return .searchEmoji
-        case .command(.searchMenus): return .searchMenus
-        case .command(.searchGIFs): return .searchGIFs
-        case .command(.pasteInSequence): return .pasteInSequence
-        case .command(.openSettings): return .openSettings
+        case .command(let command): return .command(command)
         case .system(let command): return .mac(.system(command))
         case .window(let layout): return .mac(.window(layout))
-        case .ask: return .aiPrompt(PromptLibrary.askID)
+        case .ask: return id.hasPrefix("catalog.") ? nil : .aiPrompt(PromptLibrary.askID)
         case .askByVoice: return .askByVoice
         case .dictate: return .dictate
         case .transform(let transform): return .transformSelection(transform)
-        case .prompt(let id): return .aiPrompt(id)
-        case .layout(let id): return .windowLayout(id)
-        case .appLink(let id): return LinkedApp.command(id: id).map { .mac(.appLink($0, variant: nil)) }
-        case .shortcut(let id): return .mac(.shortcut(AppleShortcuts.current(AppleShortcut(id: id, name: "")), withSelection: false))
+        case .prompt(let prompt): return .aiPrompt(prompt)
+        case .snippet(let snippet): return .snippet(snippet)
+        case .quicklink(let link): return .quicklink(link)
+        case .layout(let layout): return .windowLayout(layout)
+        case .appLink(let link): return LinkedApp.command(id: link).map { .mac(.appLink($0, variant: nil)) }
+        case .shortcut(let shortcut): return .mac(.shortcut(AppleShortcuts.current(AppleShortcut(id: shortcut, name: "")), withSelection: false))
         case .skillie(let path):
             guard let command = skillies.first(where: { $0.path == path }), command.arguments.allSatisfy(\.optional) else { return nil }
             return .mac(.script(command))
-        case .command, .type, .snippet, .quicklink, .settings: return nil
+        case .type, .settings: return nil
         }
     }
 }

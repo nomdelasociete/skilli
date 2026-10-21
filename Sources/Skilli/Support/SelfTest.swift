@@ -566,6 +566,7 @@ final class SelfTest {
         if scope == .catalog {
             window.center()
             await catalogListsWhatSkilliDoes()
+            await catalogShortcutsReachEverything()
             await catalogOffLeavesResults()
             guard await focusTestWindow() else { return finish() }
             await linksRunWhatTheyName()
@@ -2344,19 +2345,25 @@ final class SelfTest {
         record(name, undo.passed && asked && kept, undo.detail + "; with invitees: asked \(asked), esc kept it \(kept)", nil)
     }
 
-    /// Settings → Snippets → Delete: the file goes; ⌘Z writes it back.
+    /// Settings → Snippets → Delete: the file and its shortcut go; ⌘Z puts
+    /// both back.
     private func snippetDeleteUndoes() async {
-        let name = "Snippets: Delete goes at once; the card offers Undo ⌘Z, ↩ reaches the app, ⌘Z writes it back as it was"
+        let name = "Snippets: Delete goes at once with its shortcut; the card offers Undo ⌘Z, ↩ reaches the app, ⌘Z writes it back as it was"
         guard let deletes = context.deletes else { return record(name, false, "no deletes", nil) }
         let library = context.snippets
+        let shortcuts = context.shortcuts
         let snippet = library.save(Snippet(id: "", name: "Selftest Undo Snippet", keyword: ";stundo", text: "Kept as written {date}"))
-        defer { library.delete(snippet.id) }
+        let shortcut = shortcuts.add(.snippet(snippet.id))
+        defer {
+            library.delete(snippet.id)
+            shortcuts.remove(shortcut)
+        }
         let undo = await undoCardPutsBack("Snippet Deleted", named: snippet.name) {
-            deletes.snippet(snippet, in: library)
+            deletes.snippet(snippet, in: library, shortcuts: shortcuts)
         } isGone: {
-            library.snippet(snippet.id) == nil
+            library.snippet(snippet.id) == nil && shortcuts.entryID(for: .snippet(snippet.id)) == nil
         } isBack: {
-            library.snippet(snippet.id) == snippet
+            library.snippet(snippet.id) == snippet && shortcuts.entryID(for: .snippet(snippet.id)) == shortcut
         }
         record(name, undo.passed, undo.detail, nil)
     }
@@ -2382,21 +2389,27 @@ final class SelfTest {
         record(name, undo.passed && !entries.isEmpty, undo.detail + "; shortcut rows: \(entries.count)", nil)
     }
 
-    /// Settings → Catalog → Quicklinks → Delete.
+    /// Settings → Catalog → Quicklinks → Delete: the quicklink and its
+    /// shortcut go; ⌘Z puts both back.
     private func quicklinkDeleteUndoes() async {
-        let name = "Quicklinks: Delete goes at once; the card offers Undo ⌘Z, ↩ reaches the app, ⌘Z puts it back in its place"
+        let name = "Quicklinks: Delete goes at once with its shortcut; the card offers Undo ⌘Z, ↩ reaches the app, ⌘Z puts it back in its place"
         guard let deletes = context.deletes else { return record(name, false, "no deletes", nil) }
         let store = context.settings.freshContext().quicklinks
+        let shortcuts = context.shortcuts
         let link = Quicklink(name: "Selftest Undo Link", keyword: "stundo", url: "https://example.com/?q={query}")
         store.save(link)
-        defer { store.delete(link.id) }
+        let shortcut = shortcuts.add(.quicklink(link.id))
+        defer {
+            store.delete(link.id)
+            shortcuts.remove(shortcut)
+        }
         let index = store.links.firstIndex(of: link)
         let undo = await undoCardPutsBack("Quicklink Deleted", named: link.name) {
-            deletes.quicklink(link, in: store)
+            deletes.quicklink(link, in: store, shortcuts: shortcuts)
         } isGone: {
-            !store.links.contains(link)
+            !store.links.contains(link) && shortcuts.entryID(for: .quicklink(link.id)) == nil
         } isBack: {
-            store.links.firstIndex(of: link) == index
+            store.links.firstIndex(of: link) == index && shortcuts.entryID(for: .quicklink(link.id)) == shortcut
         }
         record(name, undo.passed, undo.detail, nil)
     }
@@ -11255,6 +11268,135 @@ final class SelfTest {
                + "↓ over the Do header to Kill a Process: \(overHeader), rows drawn as another: \(misdrawn), header followed to Do: \(followed), headers skipped: \(skippedHeaders); “? kill” first: \(killFirst), drawn as another: \(misdrawnKill), keys \(killKeys); ↩ → Kill: \(killMode); "
                + "“help” finds the command: \(command), ↩ opens the Catalog: \(fromCommand); Timer ↩ types “timer ”: \(typed); "
                + "Clipboard History keys \(clipKeys): \(keycaps); ⌘K \(shownActions): \(actions); “zqxj” lists nothing: \(nothing), footer empty: \(emptyFooter), ⇥ asked nothing: \(tabStayed), ⌘K said a line: \(said), gone with ⌫: \(noteGone); ⌫ left: \(left); launcher-note-light/-dark.png", nil)
+    }
+
+    /// Every launcher command, snippet and quicklink takes a shortcut: each
+    /// "?" entry's action names it back through its id (a command's is its
+    /// `shortcutID`), the ids shortcuts.json files hold (✦C's
+    /// "clipboard.history") still load, Do It Here and Ask on a Schedule
+    /// have none (theirs was Ask's), no two entries share one. With keys:
+    /// "? search snippets", ⌘K → Set Shortcut… records ⌥⇧⌘9 in the card;
+    /// pressed in the test window it opens the launcher in Snippets, again
+    /// closes it. A snippet's shortcut types it there; a quicklink's opens
+    /// the launcher with its keyword typed, again closes it.
+    private func catalogShortcutsReachEverything() async {
+        let name = "Catalog shortcuts: every launcher command, snippet and quicklink takes one; ⌘K → Set Shortcut… on Search Snippets records it, pressed it opens Snippets, again closes; a snippet's types it; a quicklink's types its keyword"
+        let launcher = context.launcher
+        let store = context.shortcuts
+        let popover = context.aiActions.popover
+        let library = context.snippets
+        let snippet = library.save(Snippet(id: "", name: "Selftest Shortcut Snippet", keyword: "", text: "Typed by its shortcut"))
+        guard let quicklink = launcher.quicklinks?().first(where: { $0.takesQuery && !$0.keyword.isEmpty }) else {
+            library.delete(snippet.id)
+            return record(name, false, "no quicklink with a keyword", nil)
+        }
+        let flags: CGEventFlags = [.maskCommand, .maskAlternate, .maskShift]
+        let actions: [SkilliAction] = [.launcherCommand(.searchSnippets), .snippet(snippet.id), .quicklink(quicklink.id)]
+        // A shortcut there before gets its keys back; one added goes.
+        let had = actions.map { action in
+            store.entryID(for: action).map { id in (id: id, chords: store.config.shortcuts.first { $0.id == id }?.chords) }
+        }
+        defer {
+            for (action, had) in zip(actions, had) {
+                if let had {
+                    try? store.setKeys(had.chords, for: had.id)
+                } else if let id = store.entryID(for: action) {
+                    store.remove(id)
+                }
+            }
+            library.delete(snippet.id)
+            textView.string = ""
+        }
+
+        // Every entry, made things included: its action, and back from its id.
+        let entries = FeatureCatalog.entries(FeatureCatalog.Input(snippets: [snippet], quicklinks: [quicklink]))
+        var problems: [String] = []
+        var owners: [String: String] = [:]
+        for entry in entries {
+            let action = entry.shortcutAction(skillies: [])
+            switch entry.run {
+            case .command(let command):
+                if action?.id != command.shortcutID { problems.append("\(entry.title): \(action?.id ?? "none")") }
+            case .snippet, .quicklink:
+                if action == nil { problems.append("\(entry.title): none") }
+            default:
+                break
+            }
+            guard let action else { continue }
+            if SkilliAction(id: action.id) != action { problems.append("\(entry.title): \(action.id) does not name it back") }
+            if let owner = owners.updateValue(entry.title, forKey: action.id) { problems.append("\(entry.title) shares \(action.id) with \(owner)") }
+        }
+        for id in ["catalog.doItHere", "catalog.askSchedule"] where entries.first(where: { $0.id == id })?.shortcutAction(skillies: []) != nil {
+            problems.append("\(id) records Ask's shortcut")
+        }
+        let saved: [String: SkilliAction] = ["clipboard.history": .clipboardHistory, "emoji.search": .searchEmoji, "settings.open": .openSettings,
+                                             "menus.search": .searchMenus, "gifs.search": .searchGIFs, "clipboard.sequence": .pasteInSequence]
+        for (id, action) in saved where SkilliAction(id: id) != action { problems.append("“\(id)” no longer loads") }
+        if !SkilliAction.launcherCommand(.searchSnippets).runsInline || SkilliAction.launcherCommand(.quit).runsInline {
+            problems.append("only what opens the launcher runs inline")
+        }
+
+        // ⌘K → Set Shortcut… on Search Snippets: the card asks, the next keys are it.
+        guard await openLauncher(), await typeCharacter("?") else {
+            await closeLauncher()
+            return record(name, false, "no launcher, or no key types “?” here; \(problems)", nil)
+        }
+        for character in "search snippets" { await pressKey(character) }
+        let selected = await waitUntil(timeout: 1) { launcher.selectedResultTitle == "Search Snippets" } != nil
+        await pressKey("k", flags: .maskCommand)
+        let offered = await waitUntil(timeout: 1) { launcher.shownActions.contains { $0.title == "Set Shortcut…" } } != nil
+        for character in "set shortcut" { await pressKey(character) }
+        _ = await waitUntil(timeout: 1) { launcher.shownActions.first?.title == "Set Shortcut…" }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let asked = await waitUntil(timeout: 2) { popover.isVisible && popover.shownText.hasPrefix("Press the keys for Search Snippets") } != nil
+        await pressKey("9", flags: flags)
+        let said = await waitUntil(timeout: 3) { popover.shownText.hasSuffix("runs Search Snippets.") } != nil
+        let saidText = popover.shownText
+        if popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        await closeLauncher()
+
+        // Pressed where the user types: Snippets, then closed again.
+        guard await focusTestWindow() else { return }
+        await pressKey("9", flags: flags)
+        let opened = await waitUntil(timeout: 2) { launcher.isVisible && launcher.isInSnippets } != nil
+        if opened { await captureLauncherBothWays(as: "launcher-shortcut-snippets") }
+        await pressKey("9", flags: flags)
+        let closed = await waitUntil(timeout: 1) { !launcher.isVisible } != nil
+        await closeLauncher()
+
+        /// Records `keys` for `action` as the Keys pane does (its recorder).
+        func recorded(_ action: SkilliAction, _ key: Character) async -> Bool {
+            let id = store.entryID(for: action) ?? store.add(action)
+            store.beginRecording(id)
+            await pressKey(key, flags: flags)
+            _ = await waitUntil(timeout: 3) { store.recordingID != id }
+            if store.recordingID == id { store.cancelRecording() }
+            return store.config.shortcuts.first { $0.id == id }?.chords != nil
+        }
+        // A snippet's: typed in the test window.
+        let snippetKeys = await recorded(.snippet(snippet.id), "8")
+        guard await focusTestWindow() else { return }
+        window.makeFirstResponder(textView)
+        textView.string = ""
+        await pressKey("8", flags: flags)
+        let typed = await waitUntil(timeout: 2) { self.textView.string == snippet.text } != nil
+        let typedText = textView.string
+        // A quicklink's: its keyword in the launcher, then closed again.
+        let linkKeys = await recorded(.quicklink(quicklink.id), "7")
+        guard await focusTestWindow() else { return }
+        textView.string = ""
+        await pressKey("7", flags: flags)
+        let keyword = await waitUntil(timeout: 2) { launcher.isVisible && launcher.mode == nil && launcher.query == quicklink.keyword + " " } != nil
+        let shownQuery = launcher.query
+        await pressKey("7", flags: flags)
+        let linkClosed = await waitUntil(timeout: 1) { !launcher.isVisible } != nil
+        await closeLauncher()
+
+        record(name, problems.isEmpty && selected && offered && asked && said && opened && closed && snippetKeys && typed && linkKeys && keyword && linkClosed,
+               "entries' actions: \(problems.isEmpty ? "all named back, none shared" : "\(problems)"); “? search snippets”: \(selected), ⌘K Set Shortcut…: \(offered), "
+               + "card asked: \(asked), said: \(said) “\(saidText)”\(store.lastError.map { " refused: \($0.message)" } ?? ""); pressed: Snippets \(opened), again closed \(closed); "
+               + "snippet's keys: \(snippetKeys), typed: \(typed) “\(typedText)”; \(quicklink.name)'s keys: \(linkKeys), launcher on “\(shownQuery)”: \(keyword), again closed: \(linkClosed); "
+               + "launcher-shortcut-snippets-light/-dark.png", nil)
     }
 
     // MARK: - Links
@@ -20896,7 +21038,9 @@ final class SelfTest {
         let settings = panes.flatMap { $0["settings"] as? [[String: Any]] ?? [] }
         let keys = Set(settings.compactMap { $0["key"] as? String })
         let secrets = settings.filter { item in SettingsTable.entries.contains { $0.key == item["key"] as? String && $0.secret } }
-        let secretsHidden = secrets.count == 4 && secrets.allSatisfy { ["set", "not set"].contains($0["value"] as? String ?? "") }
+        // Every secret the table holds (the keys, the relay's token, Klipy's), each only set or not.
+        let secretsHidden = secrets.count == SettingsTable.entries.filter(\.secret).count
+            && secrets.allSatisfy { ["set", "not set"].contains($0["value"] as? String ?? "") }
         // The decision keys the self-test may hold: never in what agents read.
         let keyValues = [context.ai.decisionKey(for: .openAI), context.ai.decisionKey(for: .typeSafe)].compactMap { $0 }.filter { $0.count > 8 }
         let noKey = !keyValues.contains { all.output.contains($0) } && !all.output.contains("sk-ant-")
@@ -20923,6 +21067,8 @@ final class SelfTest {
     private func settingToolsRefuseWhatIsNotValid(_ scratch: Preferences) async {
         let name = "Settings tools refuse at once, without a card: a value, a setting, a key, rights, a folder, a list, a shortcut taken (by skil.li, the launcher, macOS)"
         let popover = context.aiActions.popover
+        // skil.li's Calendar and the Calendar app: only where the tool finds that app.
+        let calendarApp = context.tools.settingTools?.findApp("Calendar").map { $0.deletingPathExtension().lastPathComponent == "Calendar" } ?? false
         let cases: [(tool: String, arguments: String, expect: String)] = [
             (SettingsTable.Tool.setSetting, #"{"pane":"Backup","setting":"How often","value":"sometimes"}"#, "weekly (Every week)"),
             (SettingsTable.Tool.setSetting, #"{"pane":"Backup","setting":"Day","value":"Sunday"}"#, "Its settings: Back up to, How often, Keep"),
@@ -20938,9 +21084,11 @@ final class SelfTest {
             (SettingsTable.Tool.addShortcut, #"{"action":"Clipboard History","keys":"y"}"#, "Start with ✦"),
             (SettingsTable.Tool.addShortcut, #"{"action":"Clipboard History","keys":"cmd+k"}"#, "Used by the launcher: Actions."),
             (SettingsTable.Tool.addShortcut, #"{"action":"Clipboard History","keys":"opt+cmd+escape"}"#, "Used by macOS: Force Quit Applications"),
+            // Every launcher command takes one: found by name (refused for its keys only).
+            (SettingsTable.Tool.addShortcut, #"{"action":"Search Snippets","keys":"y"}"#, "Start with ✦"),
             (SettingsTable.Tool.setAlias, #"{"alias":"two words","item":"Emoji"}"#, "without a space"),
             (SettingsTable.Tool.createQuicklink, #"{"name":"Bad","url":"ftp://example.com/{query}"}"#, "https://")
-        ]
+        ] + (calendarApp ? [(SettingsTable.Tool.addShortcut, #"{"action":"Calendar","keys":"ctrl+opt+cmd+8"}"#, "Two are named “Calendar”")] : [])
         let schedule = scratch.backupSchedule
         let details = scratch.formProfiles
         var wrong: [String] = []
