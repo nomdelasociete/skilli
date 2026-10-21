@@ -12951,10 +12951,14 @@ final class SelfTest {
         settings.scrollPaneToTop()
         await closeSettings()
 
-        let fast = opened.first < .milliseconds(120) && opened.whole < .milliseconds(250) && again.whole < .milliseconds(250)
+        // Every row drawn: 250 ms for the ~144 entries it was set on, 1.75 ms
+        // an entry past them, since how many there are depends on the
+        // apps installed (CleanShot X's 25, an app file's).
+        let wholeBudget = max(Duration.milliseconds(250), .microseconds(1_750 * entries))
+        let fast = opened.first < .milliseconds(120) && opened.whole < wholeBudget && again.whole < wholeBudget
         record(name, entries > 80 && grouped && overflow <= 1 && found && filteredOverflow <= 1 && popover && recording && !leftBehind && readOnly
                    && listsLast && atQuicklinks && fast,
-               "\(entries) entries in \(groups); pane drawn in \(Int(opened.first.milliseconds)) ms, every row in \(Int(opened.whole.milliseconds)) ms "
+               "\(entries) entries in \(groups); pane drawn in \(Int(opened.first.milliseconds)) ms, every row in \(Int(opened.whole.milliseconds)) ms (budget \(Int(wholeBudget.milliseconds))) "
                    + "(again \(Int(again.first.milliseconds)) / \(Int(again.whole.milliseconds)) ms; Keys \(Int(keysDrawn.milliseconds)) ms; entries read in "
                    + "\(Int((model.lastLoad ?? .zero).milliseconds * 1_000)) µs); past the window: \(Int(overflow)) pt, searched \(Int(filteredOverflow)) pt; "
                    + "“clip” finds Clipboard History first: \(found); its popover with its alias: \(popover); recording in a popover: \(recording), "
