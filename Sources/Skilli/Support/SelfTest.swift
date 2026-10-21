@@ -18610,6 +18610,9 @@ final class SelfTest {
         // Whatever happens, the keys come back.
         defer { cleaner.stop() }
         guard await focusTestWindow() else { return }
+        // The keys typed below land in the text view, not in a control an
+        // earlier check left the keyboard on (late in the ai group).
+        window.makeFirstResponder(textView)
         textView.string = ""
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
         for character in "clean keyboard" { await pressKey(character) }
@@ -20208,8 +20211,17 @@ final class SelfTest {
         defer { try? FileManager.default.removeItem(at: file) }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
-        guard let textEditPID = (try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration))?.processIdentifier else {
+        guard let textEdit = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration) else {
             record(name, false, "could not open TextEdit", nil)
+            return
+        }
+        let textEditPID = textEdit.processIdentifier
+        // Accessibility makes an app frontmost only once it has finished
+        // launching (kAXErrorCannotComplete before): a TextEdit started
+        // just now stayed behind.
+        guard await waitUntil(timeout: 5, { textEdit.isFinishedLaunching }) != nil else {
+            record(name, false, "TextEdit never finished launching", nil)
+            await cleanUp(bundleID: bundleID, wasRunning: wasRunning)
             return
         }
         let permissions = PermissionCenter()
@@ -20258,9 +20270,17 @@ final class SelfTest {
 
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
-        let opened = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration)
-        guard let textEditPID = opened?.processIdentifier else {
+        guard let textEdit = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration) else {
             record("Settings come to front over another app", false, "could not open TextEdit", nil)
+            return
+        }
+        let textEditPID = textEdit.processIdentifier
+        // Accessibility makes an app frontmost only once it has finished
+        // launching (kAXErrorCannotComplete before): a TextEdit started
+        // just now stayed behind, and the check failed before Settings opened.
+        guard await waitUntil(timeout: 5, { textEdit.isFinishedLaunching }) != nil else {
+            record("Settings come to front over another app", false, "TextEdit never finished launching", nil)
+            await cleanUp(bundleID: bundleID, wasRunning: wasRunning)
             return
         }
 

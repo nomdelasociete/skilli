@@ -87,6 +87,10 @@ xcodebuild -project Skilli.xcodeproj -scheme Skilli -destination 'platform=macOS
   never land in the user's apps. Needs Accessibility for the Debug build.
   It writes `dist/settings-<pane>.png`, captured from the window server
   (ScreenCaptureKit, own windows only: no Screen Recording permission).
+  A check that types into the test window makes the control it types into
+  first responder (an earlier check may have left the keyboard elsewhere);
+  an app it opens is made frontmost through Accessibility only once
+  `isFinishedLaunching` (before, `kAXErrorCannotComplete` and nothing).
 - Do not launch the normal app from an agent unless asked: it installs a global
   event tap and may remap Caps Lock. The user launches from Xcode or `run`.
 
@@ -1133,10 +1137,15 @@ per-show work.
   work; the "?" lists it dimmed with "Off" and runs it. Only entries with
   rows have a switch (`CatalogEntry.canBeOff`: not Ask by Voice, Do It
   Here, the case changes, the "make your first" rows).
-- Speed: a Form builds every row as it opens (no laziness on macOS): the
-  pane draws its first group at once (~65 ms on the mini) and the rest on
-  the next turn of the run loop (~210 ms whole; Keys ~120–140 ms). Rows
+- Speed: a Form builds every row as it opens (no laziness on macOS: a
+  ScrollView over a stack, every row measured): the pane draws its first
+  group at once (~60–70 ms on the mini) and the rest on the next turn of
+  the run loop (~210 ms whole for ~130 rows; Keys ~120–140 ms). Rows
   hold no controls: 92 switches or fields would cost ~0.1 s each kind.
+  A row's text takes the width its right side leaves, never weighed
+  against a Spacer (each row's two lines were measured at several widths:
+  ~230 → ~210 ms whole, 2026-10-21); the settings-search glow is drawn
+  only while it glows.
 - `selftest settings`: the pane (fast, fits, search, a row's popover,
   recording there and ⎋ leaving no empty shortcut, rows with nothing to
   change read-only, opened at its quicklinks), alias typed with keys in a

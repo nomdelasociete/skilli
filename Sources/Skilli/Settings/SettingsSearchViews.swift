@@ -342,7 +342,8 @@ private struct SettingAnchor: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background { SettingGlow(level: glow) }
+            // Only while it glows: every row of every pane has an anchor.
+            .background { if glow > 0 { SettingGlow(level: glow) } }
             .id(key)
             .onAppear { search?.appeared(key) }
             .onDisappear { search?.disappeared(key) }
