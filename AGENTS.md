@@ -3361,7 +3361,7 @@ re-investigating.
   parameters). skil.li's own: Capture / Record Front Window put the front
   window's frame in the link (`CleanShot.frame`: points from the
   display's bottom left, `display` 1 the main one in `NSScreen.screens`'
-  order; checked on the mini with a real capture of a Finder window, one
+  order; checked with a real capture of a Finder window, one
   display), Annotate / Pin Latest Screenshot the newest screenshot's path
   (PNG or JPEG). `SystemCommands.openAppLink` is the self-test's dry run;
   `remote apps` (✦K C, "capture front", ⌘K, the frame) captures nothing.

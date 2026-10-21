@@ -20,7 +20,7 @@ Last updated: 2026-10-16.
 | Launcher hotkey + typing right after it | Done | Self-test |
 | Launcher moved by a drag on its glass, pulled onto the screen's middles and its standard height (discreet guides, alignment haptic), opens there again on every screen (centered stays centered, corners stay corners); Reset Launcher Position, Settings → Launcher → Reset Position | Done | Unit tests (`LauncherPlace`, snap); `selftest settings` (real drag, guides while held, plain click, reopen, reset) |
 | Local transforms (upper/lower/title) | Done | Unit tests + self-test |
-| CleanShot X URL-scheme actions | Done: all documented commands as launcher rows, Catalog, ⌘K variants, keys, links, Ask, agents (docs/apps.md) | Unit tests; `selftest apps` (dry run); front window frame checked with a real capture on the mini (one display) |
+| CleanShot X URL-scheme actions | Done: all documented commands as launcher rows, Catalog, ⌘K variants, keys, links, Ask, agents (docs/apps.md) | Unit tests; `selftest apps` (dry run); front window frame checked with a real capture (one display) |
 | `--benchmark` perf report + layout snapshots | Done | — |
 | Settings window, System Settings layout (General, Launcher, Hyper Key, Shortcuts, About) | Done | Self-test: 3 entry points, comes to front over other apps, live prefs; pane snapshots |
 | Launcher commands (skil.li Settings, Quit skil.li) | Done | Self-test |
