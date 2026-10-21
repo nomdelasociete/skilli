@@ -20981,6 +20981,8 @@ final class SelfTest {
     private func settingToolsRefuseWhatIsNotValid(_ scratch: Preferences) async {
         let name = "Settings tools refuse at once, without a card: a value, a setting, a key, rights, a folder, a list, a shortcut taken (by skil.li, the launcher, macOS)"
         let popover = context.aiActions.popover
+        // skil.li's Calendar and the Calendar app: only where the tool finds that app.
+        let calendarApp = context.tools.settingTools?.findApp("Calendar").map { $0.deletingPathExtension().lastPathComponent == "Calendar" } ?? false
         let cases: [(tool: String, arguments: String, expect: String)] = [
             (SettingsTable.Tool.setSetting, #"{"pane":"Backup","setting":"How often","value":"sometimes"}"#, "weekly (Every week)"),
             (SettingsTable.Tool.setSetting, #"{"pane":"Backup","setting":"Day","value":"Sunday"}"#, "Its settings: Back up to, How often, Keep"),
@@ -20998,10 +21000,9 @@ final class SelfTest {
             (SettingsTable.Tool.addShortcut, #"{"action":"Clipboard History","keys":"opt+cmd+escape"}"#, "Used by macOS: Force Quit Applications"),
             // Every launcher command takes one: found by name (refused for its keys only).
             (SettingsTable.Tool.addShortcut, #"{"action":"Search Snippets","keys":"y"}"#, "Start with ✦"),
-            (SettingsTable.Tool.addShortcut, #"{"action":"Calendar","keys":"ctrl+opt+cmd+8"}"#, "Two are named “Calendar”"),
             (SettingsTable.Tool.setAlias, #"{"alias":"two words","item":"Emoji"}"#, "without a space"),
             (SettingsTable.Tool.createQuicklink, #"{"name":"Bad","url":"ftp://example.com/{query}"}"#, "https://")
-        ]
+        ] + (calendarApp ? [(SettingsTable.Tool.addShortcut, #"{"action":"Calendar","keys":"ctrl+opt+cmd+8"}"#, "Two are named “Calendar”")] : [])
         let schedule = scratch.backupSchedule
         let details = scratch.formProfiles
         var wrong: [String] = []
