@@ -311,6 +311,15 @@ public enum CleanShot {
         ]
     }
 
+    /// A CleanShot link that sends the capture to CleanShot Cloud
+    /// (`action=upload`, whatever its path or case): asked every time,
+    /// whoever opens it (an agent's `open_url`, `run_action`).
+    public static func uploads(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == LinkedApp.cleanShot.scheme,
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return false }
+        return items.contains { $0.name.lowercased() == "action" && $0.value?.lowercased() == "upload" }
+    }
+
     static let groups: [LinkedApp.CommandGroup] = [
         .init(title: "Capture", commands: ["capture-area", "capture-front-window", "capture-window", "capture-fullscreen", "capture-previous-area",
                                            "self-timer", "scrolling-capture", "all-in-one", "capture-text"]),

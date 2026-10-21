@@ -543,6 +543,7 @@ final class SelfTest {
             guard await focusTestWindow() else { return finish() }
             await cleanShotRouting()
             if !aborted { await cleanShotFromLauncher() }
+            if !aborted { await cleanShotFromSkillies() }
             if !aborted { await appsPaneShown() }
             if !aborted { await appleShortcutsRun() }
             return finish()
@@ -1653,6 +1654,80 @@ final class SelfTest {
         var value: CFTypeRef?
         AXUIElementCopyAttributeValue(root, kAXWindowsAttribute as CFString, &value)
         return (value as? [AXUIElement]) ?? []
+    }
+
+    /// A skillie reaches CleanShot X as agents do (skillies/README.md):
+    /// `Skilli call run_action` with a variant opens its link
+    /// (`action=copy`); a variant it does not take is said with the ones
+    /// it takes; upload asks in the card even with run_action allowed for
+    /// good, and esc opens nothing. Dry run: nothing captured.
+    private func cleanShotFromSkillies() async {
+        let name = "CleanShot X from a skillie: `Skilli call run_action variant=copy` opens capture-area?action=copy; a wrong variant lists the right ones and opens nothing; upload asks every time, through run_action or open_url, even right after run_action was allowed in the card"
+        guard let commands = context.aiActions.systemCommands else {
+            record(name, false, "no SystemCommands", nil)
+            return
+        }
+        guard LinkedApps.installed("cleanshot") != nil else {
+            record(name, true, "CleanShot X is not installed here: nothing to call", nil)
+            return
+        }
+        let popover = context.aiActions.popover
+        let settings = context.tools.settings
+        let saved = (link: commands.openAppLink, mode: settings.mode, right: settings.override(for: "run_action"))
+        commands.openAppLink = { _ in }
+        commands.lastAppLink = nil
+        settings.mode = .auto
+        settings.setOverride(.always, for: "run_action")
+        defer {
+            commands.openAppLink = saved.link
+            settings.mode = saved.mode
+            settings.setOverride(saved.right, for: "run_action")
+        }
+        guard await focusTestWindow() else { return }
+        let copy = await skilliCall("run_action", #"{"id":"cleanshot.capture-area","variant":"copy"}"#)
+        let opened = await waitUntil(timeout: 2) { commands.lastAppLink?.absoluteString == "cleanshot://capture-area?action=copy" } != nil
+        commands.lastAppLink = nil
+        let wrong = await skilliCall("run_action", #"{"id":"cleanshot.capture-area","variant":"autoscroll"}"#)
+        await pause(300)
+        let wrongOpenedNothing = commands.lastAppLink == nil
+        async let upload = skilliCall("run_action", #"{"id":"cleanshot.capture-area","variant":"upload"}"#)
+        let asked = await waitUntil(timeout: 3) { popover.isVisible && popover.phase == .approving } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let declined = await upload
+        await pause(300)
+        let uploadOpenedNothing = commands.lastAppLink == nil
+        // The same upload as CleanShot's own link through open_url: asked
+        // too. Its opening is stubbed: nothing leaves even if it was not.
+        var openedURLs: [URL] = []
+        let savedOpen = context.tools.tools.openURL
+        context.tools.tools.openURL = { openedURLs.append($0) }
+        defer { context.tools.tools.openURL = savedOpen }
+        _ = await waitUntil(timeout: 2) { !popover.isVisible }
+        async let viaURL = skilliCall("open_url", #"{"url":"cleanshot://capture-area?action=upload"}"#)
+        let askedURL = await waitUntil(timeout: 3) { popover.isVisible && popover.phase == .approving } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let declinedURL = await viaURL
+        // run_action asked in the card and allowed there: the upload still
+        // asks on its own (that Allow does not answer for it).
+        settings.setOverride(nil, for: "run_action")
+        commands.lastAppLink = nil
+        _ = await waitUntil(timeout: 2) { !popover.isVisible }
+        async let afterAllow = skilliCall("run_action", #"{"id":"cleanshot.capture-area","variant":"upload"}"#)
+        let toolAsked = await waitUntil(timeout: 3) { popover.isVisible && popover.phase == .approving } != nil
+        let toolTitle = popover.shownTitle
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        _ = await waitUntil(timeout: 2) { !popover.isVisible || popover.shownTitle != toolTitle }
+        let uploadAsked = await waitUntil(timeout: 3) { popover.isVisible && popover.phase == .approving } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let declinedAfterAllow = await afterAllow
+        await pause(300)
+        let passed = copy.status == 0 && opened && wrong.status == 1 && wrong.output.contains("copy, save") && wrongOpenedNothing
+            && asked && declined.status == 1 && declined.output.contains("declined") && uploadOpenedNothing
+            && askedURL && declinedURL.status == 1 && openedURLs.isEmpty
+            && toolAsked && uploadAsked && declinedAfterAllow.status == 1 && commands.lastAppLink == nil
+        record(name, passed,
+               "copy: exit \(copy.status), opened \(opened); wrong variant: exit \(wrong.status) “\(wrong.output.prefix(80))”, opened nothing: \(wrongOpenedNothing); upload asked: \(asked), esc → exit \(declined.status) “\(declined.output.prefix(40))”, opened nothing: \(uploadOpenedNothing); open_url upload asked: \(askedURL), esc → exit \(declinedURL.status), opened \(openedURLs.count); run_action allowed in the card (\(toolAsked)), upload still asked: \(uploadAsked), esc → exit \(declinedAfterAllow.status), link \(commands.lastAppLink?.absoluteString ?? "none")",
+               nil)
     }
 
     /// Settings → Apps (docs/apps.md): CleanShot X's row (its version,
