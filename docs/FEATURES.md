@@ -234,7 +234,11 @@ Text you type often, from a keyword or the launcher.
   `{cursor}`…); its keyword types it anywhere, at once or after a space
   or ↩, and so does a shortcut of its own. Never in password fields.
 - **Search Snippets** (`snip`): by name, or by what you need with ⇥
-  ("my iban"). ↩ types it, ⌘↩ copies it.
+  ("my iban"). Beside the list, the snippet as it would type now (today's
+  date, where the caret ends, the copy on the clipboard when Paste from
+  Other Apps allows skil.li; otherwise `{clipboard}` stays as written and
+  the clipboard is not read) and its keyword, when it expands, alias,
+  shortcut and size. ↩ types it, ⌘↩ copies it.
 - **New Snippet** in the launcher: this pane, its editor open on a new
   snippet.
 

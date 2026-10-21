@@ -159,12 +159,32 @@ final class SnippetExpander {
     /// the user (Paste from Other Apps).
     private func values(for snippet: Snippet) -> [PromptTemplate.Variable: String] {
         let usesClipboard = PromptTemplate(snippet.text).uses(.clipboard)
-        return AIActionController.values(
+        return Self.values(clipboard: usesClipboard ? NSPasteboard.general.string(forType: .string) ?? "" : "")
+    }
+
+    /// What a snippet's placeholders are filled with: the date and time,
+    /// the app in front, `clipboard`; no selection, window or profile.
+    private static func values(clipboard: String) -> [PromptTemplate.Variable: String] {
+        AIActionController.values(
             selection: "",
-            clipboard: usesClipboard ? NSPasteboard.general.string(forType: .string) ?? "" : "",
+            clipboard: clipboard,
             app: NSWorkspace.shared.frontmostApplication?.localizedName ?? "",
             window: "",
             profile: ""
         )
+    }
+
+    /// The snippet as it would type now, for Search Snippets' preview: the
+    /// same expansion and values as typing it, the clipboard read only when
+    /// macOS lets skil.li without asking (a preview never makes it ask);
+    /// otherwise `{clipboard}` is in `unfilled`. Values are made only for a
+    /// text with placeholders.
+    func preview(of snippet: Snippet) -> (pieces: [Snippet.Piece], unfilled: Set<PromptTemplate.Variable>) {
+        let tokens = PromptTemplate(snippet.text).tokens()
+        guard tokens.contains(where: \.isKnown) else { return (snippet.expansion([:]), []) }
+        let usesClipboard = tokens.contains { $0.variable == .clipboard }
+        let readable = usesClipboard && NSPasteboard.general.accessBehavior == .alwaysAllow
+        let values = Self.values(clipboard: readable ? NSPasteboard.general.string(forType: .string) ?? "" : "")
+        return (snippet.expansion(values), usesClipboard && !readable ? [.clipboard] : [])
     }
 }

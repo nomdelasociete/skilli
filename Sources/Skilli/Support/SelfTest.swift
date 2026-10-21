@@ -16005,28 +16005,63 @@ final class SelfTest {
         }
     }
 
-    /// "snip " turns the launcher into Search Snippets; a name filters;
-    /// what one needs then ⇥ lets the decision model pick (the user's
-    /// key); Return types it in the test window.
+    /// "snip " turns the launcher into Search Snippets: the list narrows
+    /// beside the preview, each row the name and its keyword's keycap, the
+    /// preview follows ↓; a snippet with placeholders shows as it would
+    /// type now (the date filled, the clipboard filled or left as written
+    /// when reading it would ask, the caret) and its information (keyword,
+    /// when it expands, placeholders, alias, shortcut, size, file date);
+    /// code monospaced; nothing found, the quiet tile. A name filters; what
+    /// one needs then ⇥ lets the decision model pick (the user's key);
+    /// Return types it in the test window; esc puts the list back whole.
     private func snippetsFoundByMeaning() async {
-        let name = "Search Snippets: “snip ” opens the mode, “adresse” filters, “mon iban” then ⇥ picks the IBAN, ↩ types it here"
+        let name = "Search Snippets: “snip ” opens the mode beside its preview (the snippet as it would type now, its information, ↓ follows), “adresse” filters, “mon iban” then ⇥ picks the IBAN, ↩ types it here"
         let library = context.snippets
         let ibanText = "FR76 3000 6000 0112 3456 7890 \(Int.random(in: 100...999))"
+        let datedText = "Rendez-vous confirmé pour le {date}.\nCopié : {clipboard}\nÀ bientôt, {cursor}\nCamille"
         let seeded = [
             library.save(Snippet(id: "", name: "IBAN perso", keyword: ";iban", text: ibanText)),
             library.save(Snippet(id: "", name: "Adresse bureau", keyword: ";bur", text: "14 avenue de l'Opéra, 75001 Paris")),
             library.save(Snippet(id: "", name: "Refus poli", keyword: ";non", text: "Merci, mais ce ne sera pas possible cette fois-ci.")),
-            library.save(Snippet(id: "", name: "Lien Calendly", keyword: ";cal", text: "https://calendly.com/camille/30min"))
+            library.save(Snippet(id: "", name: "Lien Calendly", keyword: ";cal", text: "https://calendly.com/camille/30min")),
+            library.save(Snippet(id: "", name: "Confirmation datée", keyword: ";conf", text: datedText)),
+            library.save(Snippet(id: "", name: "Garde Swift", keyword: ";gs",
+                                 text: "guard let url = URL(string: address) else {\n    return nil\n}\nlet data = try Data(contentsOf: url)")),
+            // Long and without a keyword: the fade, no Keyword nor Expands.
+            library.save(Snippet(id: "", name: "Relance devis", keyword: "", text: (["Bonjour Margot,", ""]
+                + Array(repeating: "Je me permets de revenir vers vous au sujet du devis envoyé la semaine dernière pour la refonte du site de Lumière, "
+                    + "dont nous avions parlé ensemble.", count: 6) + ["", "Bien à vous,", "Camille"]).joined(separator: "\n")))
         ]
+        let dated = seeded[4]
         let launcher = context.launcher
+        let preferences = context.preferences
+        let store = context.shortcuts
         let keys = userDecisionKeys
         let saved = (launcher.snippetMeaningAvailable, launcher.snippetMeaning)
+        let savedAliases = preferences.launcherAliases
         // The self-test's own Keychain items hold no decision key: ⇥ uses
         // the user's here, as the other live checks do.
         launcher.snippetMeaningAvailable = { !keys.isEmpty }
         launcher.snippetMeaning = { request in await library.searchByMeaning(request, keys: keys) }
+        // An alias and a shortcut, for the preview to say.
+        preferences.launcherAliases.append(LauncherAlias(id: "snippet:\(dated.id)", alias: "rdv", title: dated.name))
+        let shortcutID = store.add(.snippet(dated.id))
+        // The Shortcut row is checked only if its fixture took: a refusal
+        // fails the check and says why.
+        var shortcutSet = false
+        var shortcutRefused = ""
+        do {
+            try store.setKeys([Chord(parsing: "ctrl+opt+cmd+8")], for: shortcutID)
+            shortcutSet = true
+        } catch {
+            shortcutRefused = store.lastError?.message ?? error.localizedDescription
+        }
+        let sentinel = "selftest-copy-\(Int.random(in: 100...999))"
+        setClipboard(sentinel)
         defer {
             (launcher.snippetMeaningAvailable, launcher.snippetMeaning) = saved
+            preferences.launcherAliases = savedAliases
+            store.remove(shortcutID)
             for snippet in seeded { library.delete(snippet.id) }
         }
         guard await focusTestWindow() else { return }
@@ -16036,10 +16071,63 @@ final class SelfTest {
         _ = await waitUntil(timeout: 1) { launcher.isVisible }
         for character in "snip " { await pressKey(character) }
         let mode = await waitUntil(timeout: 1) { launcher.isInSnippets } != nil
+        let preview = launcher.snippetsPreview
         let listed = launcher.resultTitles.count
+        let split = !preview.isHidden && launcher.tableView.frame.width < 400
+        // Each row its keyword's keycap; the preview follows ↓.
+        let caps = launcher.shownTrailingKeycaps.prefix(4).map { $0 ?? "none" }
+        let capped = launcher.shownTrailingKeycaps.contains(";iban") && launcher.shownTrailingKeycaps.contains(";conf")
+        let firstShown = preview.shownID
+        await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
+        let followed = await waitUntil(timeout: 1) { preview.shownID != nil && preview.shownID != firstShown } != nil
+
+        // As it would type now.
+        for character in "confirm" { await pressKey(character) }
+        let datedShown = await waitUntil(timeout: 1) { preview.shownID == dated.id } != nil
+        let today = DateFormatter.localizedString(from: .now, dateStyle: .long, timeStyle: .none)
+        let readable = NSPasteboard.general.accessBehavior == .alwaysAllow
+        let expected = "Rendez-vous confirmé pour le \(today).\nCopié : \(readable ? sentinel : "")\nÀ bientôt, \nCamille"
+        let typedRight = preview.shownTyped == expected
+        let filledRight = preview.shownFilled == (readable ? [today, sentinel] : [today])
+            && preview.shownUnfilled == (readable ? [] : ["{clipboard}"]) && preview.shownCaret && !preview.shownCode
+        let info = Dictionary(preview.shownInfo, uniquingKeysWith: { first, _ in first })
+        let expands = !preferences.snippetExpansion ? "Off" : preferences.snippetExpansionMode.title
+        let informed = info["Keyword"] == ";conf" && (info["Expands"] == expands || info["Expands"]?.hasPrefix("Not in") == true)
+            && info["Placeholders"] == "{date}, {clipboard}, {cursor}" && info["Alias"] == "rdv"
+            && shortcutSet && info["Shortcut"] == "⌃⌥⌘8" && info["Size"]?.contains("characters") == true && info["Modified"] != nil
+        let fast = preview.lastShowTime < .milliseconds(8)
+        let showTime = preview.lastShowTime
+        let datedDetail = "“\(preview.shownTyped.replacingOccurrences(of: "\n", with: "⏎"))”, filled \(preview.shownFilled), "
+            + "unfilled \(preview.shownUnfilled), caret \(preview.shownCaret); \(preview.shownInfo.map { "\($0.0): \($0.1)" }.joined(separator: ", "))"
+        // Beside the preview, a row is its name and its keyword: no alias cap.
+        let nameOnly = launcher.shownTrailingKeycaps.first == ";conf" && launcher.shownAliasCaps.first == .some(nil)
+        await captureLauncherBothWays(as: "launcher-snippets")
+        for _ in 0..<"confirm".count { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+
+        // Code, monospaced under its language.
+        for character in "garde" { await pressKey(character) }
+        let code = await waitUntil(timeout: 1) { preview.shownID == seeded[5].id && preview.shownCode } != nil
+        await captureLauncherBothWays(as: "launcher-snippets-code")
+        for _ in 0..<"garde".count { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+
+        // Long, no keyword: no keycap, no Keyword nor Expands; it fades.
+        for character in "relance" { await pressKey(character) }
+        let long = await waitUntil(timeout: 1) { preview.shownID == seeded[6].id } != nil
+            && launcher.shownTrailingKeycaps.first == .some(nil) && !preview.shownInfo.contains { $0.0 == "Keyword" || $0.0 == "Expands" }
+        await captureLauncherBothWays(as: "launcher-snippets-long")
+        for _ in 0..<"relance".count { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+
+        // Nothing found: the quiet tile, no information.
+        for character in "zzqxw" { await pressKey(character) }
+        let quiet = await waitUntil(timeout: 1) { launcher.resultTitles.isEmpty && preview.shownID == nil && preview.shownInfo.isEmpty } != nil
+        await captureLauncherBothWays(as: "launcher-snippets-empty")
+        for _ in 0..<"zzqxw".count { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+
         for character in "adresse" { await pressKey(character) }
         let filtered = await waitUntil(timeout: 1) { launcher.resultTitles.first == "Adresse bureau" } != nil
-        await captureLauncherBothWays(as: "launcher-snippets")
+        let plain = await waitUntil(timeout: 1) { preview.shownID == seeded[1].id } != nil
+            && preview.shownTyped == "14 avenue de l'Opéra, 75001 Paris" && preview.shownFilled.isEmpty && !preview.shownCaret
+            && !preview.shownInfo.contains { $0.0 == "Placeholders" }
         for _ in 0..<"adresse".count { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
 
         var meaningDetail = "no decision key: skipped"
@@ -16050,15 +16138,22 @@ final class SelfTest {
             let start = ContinuousClock.now
             let found = await waitUntil(timeout: 6) { launcher.isShowingSnippetMeaning && launcher.resultTitles.first == "IBAN perso" } != nil
             let seconds = (ContinuousClock.now - start).milliseconds / 1_000
+            let paneFollows = await waitUntil(timeout: 1) { preview.shownID == seeded[0].id } != nil
             await captureLauncherBothWays(as: "launcher-snippets-meaning")
             if found { await pressKey(nil, code: CGKeyCode(kVK_Return)) }
             let typed = await waitUntil(timeout: 2) { self.textView.string == ibanText } != nil
-            meaningPassed = found && typed
-            meaningDetail = "⇥ found the IBAN: \(found) in \(String(format: "%.2f", seconds)) s (\(launcher.resultTitles.first ?? "nothing")), typed: \(typed)"
+            meaningPassed = found && paneFollows && typed
+            meaningDetail = "⇥ found the IBAN: \(found) in \(String(format: "%.2f", seconds)) s (\(launcher.resultTitles.first ?? "nothing")), pane on it: \(paneFollows), typed: \(typed)"
         }
         await closeLauncher()
-        record(name, mode && filtered && meaningPassed,
-               "mode: \(mode) (\(listed) snippets), “adresse” first: \(filtered); \(meaningDetail)", nil)
+        let whole = preview.isHidden && launcher.tableView.frame.width > 600
+        let paneDetail = "split: \(split), keycaps: \(caps), ↓ followed: \(followed); dated shown: \(datedShown), name and keyword only: \(nameOnly), "
+            + "typed as now: \(typedRight), clipboard readable: \(readable), filled: \(filledRight), information: \(informed) (shortcut set: \(shortcutSet)\(shortcutRefused.isEmpty ? "" : ", refused: \(shortcutRefused)")): "
+            + "\(datedDetail); shown in \(showTime.compact): \(fast); code: \(code), long without a keyword: \(long), nothing found quiet: \(quiet), plain: \(plain); list whole again: \(whole)"
+        record(name, mode && split && capped && followed && datedShown && nameOnly && typedRight && filledRight && informed && fast && code && long && quiet
+               && filtered && plain && meaningPassed && whole,
+               "mode: \(mode) (\(listed) snippets), \(paneDetail), “adresse” first: \(filtered); \(meaningDetail); "
+               + "launcher-snippets(-code, -long, -empty, -meaning)-light/-dark.png", nil)
     }
 
     /// ✦K V pastes the newest copy, again the one before, again the one

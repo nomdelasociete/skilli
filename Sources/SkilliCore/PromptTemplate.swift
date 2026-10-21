@@ -148,10 +148,38 @@ public struct PromptTemplate: Equatable, Sendable {
         quoting: Set<Variable> = [],
         quote: (String) -> String = { $0 }
     ) -> String {
-        var output = ""
+        pieces(values, answers: answers, quoting: quoting, quote: quote).map(\.text).joined()
+    }
+
+    /// One part of the rendered prompt: text as written, or a known
+    /// token and what fills it.
+    public enum Piece: Equatable, Sendable {
+        case written(String)
+        /// `token` as written (`{date}`), `value` what `render` puts there.
+        case filled(token: String, variable: Variable?, value: String)
+
+        public var text: String {
+            switch self {
+            case .written(let text): text
+            case .filled(_, _, let value): value
+            }
+        }
+    }
+
+    /// `render`, piece by piece: what each known token became, between the
+    /// text as written (unknown `{words}` included). A snippet's preview
+    /// shows what was filled.
+    public func pieces(
+        _ values: [Variable: String],
+        answers: [String: String] = [:],
+        quoting: Set<Variable> = [],
+        quote: (String) -> String = { $0 }
+    ) -> [Piece] {
+        var pieces: [Piece] = []
+        var written = ""
         var index = text.startIndex
         for token in tokens() {
-            output += text[index..<token.range.lowerBound]
+            written += text[index..<token.range.lowerBound]
             if token.isKnown {
                 var value = token.variable.map { values[$0] ?? "" } ?? answers[token.question ?? ""] ?? ""
                 for modifier in token.modifiers {
@@ -165,14 +193,17 @@ public struct PromptTemplate: Equatable, Sendable {
                 if let variable = token.variable, quoting.contains(variable), !value.isEmpty, !token.modifiers.contains(.raw) {
                     value = quote(value)
                 }
-                output += value
+                if !written.isEmpty { pieces.append(.written(written)) }
+                written = ""
+                pieces.append(.filled(token: String(text[token.range]), variable: token.variable, value: value))
             } else {
-                output += text[token.range]
+                written += text[token.range]
             }
             index = token.range.upperBound
         }
-        output += text[index...]
-        return output
+        written += text[index...]
+        if !written.isEmpty { pieces.append(.written(written)) }
+        return pieces
     }
 
     /// Variable names starting with `prefix` (what follows an open `{`), for

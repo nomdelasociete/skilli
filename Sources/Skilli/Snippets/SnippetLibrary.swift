@@ -8,6 +8,8 @@ final class SnippetLibrary: @unchecked Sendable {
     let folder: URL?
     private let lock = NSLock()
     private var cache: [Snippet] = []
+    /// Each snippet file's date, read with the folder.
+    private var dates: [String: Date] = [:]
     private var stamp: Date?
 
     /// Shown once, so the feature explains itself: ";date" types the date.
@@ -36,17 +38,29 @@ final class SnippetLibrary: @unchecked Sendable {
         let modified = (try? folder.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
         if modified != stamp || stamp == nil {
             stamp = modified
-            let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+            let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+            var dates: [String: Date] = [:]
             cache = files.filter { $0.pathExtension == "md" }.compactMap { url in
-                (try? String(contentsOf: url, encoding: .utf8)).map { Snippet(id: url.deletingPathExtension().lastPathComponent, parsing: $0) }
+                let id = url.deletingPathExtension().lastPathComponent
+                dates[id] = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                return (try? String(contentsOf: url, encoding: .utf8)).map { Snippet(id: id, parsing: $0) }
             }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            self.dates = dates
         }
         return cache
     }
 
     func snippet(_ id: String) -> Snippet? {
         all.first { $0.id == id }
+    }
+
+    /// When its file last changed, as the folder was last read (nothing
+    /// read here: Search Snippets' preview asks on every row).
+    func modified(_ id: String) -> Date? {
+        lock.lock()
+        defer { lock.unlock() }
+        return dates[id]
     }
 
     /// A new snippet gets a file name from its name, unique in the folder.

@@ -64,10 +64,64 @@ public struct Snippet: Equatable, Sendable, Identifiable {
     /// The text as it goes in: variables filled, `{cursor}` gone, and how
     /// many characters the caret then moves back from the end.
     public func expanded(_ values: [PromptTemplate.Variable: String]) -> (text: String, cursorFromEnd: Int) {
-        let parts = text.components(separatedBy: Self.cursorToken)
-        let before = PromptTemplate(parts[0]).render(values)
-        let after = parts.count > 1 ? PromptTemplate(parts.dropFirst().joined()).render(values) : ""
+        let pieces = expansion(values)
+        let cursor = pieces.firstIndex(of: .cursor) ?? pieces.endIndex
+        let before = pieces[..<cursor].map(\.typed).joined()
+        let after = pieces[cursor...].map(\.typed).joined()
         return (before + after, after.count)
+    }
+
+    /// One part of what a snippet types.
+    public enum Piece: Equatable, Sendable {
+        /// The text as written (unknown `{words}` included).
+        case written(String)
+        /// A placeholder (`token` as written) and what fills it now.
+        case filled(token: String, variable: PromptTemplate.Variable?, value: String)
+        /// Where the caret ends (the first `{cursor}`; any other is dropped).
+        case cursor
+
+        /// What it types.
+        public var typed: String {
+            switch self {
+            case .written(let text): text
+            case .filled(_, _, let value): value
+            case .cursor: ""
+            }
+        }
+
+        init(_ piece: PromptTemplate.Piece) {
+            switch piece {
+            case .written(let text): self = .written(text)
+            case .filled(let token, let variable, let value): self = .filled(token: token, variable: variable, value: value)
+            }
+        }
+    }
+
+    /// `expanded`, piece by piece: the launcher's preview shows the
+    /// snippet as it would type now, its filled parts told apart.
+    public func expansion(_ values: [PromptTemplate.Variable: String]) -> [Piece] {
+        let parts = text.components(separatedBy: Self.cursorToken)
+        var pieces = PromptTemplate(parts[0]).pieces(values).map(Piece.init)
+        if parts.count > 1 {
+            pieces.append(.cursor)
+            pieces += PromptTemplate(parts.dropFirst().joined()).pieces(values).map(Piece.init)
+        }
+        return pieces
+    }
+
+    /// The placeholders as written, once each, in order: "{date}",
+    /// "{clipboard}", "{cursor}".
+    public var placeholders: [String] {
+        var found: [String] = []
+        for piece in expansion([:]) {
+            let token: String? = switch piece {
+            case .filled(let token, _, _): token
+            case .cursor: Self.cursorToken
+            case .written: nil
+            }
+            if let token, !found.contains(token) { found.append(token) }
+        }
+        return found
     }
 
     /// A file name from a name: "Mon adresse" → "mon-adresse".

@@ -88,6 +88,27 @@ final class ResultCellView: NSTableCellView {
         layoutLabels()
     }
 
+    /// A keycap at the right edge, in the accessory's place (a snippet's
+    /// keyword in Search Snippets); made once per cell, retitled after.
+    private var trailingCap: KeycapView?
+    private(set) var trailingText: String?
+
+    func setTrailingKeycap(_ text: String?) {
+        guard text != trailingText else { return }
+        trailingText = text
+        if let text {
+            if let trailingCap {
+                trailingCap.text = text
+            } else {
+                let cap = KeycapView(text)
+                addSubview(cap)
+                trailingCap = cap
+            }
+        }
+        trailingCap?.isHidden = text == nil
+        layoutLabels()
+    }
+
     func setPinned(_ pinned: Bool) {
         guard pinned != isPinned else { return }
         isPinned = pinned
@@ -115,11 +136,16 @@ final class ResultCellView: NSTableCellView {
     }
 
     /// The title takes what the accessory leaves: 440 pt beside it in the
-    /// full list, the whole row in the clipboard's narrow one.
+    /// full list, the whole row in the narrow one beside a preview but
+    /// for a keycap at its right edge.
     private func layoutLabels() {
         let accessoryWidth: CGFloat = accessory.stringValue.isEmpty ? 0 : 156
         accessory.frame = NSRect(x: bounds.width - 24 - accessoryWidth, y: 15, width: accessoryWidth, height: 16)
         var titleEnd = accessoryWidth > 0 ? accessory.frame.minX - 14 : bounds.width - 16
+        if let trailingCap, trailingText != nil {
+            trailingCap.frame.origin = NSPoint(x: bounds.width - 24 - trailingCap.frame.width, y: (bounds.height - trailingCap.frame.height) / 2)
+            titleEnd = min(titleEnd, trailingCap.frame.minX - 12)
+        }
         // Right after the title's text, where Raycast shows its alias: the
         // pin, then the alias.
         let pinWidth = isPinned ? Self.pinSize : 0

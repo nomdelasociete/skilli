@@ -24,12 +24,8 @@ final class ClipboardPreviewView: NSView {
 
     private let divider = HairlineView()
     private let tile = SoftTile()
-    private let textScroll = NSScrollView()
-    private let textView = NSTextView()
-    private let textFade = CAGradientLayer()
-    /// A code copy's language, atop its tile.
-    private let language = NSTextField(labelWithString: "")
-    private let languageLine = HairlineView()
+    /// A text or code copy (code under its language's name).
+    private let text = PreviewText()
     private let imageView = NSImageView()
     private let fileName = NSTextField(wrappingLabelWithString: "")
     private let placeholder = NSImageView()
@@ -41,9 +37,7 @@ final class ClipboardPreviewView: NSView {
     private let reading = SIRevealLabel(wrappingLabelWithString: "")
     private let ocrHeader = NSTextField(labelWithString: "Text in Image")
     private let ocrText = NSTextField(wrappingLabelWithString: "")
-    private let infoHeader = NSTextField(labelWithString: "Information")
-    private let infoLine = HairlineView()
-    private var rows: [(label: NSTextField, value: NSTextField)] = []
+    private let information = PreviewInformation(rows: 7)
 
     private var item: ClipboardStore.Item?
     private var imageURL: URL?
@@ -55,7 +49,7 @@ final class ClipboardPreviewView: NSView {
 
     /// Self-test hooks: what is shown, and how long showing it took.
     private(set) var shown: Shown = .none
-    private(set) var shownInfo: [(String, String)] = []
+    var shownInfo: [(String, String)] { information.shown }
     /// A link's or a value's title, as the card shows it.
     var shownTitle: String { shown == .link ? linkCard.shownTitle : shown == .file ? fileName.stringValue : valueCard.shownTitle }
     var shownLinkHasPicture: Bool { linkCard.hasPicture }
@@ -70,33 +64,11 @@ final class ClipboardPreviewView: NSView {
     /// The kind of the copy shown, as the history keeps it.
     var shownKind: ClipboardStore.Item.Kind? { item?.kind }
 
-    private static let rowHeight: CGFloat = 21
-    private static let maxRows = 7
-
     override init(frame: NSRect) {
         super.init(frame: frame)
         addSubview(divider)
         addSubview(tile)
-
-        textView.isEditable = false
-        textView.isSelectable = false
-        textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 8, height: 10)
-        textView.textContainer?.widthTracksTextView = true
-        textView.isVerticallyResizable = true
-        textScroll.documentView = textView
-        textScroll.drawsBackground = false
-        textScroll.hasVerticalScroller = false
-        textScroll.hasHorizontalScroller = false
-        // A long text fades out at the bottom instead of being cut through a line.
-        textScroll.wantsLayer = true
-        textFade.colors = [NSColor.black.cgColor, NSColor.black.cgColor, NSColor.clear.cgColor]
-        textScroll.layer?.mask = textFade
-        tile.addSubview(textScroll)
-        language.font = Theme.Font.sectionHeader
-        language.textColor = .secondaryLabelColor
-        tile.addSubview(language)
-        tile.addSubview(languageLine)
+        tile.addSubview(text)
 
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.wantsLayer = true
@@ -137,23 +109,7 @@ final class ClipboardPreviewView: NSView {
         ocrText.cell?.truncatesLastVisibleLine = true
         addSubview(ocrText)
 
-        infoHeader.font = Theme.Font.sectionHeader
-        infoHeader.textColor = .secondaryLabelColor
-        addSubview(infoHeader)
-        addSubview(infoLine)
-        for _ in 0..<Self.maxRows {
-            let label = NSTextField(labelWithString: "")
-            label.font = Theme.Font.rowAccessory
-            label.textColor = .secondaryLabelColor
-            let value = NSTextField(labelWithString: "")
-            value.font = Theme.Font.rowAccessory
-            value.textColor = .labelColor
-            value.alignment = .right
-            value.lineBreakMode = .byTruncatingMiddle
-            addSubview(label)
-            addSubview(value)
-            rows.append((label, value))
-        }
+        addSubview(information)
         show(nil, imageURL: nil)
     }
 
@@ -183,21 +139,8 @@ final class ClipboardPreviewView: NSView {
 
         // From the bottom: the information, then what an image adds.
         var y: CGFloat = 8
-        let shownRows = rows.filter { !$0.label.stringValue.isEmpty }
-        for row in shownRows.reversed() {
-            row.label.frame = NSRect(x: inset, y: y, width: 120, height: 16)
-            row.value.frame = NSRect(x: inset + 112, y: y, width: width - 112, height: 16)
-            y += Self.rowHeight
-        }
-        for row in rows where row.label.stringValue.isEmpty {
-            row.label.frame = .zero
-            row.value.frame = .zero
-        }
-        if !shownRows.isEmpty {
-            infoLine.frame = NSRect(x: inset, y: y + 1, width: width, height: 1)
-            infoHeader.frame = NSRect(x: inset, y: y + 8, width: width, height: 14)
-            y = infoHeader.frame.maxY + 14
-        }
+        information.frame = NSRect(x: inset, y: y, width: width, height: information.height)
+        if information.height > 0 { y = information.frame.maxY + 14 }
         if !ocrText.isHidden {
             let height = min(ocrText.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: 200)).height ?? 15, 47)
             ocrText.frame = NSRect(x: inset, y: y, width: width, height: height)
@@ -216,24 +159,7 @@ final class ClipboardPreviewView: NSView {
         swatch.frame = hero
         linkCard.frame = hero
         let inner = tile.bounds
-        // Code in a language: its name on a line of its own atop the code.
-        let header: CGFloat = language.isHidden ? 0 : 30
-        language.frame = NSRect(x: 14, y: inner.maxY - 22, width: inner.width - 28, height: 14)
-        languageLine.frame = NSRect(x: 0, y: inner.maxY - header, width: inner.width, height: 1)
-        textScroll.frame = NSRect(x: 0, y: 0, width: inner.width, height: inner.height - header)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        textFade.frame = textScroll.bounds
-        // From the top down: solid, then clear over the last 30 pt. The
-        // scroll view is flipped: its layer's top is y 0.
-        let fade = min(0.5, 30 / max(textScroll.bounds.height, 1))
-        let top: CGFloat = textScroll.isFlipped ? 0 : 1
-        textFade.locations = [0, NSNumber(value: 1 - fade), 1]
-        textFade.startPoint = CGPoint(x: 0.5, y: top)
-        textFade.endPoint = CGPoint(x: 0.5, y: 1 - top)
-        CATransaction.commit()
-        textView.frame = NSRect(origin: .zero, size: NSSize(width: inner.width, height: max(textScroll.frame.height, textView.frame.height)))
-        textView.textContainer?.containerSize = NSSize(width: inner.width - 16, height: .greatestFiniteMagnitude)
+        text.frame = inner
         placeholder.frame = NSRect(x: inner.midX - 24, y: inner.midY - 24, width: 48, height: 48)
         valueCard.frame = inner
         fileList.frame = inner.insetBy(dx: 12, dy: 10)
@@ -272,7 +198,7 @@ final class ClipboardPreviewView: NSView {
         hasPicture = false
         shownReading = ""
         shownTextInImage = ""
-        for view in [textScroll, language, languageLine, imageView, fileName, fileList, placeholder, swatch, linkCard, valueCard,
+        for view in [text, imageView, fileName, fileList, placeholder, swatch, linkCard, valueCard,
                      readingIcon, reading, ocrHeader, ocrText] as [NSView] {
             view.isHidden = true
         }
@@ -310,24 +236,13 @@ final class ClipboardPreviewView: NSView {
     }
 
     private func setInfo(_ info: [(String, String)]) {
-        let info = Array(info.prefix(Self.maxRows))
-        shownInfo = info
-        infoHeader.isHidden = info.isEmpty
-        infoLine.isHidden = info.isEmpty
-        for (index, row) in rows.enumerated() {
-            let pair = index < info.count ? info[index] : nil
-            row.label.stringValue = pair?.0 ?? ""
-            row.value.stringValue = pair?.1 ?? ""
-        }
+        information.set(info)
         needsLayout = true
     }
 
     /// One row of the information, filled in after it was shown.
     private func update(_ label: String, _ value: String) {
-        if let index = shownInfo.firstIndex(where: { $0.0 == label }) {
-            shownInfo[index].1 = value
-            rows[index].value.stringValue = value
-        }
+        information.update(label, value)
     }
 
     private func value(of item: ClipboardStore.Item) -> CopiedValue {
@@ -377,20 +292,14 @@ final class ClipboardPreviewView: NSView {
             return [app, ("Content", "Address")]
         case .code(let language):
             shown = .code
-            showPlain(item.text, code: true)
-            self.language.isHidden = language == nil
-            languageLine.isHidden = language == nil
-            self.language.stringValue = language ?? ""
+            showPlain(item.text, code: true, language: language)
             let lines = item.text.split(whereSeparator: \.isNewline).count
             return [app, ("Content", language.map { "Code · \($0)" } ?? "Code"),
-                    ("Size", "\(Self.count(lines, "line")) · \(Self.count(item.text.count, "character"))")]
+                    ("Size", "\(PreviewInformation.count(lines, "line")) · \(PreviewInformation.count(item.text.count, "character"))")]
         case .text:
             shown = .text
-            showPlain(item.text, code: false)
-            let words = item.text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
-            let lines = item.text.split(whereSeparator: \.isNewline).count
-            var size = "\(Self.count(words, "word")) · \(Self.count(item.text.count, "character"))"
-            if lines > 1 { size += " · \(Self.count(lines, "line"))" }
+            showPlain(item.text, code: false, language: nil)
+            let (size, words) = PreviewInformation.size(of: item.text)
             var info = [app, ("Content", "Text"), ("Size", size)]
             // A long read says how long (238 words a minute).
             if words >= 400 { info.append(("Reading time", "About \(max(1, Int((Double(words) / 238).rounded()))) min")) }
@@ -398,13 +307,9 @@ final class ClipboardPreviewView: NSView {
         }
     }
 
-    private func showPlain(_ text: String, code: Bool) {
-        let shown = text.utf16.count > 4_000 ? String(text.prefix(4_000)) + "…" : text
-        textView.font = code ? .monospacedSystemFont(ofSize: 11.5, weight: .regular) : .systemFont(ofSize: 13)
-        textView.textColor = .labelColor
-        textView.string = shown
-        textView.scroll(.zero)
-        textScroll.isHidden = false
+    private func showPlain(_ string: String, code: Bool, language: String?) {
+        text.show(string, code: code, language: language)
+        text.isHidden = false
     }
 
     // MARK: Link
@@ -600,10 +505,6 @@ final class ClipboardPreviewView: NSView {
 
     // MARK: - Words
 
-    private static func count(_ value: Int, _ noun: String) -> String {
-        "\(value.formatted()) \(noun)\(value == 1 ? "" : "s")"
-    }
-
     /// "Today at 14:32", "Yesterday at 09:10", "3 Oct 2026 at 18:02".
     static let copied: DateFormatter = {
         let formatter = DateFormatter()
@@ -673,14 +574,6 @@ private extension String {
 }
 
 // MARK: - Parts
-
-/// A soft rounded fill that follows the appearance, drawn at draw time.
-private final class SoftTile: NSView {
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.labelColor.withAlphaComponent(0.05).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 12, yRadius: 12).fill()
-    }
-}
 
 /// A copied color, large: the color over a checkerboard when it is not
 /// opaque, its hex and RGB written on it in whichever of black or white

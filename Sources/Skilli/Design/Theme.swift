@@ -82,16 +82,33 @@ final class KeycapView: NSView {
         label.font = Theme.Font.keycap
         label.textColor = .secondaryLabelColor
         label.alignment = .center
+        super.init(frame: NSRect(x: 0, y: 0, width: Self.height, height: Self.height))
+        fit()
+        addSubview(label)
+    }
+
+    /// Its text; set, the cap takes the new text's width (a row's keycap
+    /// reused for another row).
+    var text: String {
+        get { label.stringValue }
+        set {
+            guard newValue != label.stringValue else { return }
+            label.stringValue = newValue
+            fit()
+            needsDisplay = true
+        }
+    }
+
+    private func fit() {
         label.sizeToFit()
         let width = max(Self.height + 2, ceil(label.frame.width) + Self.horizontalPadding * 2)
-        super.init(frame: NSRect(x: 0, y: 0, width: width, height: Self.height))
+        frame.size = NSSize(width: width, height: Self.height)
         label.frame = NSRect(
             x: 0,
             y: (Self.height - label.frame.height) / 2,
             width: width,
             height: label.frame.height
         )
-        addSubview(label)
     }
 
     @available(*, unavailable)
