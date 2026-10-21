@@ -142,6 +142,21 @@ Design spec:
 - Settings' search opens the app's page at the row (a command, a
   shortcut, Line breaks in Capture Text). Keys and the Catalog list the
   same commands; their settings live here.
+- **App files** (2026-10-21): an app file's app is a row like the others,
+  and its page the same, its header with two more buttons beside Open:
+  Documentation (where the app documents its links) and, for the user's
+  own file, Show File. With no options, the header sits atop the first
+  group. The user's files left out come last in the list, under "2 App
+  Files Left Out": a row each (an orange triangle, the file's name, why in
+  one or two caption lines), the footer "Fixed and saved, a file is read
+  again as the launcher opens." with Show in Finder.
+- **Adding from a link**: a sheet over the pane, "Add This App?", one line
+  on trust, then a card per app (its icon, or a dashed one when it is not
+  installed; its name, bundle id, scheme and number of commands; where
+  its links are documented; "from a link" or the site), and in it every
+  command: its symbol, title, "Asks first" in orange where it does, and
+  the exact link it opens in monospace, a variant under it the same way.
+  Cancel, Add App. What cannot be added is said in orange above.
 
 What CleanShot's API state shows: whether it is on cannot be read (checked
 2026-10-21 on CleanShot X 5.0.1): turning Allow URL scheme API off changes
