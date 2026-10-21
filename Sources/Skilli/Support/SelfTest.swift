@@ -2238,9 +2238,19 @@ final class SelfTest {
             !Self.axElements(roles: [kAXButtonRole], where: { $0 == title }).isEmpty
         }
         await captureSettingsBothWays(as: "settings-apps-file-page")
+        // skil.li's own app files, as shipped: each installed one's page.
+        var shippedOverflow: CGFloat = 0
+        var shipped: [String] = []
+        for installed in LinkedApps.installed() where installed.app.file == nil && installed.app.id != LinkedApp.cleanShot.id {
+            model.page = .linked(installed.app.id)
+            await pause(500)
+            shippedOverflow = max(shippedOverflow, settings.paneOverflow())
+            shipped.append(installed.app.name)
+            await captureSettingsBothWays(as: "settings-apps-\(installed.app.id)")
+        }
         model.page = nil
         await pause(300)
-        details.append("Settings: its row \(rowShown), files left out \(leftOutShown), its page's rows \(pageRows), buttons \(pageButtons); past the window: list \(Int(listOverflow)), page \(Int(pageOverflow)) pt")
+        details.append("Settings: its row \(rowShown), files left out \(leftOutShown), its page's rows \(pageRows), buttons \(pageButtons); skil.li's own: \(shipped.joined(separator: ", ")); past the window: list \(Int(listOverflow)), page \(Int(pageOverflow)), shipped \(Int(shippedOverflow)) pt")
 
         // An import link: the app whole before Add; Add writes its file.
         var imported: [String: Any] = app
@@ -2280,7 +2290,7 @@ final class SelfTest {
 
         let passed = read && leftOut && rowRan && accessory == "Selftest Notes" && variantRan && listed.contains("New Pinned Selftest Note") && inCatalog
             && called && callAsked && callOpenedNothing && linkRan && linkAsked && askRan && askAsked
-            && rowShown && leftOutShown && pageRows && pageButtons && listOverflow <= 1 && pageOverflow <= 1
+            && rowShown && leftOutShown && pageRows && pageButtons && listOverflow <= 1 && pageOverflow <= 1 && shippedOverflow <= 1
             && sheet && pressed && added && refusedRight && createdRight
         record(name, passed, details.joined(separator: "; "), nil)
     }
