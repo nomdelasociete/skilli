@@ -440,6 +440,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             #endif
         }
         shortcuts.resolveKey = { [layout] code in layout.key(for: CGKeyCode(code)) }
+        // Before the engine binds the shortcuts' names (✦K's overlay).
+        SkilliAction.snippetName = { [snippetLibrary] id in snippetLibrary.snippet(id)?.name }
+        SkilliAction.quicklinkName = { [quicklinkStore] id in quicklinkStore.links.first { $0.id == id }?.name }
         let router = KeyRouter(
             engine: shortcuts.makeEngine(),
             triggerKeyCodes: triggerKeyCodes,
@@ -545,8 +548,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             Task { await self.snippetExpander.insert(snippet) }
         }
-        SkilliAction.snippetName = { [snippetLibrary] id in snippetLibrary.snippet(id)?.name }
-        SkilliAction.quicklinkName = { [quicklinkStore] id in quicklinkStore.links.first { $0.id == id }?.name }
         launcher.filesByMeaningAvailable = { [weak self] in
             guard let self else { return false }
             return self.preferences.fileMeaningSearch && !AskRouter.keys(self.ai).isEmpty

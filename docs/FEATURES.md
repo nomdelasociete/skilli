@@ -113,7 +113,7 @@ Default keys:
 Settings: Hyper Key · Advanced: Tap Caps Lock alone to send Escape ·
 Shortcuts (every one, recorded by pressing the keys) · Add Shortcut
 (apps, URLs, CleanShot, System Settings panes, sound devices, layouts,
-skillies, projects).
+skillies, projects, every launcher command, snippets, quicklinks).
 
 <!-- pane: privacy -->
 ## Privacy
@@ -231,7 +231,7 @@ Text you type often, from a keyword or the launcher.
 
 - **Snippets**: saves a text once (with `{date}`, `{clipboard}`,
   `{cursor}`…); its keyword types it anywhere, at once or after a space
-  or ↩. Never in password fields.
+  or ↩, and so does a shortcut of its own. Never in password fields.
 - **Search Snippets** (`snip`): by name, or by what you need with ⇥
   ("my iban"). ↩ types it, ⌘↩ copies it.
 - **New Snippet** in the launcher: this pane, its editor open on a new
@@ -534,10 +534,14 @@ TypeSafe Jev key.
 Everything skil.li can do, and how you reach each one.
 
 - **What skil.li Can Do** (`?` in the launcher): every entry by group,
-  with its prefix, alias and shortcut; ↩ runs it.
+  with its prefix, alias and shortcut; ↩ runs it. Every launcher
+  command, Mac command and what you made takes a shortcut (⌘K → Set
+  Shortcut…, or the entry's popover here): Search Snippets opens
+  straight in your snippets.
 - **Aliases**: your own short names for any result.
 - **Quicklinks**: search a site from the launcher (`g skilli`, `yt lofi`);
-  the selection is the query when none is typed; Add from Library….
+  the selection is the query when none is typed; a shortcut of its own
+  opens the launcher with its keyword typed; Add from Library….
   **New Quicklink** in the launcher opens its editor on a new one.
 - **From other apps**: every entry's `skilli://` link (⌘K → Copy Link)
   for Shortcuts, a Stream Deck or a page. What could change your Mac

@@ -731,6 +731,25 @@ per-show work.
   last one is emptied. Recording waits
   `ShortcutStore.sequencePause` for the next key of a chain, shown as a
   countdown; Return saves at once.
+- Every launcher command, Mac command, window place and what the user
+  made takes one (2026-10-21: Search Snippets could not; only six
+  launcher commands had an action). `SkilliAction.launcherCommand` for a
+  `LauncherCommand.ID`, id its `shortcutID` ("cmd.searchSnippets", in
+  SkilliCore, unit-tested; the six that had an action keep it and its
+  id, ✦C's "clipboard.history": `SkilliAction.command(_:)`): a command
+  that turns the launcher into a mode opens it straight in that mode
+  (`LauncherController.mode(for:)`, `toggle(into:)`, inline in the tap;
+  again closes it), the others do what their row does (`AppDelegate.run`).
+  `.snippet` ("snippet:<file id>") types it in the app in front, as ↩ on
+  its row; `.quicklink` ("quicklink:<id>") opens the launcher with its
+  keyword typed, as its row picked by name (the selection, once read, is
+  its query and the row says so; one that takes no query opens its page;
+  again closes it). Their titles read the names live
+  (`SkilliAction.snippetName`, `quicklinkName`): renamed, the shortcut
+  stays. Deleting one takes its shortcuts with it (⌘Z puts both back).
+  Keys → Add Shortcut: Launcher Commands (a submenu, by the "?"'s
+  groups), then Snippets and Quicklinks (a submenu each, after Skillies);
+  `add_shortcut` takes them by name or id.
 - Keys → Restore Defaults asks first and names what goes
   (`RestoreDefaults` in SkilliCore, `ShortcutStore.changesFromDefaults`:
   "Your 3 custom shortcuts and 2 changed keys are removed.", destructive
@@ -1042,12 +1061,26 @@ per-show work.
   first group's name is the header above the list, which follows the group
   at the top as the rows scroll. ↩ does what the entry's launcher row does
   (`launch(_:row:flags:)`), or types the start of the words; ⌘K: Run, the
-  alias, Set Shortcut… (Settings → Keys). Entries, shortcuts and keycaps
+  alias, Set Shortcut… (the card asks for the keys, as on an app's row:
+  `AppDelegate.recordShortcut`). Entries, shortcuts and keycaps
   are made once as it opens; a key only filters in memory.
+- What takes a shortcut (`CatalogEntry.shortcutAction`, the "?" and
+  Settings → Catalog alike): every launcher command, Mac command, window
+  place, Ask, Ask by Voice, Dictate, the case changes, and what the user
+  made (a skillie only when it needs no argument). Not what types the
+  start of words (Timer, Calculator), nor the rows that open where the
+  first of something is made, nor Do It Here and Ask on a Schedule: ways
+  of saying what Ask does (`run: .ask`), a shortcut on them recorded
+  Ask's own. No two entries share an action.
 - `selftest catalog` (keys): "?" typed with the layout's own keys, the six
   groups, the header following, "? kill" then ↩ into Kill, Clipboard
   History's prefix, alias and ✦C, ⌘K, an entry Off dimmed and still
-  run; `launcher-catalog*-light/-dark.png`. Links (`linksRunWhatTheyName`):
+  run; `launcher-catalog*-light/-dark.png`. `catalogShortcutsReachEverything`:
+  every entry's action named back by its id and none shared, the ids
+  saved before still loading, none for Do It Here; "? search snippets",
+  ⌘K → Set Shortcut… recording ⌥⇧⌘9 in the card, pressed in the test
+  window Snippets opens, again closes; a snippet's shortcut types it, a
+  quicklink's types its keyword; `launcher-shortcut-snippets-*.png`. Links (`linksRunWhatTheyName`):
   ⌘K → Copy Link in "?" (Clipboard History) and on launcher rows (Left
   Half, a quicklink with its query, Lock Screen), each opened through
   `LinkRunner.openNow`: the history opens, the test window moves, the
@@ -1211,8 +1244,9 @@ the launcher and the self-test call:
   `CalendarBook.remove`/`restore`). An event with invitees still asks
   ("Delete Event?"): deleting it can tell them, and EventKit cannot
   invite them again.
-- Settings: a snippet (its file as written), one of the user's commands
-  (its file and its shortcuts), a quicklink (in its place), a field of
+- Settings: a snippet (its file as written, and its shortcuts), one of
+  the user's commands (its file and its shortcuts), a quicklink (in its
+  place, and its shortcuts), a field of
   Your Details or a person or company with theirs (a locked value such as
   an IBAN back in the Keychain), the Claude API key or a deciding key, a
   connected server (its config, token or OAuth sign-in, its tools' rights
@@ -1229,7 +1263,8 @@ the launcher and the self-test call:
   History, a backup restored, Keys → Restore Defaults, Uninstall… (it
   quits the app too), an event with invitees. Agents' deletes
   (`delete_snippet`, `delete_quicklink`, `delete_reminder`…) wait for the
-  user's OK in the card and offer no undo.
+  user's OK in the card and offer no undo (a snippet's or quicklink's
+  shortcuts go with it there too).
 - While the launcher is open (a copy forgotten), the card shows right
   under its glass, as wide (`AIActionController.openLauncherFrame`,
   `UndoDelete.spot`: above it when the screen has no room below), never
@@ -2415,7 +2450,8 @@ re-investigating.
   `~/Library/Application Support/skil.li/snippets` (front matter `name`,
   `keyword`; the text with `{date}`, `{clipboard}`… and one `{cursor}`).
   Found in the launcher by name, keyword or words (↩ types it, ⌘↩ copies
-  it), by agents (`list_snippets`, `insert_snippet`), and expanded where
+  it), by agents (`list_snippets`, `insert_snippet`), typed by a shortcut
+  of its own (Keys → Add Shortcut → Snippets, its Catalog row), and expanded where
   their keyword is typed: `KeyRouter.onTypedKey` hands `SnippetExpander`
   the keys going on to the app in front (not the launcher's, not with
   Hyper). Settings → Snippets → Expand (`Preferences.snippetExpansionMode`):
@@ -2497,7 +2533,9 @@ re-investigating.
   its keyword in the field for the query; text that matches nothing on the
   Mac offers "Search Google for “…”" before Ask. Only http(s) addresses;
   the query is percent-encoded whole (&, =, #, / too). Opened through
-  `ActionRunner` (the self-test records instead).
+  `ActionRunner` (the self-test records instead). A shortcut of its own
+  (Keys → Add Shortcut → Quicklinks, its Catalog row) opens the launcher
+  with its keyword typed.
   Nothing typed for one that takes a query: the text selected where the
   launcher opened is the query (`quicklinkQuery`, `Quicklink.query(fromSelection:)`:
   one line, 1,000 characters at most), the row says it ("Wikipedia · Tour
