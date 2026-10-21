@@ -295,7 +295,10 @@ enum AskRouter {
         // wording move another answer.
         let projectActions = projects.prefix(40).map(MacAction.project)
         let scriptActions = scripts.prefix(60).map(MacAction.script)
-        let shortcutActions = shortcuts.prefix(60).map { MacAction.shortcut($0, withSelection: false) }
+        let shortcutActions = shortcuts.map { MacAction.shortcut($0, withSelection: false) }
+        // Every shortcut, 60 a question (as apps are split): a name said
+        // must be found whoever has many.
+        let shortcutQuestions = MenuCandidates.chunks(Array(shortcutActions.indices), size: 60).enumerated().map { ("shortcut\($0.offset)", $0.element) }
         if !projectActions.isEmpty {
             questions.append(DecisionQuestion(
                 name: "project",
@@ -325,11 +328,11 @@ enum AskRouter {
         }
         // The user's shortcuts by name only: Shortcuts says nothing more of
         // them.
-        if !shortcutActions.isEmpty {
+        for (name, indices) in shortcutQuestions {
             questions.append(DecisionQuestion(
-                name: "shortcut",
+                name: name,
                 instructions: "Does the user ask to run one of their shortcuts (made in Apple's Shortcuts app), by its name or by what its name says it does? Which one? Answer none when they ask for something else.",
-                options: shortcutActions.enumerated().map { .init(value: "shortcut\($0.offset)", description: $0.element.description) }
+                options: indices.map { .init(value: "shortcut-\($0)", description: shortcutActions[$0].description) }
                     + [.init(value: "none", description: "Not one of these shortcuts")]
             ))
         }
@@ -430,7 +433,8 @@ enum AskRouter {
                     return (name == "wifi" || name == "bluetooth") && letters(instruction).contains(name)
                 }.map { (MacAction.settings($0), 0.9) } : nil
                 let command = ([isRadio && namesSettings ? nil : direct, pick("project", projectActions, prefix: "project"),
-                                pick("skillie", scriptActions, prefix: "script"), pick("shortcut", shortcutActions, prefix: "shortcut"), namedPane]
+                                pick("skillie", scriptActions, prefix: "script"), namedPane]
+                               + shortcutQuestions.map { pick($0.0, shortcutActions, prefix: "shortcut-") }
                                + (doesIt ? [] : [pick("settings", paneActions, prefix: "pane")]))
                     .compactMap { $0 }
                     .filter { action, probability in
@@ -446,7 +450,7 @@ enum AskRouter {
                     .filter { $0.key != "none" && $0.value >= 0.1 }
                     .sorted { $0.value > $1.value }
                     .compactMap { key, value in action(key).map { ($0, value) } }
-                for name in [question.name, "command", "project", "skillie", "shortcut", "settings"] {
+                for name in [question.name, "command", "project", "skillie", "settings"] + shortcutQuestions.map(\.0) {
                     guard let answer = answers[name] else { continue }
                     let top = answer.probabilities.sorted { $0.value > $1.value }.prefix(4).map { key, value in
                         let pane = key.hasPrefix("pane") ? Int(key.dropFirst(4)).flatMap { settings.indices.contains($0) ? settings[$0].name : nil } : nil

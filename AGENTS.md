@@ -3388,7 +3388,7 @@ re-investigating.
   `system:shortcut:<identifier>`, `FeatureCatalog.Input.shortcuts`),
   aliases and pins, keys (Add Shortcut → Shortcuts, a submenu each: as it
   is, With the Selection), links (asked first, Always offered: a shortcut
-  can do anything), Ask (a question of its own, `shortcut0`…, by name;
+  can do anything), Ask (questions of their own, `shortcut0`…, 60 shortcuts each, by name;
   ≥ 60 % beats the agent, ≥ 85 % a reminder or an answer too; asked
   first under 85 %; what Ask was asked on is its input), agents
   (`list_shortcuts`, `run_shortcut` with an optional `input` or

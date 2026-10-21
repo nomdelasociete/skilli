@@ -18480,16 +18480,18 @@ final class SelfTest {
     }
 
     /// Ask runs one of the user's shortcuts (Apple's Shortcuts app) by its
-    /// name, from a fixed list of made-up ones (nothing run); a request for
-    /// something else picks none. Decided only.
+    /// name, from a fixed list of 64 made-up ones (two questions; nothing
+    /// run); a request for something else picks none. Decided only.
     private func askRunsShortcuts() async {
-        let shortcuts = ["Morning Routine", "Text Camille I'm Late", "Log Water", "Resize Images for the Web"].enumerated().map { index, name in
-            AppleShortcut(id: "00000000-0000-4000-8000-00000000000\(index)", name: name)
+        // 60 others first: the ones asked for are in the second question.
+        let names = (1...60).map { "Filler \($0)" } + ["Morning Routine", "Text Camille I'm Late", "Log Water", "Resize Images for the Web"]
+        let shortcuts = names.enumerated().map { index, name in
+            AppleShortcut(id: String(format: "00000000-0000-4000-8000-%012d", index), name: name)
         }
         // By its name, said as people say it; a shortcut is named, not
         // guessed ("préviens Camille…" is as much a message to send).
-        let cases = [("lance ma routine du matin", shortcuts[0]), ("lance le raccourci log water", shortcuts[2]),
-                     ("redimensionne mes images pour le web avec mon raccourci", shortcuts[3])]
+        let cases = [("lance ma routine du matin", shortcuts[60]), ("lance le raccourci log water", shortcuts[62]),
+                     ("redimensionne mes images pour le web avec mon raccourci", shortcuts[63])]
         let elsewhere = ["mets le son à 30 %"]
         for provider in DecisionProvider.allCases {
             let name = "Ask runs the user's shortcuts by their names with \(provider.title) (decided only, nothing run)"
