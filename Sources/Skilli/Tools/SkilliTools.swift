@@ -682,7 +682,8 @@ final class SkilliTools {
             guard let url = URL(string: value), url.scheme != nil, NSWorkspace.shared.urlForApplication(toOpen: url) != nil else {
                 throw Failure(message: "No app opens “\(value)”.")
             }
-            NSWorkspace.shared.open(url)
+            if CleanShot.uploads(url) { try await askUpload(name, run) }
+            openURL(url)
             return "Opened."
 
         case "search_menus":
@@ -1094,12 +1095,7 @@ final class SkilliTools {
                     let known = command.variants.map(\.id).joined(separator: ", ")
                     throw Failure(message: known.isEmpty ? "“\(id)” takes no variant." : "“\(id)” has no variant “\(asked)”: \(known).")
                 }
-                // The capture leaves the Mac: asked every time, whatever the rights.
-                if variant.id == "upload" {
-                    let approval = await confirm?("Upload the capture to CleanShot Cloud?", "CleanShot X sends it to its cloud and copies its link.",
-                                                  "Upload", name, run, false) ?? .deny
-                    guard approval != .deny else { throw Failure(message: "Not uploaded: the user declined.") }
-                }
+                if variant.id == "upload" { try await askUpload(name, run) }
                 action = .mac(.appLink(command, variant: variant.id))
             }
             performAction?(action)
@@ -1108,6 +1104,15 @@ final class SkilliTools {
         default:
             throw Failure(message: "Unknown tool “\(name)”.")
         }
+    }
+
+    /// A capture sent to CleanShot Cloud leaves the Mac: asked in the card
+    /// every time, whatever the tool's rights (`run_action`'s upload,
+    /// `open_url` with `action=upload`).
+    private func askUpload(_ tool: String, _ run: AgentContext?) async throws {
+        let approval = await confirm?("Upload the capture to CleanShot Cloud?", "CleanShot X sends it to its cloud and copies its link.",
+                                      "Upload", tool, run, false) ?? .deny
+        guard approval != .deny else { throw Failure(message: "Not uploaded: the user declined.") }
     }
 
     /// Bluetooth may be used; never asked: macOS's own question now, as

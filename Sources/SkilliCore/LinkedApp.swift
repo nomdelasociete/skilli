@@ -289,6 +289,15 @@ public enum CleanShot {
         ]
     }
 
+    /// A CleanShot link that sends the capture to CleanShot Cloud
+    /// (`action=upload`, whatever its path or case): asked every time,
+    /// whoever opens it (an agent's `open_url`, `run_action`).
+    public static func uploads(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == LinkedApp.cleanShot.scheme,
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return false }
+        return items.contains { $0.name.lowercased() == "action" && $0.value?.lowercased() == "upload" }
+    }
+
     /// The image types CleanShot opens (`pin`, `open-annotate`).
     public static let imageExtensions: Set<String> = ["png", "jpg", "jpeg"]
 }
