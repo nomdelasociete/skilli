@@ -254,9 +254,10 @@ final class SkilliTools {
     }
 
     /// run_action as agents see it now: CleanShot X's commands, then those
-    /// of the apps written in files, each "id (Title)".
-    nonisolated static func runActionDefinition() -> ToolDefinition {
-        let others = LinkedApp.all.filter { $0.id != LinkedApp.cleanShot.id }.map { app in
+    /// of the apps written in files that are on this Mac (`apps`, as last
+    /// read by default), each "id (Title)".
+    nonisolated static func runActionDefinition(apps: [LinkedApp]? = nil) -> ToolDefinition {
+        let others = (apps ?? LinkedApps.installed().map(\.app)).filter { $0.id != LinkedApp.cleanShot.id }.map { app in
             "\(app.name): " + app.commands.map { "\($0.id) (\($0.title)" + ($0.variants.isEmpty ? "" : "; variants \($0.variants.map(\.id).joined(separator: ", "))") + ")" }
                 .joined(separator: ", ")
         }
@@ -315,7 +316,7 @@ final class SkilliTools {
                        parameters: [.init(name: "id", description: "Command id from list_commands."),
                                     .init(name: "text", description: "The text to work on.")]),
         // Read again where agents get it (`live`): the apps' files change.
-        runActionDefinition(),
+        runActionDefinition(apps: []),
         ToolDefinition(name: "update_app", title: "Update an app",
                        description: "Updates an app the right way: its own “Check for Updates…” menu item, else the App Store's Updates page, else Homebrew (brew upgrade --cask). Without a name: the app in front.",
                        group: .apps, risk: .changes,
