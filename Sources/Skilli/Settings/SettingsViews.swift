@@ -1027,6 +1027,20 @@ struct ShortcutSections: View {
                                 }
                             }
                         }
+                        // The user's shortcuts in Apple's Shortcuts app: a
+                        // submenu each, run as it is or on the selection.
+                        if !AppleShortcuts.all().isEmpty {
+                            Menu("Shortcuts") {
+                                ForEach(AppleShortcuts.all(), id: \.id) { shortcut in
+                                    Menu(shortcut.name) {
+                                        Button(shortcut.name) { store.beginRecording(store.add(.mac(.shortcut(shortcut, withSelection: false)))) }
+                                        Button("With the Selection") {
+                                            store.beginRecording(store.add(.mac(.shortcut(shortcut, withSelection: true))))
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         Divider()
                         Button("Open App…") {
                             if let url = context.chooseApp() {

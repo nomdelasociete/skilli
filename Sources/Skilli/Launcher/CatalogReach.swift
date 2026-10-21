@@ -24,6 +24,7 @@ extension CatalogEntry {
         case .prompt(let id): return .aiPrompt(id)
         case .layout(let id): return .windowLayout(id)
         case .appLink(let id): return LinkedApp.command(id: id).map { .mac(.appLink($0, variant: nil)) }
+        case .shortcut(let id): return .mac(.shortcut(AppleShortcuts.current(AppleShortcut(id: id, name: "")), withSelection: false))
         case .skillie(let path):
             guard let command = skillies.first(where: { $0.path == path }), command.arguments.allSatisfy(\.optional) else { return nil }
             return .mac(.script(command))

@@ -80,6 +80,9 @@ final class SystemCommands {
         case .script(let command):
             // Run by the app (its card and its modes): never here.
             throw Failure(message: "The skillie “\(command.title)” runs from the launcher, Ask or a shortcut.")
+        case .shortcut(let shortcut, _):
+            // Run by the app too: its card shows what it gave back.
+            throw Failure(message: "The shortcut “\(AppleShortcuts.name(of: shortcut))” runs from the launcher, Ask or a key.")
         case .project(let project):
             guard FileManager.default.fileExists(atPath: project.path) else { throw Failure(message: "“\(project.name)” is no longer at \(project.folder()).") }
             EditorProjects.open(project, reveal: false)

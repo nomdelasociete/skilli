@@ -165,7 +165,9 @@ public enum SkilliLink: Equatable, Sendable {
         switch run {
         case .command(let id): id == .quit || id == .pasteInSequence
         case .system(let command): command.asksFromALink
-        case .askByVoice, .dictate, .transform, .prompt, .snippet, .skillie: true
+        // A shortcut can do anything an app lets Shortcuts do: asked as a
+        // skillie is.
+        case .askByVoice, .dictate, .transform, .prompt, .snippet, .skillie, .shortcut: true
         // A linked app's command opens it, seen at once: a capture, the
         // editor, desktop icons, its history (docs/apps.md).
         case .window, .type, .ask, .settings, .layout, .quicklink, .appLink: false

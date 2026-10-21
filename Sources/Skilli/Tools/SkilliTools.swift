@@ -384,6 +384,14 @@ final class SkilliTools {
                        group: .actions, risk: .changes,
                        parameters: [.init(name: "title", description: "Its title, as list_skillies gives it."),
                                     .init(name: "arguments", description: "Its arguments' values, in order.", isArray: true, isRequired: false)]),
+        ToolDefinition(name: "list_shortcuts", title: "List shortcuts",
+                       description: "The shortcuts the user made in Apple's Shortcuts app, one name per line. Through them you reach what any app lets Shortcuts do.",
+                       group: .actions, risk: .read, parameters: []),
+        ToolDefinition(name: "run_shortcut", title: "Run a shortcut",
+                       description: "Runs one of the user's shortcuts (Apple's Shortcuts app) by its name, with a text as its input if it takes one; returns the text it gave back.",
+                       group: .actions, risk: .changes,
+                       parameters: [.init(name: "name", description: "Its name, as list_shortcuts gives it."),
+                                    .init(name: "input", description: "The text it works on.", isRequired: false)]),
         ToolDefinition(name: "create_skillie", title: "Create a skillie",
                        description: "Writes a new skillie: a script the user then finds in skil.li's launcher by its title, Ask can run and you can run with run_skillie. Give the code without a shebang; it receives its arguments as $1, $2… (argv). To act in apps, it opens one skil.li link a step, done in order, each asked first: open \"skilli://do?app=TextEdit&goal=exporte%20en%20PDF%20dans%20mes%20documents\" (the goal as the user would ask it, percent-encoded; app optional). When what follows depends on whether a step worked, wait for it instead: \"$SKILLI_CLI\" call do_in_app app=TextEdit goal=\"exporte en PDF dans mes documents\" exits 0 when done, 1 otherwise, its first line saying how it ended (asked in the card like any agent's call). Keep it small and safe; it runs on the user's Mac.",
                        group: .actions, risk: .changes,
@@ -939,6 +947,25 @@ final class SkilliTools {
             let output = ran.output.trimmingCharacters(in: .whitespacesAndNewlines)
             guard ran.succeeded else { throw Failure(message: "“\(command.title)” failed (exit \(ran.status)): \(output.suffix(2_000))") }
             return output.isEmpty ? "Done." : String(output.suffix(8_000))
+
+        case "list_shortcuts":
+            let all = AppleShortcuts.all()
+            guard !all.isEmpty else { return "No shortcuts in the Shortcuts app yet." }
+            return all.map(\.name).joined(separator: "\n")
+
+        case "run_shortcut":
+            let wanted = try text("name")
+            let all = AppleShortcuts.all()
+            guard let shortcut = all.first(where: { $0.name.localizedCaseInsensitiveCompare(wanted) == .orderedSame }) ?? all.first(where: { $0.id == wanted }) else {
+                throw Failure(message: "No shortcut “\(wanted)” in the Shortcuts app. Use list_shortcuts.")
+            }
+            let input = (try? text("input")).flatMap { $0.isEmpty ? nil : $0 }
+            do {
+                let output = try await AppleShortcuts.run(shortcut, input: input)
+                return output.map { String($0.suffix(8_000)) } ?? "Done."
+            } catch {
+                throw Failure(message: error.localizedDescription)
+            }
 
         case "list_projects":
             let all = projects?.all() ?? []

@@ -235,6 +235,7 @@ enum AskRouter {
     /// tools' names; only those names are sent, with the request.
     static func decide(_ instruction: String, hasSelection: Bool, app: String, menu: [MenuReader.Item],
                        apps: [AppCandidates.App] = [], projects: [EditorProject] = [], scripts: [ScriptCommand] = [],
+                       shortcuts: [AppleShortcut] = [],
                        settings: [SystemSettingsPane] = [],
                        bluetooth: [MacAction] = [],
                        services: [(name: String, tools: [String])] = [],
@@ -294,6 +295,7 @@ enum AskRouter {
         // wording move another answer.
         let projectActions = projects.prefix(40).map(MacAction.project)
         let scriptActions = scripts.prefix(60).map(MacAction.script)
+        let shortcutActions = shortcuts.prefix(60).map { MacAction.shortcut($0, withSelection: false) }
         if !projectActions.isEmpty {
             questions.append(DecisionQuestion(
                 name: "project",
@@ -319,6 +321,16 @@ enum AskRouter {
                 instructions: "Does the user ask to run one of their own commands (skillies), by its name or by what it does? Which one? Answer none when they ask for something else.",
                 options: scriptActions.enumerated().map { .init(value: "script\($0.offset)", description: $0.element.description) }
                     + [.init(value: "none", description: "Not one of these commands")]
+            ))
+        }
+        // The user's shortcuts by name only: Shortcuts says nothing more of
+        // them.
+        if !shortcutActions.isEmpty {
+            questions.append(DecisionQuestion(
+                name: "shortcut",
+                instructions: "Does the user ask to run one of their shortcuts (made in Apple's Shortcuts app), by its name or by what its name says it does? Which one? Answer none when they ask for something else.",
+                options: shortcutActions.enumerated().map { .init(value: "shortcut\($0.offset)", description: $0.element.description) }
+                    + [.init(value: "none", description: "Not one of these shortcuts")]
             ))
         }
         let appChunks = MenuCandidates.chunks(apps)
@@ -418,13 +430,13 @@ enum AskRouter {
                     return (name == "wifi" || name == "bluetooth") && letters(instruction).contains(name)
                 }.map { (MacAction.settings($0), 0.9) } : nil
                 let command = ([isRadio && namesSettings ? nil : direct, pick("project", projectActions, prefix: "project"),
-                                pick("skillie", scriptActions, prefix: "script"), namedPane]
+                                pick("skillie", scriptActions, prefix: "script"), pick("shortcut", shortcutActions, prefix: "shortcut"), namedPane]
                                + (doesIt ? [] : [pick("settings", paneActions, prefix: "pane")]))
                     .compactMap { $0 }
                     .filter { action, probability in
                         switch action {
                         case .project: probability >= projectBar
-                        case .script: probability >= 0.6
+                        case .script, .shortcut: probability >= 0.6
                         case .settings: probability >= 0.5
                         default: true
                         }
@@ -434,7 +446,7 @@ enum AskRouter {
                     .filter { $0.key != "none" && $0.value >= 0.1 }
                     .sorted { $0.value > $1.value }
                     .compactMap { key, value in action(key).map { ($0, value) } }
-                for name in [question.name, "command", "project", "skillie", "settings"] {
+                for name in [question.name, "command", "project", "skillie", "shortcut", "settings"] {
                     guard let answer = answers[name] else { continue }
                     let top = answer.probabilities.sorted { $0.value > $1.value }.prefix(4).map { key, value in
                         let pane = key.hasPrefix("pane") ? Int(key.dropFirst(4)).flatMap { settings.indices.contains($0) ? settings[$0].name : nil } : nil
@@ -481,7 +493,7 @@ enum AskRouter {
                 // 25 % when no app fits) beats an unsure app, the agent and,
                 // with nothing selected, a written answer ("je veux bosser
                 // sur l'api"); opening it changes nothing. One of the user's
-                // scripts that fits beats the agent and doing it by hand in
+                // scripts or shortcuts that fits beats the agent and doing it by hand in
                 // the app in front too, asked first in the card under 85 %.
                 if appBest < 0.85, menuBest < 0.85, let (action, probability) = command {
                     switch action {
@@ -489,7 +501,7 @@ enum AskRouter {
                         if (route == .open || route == .act || route == .answer && !hasSelection) && probability >= projectBar {
                             route = .command
                         }
-                    case .script:
+                    case .script, .shortcut:
                         if (route == .open || route == .act || route == .control) && probability >= 0.6 { route = .command }
                     default:
                         break
