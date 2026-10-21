@@ -444,10 +444,11 @@ back.
   agents and skillies (its link, or `$SKILLI_CLI call run_shortcut` with
   an input or the selection). A shortcut made, renamed or deleted shows
   the next time the launcher opens.
-- **Warp and Zed**: the links each documents itself, as skil.li's own app
-  files. Warp: Warp Settings, Appearance, MCP Servers, Agent Settings,
-  Environments, Platform, Billing and Usage, Team Settings. Zed: Zed
-  Settings, Agent Tool Permissions, Agent Skills, Edit Predictions. Rows,
+- **Warp, Zed and Microsoft Teams**: the links each documents itself, as
+  skil.li's own app files. Warp: Warp Settings, Appearance, MCP Servers,
+  Agent Settings, Environments, Platform, Billing and Usage, Team
+  Settings. Zed: Zed Settings, Agent Tool Permissions, Agent Skills, Edit
+  Predictions. Teams: New Teams Meeting (its scheduling form). Rows,
   Catalog, keys, links, Ask, agents and skillies as CleanShot's.
 - **Your app files**: any other app that documents its links, in a file
   of your own (`~/Library/Application Support/skil.li/Apps/*.json`: the
@@ -465,7 +466,7 @@ back.
   agents, every time.
 
 Settings: each app's page: its version and what it has, Open, its
-links' documentation and your file (Its Links, Show File), its
+links' documentation and your file (Documentation, Show File), its
 options (CleanShot: Line breaks in Capture Text), then its commands (or
 shortcuts), each with its keys; ⋯ on a row (or a right-click): Add
 Shortcut, Add a Shortcut for a variant (Capture and Copy…, With the

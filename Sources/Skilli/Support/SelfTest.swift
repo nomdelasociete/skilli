@@ -2049,7 +2049,7 @@ final class SelfTest {
     /// variant too) and what asks first asks (esc: nothing opened), its
     /// link runs and the asking one asks, Ask runs one and asks for the
     /// other; Settings → Apps lists it and the two files left out, its page
-    /// (Its Links, Show File); an import link shows an app whole, Add
+    /// (Documentation, Show File); an import link shows an app whole, Add
     /// writes its file; `create_app_link` refuses a scheme the app does not
     /// open and adds Notes' links. Links read, nothing opened.
     private func appFilesFromFiles() async {
@@ -2234,7 +2234,7 @@ final class SelfTest {
         let pageRows = ["Selftest Today", "New Selftest Note", "Share Selftest Notes"].allSatisfy { title in
             !Self.axElements(roles: [kAXStaticTextRole], where: { $0 == title }).isEmpty
         }
-        let pageButtons = ["Its Links", "Show File", "Open Selftest"].allSatisfy { title in
+        let pageButtons = ["Documentation", "Show File", "Open Selftest"].allSatisfy { title in
             !Self.axElements(roles: [kAXButtonRole], where: { $0 == title }).isEmpty
         }
         await captureSettingsBothWays(as: "settings-apps-file-page")

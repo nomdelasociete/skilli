@@ -1,0 +1,19 @@
+{
+  "id": "teams",
+  "name": "Microsoft Teams",
+  "shortName": "Teams",
+  "bundleID": "com.microsoft.teams2",
+  "scheme": "msteams",
+  "documentation": "https://learn.microsoft.com/en-us/microsoftteams/platform/concepts/build-and-test/deep-link-workflow",
+  "commands": [
+    {
+      "id": "new-meeting",
+      "path": "/l/meeting/new",
+      "title": "New Teams Meeting",
+      "description": "Opens a new meeting to schedule, its invitees and time",
+      "words": ["teams", "meeting", "schedule", "invite", "calendar", "réunion", "nouvelle réunion", "planifier", "rendez-vous"],
+      "symbol": "calendar.badge.plus",
+      "group": "Meetings"
+    }
+  ]
+}

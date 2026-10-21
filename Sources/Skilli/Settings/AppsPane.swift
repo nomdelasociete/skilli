@@ -54,8 +54,6 @@ final class AppsPaneModel {
 
     var pendingImport: [ImportCandidate] = []
     var importErrors: [String] = []
-    /// The apps added from the last import, for the self-test.
-    private(set) var added: [LinkedApp] = []
     var isImporting: Bool {
         get { !pendingImport.isEmpty || !importErrors.isEmpty }
         set { if !newValue { pendingImport = []; importErrors = [] } }
@@ -119,7 +117,6 @@ final class AppsPaneModel {
         }
         pendingImport = []
         importErrors = failed
-        self.added = added
         changed += 1
         onAppsChanged?()
         return added
@@ -519,7 +516,7 @@ private struct AppPageHeader: View {
             HStack(spacing: 8) {
                 Button("Open \(app.shortName)") { app.open() }
                 if let documentation = app.documentation {
-                    Button("Its Links") { NSWorkspace.shared.open(documentation) }
+                    Button("Documentation") { NSWorkspace.shared.open(documentation) }
                         .help("Where \(app.shortName) documents its links: \(documentation.host() ?? "")")
                 }
                 if let file = app.file {

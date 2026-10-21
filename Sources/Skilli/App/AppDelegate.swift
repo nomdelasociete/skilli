@@ -366,15 +366,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The self-test's sensitive form fields never touch the user's.
         if case .selftest = mode { FormSecrets.prefix = "selftest-" }
         // The linked apps' files before the shortcuts, which name their
-        // commands by id: a few small files, read once here. The
-        // self-test keeps its own folder; the benchmark reads skil.li's only.
+        // commands by id: a few small files, read here without their SF
+        // Symbols (checked off the main thread just after). The self-test
+        // keeps its own folder; the benchmark reads skil.li's only.
         switch mode {
         case .normal: break
         case .selftest:
             LinkedApps.folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/Apps", isDirectory: true)
         case .benchmark: LinkedApps.folder = nil
         }
-        LinkedApps.readFiles(force: true)
+        LinkedApps.readFiles(force: true, checkSymbols: false)
         switch mode {
         case .normal:
             shortcuts = ShortcutStore(fileURL: ShortcutStore.defaultFileURL)

@@ -76,6 +76,7 @@ public enum LinkedAppFile {
     /// Every file, skil.li's own first, then the user's by name; each one
     /// that clashes with an app known already (by id, bundle id or scheme:
     /// the built-in ones first, then the files read before it) left out.
+    /// `symbolExists` checks the user's files' SF Symbols.
     public static func load(_ sources: [Source], builtIn: [LinkedApp] = LinkedApp.builtIn,
                             symbolExists: (String) -> Bool = { _ in true }) -> Loaded {
         var loaded = Loaded()
@@ -83,7 +84,8 @@ public enum LinkedAppFile {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         for source in ordered {
             do {
-                let app = try read(source.data, file: source.shipped ? nil : source.name, symbolExists: symbolExists)
+                // skil.li's own: their symbols checked by its tests.
+                let app = try read(source.data, file: source.shipped ? nil : source.name, symbolExists: source.shipped ? { _ in true } : symbolExists)
                 if let clash = clash(app, builtIn: builtIn, read: loaded.apps) {
                     loaded.problems.append(Problem(file: source.name, message: clash))
                 } else {

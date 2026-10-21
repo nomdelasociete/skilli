@@ -55,8 +55,9 @@ enum LinkedApps {
     /// The user's folder (the self-test keeps its own; nil: none read).
     nonisolated(unsafe) static var folder: URL? = defaultFolder
 
-    /// What the files gave, when they were read, and how often they changed.
-    private static let files = Mutex<(stamp: [String: Date]?, problems: [LinkedAppFile.Problem], generation: Int)>((nil, [], 0))
+    /// What the files gave, when they were read (and whether their SF
+    /// Symbols were checked then), and how often they changed.
+    private static let files = Mutex<(stamp: [String: Date]?, symbols: Bool, problems: [LinkedAppFile.Problem], generation: Int)>((nil, false, [], 0))
 
     /// The files left out, with why, as last read (Settings → Apps).
     static var problems: [LinkedAppFile.Problem] {
@@ -83,13 +84,15 @@ enum LinkedApps {
 
     /// Reads the app files again when one was added, changed or removed
     /// (`force`: whatever their dates); true when it read them. At launch
-    /// before the shortcuts (a key names its command by id), then with the
-    /// radios. Shortcuts and rows of an app whose file went stay until it
-    /// comes back: nothing is deleted.
+    /// before the shortcuts (a key names its command by id) without
+    /// checking the user's SF Symbols (macOS's first answer takes ~35 ms),
+    /// then off the main thread with them, and with the radios. Keys on
+    /// the commands of an app whose file went come back with it.
     @discardableResult
-    static func readFiles(force: Bool = false) -> Bool {
+    static func readFiles(force: Bool = false, checkSymbols: Bool = true) -> Bool {
         let stamp = userFiles()
-        guard force || files.withLock({ $0.stamp }) != stamp else { return false }
+        let last = files.withLock { (stamp: $0.stamp, symbols: $0.symbols) }
+        guard force || last.stamp != stamp || (checkSymbols && !last.symbols) else { return false }
         var sources = shippedFiles().compactMap { url in
             (try? Data(contentsOf: url)).map { LinkedAppFile.Source(name: url.lastPathComponent, data: $0, shipped: true) }
         }
@@ -100,9 +103,12 @@ enum LinkedApps {
                 sources.append(LinkedAppFile.Source(name: name, data: data, shipped: false))
             }
         }
-        let loaded = LinkedAppFile.load(sources, symbolExists: { NSImage(systemSymbolName: $0, accessibilityDescription: nil) != nil })
+        // skil.li's own files' symbols are checked by its tests.
+        let loaded = LinkedAppFile.load(sources, symbolExists: { symbol in
+            !checkSymbols || NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil
+        })
         LinkedApp.useFiles(loaded.apps)
-        files.withLock { $0 = (stamp, loaded.problems, $0.generation + 1) }
+        files.withLock { $0 = (stamp, checkSymbols, loaded.problems, $0.generation + 1) }
         for problem in loaded.problems {
             Log.trace("App file \(problem.file) left out: \(problem.message)")
         }

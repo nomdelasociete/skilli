@@ -1,3 +1,4 @@
+import AppKit
 @testable import SkilliCore
 import XCTest
 
@@ -128,11 +129,17 @@ final class LinkedAppFileTests: XCTestCase {
         // As their apps document them (docs/apps.md).
         XCTAssertEqual(LinkedApp.command(id: "warp.appearance")?.url()?.absoluteString, "warp://settings/appearance")
         XCTAssertEqual(LinkedApp.command(id: "zed.tool-permissions")?.url()?.absoluteString, "zed://settings/agent.tool_permissions")
+        XCTAssertEqual(LinkedApp.command(id: "teams.new-meeting")?.url()?.absoluteString, "msteams:/l/meeting/new")
         for app in loaded.apps {
             XCTAssertNil(app.file, app.id)
             XCTAssertNotNil(app.documentation, "\(app.id): only links the app documents")
             XCTAssertEqual(app.documentation.flatMap(URL.init(string:))?.scheme, "https")
             for command in app.commands {
+                // Not checked as the app reads them (macOS's first answer is slow).
+                XCTAssertNotNil(NSImage(systemSymbolName: command.symbol, accessibilityDescription: nil), "\(command.id): \(command.symbol)")
+                for variant in command.variants {
+                    XCTAssertNotNil(NSImage(systemSymbolName: variant.symbol, accessibilityDescription: nil), "\(command.id)/\(variant.id)")
+                }
                 // As the Catalog lists it: one line of 80 at most.
                 XCTAssertLessThanOrEqual("\(command.oneLine), in \(app.name)".count, 80, command.id)
                 XCTAssertTrue(command.keywords.contains(app.name.lowercased()), command.id)
@@ -181,8 +188,12 @@ final class LinkedAppFileTests: XCTestCase {
             XCTAssertNotNil(message, said)
             XCTAssertTrue(message?.contains(said) == true, "“\(message ?? "nil")” does not say “\(said)”")
         }
-        // An SF Symbol this Mac does not have.
+        // An SF Symbol this Mac does not have: the user's file left out,
+        // skil.li's own read (its symbols are checked here instead).
         XCTAssertTrue(problem(file(), symbolExists: { $0 != "sun.max" })?.contains("“sun.max” is not an SF Symbol") == true)
+        let symbols = { (symbol: String) in symbol != "sun.max" }
+        XCTAssertEqual(LinkedAppFile.load([.init(name: "Nimbus.json", data: file(), shipped: false)], symbolExists: symbols).apps.count, 0)
+        XCTAssertEqual(LinkedAppFile.load([.init(name: "nimbus.json", data: file(), shipped: true)], symbolExists: symbols).apps.count, 1)
         XCTAssertNil(problem(file()))
     }
 
