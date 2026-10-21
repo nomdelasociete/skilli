@@ -104,27 +104,48 @@ Rules:
 
 ## Settings → Apps
 
-One pane for every app skil.li drives through its links, in the block with
-Calendar, Reminders and GitHub. "The apps skil.li drives: their commands in
-the launcher, on a key, in Ask."
+One pane for every app skil.li drives, in the block with Calendar,
+Reminders and GitHub. "The apps skil.li drives: their commands in the
+launcher, on a key, in Ask." Redesigned on 2026-10-21 (the first version
+stacked every app on one page, which does not scale and read badly).
 
-- One row per installed app it knows: icon, name, version, one line on
-  where to allow it, and Open, which opens CleanShot itself: its own
-  settings link needs the API already allowed.
-- Whether the API is on cannot be read (checked 2026-10-21 on CleanShot X
-  5.0.1): turning Allow URL scheme API off changes nothing in CleanShot's
-  defaults (`allowURLSchemesAPI` stays as it was), and a link is then
-  ignored, no question asked. So the line never says "Ready" or "Off": it
-  says where the switch is.
-- An app's page: its own options first (CleanShot: Line breaks in Capture
-  Text: as set in CleanShot, kept, or joined on one line, for its row, a
-  key and Ask; ⌘K still offers both), then its commands by group (Capture,
-  Record, Annotate and Pin, Desktop Icons, History and Settings), a long
-  list last: each with its key and Show in search; a right-click gives a
-  variant a key (Capture and Copy…), shown under its command.
-- Apps not installed are not listed: no promises.
-- Keys and the Catalog index the same commands; their settings live here
-  only. Settings' search opens a command here.
+Design spec:
+
+- **The list** (the pane's top): the apps skil.li drives that are on this
+  Mac, nothing promised for the others. One row each: the app's own icon
+  (32 pt), its name, one status line ("22 commands · 2 on keys"; "14
+  shortcuts · 1 on a key"; "Reading your shortcuts…"), a chevron. The
+  whole row opens the app's page. The same layout for any number of apps.
+- **An app's page**, pushed inside the pane, as System Settings →
+  Notifications → an app: "‹ Apps" goes back. In order:
+  1. Its header, centered like a pane's: the app's icon (64 pt), its
+     name, its version and what it has ("5.0.1 · 22 commands"), the line on
+     what it needs (CleanShot: where to allow its API: nothing on the Mac
+     says whether it is on, see below), one button that opens the app.
+  2. Its options, plain rows (CleanShot: Line breaks in Capture Text).
+  3. Its commands by group, the long list last. A row: the command's
+     symbol in grey (no tile), its title, and its keys as keycaps only
+     when it has some. On hover, a ⋯ button (also on right-click): Add
+     Shortcut (or Change / Remove), Add a Shortcut for → each variant, Hide
+     from Search / Show in Search. A hidden command is dimmed, with "Hidden
+     from search". A variant with its own keys shows under its command,
+     indented. Recording happens in the row (the keys as typed, the hint
+     under the title); leaving the page, the pane or Settings stops it, and
+     a shortcut added for it without keys goes.
+  4. At most one short footer line.
+- **Shortcuts' page**: the same header (Open Shortcuts); while the list is
+  still being read, a "Reading your shortcuts…" row; then every shortcut
+  as a row like a command's: ⋯ gives Add Shortcut, Add a Shortcut With the
+  Selection, Hide from Search, Edit in Shortcuts.
+- Settings' search opens the app's page at the row (a command, a
+  shortcut, Line breaks in Capture Text). Keys and the Catalog list the
+  same commands; their settings live here.
+
+What CleanShot's API state shows: whether it is on cannot be read (checked
+2026-10-21 on CleanShot X 5.0.1): turning Allow URL scheme API off changes
+nothing in CleanShot's defaults (`allowURLSchemesAPI` stays as it was),
+and a link is then ignored, no question asked. So the page never says
+"Ready" or "Off": it says where the switch is.
 
 ## Next apps
 

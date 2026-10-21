@@ -57,14 +57,6 @@ enum LinkedApps {
         command.variants(forVersion: installed(command.appID)?.version)
     }
 
-    /// The app itself, as the Dock opens it: where the user turns on what
-    /// lets skil.li drive it (its own link to its settings needs that on
-    /// already).
-    @MainActor
-    static func open(_ installed: Installed) {
-        NSWorkspace.shared.openApplication(at: installed.url, configuration: NSWorkspace.OpenConfiguration())
-    }
-
     @MainActor private static var icons: [String: NSImage] = [:]
 
     /// The app's own icon, as rows show apps' (32 pt).

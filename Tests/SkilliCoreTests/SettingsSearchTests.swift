@@ -82,6 +82,10 @@ final class SettingsSearchTests: XCTestCase {
         let named = SettingsSearch.entries(entries)
         XCTAssertTrue(named.filter { $0.anchor.hasPrefix("entry.system:link:") }.allSatisfy { $0.pane == "apps" })
         XCTAssertTrue(named.filter { !$0.anchor.hasPrefix("entry.system:link:") }.allSatisfy { $0.pane == "catalog" })
+        // The user's shortcuts too: on Shortcuts' page in Apps.
+        let shortcut = AppleShortcut(id: "8E2C7C33-1D5A-4C3B-9A51-6B1F3B2E9D10", name: "Rename Invoices")
+        let withShortcut = SettingsSearch.entries(FeatureCatalog.entries(FeatureCatalog.Input(shortcuts: [shortcut])))
+        XCTAssertEqual(withShortcut.first { $0.anchor == SettingsSearch.entryAnchor(FeatureCatalog.shortcutEntryID(shortcut.id)) }?.pane, "apps")
     }
 
     func testASettingByItsNameCaseAndAccentsIgnored() {

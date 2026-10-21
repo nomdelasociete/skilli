@@ -22,8 +22,8 @@ final class LauncherController: NSObject {
         /// The GitHub strip under the search field, when it shows.
         static let stripHeight: CGFloat = 32
         static let resultLimit = 50
-        /// The clipboard history's list, beside its preview.
-        static let clipboardListWidth: CGFloat = 290
+        /// The list beside a preview (Clipboard History, Search Snippets).
+        static let splitListWidth: CGFloat = 290
 
         static var listHeight: CGFloat { CGFloat(visibleRows) * rowHeight }
         static var cardHeight: CGFloat { headerHeight + listHeight + listBottomPadding + 1 + footerHeight }
@@ -126,7 +126,19 @@ final class LauncherController: NSObject {
     /// is typed ("my iban"); whether it can (Settings → Snippets, a key).
     var snippetMeaningAvailable: (() -> Bool)?
     var snippetMeaning: ((String) async -> (snippets: [Snippet], label: String)?)?
+    /// Search Snippets' preview: the snippet as the expander would type it
+    /// now, and the variables it cannot fill without asking.
+    var snippetPreviewPieces: ((Snippet) -> (pieces: [Snippet.Piece], unfilled: Set<PromptTemplate.Variable>))?
+    /// When keywords expand now, said in the preview ("After a space or
+    /// ↩", "Off", "Not in 1Password"); read as the mode opens.
+    var snippetExpands: (() -> String)?
+    /// A snippet file's date, as the library last read its folder.
+    var snippetModified: ((Snippet) -> Date?)?
     private var snippetList: [Snippet] = []
+    private let snippetPreview = SnippetPreviewView()
+    /// As the mode opened: the Expands line, the snippets' shortcuts.
+    private var snippetExpandsLine: String?
+    private var snippetShortcuts: [String: [Chord]] = [:]
     /// Search Menu Items: the app in front as the mode opened, its enabled
     /// items once read (nil while reading), prepared for every key.
     private var menuApp: NSRunningApplication?
@@ -139,6 +151,7 @@ final class LauncherController: NSObject {
     private var snippetMeaningTask: Task<Void, Never>?
     /// Self-test hooks.
     var isInSnippets: Bool { mode == .snippets }
+    var snippetsPreview: SnippetPreviewView { snippetPreview }
     var isShowingSnippetMeaning: Bool { snippetFound?.query == searchField.stringValue }
     /// The calculator's answer: typed in the app in front (↩, like a clip,
     /// a snippet or an emoji: D4) or copied (⌘↩, ⌘C).
@@ -324,6 +337,14 @@ final class LauncherController: NSObject {
     private var kept: Kept?
     /// Self-test hook: the alias each row shows.
     var shownAliases: [String?] { results.map { aliasByID[$0.learningID] } }
+    /// The keycaps at the rows' right edge as drawn (a snippet's keyword),
+    /// and the alias keycaps after their names.
+    var shownTrailingKeycaps: [String?] {
+        results.indices.map { (tableView.view(atColumn: 0, row: $0, makeIfNecessary: false) as? ResultCellView)?.trailingText }
+    }
+    var shownAliasCaps: [String?] {
+        results.indices.map { (tableView.view(atColumn: 0, row: $0, makeIfNecessary: false) as? ResultCellView)?.aliasText }
+    }
     /// Where ⌘K's links go (Messages, Phone, mail); self-tests keep them.
     var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
     /// ⌘K's list over the results.
@@ -1523,6 +1544,7 @@ final class LauncherController: NSObject {
         // The selection is what Tab asks about, outside the modes.
         selectionLabel.isHidden = mode != nil
         emptyState.isHidden = !results.isEmpty
+        if results.isEmpty, beside != nil { placeEmptyState() }
         laps.lap("labels")
         showRows()
         laps.lap("rows")
@@ -1533,7 +1555,7 @@ final class LauncherController: NSObject {
         // The selected row's own keys (the selection may not have moved).
         updateFooter()
         showEmojiGrid()
-        if clipboardMode { updateClipPreview() }
+        updatePreview()
         laps.lap("list")
         lastSearchLaps = laps
     }
@@ -1596,26 +1618,63 @@ final class LauncherController: NSObject {
         tableView.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
     }
 
-    /// The selected copy in the preview.
-    private func updateClipPreview() {
+    /// The selected row in the preview beside the list: a copy in the
+    /// clipboard history, a snippet in Search Snippets.
+    private func updatePreview() {
         let row = tableView.selectedRow
-        guard results.indices.contains(row), case .clip(let item) = results[row] else {
-            clipPreview.show(nil, imageURL: nil)
-            return
+        let item = results.indices.contains(row) ? results[row] : nil
+        if clipboardMode {
+            guard case .clip(let clip) = item else {
+                clipPreview.show(nil, imageURL: nil)
+                return
+            }
+            clipPreview.show(clip, imageURL: clip.kind == .image ? clipboardImageURL?(clip) : nil)
+        } else if mode == .snippets {
+            guard case .snippet(let snippet) = item else {
+                snippetPreview.show(nil, preview: nil, details: .init())
+                return
+            }
+            let details = SnippetPreviewView.Details(
+                expands: snippetExpandsLine, alias: aliasByID[LauncherItem.snippet(snippet).learningID],
+                shortcut: snippetShortcuts[SkilliAction.snippet(snippet.id).id].map { $0.map { $0.keycaps.joined() }.joined(separator: " ") },
+                modified: snippetModified?(snippet))
+            snippetPreview.show(snippet, preview: snippetPreviewPieces?(snippet) ?? (snippet.expansion([:]), []), details: details)
         }
-        clipPreview.show(item, imageURL: item.kind == .image ? clipboardImageURL?(item) : nil)
     }
 
-    /// The list narrows beside the preview in the clipboard history, and
-    /// takes the whole card again outside it.
-    private func setClipboardSplit(_ on: Bool) {
-        let width = on ? Layout.clipboardListWidth : Layout.width
+    /// What sits beside the narrowed list.
+    private enum Beside { case clipboard, snippets }
+    private var beside: Beside?
+
+    /// The list narrows beside a preview (the clipboard history, Search
+    /// Snippets), and takes the whole card again outside them.
+    private func setSplit(_ beside: Beside?) {
+        self.beside = beside
+        let width = beside == nil ? Layout.width : Layout.splitListWidth
         listScroll?.frame.size.width = width
         tableView.tableColumns.first?.width = width
         tableView.frame.size.width = width
-        emptyState.frame.size.width = width
-        clipPreview.isHidden = !on
-        if on { clipPreview.prepare() } else { clipPreview.release() }
+        emptyState.cell?.wraps = beside != nil
+        emptyState.lineBreakMode = beside == nil ? .byClipping : .byWordWrapping
+        emptyState.maximumNumberOfLines = beside == nil ? 1 : 2
+        placeEmptyState()
+        clipPreview.isHidden = beside != .clipboard
+        snippetPreview.isHidden = beside != .snippets
+        if beside == .clipboard { clipPreview.prepare() } else { clipPreview.release() }
+        if beside != .snippets { snippetPreview.release() }
+    }
+
+    /// The list's empty line, centred in it; beside a preview it wraps on
+    /// two lines ("No snippet yet: add one in Settings → Snippets").
+    private func placeEmptyState() {
+        let middle = Layout.footerHeight + 1 + Layout.listBottomPadding + Layout.listHeight / 2
+        guard beside != nil else {
+            emptyState.frame = NSRect(x: 0, y: middle - 10, width: Layout.width, height: 20)
+            return
+        }
+        let width = Layout.splitListWidth - 40
+        let height = min(ceil(emptyState.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: 100)).height ?? 20), 40)
+        emptyState.frame = NSRect(x: 20, y: (middle - height / 2).rounded(), width: width, height: height)
     }
 
     /// "trop content mais crevé": the decision model picks the emoji.
@@ -2343,6 +2402,9 @@ final class LauncherController: NSObject {
             snippetList = snippets?() ?? []
             snippetFound = nil
             snippetMeaningOn = snippetMeaningAvailable?() ?? false
+            snippetExpandsLine = snippetExpands?()
+            snippetShortcuts = shortcutKeys?() ?? [:]
+            setSplit(.snippets)
         case .emoji:
             modeChip.set(title: "Emoji", color: .systemOrange)
             searchField.placeholderString = "A name, or a feeling then ⇥"
@@ -2362,7 +2424,7 @@ final class LauncherController: NSObject {
             searchField.placeholderString = "Search what you copied"
             meaning = nil
             meaningAvailable = clipboardMeaningAvailable?() ?? false
-            setClipboardSplit(true)
+            setSplit(.clipboard)
             onClipboardMode?()
         case .catalog:
             modeChip.set(title: "Catalog", color: .controlAccentColor)
@@ -2429,9 +2491,11 @@ final class LauncherController: NSObject {
             snippetMeaningPending = nil
             snippetFound = nil
             snippetList = []
+            snippetShortcuts = [:]
+            setSplit(nil)
         }
         if mode == .clipboard {
-            setClipboardSplit(false)
+            setSplit(nil)
             meaningTask?.cancel()
             meaningPending = nil
             meaning = nil
@@ -3808,11 +3872,14 @@ final class LauncherController: NSObject {
         emptyState.alignment = .center
         emptyState.frame = NSRect(x: 0, y: listFrame.midY - 10, width: Layout.width, height: 20)
 
-        // The clipboard history's preview, right of its narrowed list.
-        clipPreview.frame = NSRect(x: Layout.clipboardListWidth, y: Layout.footerHeight + 1,
-                                   width: Layout.width - Layout.clipboardListWidth, height: Layout.cardHeight - Layout.footerHeight - 1)
-        clipPreview.isHidden = true
-        card.addSubview(clipPreview)
+        // The previews right of the narrowed list: the clipboard history's,
+        // Search Snippets'.
+        for preview in [clipPreview, snippetPreview] as [NSView] {
+            preview.frame = NSRect(x: Layout.splitListWidth, y: Layout.footerHeight + 1,
+                                   width: Layout.width - Layout.splitListWidth, height: Layout.cardHeight - Layout.footerHeight - 1)
+            preview.isHidden = true
+            card.addSubview(preview)
+        }
         emptyState.isHidden = true
         // The emoji picker's grid, in the list's place.
         emojiGrid.isHidden = true
@@ -3976,8 +4043,11 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             guard let cell = view as? ResultCellView else { return false }
             configure(cell, for: results[row])
             let id = results[row].learningID
-            cell.setAlias(aliasByID[id])
+            // Beside a preview a row is its name (and a snippet's keyword):
+            // the preview says the alias, the name needs the room.
+            cell.setAlias(beside == nil ? aliasByID[id] : nil)
             cell.setPinned(mode == nil && pinsNow.ids.contains(id))
+            cell.setTrailingKeycap(mode == .snippets ? Self.keywordCap(results[row]) : nil)
         }
         return true
     }
@@ -4034,6 +4104,13 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             tableView.reloadData(forRowIndexes: stale, columnIndexes: IndexSet(integer: 0))
             NSAnimationContext.endGrouping()
         }
+    }
+
+    /// A snippet's keyword as its row's keycap in Search Snippets; a long
+    /// one cut (the preview says it whole).
+    private static func keywordCap(_ item: LauncherItem) -> String? {
+        guard case .snippet(let snippet) = item, !snippet.keyword.isEmpty else { return nil }
+        return snippet.keyword.count > 12 ? snippet.keyword.prefix(11) + "…" : snippet.keyword
     }
 
     private func configure(_ cell: ResultCellView, for item: LauncherItem) {
@@ -4156,9 +4233,9 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
         case .calculation(let result):
             cell.configure(title: result.display, accessory: result.detail, icon: CommandIcon.image(for: "equal"))
         case .snippet(let snippet):
-            // In Search Snippets every row is one: its first words say which.
-            let kind = mode == .snippets ? ClipboardSearch.title(of: snippet.text, limit: 36) : "Snippet"
-            cell.configure(title: snippet.name, accessory: snippet.keyword.isEmpty ? kind : "\(kind) · \(snippet.keyword)",
+            // In Search Snippets, beside the preview: the name, its keyword
+            // a keycap at the right edge (`fill`).
+            cell.configure(title: snippet.name, accessory: mode == .snippets ? "" : snippet.keyword.isEmpty ? "Snippet" : "Snippet · \(snippet.keyword)",
                            icon: CommandIcon.image(for: "text.quote"))
         case .clip(let item):
             // Beside the preview, which says the rest.
@@ -4177,7 +4254,7 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
     func tableViewSelectionDidChange(_ notification: Notification) {
         if mode == .emoji { showEmojiSelection() }
         if mode == .gifs { showGIFSelection() }
-        if clipboardMode { updateClipPreview() }
+        updatePreview()
         updateFooter()
     }
 

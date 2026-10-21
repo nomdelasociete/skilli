@@ -240,7 +240,7 @@ extension LinkedApp {
     public static let cleanShot = LinkedApp(
         id: "cleanshot", name: "CleanShot X", shortName: "CleanShot", bundleID: "pl.maketheweb.cleanshotx", scheme: "cleanshot",
         commands: CleanShot.commands, groups: CleanShot.groups,
-        allowance: "Its commands run while Allow URL scheme API is on, in CleanShot → Settings → Advanced.",
+        allowance: "Its commands run while Allow URL scheme API is on:\nCleanShot → Settings → Advanced.",
         fileActions: [
             .init(command: "open-annotate", title: "Annotate in CleanShot", symbol: "pencil.tip.crop.circle"),
             .init(command: "pin", title: "Pin in CleanShot", symbol: "pin"),

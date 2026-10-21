@@ -13,7 +13,9 @@ enum Brand {
     }
 
     static func hasSI(_ text: String) -> Bool {
-        text.contains(/\bSI\b/)
+        // The regex is parsed on each call: only for text that holds "SI"
+        // (each Settings label asks).
+        text.contains("SI") && text.contains(/\bSI\b/)
     }
 }
 
