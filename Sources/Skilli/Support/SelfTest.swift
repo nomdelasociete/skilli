@@ -20954,7 +20954,9 @@ final class SelfTest {
         let settings = panes.flatMap { $0["settings"] as? [[String: Any]] ?? [] }
         let keys = Set(settings.compactMap { $0["key"] as? String })
         let secrets = settings.filter { item in SettingsTable.entries.contains { $0.key == item["key"] as? String && $0.secret } }
-        let secretsHidden = secrets.count == 4 && secrets.allSatisfy { ["set", "not set"].contains($0["value"] as? String ?? "") }
+        // Every secret the table holds (the keys, the relay's token, Klipy's), each only set or not.
+        let secretsHidden = secrets.count == SettingsTable.entries.filter(\.secret).count
+            && secrets.allSatisfy { ["set", "not set"].contains($0["value"] as? String ?? "") }
         // The decision keys the self-test may hold: never in what agents read.
         let keyValues = [context.ai.decisionKey(for: .openAI), context.ai.decisionKey(for: .typeSafe)].compactMap { $0 }.filter { $0.count > 8 }
         let noKey = !keyValues.contains { all.output.contains($0) } && !all.output.contains("sk-ant-")
