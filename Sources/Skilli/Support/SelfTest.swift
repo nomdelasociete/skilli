@@ -1853,14 +1853,23 @@ final class SelfTest {
                     _ = await hyperChord(["c"], trigger: Self.ownTriggerKeyCode)
                     _ = await waitUntil(timeout: 1) { launcher.isVisible && launcher.isInClipboard }
                     for character in marker { await pressKey(character) }
-                    let found = await waitUntil(timeout: 2) { launcher.resultTitles.first?.contains(marker) == true } != nil
-                    await pressKey("k", flags: .maskCommand)
-                    _ = await waitUntil(timeout: 1) { launcher.isShowingActions }
-                    let listed = launcher.shownActions.map(\.title)
-                    for character in "pin in" { await pressKey(character) }
-                    let filtered = await waitUntil(timeout: 1) { launcher.shownActions.first?.title == "Pin in CleanShot" } != nil
-                    await pressKey(nil, code: CGKeyCode(kVK_Return))
-                    let ran = await waitUntil(timeout: 2) { commands.lastAppLink != nil } != nil
+                    // ⌘K and ↩ only on the test's own copy and action: another
+                    // would paste or run for real.
+                    let found = await waitUntil(timeout: 2) { launcher.selectedResultTitle?.contains(marker) == true } != nil
+                    var listed: [String] = []
+                    var filtered = false
+                    var ran = false
+                    if found {
+                        await pressKey("k", flags: .maskCommand)
+                        _ = await waitUntil(timeout: 1) { launcher.isShowingActions }
+                        listed = launcher.shownActions.map(\.title)
+                        for character in "pin in" { await pressKey(character) }
+                        filtered = await waitUntil(timeout: 1) { launcher.shownActions.first?.title == "Pin in CleanShot" } != nil
+                    }
+                    if filtered {
+                        await pressKey(nil, code: CGKeyCode(kVK_Return))
+                        ran = await waitUntil(timeout: 2) { commands.lastAppLink != nil } != nil
+                    }
                     clipPinned = found && expected.png.allSatisfy(listed.contains) && filtered && ran
                         && Self.opened(commands.lastAppLink, "pin", kept) && !launcher.isVisible
                     clipDetail = "found: \(found), ⌘K: \(listed.joined(separator: ", ")); “pin in” → \(filtered); opened \(commands.lastAppLink?.absoluteString ?? "nothing")"
@@ -1963,11 +1972,14 @@ final class SelfTest {
             // Typed only with the launcher open: never into Finder.
             if await waitUntil(timeout: 1, { launcher.isVisible }) != nil {
                 for character in "pin selected" { await pressKey(character) }
-                let top = await waitUntil(timeout: 1) { launcher.topResultName == pin.title } != nil
-                await pressKey(nil, code: CGKeyCode(kVK_Return))
-                _ = await waitUntil(timeout: 3) { commands.lastAppLink != nil }
-                fromRow = top && Self.opened(commands.lastAppLink, "pin", png)
-                rowDetail = "row on top: \(top), opened \(commands.lastAppLink?.absoluteString ?? "nothing")"
+                // ↩ only on that row: another one would run for real.
+                let selected = await waitUntil(timeout: 1) { launcher.selectedResultTitle == pin.title } != nil
+                if selected {
+                    await pressKey(nil, code: CGKeyCode(kVK_Return))
+                    _ = await waitUntil(timeout: 3) { commands.lastAppLink != nil }
+                }
+                fromRow = selected && Self.opened(commands.lastAppLink, "pin", png)
+                rowDetail = "row selected: \(selected) (\(launcher.selectedResultTitle ?? "none")), opened \(commands.lastAppLink?.absoluteString ?? "nothing")"
                 if launcher.isVisible { await closeLauncher() }
             } else {
                 rowDetail = "the launcher did not open over Finder"
