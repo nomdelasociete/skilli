@@ -115,6 +115,8 @@ final class DisplayPrompt {
                 actions.move(by: -1, wraps: !event.isARepeat)
             } else if code == kVK_DownArrow {
                 actions.move(by: 1, wraps: !event.isARepeat)
+            } else if let step = LauncherController.controlStep(event) {
+                actions.move(by: step, wraps: !event.isARepeat)
             } else if code == kVK_Delete {
                 actions.deleteBackward()
             } else if isReturn {
