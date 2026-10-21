@@ -20498,6 +20498,9 @@ final class SelfTest {
             (SettingsTable.Tool.addShortcut, #"{"action":"Clipboard History","keys":"y"}"#, "Start with ✦"),
             (SettingsTable.Tool.addShortcut, #"{"action":"Clipboard History","keys":"cmd+k"}"#, "Used by the launcher: Actions."),
             (SettingsTable.Tool.addShortcut, #"{"action":"Clipboard History","keys":"opt+cmd+escape"}"#, "Used by macOS: Force Quit Applications"),
+            // Every launcher command takes one: found by name (refused for its keys only).
+            (SettingsTable.Tool.addShortcut, #"{"action":"Search Snippets","keys":"y"}"#, "Start with ✦"),
+            (SettingsTable.Tool.addShortcut, #"{"action":"Calendar","keys":"ctrl+opt+cmd+8"}"#, "Two are named “Calendar”"),
             (SettingsTable.Tool.setAlias, #"{"alias":"two words","item":"Emoji"}"#, "without a space"),
             (SettingsTable.Tool.createQuicklink, #"{"name":"Bad","url":"ftp://example.com/{query}"}"#, "https://")
         ]

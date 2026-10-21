@@ -715,6 +715,10 @@ final class SettingTools {
         }
         var exact = actions.filter { Self.folded($0.title) == wanted }
         if exact.isEmpty { exact = actions.filter { plain($0.title) == wanted } }
+        // "Calendar" is skil.li's command and the app: neither is guessed.
+        if exact.count == 1, let app = findApp(text), Self.folded(app.deletingPathExtension().lastPathComponent) == wanted {
+            throw Failure("Two are named “\(text)”: \(exact[0].title) (\(exact[0].action.id)) and the app (\(SkilliAction.openApp(app.path).id)). Pass its id.")
+        }
         if exact.count == 1 { return exact[0].action }
         if exact.isEmpty, let app = findApp(text) { return .openApp(app.path) }
         if exact.count > 1 {
