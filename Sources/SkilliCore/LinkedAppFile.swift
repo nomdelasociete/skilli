@@ -173,7 +173,7 @@ public enum LinkedAppFile {
         var commands: [AppLinkCommand] = []
         var groups: [(title: String, commands: [String])] = []
         for command in list {
-            let read = try self.command(command, app: id, name: name, minimum: minimum, symbolExists: symbolExists)
+            let read = try self.command(command, app: id, name: shortName, minimum: minimum, symbolExists: symbolExists)
             guard !commands.contains(where: { $0.id == read.command.id }) else {
                 throw Failure(message: "\(command.place): another command has the id “\(read.command.id.dropFirst(id.count + 1))”.")
             }
@@ -222,7 +222,9 @@ public enum LinkedAppFile {
                 since: latest(since, try variant.version("since")), asksFirst: try variant.flag("asksFirst")
             ))
         }
-        // Found by the app's name too, as CleanShot's are by "cleanshot".
+        // Found by the app's short name too, as CleanShot's are by
+        // "cleanshot" ("teams", not "microsoft teams": "micro" is the
+        // microphone's).
         var keywords = [name.lowercased()]
         for word in words where !keywords.contains(word.lowercased()) { keywords.append(word.lowercased()) }
         let command = AppLinkCommand(id: "\(app).\(id)", path: path, title: title, oneLine: oneLine, symbol: symbol, keywords: keywords,

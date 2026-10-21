@@ -11,10 +11,9 @@
       "title": "Zed Settings",
       "description": "Opens Zed's settings editor",
       "words": [
-        "settings.json",
-        "réglages zed",
-        "préférences zed",
-        "paramètres zed"
+        "zed réglages",
+        "zed préférences",
+        "zed paramètres"
       ],
       "symbol": "gearshape",
       "group": "Settings"

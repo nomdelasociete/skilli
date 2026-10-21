@@ -12,9 +12,9 @@
       "description": "Opens Warp's settings",
       "words": [
         "terminal",
-        "réglages warp",
-        "préférences warp",
-        "paramètres warp"
+        "warp réglages",
+        "warp préférences",
+        "warp paramètres"
       ],
       "symbol": "gearshape",
       "group": "Settings"
@@ -29,7 +29,7 @@
         "theme",
         "font",
         "colors",
-        "apparence warp",
+        "warp apparence",
         "thème",
         "police",
         "couleurs"
@@ -99,12 +99,12 @@
       "words": [
         "billing",
         "usage",
-        "plan",
         "credits",
         "facturation",
         "abonnement",
         "utilisation",
-        "crédits"
+        "crédits",
+        "warp plan"
       ],
       "symbol": "creditcard",
       "group": "Account"

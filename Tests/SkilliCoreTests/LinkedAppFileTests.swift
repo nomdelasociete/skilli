@@ -89,8 +89,8 @@ final class LinkedAppFileTests: XCTestCase {
         // The period goes: the Catalog's line has none.
         XCTAssertEqual(today.oneLine, "Shows today's notes")
         XCTAssertEqual(today.symbol, "sun.max")
-        // Found by the app's name too, then its words.
-        XCTAssertEqual(today.keywords, ["nimbus notes", "notes", "today", "aujourd'hui"])
+        // Found by the app's short name too, then its words.
+        XCTAssertEqual(today.keywords, ["nimbus", "notes", "today", "aujourd'hui"])
         // The app's minimum is every command's; a variant's own is later.
         XCTAssertEqual(today.since, "2.0")
         XCTAssertFalse(today.runs(onVersion: "1.9"))
@@ -142,25 +142,42 @@ final class LinkedAppFileTests: XCTestCase {
                 }
                 // As the Catalog lists it: one line of 80 at most.
                 XCTAssertLessThanOrEqual("\(command.oneLine), in \(app.name)".count, 80, command.id)
-                XCTAssertTrue(command.keywords.contains(app.name.lowercased()), command.id)
+                XCTAssertTrue(command.keywords.contains(app.shortName.lowercased()), command.id)
                 XCTAssertNotNil(command.url(), command.id)
             }
         }
     }
 
-    /// A shipped app's words never take skil.li's own: a tie goes to the
-    /// shorter title, and "settings" opened Zed's instead of skil.li's.
-    func testSkilliFilesDoNotTakeSkilliOwnWords() throws {
+    /// A shipped app's row never comes before skil.li's own commands for
+    /// what leads to them, as root search ranks it (`LauncherRank.score`,
+    /// a tie to the shorter title): "sett" opened Zed's settings instead of
+    /// skil.li's when Zed's words said "settings".
+    func testSkilliFilesNeverOutrankSkilliOwnCommands() throws {
         let folder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/Skilli/Resources/Apps")
         let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }
-        let apps = LinkedAppFile.load(try files.map { LinkedAppFile.Source(name: $0.lastPathComponent, data: try Data(contentsOf: $0), shipped: true) }).apps
-        let own = Set(LauncherCommand.all.flatMap(\.keywords).map(CatalogEntry.fold) + FeatureCatalog.entries().flatMap(\.otherWords))
-        for app in apps {
-            for command in app.commands {
-                // Its app's name aside: CleanShot's is found by "cleanshot" too.
-                let taken = command.keywords.dropFirst().map(CatalogEntry.fold).filter(own.contains)
-                XCTAssertEqual(taken, [], "\(command.id) takes skil.li's own words")
+        let commands = LinkedAppFile.load(try files.map { LinkedAppFile.Source(name: $0.lastPathComponent, data: try Data(contentsOf: $0), shipped: true) })
+            .apps.flatMap(\.commands)
+        XCTAssertFalse(commands.isEmpty)
+        // skil.li's launcher commands, Mac commands and window places.
+        let owns = LauncherCommand.all.map { (title: $0.title, keywords: $0.keywords) }
+            + SystemCommand.allCases.map { (title: $0.title, keywords: $0.keywords) }
+            + WindowLayout.allCases.map { (title: $0.title, keywords: $0.keywords) }
+        for own in owns {
+            let ownNames = [FuzzyCandidate(own.title)][...]
+            let ownWords = ArraySlice(own.keywords.map(FuzzyCandidate.init))
+            // Four letters on: three still lead to many rows.
+            for keyword in own.keywords where keyword.count >= 4 {
+                for length in 4...keyword.count where keyword.prefix(length).filter({ !$0.isWhitespace }).count >= 4 {
+                    let query = FuzzyMatcher.Query(String(keyword.prefix(length)))
+                    guard let mine = LauncherRank.score(query, names: ownNames, keywords: ownWords) else { continue }
+                    for command in commands {
+                        guard let theirs = LauncherRank.score(query, names: [FuzzyCandidate(command.title)][...],
+                                                              keywords: ArraySlice(command.keywords.map(FuzzyCandidate.init))) else { continue }
+                        let before = theirs > mine || (theirs == mine && command.title.count < own.title.count)
+                        XCTAssertFalse(before, "“\(keyword.prefix(length))”: \(command.id) (\(theirs)) before \(own.title) (\(mine))")
+                    }
+                }
             }
         }
     }
