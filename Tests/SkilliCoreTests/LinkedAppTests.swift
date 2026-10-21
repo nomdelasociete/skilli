@@ -112,6 +112,14 @@ final class LinkedAppTests: XCTestCase {
                        "cleanshot://add-quick-access-overlay?filepath=/Users/me/Movies/Demo%201.mp4")
         XCTAssertFalse(quickAccess.runs(onVersion: "3.6"))
         XCTAssertTrue(quickAccess.runs(onVersion: "3.8.1"))
+        // The docs' minimums, which the apps self-test expects by: files
+        // into Annotate, Quick Access and Capture Text from 3.8.1, Pin
+        // from 3.5.1 (the first version with the API).
+        for name in ["quick-access", "capture-text", "open-annotate", "annotate-selected-image"] {
+            XCTAssertEqual(try command(name).since, "3.8.1", name)
+        }
+        XCTAssertTrue(try command("pin").runs(onVersion: "3.5.1"))
+        XCTAssertTrue(try command("pin-selected-image").runs(onVersion: "3.5.1"))
         // Every file action names a command that takes files.
         for action in LinkedApp.cleanShot.fileActions {
             XCTAssertNotNil(LinkedApp.command(id: "cleanshot.\(action.command)")?.files, action.command)
