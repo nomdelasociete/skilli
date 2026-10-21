@@ -742,6 +742,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         launcher.onSystemCommand = { [weak self] action in self?.runMac(action) }
+        launcher.onOpenFile = { [weak self] file, command, title in self?.aiActions.openFile(file, with: command, title: title) }
         actions.onMac = { [weak self] action in self?.runMac(action) }
         aiActions.systemCommands = systemCommands
         toolServer.tools.systemCommands = systemCommands

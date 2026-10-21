@@ -82,6 +82,21 @@ Everything the launcher runs, a skillie runs too, two ways:
   `autoscroll` on Scrolling Capture, `linebreaks` or `nolinebreaks` on
   Capture Text, a tab on CleanShot Settings. A wrong one is said, with the
   ones it takes.
+
+  A file goes to CleanShot with `file`, its full path:
+
+  ```bash
+  "$SKILLI_CLI" call run_action id=cleanshot.open-annotate file="$HOME/Desktop/Shot.png"  # its editor
+  "$SKILLI_CLI" call run_action id=cleanshot.pin file="$PWD/$1"                          # pinned above every window
+  "$SKILLI_CLI" call run_action id=cleanshot.quick-access file=/Users/me/Movies/Demo.mp4  # a Quick Access Overlay
+  ```
+
+  Annotate, Pin and Capture Text (the text in it copied; `variant` still
+  says the line breaks) open PNG and JPEG images, Quick Access those and
+  MP4 videos. The Finder selection's and the latest screenshot's commands
+  take `file` too, instead of what they read. A type CleanShot does not open, a
+  file that is not there, a path that is not full or an empty `file` exits 1
+  and says why; nothing opens.
 - **Fire and forget**: `open "skilli://run/<entry>"`, the link ⌘K → Copy Link
   gives on any row (`skilli://run/system:link:cleanshot.capture-area`). What
   could change the Mac asks first, as for any link.

@@ -213,7 +213,9 @@ final class SelfTest {
         /// launcher, Settings' fields and the Ask card (keys).
         case rootsearch
         /// Only the linked apps (CleanShot X): ✦K C, the launcher's rows,
-        /// ⌘K's captures, the front window's frame; nothing captured (keys).
+        /// ⌘K's captures, the front window's frame, files sent to it (⌘K
+        /// on files and clipboard images, the Finder selection,
+        /// `run_action file=`); nothing captured (keys).
         case apps
         /// Only skil.li's settings through its tools, on scratch
         /// preferences: the table covers every setting, get_settings,
@@ -544,6 +546,7 @@ final class SelfTest {
             await cleanShotRouting()
             if !aborted { await cleanShotFromLauncher() }
             if !aborted { await cleanShotFromSkillies() }
+            if !aborted { await cleanShotOpensFiles() }
             if !aborted { await appsPaneShown() }
             if !aborted { await appleShortcutsRun() }
             return finish()
@@ -1774,6 +1777,266 @@ final class SelfTest {
         record(name, passed,
                "copy: exit \(copy.status), opened \(opened); wrong variant: exit \(wrong.status) “\(wrong.output.prefix(80))”, opened nothing: \(wrongOpenedNothing); upload asked: \(asked), esc → exit \(declined.status) “\(declined.output.prefix(40))”, opened nothing: \(uploadOpenedNothing); open_url upload asked: \(askedURL), esc → exit \(declinedURL.status), opened \(openedURLs.count); run_action allowed in the card (\(toolAsked)), upload still asked: \(uploadAsked), esc → exit \(declinedAfterAllow.status), link \(commands.lastAppLink?.absoluteString ?? "none")",
                nil)
+    }
+
+    /// Files into CleanShot X (docs/apps.md, Order 4), on scratch files:
+    /// ⌘K on a file row lists what CleanShot opens for its type (a PNG all
+    /// three, an MP4 only Quick Access, a text file none); an image in the
+    /// clipboard history, through real keys (✦C, ⌘K, "pin in", ↩), pins
+    /// the history's own file; a skillie's `run_action file=` opens it,
+    /// says what does not fit and opens nothing then. Then the Finder
+    /// selection (`cleanShotOpensFinderSelection`). Dry run: the links are
+    /// read, CleanShot opens nothing.
+    private func cleanShotOpensFiles() async {
+        let name = "Files into CleanShot X: ⌘K on a file by its type (PNG: Annotate, Pin, Quick Access; MP4: Quick Access; text: none); a clipboard image pinned from ⌘K by keys; `run_action file=` opens it, or says why not and opens nothing"
+        guard let commands = context.aiActions.systemCommands else {
+            record(name, false, "no SystemCommands", nil)
+            return
+        }
+        let manager = FileManager.default
+        let folder = manager.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/cleanshot-files", isDirectory: true)
+        let png = folder.appendingPathComponent("Selftest Shot.png")
+        let mp4 = folder.appendingPathComponent("Selftest Demo.mp4")
+        let text = folder.appendingPathComponent("Selftest Notes.txt")
+        let picture = NSImage(size: NSSize(width: 120, height: 80), flipped: false) { rect in
+            NSColor.systemTeal.setFill()
+            rect.fill()
+            return true
+        }
+        guard let tiff = picture.tiffRepresentation, let pngData = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]),
+              (try? manager.createDirectory(at: folder, withIntermediateDirectories: true)) != nil,
+              (try? pngData.write(to: png)) != nil, (try? Data("not a video".utf8).write(to: mp4)) != nil,
+              (try? Data("notes".utf8).write(to: text)) != nil else {
+            record(name, false, "could not write the scratch files", nil)
+            return
+        }
+        defer { try? manager.removeItem(at: folder) }
+        let launcher = context.launcher
+        func row(_ url: URL) -> LauncherItem {
+            .file(FileSearch.File(url: url, name: url.lastPathComponent, kind: "", modified: .now, used: nil))
+        }
+        func inCleanShot(_ url: URL) -> [String] {
+            launcher.actions(for: row(url)).map(\.title).filter { $0.contains("CleanShot") }
+        }
+        guard let installed = LinkedApps.installed("cleanshot") else {
+            // Not installed: no file row offers it.
+            let none = [png, mp4].allSatisfy { inCleanShot($0).isEmpty }
+            record(name, none, "CleanShot X is not installed here: ⌘K on a PNG and an MP4 offers it nowhere: \(none)", nil)
+            return
+        }
+        let saved = commands.openAppLink
+        commands.openAppLink = { _ in }
+        commands.lastAppLink = nil
+        defer { commands.openAppLink = saved }
+
+        // ⌘K on a file row, by its type and CleanShot's version: Quick
+        // Access and Capture Text on a file came with 3.8.1, Pin before.
+        func runs(_ id: String) -> Bool { LinkedApp.command(id: id)?.runs(onVersion: installed.version) == true }
+        let (quickRuns, textRuns) = (runs("cleanshot.quick-access"), runs("cleanshot.capture-text"))
+        let expected = (png: LinkedApp.cleanShot.fileActions(opening: png.path, version: installed.version).map(\.action.title),
+                        mp4: LinkedApp.cleanShot.fileActions(opening: mp4.path, version: installed.version).map(\.action.title))
+        let byType = inCleanShot(png) == expected.png && inCleanShot(mp4) == expected.mp4 && inCleanShot(text).isEmpty
+            && expected.png.contains("Pin in CleanShot") && expected.mp4 == (quickRuns ? ["Add to CleanShot Quick Access"] : [])
+        launcher.actions(for: row(mp4)).first { $0.title == "Add to CleanShot Quick Access" }?.run()
+        let mp4Added = quickRuns ? Self.opened(commands.lastAppLink, "add-quick-access-overlay", mp4) : commands.lastAppLink == nil
+
+        // An image in the clipboard history: ✦C, found by its words, ⌘K,
+        // "pin in" filters, ↩ pins the history's own file.
+        var clipDetail = "no clipboard store"
+        var clipPinned = false
+        if let store = context.clipboard.store {
+            let marker = "cleanshot selftest \(Int.random(in: 1000...9999))"
+            if let added = try? store.add(.init(kind: .image, text: "", imageData: pngData, size: "120×80", app: "com.apple.Preview",
+                                                appName: "Preview", hash: ClipboardHistory.hash("image", Data(marker.utf8)))),
+               let kept = store.imageURL(added.item) {
+                defer { try? store.delete(added.item.id) }
+                try? store.setOCR(marker, for: added.item.id)
+                commands.lastAppLink = nil
+                if await focusTestWindow() {
+                    _ = await hyperChord(["c"], trigger: Self.ownTriggerKeyCode)
+                    _ = await waitUntil(timeout: 1) { launcher.isVisible && launcher.isInClipboard }
+                    for character in marker { await pressKey(character) }
+                    // ⌘K and ↩ only on the test's own copy and action: another
+                    // would paste or run for real.
+                    let found = await waitUntil(timeout: 2) { launcher.selectedResultTitle?.contains(marker) == true } != nil
+                    var listed: [String] = []
+                    var filtered = false
+                    var ran = false
+                    if found {
+                        await pressKey("k", flags: .maskCommand)
+                        _ = await waitUntil(timeout: 1) { launcher.isShowingActions }
+                        listed = launcher.shownActions.map(\.title)
+                        for character in "pin in" { await pressKey(character) }
+                        filtered = await waitUntil(timeout: 1) { launcher.shownActions.first?.title == "Pin in CleanShot" } != nil
+                    }
+                    if filtered {
+                        await pressKey(nil, code: CGKeyCode(kVK_Return))
+                        ran = await waitUntil(timeout: 2) { commands.lastAppLink != nil } != nil
+                    }
+                    clipPinned = found && expected.png.allSatisfy(listed.contains) && filtered && ran
+                        && Self.opened(commands.lastAppLink, "pin", kept) && !launcher.isVisible
+                    clipDetail = "found: \(found), ⌘K: \(listed.joined(separator: ", ")); “pin in” → \(filtered); opened \(commands.lastAppLink?.absoluteString ?? "nothing")"
+                    await closeLauncher()
+                } else {
+                    clipDetail = "the test window lost focus"
+                }
+            } else {
+                clipDetail = "could not add an image to the history"
+            }
+        }
+        guard await focusTestWindow() else { return }
+
+        // A skillie: `run_action file=`.
+        let settings = context.tools.settings
+        let savedRights = (mode: settings.mode, right: settings.override(for: "run_action"))
+        settings.mode = .auto
+        settings.setOverride(.always, for: "run_action")
+        defer {
+            settings.mode = savedRights.mode
+            settings.setOverride(savedRights.right, for: "run_action")
+        }
+        func arguments(_ id: String, _ file: String) -> String {
+            let data = (try? JSONSerialization.data(withJSONObject: ["id": id, "file": file])) ?? Data()
+            return String(decoding: data, as: UTF8.self)
+        }
+        commands.lastAppLink = nil
+        let pinCall = await skilliCall("run_action", arguments("cleanshot.pin", png.path))
+        let pinOpened = Self.opened(commands.lastAppLink, "pin", png)
+        commands.lastAppLink = nil
+        let wrongType = await skilliCall("run_action", arguments("cleanshot.pin", mp4.path))
+        let noFile = await skilliCall("run_action", arguments("cleanshot.capture-area", png.path))
+        let relative = await skilliCall("run_action", arguments("cleanshot.pin", png.lastPathComponent))
+        let gone = await skilliCall("run_action", arguments("cleanshot.pin", folder.appendingPathComponent("Gone.png").path))
+        // An empty `file` (a skillie's "$1" left out): refused, not the
+        // Finder selection.
+        let empty = await skilliCall("run_action", arguments("cleanshot.pin-selected-image", ""))
+        let refusedOpenedNothing = commands.lastAppLink == nil
+        let quickCall = await skilliCall("run_action", arguments("cleanshot.quick-access", mp4.path))
+        let quickOpened = Self.opened(commands.lastAppLink, "add-quick-access-overlay", mp4)
+        // Capture Text on a file, its variant kept.
+        commands.lastAppLink = nil
+        let textData = (try? JSONSerialization.data(withJSONObject: ["id": "cleanshot.capture-text", "variant": "nolinebreaks", "file": png.path])) ?? Data()
+        let textCall = await skilliCall("run_action", String(decoding: textData, as: UTF8.self))
+        let textOpened = Self.opened(commands.lastAppLink, "capture-text", png)
+            && commands.lastAppLink?.query()?.hasPrefix("linebreaks=false&") == true
+        let skillies = pinCall.status == 0 && pinOpened && wrongType.status == 1 && wrongType.output.contains(CleanShot.images.said)
+            && noFile.status == 1 && noFile.output.contains("takes no file") && relative.status == 1 && relative.output.contains("full path")
+            && gone.status == 1 && empty.status == 1 && empty.output.contains("empty") && refusedOpenedNothing
+            && (quickRuns ? quickCall.status == 0 && quickOpened : quickCall.status == 1)
+            && (textRuns ? textCall.status == 0 && textOpened : textCall.status == 1)
+        record(name, byType && mp4Added && clipPinned && skillies,
+               "⌘K, PNG: \(inCleanShot(png).joined(separator: ", ")); MP4: \(inCleanShot(mp4).joined(separator: ", ")); text: \(inCleanShot(text).count) (by type: \(byType)), MP4 → Quick Access: \(mp4Added); clipboard image pinned: \(clipPinned) (\(clipDetail)); run_action pin: exit \(pinCall.status) opened \(pinOpened), an MP4 to Pin: exit \(wrongType.status) “\(wrongType.output.prefix(70))”, Capture Area with a file: exit \(noFile.status), a relative path: exit \(relative.status), a file gone: exit \(gone.status) “\(gone.output.prefix(60))”, an empty file: exit \(empty.status), opened nothing: \(refusedOpenedNothing); Quick Access an MP4: exit \(quickCall.status) opened \(quickOpened); Capture Text one line on the PNG: exit \(textCall.status) opened \(textOpened) (dry run, CleanShot X \(installed.version ?? "?"))",
+               nil)
+        await cleanShotOpensFinderSelection(png: png, mp4: mp4, commands: commands)
+    }
+
+    /// The Finder selection into CleanShot X: Finder in front with the
+    /// scratch PNG selected, Pin Selected Image from the launcher's row
+    /// pins it; an MP4 selected, Pin says what it opens and Add Selected
+    /// File to Quick Access adds it. Read through Finder's scripting, which
+    /// macOS asks for once: not allowed yet for this build, Finder's answer
+    /// is stood in for (the file the test selected) rather than left
+    /// waiting on macOS's question; Finder in front, the row and the link
+    /// are real either way. Dry run.
+    private func cleanShotOpensFinderSelection(png: URL, mp4: URL, commands: SystemCommands) async {
+        let name = "Files into CleanShot X from Finder: Pin Selected Image from the launcher over Finder pins the file selected; an MP4 selected is refused for Pin and added to Quick Access"
+        guard let pin = LinkedApp.command(id: "cleanshot.pin-selected-image"), let quickAccess = LinkedApp.command(id: "cleanshot.quick-access") else {
+            record(name, false, "no Finder selection commands", nil)
+            return
+        }
+        let finder = AutomationAccess.targets.filter { $0.bundleID == FinderSelection.bundleID }
+        let automation = await AutomationAccess.states(of: finder)[FinderSelection.bundleID]
+        let asksFinder = automation != .notAsked && automation != .denied
+        /// What the test selected last, for the stand-in.
+        final class Selected { var url: URL? }
+        let selected = Selected()
+        let saved = (link: commands.openAppLink, selection: commands.finderSelection)
+        commands.openAppLink = { _ in }
+        if !asksFinder {
+            commands.finderSelection = { try FinderSelection.file(selected: { selected.url.map { [$0] } ?? [] }) }
+        }
+        defer {
+            commands.openAppLink = saved.link
+            commands.finderSelection = saved.selection
+        }
+        let launcher = context.launcher
+        func selectInFinder(_ url: URL) async -> Bool {
+            selected.url = url
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+            let front = await waitUntil(timeout: 3) { NSWorkspace.shared.frontmostApplication?.bundleIdentifier == FinderSelection.bundleID } != nil
+            // Finder selects it once its window is drawn.
+            await pause(500)
+            return front
+        }
+        commands.lastAppLink = nil
+        var fromRow = false
+        var rowDetail = "Finder did not come to the front"
+        if await selectInFinder(png) {
+            _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+            // Typed only with the launcher open: never into Finder.
+            if await waitUntil(timeout: 1, { launcher.isVisible }) != nil {
+                for character in "pin selected" { await pressKey(character) }
+                // ↩ only on that row: another one would run for real.
+                let selected = await waitUntil(timeout: 1) { launcher.selectedResultTitle == pin.title } != nil
+                if selected {
+                    await pressKey(nil, code: CGKeyCode(kVK_Return))
+                    _ = await waitUntil(timeout: 3) { commands.lastAppLink != nil }
+                }
+                fromRow = selected && Self.opened(commands.lastAppLink, "pin", png)
+                rowDetail = "row selected: \(selected) (\(launcher.selectedResultTitle ?? "none")), opened \(commands.lastAppLink?.absoluteString ?? "nothing")"
+                if launcher.isVisible { await closeLauncher() }
+            } else {
+                rowDetail = "the launcher did not open over Finder"
+            }
+        }
+        commands.lastAppLink = nil
+        // Quick Access came with CleanShot 3.8.1: refused before.
+        let quickRuns = quickAccess.runs(onVersion: LinkedApps.installed("cleanshot")?.version)
+        var refused = "not run"
+        var quick = false
+        if await selectInFinder(mp4) {
+            do {
+                try await commands.run(.appLink(pin, variant: nil))
+                refused = "opened \(commands.lastAppLink?.absoluteString ?? "nothing")"
+            } catch {
+                refused = error.localizedDescription
+            }
+            _ = try? await commands.run(.appLink(quickAccess, variant: nil))
+            quick = quickRuns ? Self.opened(commands.lastAppLink, "add-quick-access-overlay", mp4) : commands.lastAppLink == nil
+        }
+        closeFinderWindow(named: png.deletingLastPathComponent().lastPathComponent)
+        _ = await focusTestWindow()
+        record(name, fromRow && refused.contains(CleanShot.images.said) && quick,
+               "Pin Selected Image from the launcher over Finder: \(rowDetail); an MP4 to Pin: “\(refused)”; to Quick Access: \(quick); Finder's selection \(asksFinder ? "read from Finder" : "stood in for: Automation → Finder is \(automation == .denied ? "refused" : "not asked yet") for this build") (dry run)", nil)
+    }
+
+    /// `link` is CleanShot's `host` on `file` (as `filepath`), whichever
+    /// way its folder is written (/var is /private/var).
+    private static func opened(_ link: URL?, _ host: String, _ file: URL) -> Bool {
+        guard let link, link.host() == host,
+              let path = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "filepath" })?.value
+        else { return false }
+        return URL(fileURLWithPath: path).resolvingSymlinksInPath().path == file.resolvingSymlinksInPath().path
+    }
+
+    /// Closes the Finder window showing `folder` (the one the test opened),
+    /// through Accessibility: its close button pressed.
+    private func closeFinderWindow(named folder: String) {
+        guard let finder = NSRunningApplication.runningApplications(withBundleIdentifier: FinderSelection.bundleID).first else { return }
+        let app = AXUIElementCreateApplication(finder.processIdentifier)
+        AXUIElementSetMessagingTimeout(app, 0.5)
+        var windows: CFTypeRef?
+        AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windows)
+        for window in (windows as? [AXUIElement]) ?? [] {
+            var title: CFTypeRef?
+            AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &title)
+            guard (title as? String) == folder else { continue }
+            var button: CFTypeRef?
+            AXUIElementCopyAttributeValue(window, kAXCloseButtonAttribute as CFString, &button)
+            if let button, CFGetTypeID(button) == AXUIElementGetTypeID() {
+                AXUIElementPerformAction(unsafeDowncast(button, to: AXUIElement.self), kAXPressAction as CFString)
+            }
+        }
     }
 
     /// Settings → Apps (docs/apps.md), as the user goes through it: the

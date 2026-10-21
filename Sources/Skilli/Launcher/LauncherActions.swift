@@ -140,6 +140,33 @@ extension LauncherController {
         return alias
     }
 
+    /// What the linked apps installed do with a file a row holds
+    /// (Annotate in CleanShot, Pin in CleanShot, Add to CleanShot Quick
+    /// Access): only what its type takes, read from its name, nothing
+    /// from the disk.
+    private func openFileActions(_ file: URL) -> [LauncherAction] {
+        LinkedApps.fileActions(for: file).map { action, command in
+            LauncherAction(title: action.title, symbol: action.symbol) { [weak self] in
+                self?.hide()
+                self?.onOpenFile?(file, command, action.title)
+            }
+        }
+    }
+
+    /// The file a copy is: an image's in the history's own folder, or the
+    /// one file copied in Finder.
+    private func clipFile(_ clip: ClipboardStore.Item) -> URL? {
+        switch clip.kind {
+        case .image:
+            return clipboardImageURL?(clip)
+        case .files:
+            let paths = clip.text.split(separator: "\n")
+            return paths.count == 1 ? URL(fileURLWithPath: String(paths[0])) : nil
+        case .text:
+            return nil
+        }
+    }
+
     private func itemActions(for item: LauncherItem) -> [LauncherAction] {
         guard let main = mainAction(for: item) else { return [] }
         /// What the list does with ↩, ⌘↩ or ⇧↩ on the row.
@@ -238,10 +265,12 @@ extension LauncherController {
                 list.append(copy("Copy PID", String(pid), .copySecond))
             }
             return list
-        case .clip:
-            return [first, key("Paste as Plain Text", "textformat", .openThird),
-                    key("Copy", "doc.on.doc", .openSecond, group: .copy),
-                    remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
+        case .clip(let clip):
+            // An image (or one file copied in Finder): CleanShot's too.
+            let inApps = clipFile(clip).map(openFileActions) ?? []
+            return [first, key("Paste as Plain Text", "textformat", .openThird)] + inApps
+                + [key("Copy", "doc.on.doc", .openSecond, group: .copy),
+                   remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
         case .snippet, .emoji:
             return [first, key("Copy", "doc.on.doc", .openSecond, group: .copy)]
         case .gif(let gif):
@@ -267,8 +296,7 @@ extension LauncherController {
         case .browserTab(let tab):
             return [first, copy("Copy Title", tab.title, .copy)]
         case .file(let file):
-            return [
-                first, key("Show in Finder", "folder", .openSecond),
+            return [first, key("Show in Finder", "folder", .openSecond)] + openFileActions(file.url) + [
                 LauncherAction(title: "Copy File", symbol: "doc.on.doc", key: .copy, group: .copy) { [weak self] in
                     self?.hide()
                     NSPasteboard.general.clearContents()

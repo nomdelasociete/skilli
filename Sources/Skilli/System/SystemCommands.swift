@@ -32,6 +32,9 @@ final class SystemCommands {
     var openAppLink: @MainActor (URL) -> Void = { NSWorkspace.shared.open($0) }
     /// The last linked app's link opened, for the self-test.
     var lastAppLink: URL?
+    /// The file selected in Finder (Pin Selected Image): the self-test
+    /// stands in for Finder's answer where it may not be asked.
+    var finderSelection: @MainActor () throws -> URL = { try FinderSelection.file() }
     /// The variant a linked app's command runs when none is said (Settings
     /// → Apps: Capture Text's line breaks).
     var appLinkDefault: @MainActor (AppLinkCommand) -> AppLinkCommand.Variant? = { _ in nil }
@@ -109,15 +112,26 @@ final class SystemCommands {
         case .volume(let level):
             return try Self.setVolume(level)
         case .appLink(let command, _):
-            let variant = action.appLinkVariant ?? appLinkDefault(command)
-            let url = try LinkedApps.url(for: command, variant: variant, frontWindow: { try windows.frontWindowFrame() },
-                                         latestScreenshot: { ImageFolderWatcher.latestScreenshot(in: screenshotFolders()) })
-            lastAppLink = url
-            Log.trace("App link \(command.id)\(variant.map { "/\($0.id)" } ?? "")")
-            openAppLink(url)
+            try openLink(command, variant: action.appLinkVariant ?? appLinkDefault(command), file: nil)
             // Seen at once in the app: nothing said.
             return ""
         }
+    }
+
+    /// A linked app's command on a file skil.li already has (⌘K on a
+    /// clipboard image or a file found, an agent's `file`): checked against
+    /// what its link takes, then opened. Seen at once in the app.
+    func open(_ file: URL, with command: AppLinkCommand, variant: AppLinkCommand.Variant? = nil) throws {
+        try openLink(command, variant: variant ?? appLinkDefault(command), file: file)
+    }
+
+    private func openLink(_ command: AppLinkCommand, variant: AppLinkCommand.Variant?, file: URL?) throws {
+        let url = try LinkedApps.url(for: command, variant: variant, file: file, frontWindow: { try windows.frontWindowFrame() },
+                                     latestScreenshot: { ImageFolderWatcher.latestScreenshot(in: screenshotFolders()) },
+                                     finderSelection: finderSelection)
+        lastAppLink = url
+        Log.trace("App link \(command.id)\(variant.map { "/\($0.id)" } ?? "")\(file == nil ? "" : " on a file")")
+        openAppLink(url)
     }
 
     /// What happened, in one line; throws a message for the user.

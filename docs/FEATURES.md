@@ -167,7 +167,8 @@ The search panel you open from anywhere. ✦Space.
   `cb`, Snippets `snip`, Emoji `:`, GIFs `gif`, Calendar `cal`, Reminders `todo`,
   GitHub `pr`, the Catalog `?`).
 - **Search Files** (`f`): by name with Spotlight, or by what it was about
-  with ⇥. ↩ opens, ⌘↩ shows in Finder.
+  with ⇥. ↩ opens, ⌘↩ shows in Finder; with CleanShot X, ⌘K on an image
+  or an MP4 sends it there (annotate, pin, Quick Access).
 - **Search Tabs** (`tab`): any tab open in Safari, Chrome, Arc, Brave,
   Edge…; ↩ shows it.
 - **Search Browser History** (`hist`): a page you visited, by its words
@@ -211,7 +212,8 @@ Everything you copy, and your screenshots, ready to paste again.
 - **Clipboard History** (✦C, `cb`): text, images and files; search
   without accents, even words inside images; ⇥ by meaning ("my train
   ticket from yesterday"). ↩ pastes, ⇧↩ plain text, ⌘↩ copies, ⌘⌫ forgets
-  (⌘Z brings it back for 10 s).
+  (⌘Z brings it back for 10 s). With CleanShot X, ⌘K on an image
+  annotates it, pins it or adds it to Quick Access.
 - **Previews** by kind: a link's card (picture, title, site), a color's
   swatch with Hex, RGB, HSL, an image with what SI sees and its words, a
   file's thumbnail, an email, phone or address, code, long text.
@@ -412,12 +414,18 @@ back.
   Record Screen, Capture Text, Annotate Clipboard Image, Annotate Image…,
   Pin Image…, the desktop icons, Capture History, Restore Recently Closed,
   CleanShot Settings. skil.li adds Capture and Record Front Window (its
-  frame, nothing to pick) and Annotate or Pin Latest Screenshot. ⌘K on a
+  frame, nothing to pick), Annotate or Pin Latest Screenshot, and for the
+  file selected in Finder Annotate Selected Image, Pin Selected Image and
+  Add Selected File to Quick Access. ⌘K on a
   capture: Copy, Save, Annotate, Pin or Upload it; on Scrolling Capture:
   start at once, auto-scroll; on Capture Text: with or without line
   breaks; on CleanShot Settings: each tab. Each one, variants too, takes a
   shortcut, a link, Ask ("fais une capture de la fenêtre"), agents and
   skillies (`run_action` with its variant; an upload asks every time).
+- **Files into CleanShot**: ⌘K on an image in the clipboard history or a
+  file in Search Files: Annotate in CleanShot, Pin in CleanShot (PNG and
+  JPEG), Add to CleanShot Quick Access (PNG, JPEG, MP4), only what its
+  type allows. Agents and skillies give a file: `run_action` with `file`.
 - **Where to allow it**: CleanShot runs them while its API is allowed
   (CleanShot → Settings → Advanced → Allow URL scheme API); while it is
   off, CleanShot ignores them without a word. Its page says where to turn

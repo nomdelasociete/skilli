@@ -237,6 +237,7 @@
 		BA665B05DEAC728BA03C589E /* BluetoothDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B752FC084E502F096F34BF53 /* BluetoothDevices.swift */; };
 		BAC24DB971ABBF73B69721E0 /* AudioDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3083C8B3776FFFAA767674C1 /* AudioDevices.swift */; };
 		BC30C3CBDE8DF1EABB810820 /* ToolsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEC14D80251962DAC7E6AA8F /* ToolsViews.swift */; };
+		BC4302FC81D030B094F7F945 /* FinderSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7771A4932899B9EBA4EF5B1 /* FinderSelection.swift */; };
 		BD5D6D778E80BA248688348F /* ScheduledAsk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E6D581AD87DE821705933C4 /* ScheduledAsk.swift */; };
 		BE00AA1480A38B5D4C5B3161 /* PrivacyPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4304EA5425019877798D98D /* PrivacyPane.swift */; };
 		C0CD4B2798F9A8E42D71FE8C /* ComputerControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C78CF07B6DB33CAAA10BC7 /* ComputerControl.swift */; };
@@ -585,6 +586,7 @@
 		C4BBB834A8ECE555C3DA7739 /* WindowArranger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowArranger.swift; sourceTree = "<group>"; };
 		C4E49FD010C799A1DFD649C0 /* LauncherFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherFooter.swift; sourceTree = "<group>"; };
 		C5FF857B9AB86A64DEAE6C63 /* SystemSettingsPanes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemSettingsPanes.swift; sourceTree = "<group>"; };
+		C7771A4932899B9EBA4EF5B1 /* FinderSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderSelection.swift; sourceTree = "<group>"; };
 		C79A5C0A80CE10A4A59E045F /* DisplayWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayWatch.swift; sourceTree = "<group>"; };
 		C7C18D0A62567C6BC3D56E59 /* LauncherPlace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherPlace.swift; sourceTree = "<group>"; };
 		C7F00BAB8651E3B7A47907A3 /* AppCandidates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCandidates.swift; sourceTree = "<group>"; };
@@ -1086,6 +1088,7 @@
 				BA4B33A318C57677A89ACF6F /* DisplayPrompt.swift */,
 				A8D5123638FE95B379955F88 /* Displays.swift */,
 				C79A5C0A80CE10A4A59E045F /* DisplayWatch.swift */,
+				C7771A4932899B9EBA4EF5B1 /* FinderSelection.swift */,
 				AD55CF771A94AC50FDD50BF8 /* GitHubBook.swift */,
 				5EB2977D47F16E58FA8D87C4 /* Homebrew.swift */,
 				2B24E2B1AEAB526E9334DCF9 /* KeyboardCleaner.swift */,
@@ -1497,6 +1500,7 @@
 				304E7BB32C205223FE622778 /* EnglishTyping.swift in Sources */,
 				934CDD4EF6CA16E94496E978 /* EventTap.swift in Sources */,
 				3648BD533630540E2C4FEC3C /* FileSearch.swift in Sources */,
+				BC4302FC81D030B094F7F945 /* FinderSelection.swift in Sources */,
 				5249FC49901DF82C395BDAD8 /* Foreground.swift in Sources */,
 				097885C631EA9F8ADB7D8AC1 /* FormsPane.swift in Sources */,
 				555BEC58C311D8BB1B4A8E1B /* GIFGridView.swift in Sources */,

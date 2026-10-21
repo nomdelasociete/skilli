@@ -3461,8 +3461,27 @@ re-investigating.
   display's bottom left, `display` 1 the main one in `NSScreen.screens`'
   order; checked with a real capture of a Finder window, one
   display), Annotate / Pin Latest Screenshot the newest screenshot's path
-  (PNG or JPEG). `SystemCommands.openAppLink` is the self-test's dry run;
-  `remote apps` (✦K C, "capture front", ⌘K, the frame) captures nothing.
+  (PNG or JPEG). Files into CleanShot (Order 4): a command's `files`
+  (`AppLinkCommand.FileTypes`, by extension: `CleanShot.images` for `pin`
+  and `open-annotate`, `imagesAndVideos` with MP4 for
+  `add-quick-access-overlay`) is what its `filepath` takes; ⌘K on a
+  clipboard image (the history's own file, `ClipboardStore.imageURL`, or
+  one file copied in Finder) and on a Search Files row lists the app's
+  `fileActions` that open its type on the installed version (Annotate in
+  CleanShot, Pin in CleanShot, Add to CleanShot Quick Access;
+  `LinkedApps.fileActions`, the name only, nothing read), run through
+  `SystemCommands.open(_:with:)` (the file checked: its type, there, not a
+  folder). Annotate / Pin Selected Image and Add Selected File to Quick
+  Access read the Finder selection (`FinderSelection`: Finder in front,
+  one file, through Finder's `selection`; macOS asks once, Automation).
+  Agents and skillies: `run_action` with `file` (a full path) on any
+  command with `files`, instead of what it reads; refused said, nothing
+  opened. `SystemCommands.openAppLink` is the self-test's dry run;
+  `remote apps` (✦K C, "capture front", ⌘K, the frame; ⌘K on scratch
+  files by type, a clipboard image pinned by keys, `run_action file=`,
+  the Finder selection pinned from its row over Finder; Finder's own
+  answer stood in for while Automation → Finder is not allowed for the
+  build, `SystemCommands.finderSelection`) captures nothing.
 - Apple's Shortcuts (docs/apps.md, Next apps 1; `AppleShortcut` in
   SkilliCore, `AppleShortcuts`): every shortcut in the user's library is a
   `MacAction.shortcut(shortcut, withSelection:)` (raw value

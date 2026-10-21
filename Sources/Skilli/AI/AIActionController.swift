@@ -2985,6 +2985,16 @@ extension AIActionController: ToolPresenter {
         return answer
     }
 
+    /// A linked app's command on a file (⌘K → Pin in CleanShot): seen at
+    /// once in the app; only a failure is said, under the action's title.
+    func openFile(_ file: URL, with command: AppLinkCommand, title: String) {
+        do {
+            try systemCommands?.open(file, with: command)
+        } catch {
+            notify(error.localizedDescription, caller: title, run: nil)
+        }
+    }
+
     /// A Mac command or a window place, from the launcher, a shortcut or
     /// Ask: a card while a long one works (the speed test), then what it
     /// read (speed, color, system info), and what went wrong. What the user

@@ -294,11 +294,13 @@ final class SkilliTools {
                        parameters: [.init(name: "id", description: "Command id from list_commands."),
                                     .init(name: "text", description: "The text to work on.")]),
         ToolDefinition(name: "run_action", title: "Run a skil.li action",
-                       description: "Runs a skil.li action: CleanShot X's captures (an area, the front window, the screen, scrolling), recordings, text recognition, annotating or pinning the latest screenshot, desktop icons, its history; or changing the case of the selection. A CleanShot command takes a variant: what happens to a capture (copy, save, annotate, pin, upload: asked first, it leaves the Mac), scrolling's start or autoscroll, text with linebreaks or nolinebreaks, a settings tab.",
+                       description: "Runs a skil.li action: CleanShot X's captures (an area, the front window, the screen, scrolling), recordings, text recognition, annotating or pinning an image (the latest screenshot, the one selected in Finder, or a file), Quick Access, desktop icons, its history; or changing the case of the selection. A CleanShot command takes a variant: what happens to a capture (copy, save, annotate, pin, upload: asked first, it leaves the Mac), scrolling's start or autoscroll, text with linebreaks or nolinebreaks, a settings tab. Annotating (cleanshot.open-annotate), pinning (cleanshot.pin) and text recognition (cleanshot.capture-text) take a PNG or JPEG file, Quick Access (cleanshot.quick-access) a PNG, JPEG or MP4.",
                        group: .actions, risk: .changes,
                        parameters: [.init(name: "id", description: "The action.", options: actions.keys.sorted()),
                                     .init(name: "variant", description: "What the CleanShot command does more; leave out for its plain run.",
-                                          options: actionVariants, isRequired: false)]),
+                                          options: actionVariants, isRequired: false),
+                                    .init(name: "file", description: "The file's full path, for the commands that open one; instead of the Finder selection, the latest screenshot or CleanShot asking.",
+                                          isRequired: false)]),
         ToolDefinition(name: "update_app", title: "Update an app",
                        description: "Updates an app the right way: its own “Check for Updates…” menu item, else the App Store's Updates page, else Homebrew (brew upgrade --cask). Without a name: the app in front.",
                        group: .apps, risk: .changes,
@@ -1125,6 +1127,15 @@ final class SkilliTools {
         case "run_action":
             let id = try text("id")
             guard var action = Self.actions[id] else { throw Failure(message: "Unknown action “\(id)”.") }
+            // Left out: the plain run. Given, it is the file, never ignored
+            // (an empty `file="$1"` would run on the Finder selection).
+            var file: String?
+            if let given = arguments["file"], !(given is NSNull) {
+                guard let path = (given as? String)?.trimmingCharacters(in: .whitespaces), !path.isEmpty else {
+                    throw Failure(message: "“file” is empty: give the file's full path, or leave it out.")
+                }
+                file = path
+            }
             if let asked = (arguments["variant"] as? String)?.trimmingCharacters(in: .whitespaces), !asked.isEmpty {
                 guard case .mac(.appLink(let command, nil)) = action else {
                     throw Failure(message: "“\(id)” takes no variant.")
@@ -1135,6 +1146,17 @@ final class SkilliTools {
                 }
                 if variant.id == "upload" { try await askUpload(name, run) }
                 action = .mac(.appLink(command, variant: variant.id))
+            }
+            if let path = file {
+                // Opened here, so what does not fit is said to the agent.
+                guard case .mac(.appLink(let command, let variant)) = action, command.files != nil else {
+                    throw Failure(message: "“\(id)” takes no file.")
+                }
+                let expanded = (path as NSString).expandingTildeInPath
+                guard expanded.hasPrefix("/") else { throw Failure(message: "Give the file's full path: “\(path)” is not one.") }
+                guard let systemCommands else { throw Failure(message: "Mac commands are not available.") }
+                try systemCommands.open(URL(fileURLWithPath: expanded), with: command, variant: variant.flatMap(command.variant(id:)))
+                return "Opened “\((expanded as NSString).lastPathComponent)” in \(command.app?.name ?? "the app")."
             }
             performAction?(action)
             return "Done."
