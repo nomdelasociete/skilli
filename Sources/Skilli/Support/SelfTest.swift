@@ -1829,13 +1829,16 @@ final class SelfTest {
         commands.lastAppLink = nil
         defer { commands.openAppLink = saved }
 
-        // ⌘K on a file row, by its type and CleanShot's version.
+        // ⌘K on a file row, by its type and CleanShot's version: Quick
+        // Access and Capture Text on a file came with 3.8.1, Pin before.
+        func runs(_ id: String) -> Bool { LinkedApp.command(id: id)?.runs(onVersion: installed.version) == true }
+        let (quickRuns, textRuns) = (runs("cleanshot.quick-access"), runs("cleanshot.capture-text"))
         let expected = (png: LinkedApp.cleanShot.fileActions(opening: png.path, version: installed.version).map(\.action.title),
                         mp4: LinkedApp.cleanShot.fileActions(opening: mp4.path, version: installed.version).map(\.action.title))
         let byType = inCleanShot(png) == expected.png && inCleanShot(mp4) == expected.mp4 && inCleanShot(text).isEmpty
-            && expected.png.count == 3 && expected.mp4 == ["Add to CleanShot Quick Access"]
+            && expected.png.contains("Pin in CleanShot") && expected.mp4 == (quickRuns ? ["Add to CleanShot Quick Access"] : [])
         launcher.actions(for: row(mp4)).first { $0.title == "Add to CleanShot Quick Access" }?.run()
-        let mp4Added = Self.opened(commands.lastAppLink, "add-quick-access-overlay", mp4)
+        let mp4Added = quickRuns ? Self.opened(commands.lastAppLink, "add-quick-access-overlay", mp4) : commands.lastAppLink == nil
 
         // An image in the clipboard history: ✦C, found by its words, ⌘K,
         // "pin in" filters, ↩ pins the history's own file.
@@ -1919,7 +1922,8 @@ final class SelfTest {
         let skillies = pinCall.status == 0 && pinOpened && wrongType.status == 1 && wrongType.output.contains(CleanShot.images.said)
             && noFile.status == 1 && noFile.output.contains("takes no file") && relative.status == 1 && relative.output.contains("full path")
             && gone.status == 1 && empty.status == 1 && empty.output.contains("empty") && refusedOpenedNothing
-            && quickCall.status == 0 && quickOpened && textCall.status == 0 && textOpened
+            && (quickRuns ? quickCall.status == 0 && quickOpened : quickCall.status == 1)
+            && (textRuns ? textCall.status == 0 && textOpened : textCall.status == 1)
         record(name, byType && mp4Added && clipPinned && skillies,
                "⌘K, PNG: \(inCleanShot(png).joined(separator: ", ")); MP4: \(inCleanShot(mp4).joined(separator: ", ")); text: \(inCleanShot(text).count) (by type: \(byType)), MP4 → Quick Access: \(mp4Added); clipboard image pinned: \(clipPinned) (\(clipDetail)); run_action pin: exit \(pinCall.status) opened \(pinOpened), an MP4 to Pin: exit \(wrongType.status) “\(wrongType.output.prefix(70))”, Capture Area with a file: exit \(noFile.status), a relative path: exit \(relative.status), a file gone: exit \(gone.status) “\(gone.output.prefix(60))”, an empty file: exit \(empty.status), opened nothing: \(refusedOpenedNothing); Quick Access an MP4: exit \(quickCall.status) opened \(quickOpened); Capture Text one line on the PNG: exit \(textCall.status) opened \(textOpened) (dry run, CleanShot X \(installed.version ?? "?"))",
                nil)
@@ -1986,6 +1990,8 @@ final class SelfTest {
             }
         }
         commands.lastAppLink = nil
+        // Quick Access came with CleanShot 3.8.1: refused before.
+        let quickRuns = quickAccess.runs(onVersion: LinkedApps.installed("cleanshot")?.version)
         var refused = "not run"
         var quick = false
         if await selectInFinder(mp4) {
@@ -1996,7 +2002,7 @@ final class SelfTest {
                 refused = error.localizedDescription
             }
             _ = try? await commands.run(.appLink(quickAccess, variant: nil))
-            quick = Self.opened(commands.lastAppLink, "add-quick-access-overlay", mp4)
+            quick = quickRuns ? Self.opened(commands.lastAppLink, "add-quick-access-overlay", mp4) : commands.lastAppLink == nil
         }
         closeFinderWindow(named: png.deletingLastPathComponent().lastPathComponent)
         _ = await focusTestWindow()
