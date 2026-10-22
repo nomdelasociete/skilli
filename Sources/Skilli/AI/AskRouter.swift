@@ -236,7 +236,13 @@ enum AskRouter {
         let narrow = DecisionQuestion(name: question.name,
                                       instructions: question.instructions + " It is one of these two: which one does the request ask for?",
                                       options: options)
-        guard let answer = try? await DecisionClient.decide(narrow, input: input, provider: provider, key: key) else { return routed }
+        let answer: DecisionResult
+        do {
+            answer = try await DecisionClient.decide(narrow, input: input, provider: provider, key: key)
+        } catch {
+            Log.actions.error("Ask close call by \(provider.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            return routed
+        }
         let shared = ranked[0].value + ranked[1].value
         var probabilities = routed.probabilities
         for value in pair {
