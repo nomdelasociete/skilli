@@ -4,7 +4,9 @@ import SkilliCore
 
 /// The linked apps installed on this Mac (docs/apps.md), and their commands
 /// run: what skil.li reads for one (the front window, the latest
-/// screenshot) put in its link, then the link opened.
+/// screenshot) put in its link, then the link opened. The apps written in
+/// files (`LinkedAppFile`) are read here too: skil.li's own, in its bundle's
+/// `Apps` folder, then the user's.
 enum LinkedApps {
     struct Installed: Sendable {
         let app: LinkedApp
@@ -24,9 +26,10 @@ enum LinkedApps {
     }
 
     /// Reads them again: off the main thread at launch and as the launcher
-    /// opens, with the radios.
+    /// opens, with the radios; the app files first, when one changed.
     @discardableResult
     static func read() -> [Installed] {
+        readFiles()
         let found = LinkedApp.all.compactMap { app -> Installed? in
             guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleID) else { return nil }
             return Installed(app: app, url: url, version: Bundle(url: url)?.infoDictionary?["CFBundleShortVersionString"] as? String)
@@ -35,9 +38,137 @@ enum LinkedApps {
         return found
     }
 
-    /// The apps and versions as last read, to see a change.
+    /// The apps and versions as last read, and the files read, to see a
+    /// change.
     static var summary: [String] {
-        installed().map { "\($0.app.id) \($0.version ?? "")" }
+        installed().map { "\($0.app.id) \($0.version ?? "")" } + ["files \(files.withLock { $0.generation })"]
+    }
+
+    // MARK: - App files
+
+    /// Where the user's app files are: `~/Library/Application Support/skil.li/Apps`.
+    static var defaultFolder: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("skil.li/Apps", isDirectory: true)
+    }
+
+    /// The user's folder (the self-test keeps its own; nil: none read).
+    nonisolated(unsafe) static var folder: URL? = defaultFolder
+
+    /// What the files gave, when they were read (and whether their SF
+    /// Symbols were checked then), and how often they changed.
+    private static let files = Mutex<(stamp: [String: Date]?, symbols: Bool, problems: [LinkedAppFile.Problem], generation: Int)>((nil, false, [], 0))
+
+    /// The files left out, with why, as last read (Settings → Apps).
+    static var problems: [LinkedAppFile.Problem] {
+        files.withLock { $0.problems }
+    }
+
+    /// The user's files by name, each with when it last changed.
+    private static func userFiles() -> [String: Date] {
+        guard let folder else { return [:] }
+        let urls = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey],
+                                                                  options: .skipsHiddenFiles)) ?? []
+        var found: [String: Date] = [:]
+        for url in urls where url.pathExtension.lowercased() == "json" {
+            found[url.lastPathComponent] = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+        }
+        return found
+    }
+
+    /// skil.li's own files, in its bundle.
+    private static func shippedFiles() -> [URL] {
+        (Bundle.main.urls(forResourcesWithExtension: "json", subdirectory: "Apps") ?? [])
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// Reads the app files again when one was added, changed or removed
+    /// (`force`: whatever their dates); true when it read them. At launch
+    /// before the shortcuts (a key names its command by id) without
+    /// checking the user's SF Symbols (macOS's first answer takes ~35 ms),
+    /// then off the main thread with them, and with the radios. Keys on
+    /// the commands of an app whose file went come back with it.
+    @discardableResult
+    static func readFiles(force: Bool = false, checkSymbols: Bool = true) -> Bool {
+        let stamp = userFiles()
+        let last = files.withLock { (stamp: $0.stamp, symbols: $0.symbols) }
+        guard force || last.stamp != stamp || (checkSymbols && !last.symbols) else { return false }
+        var sources = shippedFiles().compactMap { url in
+            (try? Data(contentsOf: url)).map { LinkedAppFile.Source(name: url.lastPathComponent, data: $0, shipped: true) }
+        }
+        if let folder {
+            for name in stamp.keys {
+                let url = folder.appendingPathComponent(name)
+                guard let data = try? Data(contentsOf: url) else { continue }
+                sources.append(LinkedAppFile.Source(name: name, data: data, shipped: false))
+            }
+        }
+        // skil.li's own files' symbols are checked by its tests.
+        let loaded = LinkedAppFile.load(sources, symbolExists: { symbol in
+            !checkSymbols || NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil
+        })
+        LinkedApp.useFiles(loaded.apps)
+        files.withLock { $0 = (stamp, checkSymbols, loaded.problems, $0.generation + 1) }
+        for problem in loaded.problems {
+            Log.trace("App file \(problem.file) left out: \(problem.message)")
+        }
+        return true
+    }
+
+    /// An app file checked as it would be read: the app it defines, or why
+    /// it cannot join the apps known now. An app on this Mac must open the
+    /// scheme the file gives it (its Info.plist says which).
+    static func check(_ text: String) throws -> LinkedApp {
+        let app: LinkedApp
+        do {
+            app = try LinkedAppFile.read(Data(text.utf8), file: "", symbolExists: { NSImage(systemSymbolName: $0, accessibilityDescription: nil) != nil })
+        } catch {
+            throw SystemCommands.Failure(message: error.message)
+        }
+        let fromFiles = LinkedApp.all.filter { other in !LinkedApp.builtIn.contains { $0.id == other.id } }
+        if let clash = LinkedAppFile.clash(app, read: fromFiles) {
+            throw SystemCommands.Failure(message: clash)
+        }
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleID), !opens(url, scheme: app.scheme) {
+            throw SystemCommands.Failure(message: "\(app.name) does not open “\(app.scheme)” links: its scheme is another.")
+        }
+        return app
+    }
+
+    /// Whether the app at `url` says it opens `scheme` links.
+    static func opens(_ url: URL, scheme: String) -> Bool {
+        let types = Bundle(url: url)?.infoDictionary?["CFBundleURLTypes"] as? [[String: Any]] ?? []
+        return types.contains { ($0["CFBundleURLSchemes"] as? [String] ?? []).contains { $0.lowercased() == scheme } }
+    }
+
+    /// The user's Apps folder in Finder, made first when there is none.
+    @MainActor
+    static func revealFolder() {
+        guard let folder else { return }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        NSWorkspace.shared.activateFileViewerSelecting([folder])
+    }
+
+    /// Writes an app file in the user's folder (an agent's, an import) once
+    /// it reads as an app no other one clashes with; "zed-2.json" when its
+    /// name is taken by a file left out. Read again at once.
+    @discardableResult
+    static func add(_ text: String) throws -> LinkedApp {
+        let app = try check(text)
+        guard let folder else { throw SystemCommands.Failure(message: "No folder for app files.") }
+        let manager = FileManager.default
+        try manager.createDirectory(at: folder, withIntermediateDirectories: true)
+        var url = folder.appendingPathComponent("\(app.id).json")
+        var index = 2
+        while manager.fileExists(atPath: url.path) {
+            url = folder.appendingPathComponent("\(app.id)-\(index).json")
+            index += 1
+        }
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        readFiles(force: true)
+        read()
+        Log.trace("App file \(url.lastPathComponent) added: \(app.name)")
+        return LinkedApp.app(id: app.id) ?? app
     }
 
     static func installed(_ appID: String) -> Installed? {

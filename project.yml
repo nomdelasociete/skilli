@@ -46,6 +46,13 @@ targets:
     platform: macOS
     sources:
       - path: Sources/Skilli
+        excludes:
+          - Resources/Apps
+      # The linked apps skil.li ships as app files (docs/apps.md), read
+      # from Contents/Resources/Apps as the user's are from their folder.
+      - path: Sources/Skilli/Resources/Apps
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: SkilliCore
         embed: true

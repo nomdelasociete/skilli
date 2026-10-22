@@ -566,12 +566,15 @@ per-show work.
   while missing), your other details, About You, what leaves, then the
   people and what forms get from the card.
   Apps (docs/apps.md): a list of the apps skil.li drives that are
-  installed (CleanShot X, Shortcuts): a row each (its own icon, its
-  commands and how many on keys, a chevron); a click pushes the app's
+  installed (CleanShot X, Shortcuts, the app files' apps): a row each (its
+  own icon, its commands and how many on keys, a chevron), then the
+  user's app files left out, each with why (`LinkedApps.problems`, Show
+  in Finder); a click pushes the app's
   page in the pane (`AppsPaneModel.page`, "‹ Apps" atop the page goes
   back, the window's title is the app's). A page: its header (icon, name,
   version, `LinkedApp.allowance`: nothing on the Mac says whether
-  CleanShot's API is on; Open, which opens the app), its options
+  CleanShot's API is on; Open, which opens the app; an app file's
+  Documentation (its `documentation`) and Show File), its options
   (CleanShot: Line breaks in Capture Text), then its commands by group
   (`LinkedApp.groups`) or Shortcuts' shortcuts, the long list last: a grey
   symbol, the title, keycaps only when it has keys, and on hover a ⋯ menu
@@ -3482,6 +3485,44 @@ re-investigating.
   the Finder selection pinned from its row over Finder; Finder's own
   answer stood in for while Automation → Finder is not allowed for the
   build, `SystemCommands.finderSelection`) captures nothing.
+- App files (docs/apps.md, "App files"; `LinkedAppFile`, `AppFileLink` in
+  SkilliCore, `LinkedApps`): every other linked app is a JSON file, read
+  strictly (`LinkedAppFile.read`: a key it does not know, a wrong kind, a
+  value past its bounds, a reserved scheme or id, an SF Symbol macOS does
+  not have, and the whole file is left out, said in Settings → Apps). skil.li's
+  own are in `Sources/Skilli/Resources/Apps` (a folder reference:
+  `Contents/Resources/Apps`, Warp's, Zed's and Teams'), the user's in
+  `~/Library/Application Support/skil.li/Apps` (the self-test's in its
+  scratch folder, the benchmark reads none). `LinkedApp.builtIn`
+  (CleanShot X) wins any clash (id, bundle id or scheme), then skil.li's
+  files, then the user's by name; `LinkedApp.all` is the built-in ones then
+  the files' (`LinkedApp.useFiles`). A command is found by its app's short
+  name and its words; skil.li's own files' words never outrank skil.li's
+  commands as root search ranks them (a tie goes to the shorter title:
+  "settings" in Zed's words opened Zed's settings;
+  `testSkilliFilesNeverOutrankSkilliOwnCommands`). Read in `AppDelegate.init` before
+  the shortcuts (a key names a command by id), then with the radios when
+  a file's date changed (`LinkedApps.readFiles`). A command's link:
+  `scheme://host/rest?…` from `path` (one that starts with "/":
+  `scheme:/rest`), its own `query`, a variant's, `+` encoded. Opened in the
+  app the file names (`NSWorkspace.open(_:withApplicationAt:)`), whoever
+  macOS gives the scheme to. `asksFirst` (a command or a variant; CleanShot's
+  upload is one): asked every time from links (`SkilliLink.asksFirst`,
+  never trusted), Ask (its card's Run / Cancel) and agents (`run_action`,
+  and `open_url` on the same link: `LinkedApp.asksFirst(_:)`); picked in
+  the launcher or on a key, it runs. Everything else is CleanShot's path:
+  rows, Catalog, ⌘K variants, keys, links, Ask, `run_action` (its ids and
+  variants read each time: `SkilliTools.runActionDefinition`), a page in
+  Settings → Apps. Added by `create_app_link` (the installed app named,
+  its bundle id read, the scheme it must declare in its Info.plist, the
+  vendor's documentation address required; the approval card shows every
+  command's link, `SkilliTools.summary`) or `skilli://apps/import?app=<the
+  file>` / `?url=https://…` (Settings → Apps' sheet shows each app and every
+  link before Add; `AppsPaneModel.receive`); written as `<id>.json`, never
+  over another file. `remote apps` (`appFilesFromFiles`): a test app's file
+  and two left out, its row, ⌘K, Catalog, `run_action`, links, Ask, the
+  pane's list and page, an import, `create_app_link`; links read through
+  `SystemCommands.openAppLink`, nothing opened.
 - Apple's Shortcuts (docs/apps.md, Next apps 1; `AppleShortcut` in
   SkilliCore, `AppleShortcuts`): every shortcut in the user's library is a
   `MacAction.shortcut(shortcut, withSelection:)` (raw value
@@ -3531,7 +3572,8 @@ re-investigating.
   deletes it in Shortcuts (Edit → Delete) and quits Shortcuts when it
   opened it; `selftest decide`: Ask picks made-up shortcuts by name, and
   none for something else (decided only).
-- Import: `skilli://commands/import?command=<file>` (repeatable) or
+- Import: `skilli://apps/import?app=<file>` adds linked apps (above);
+  `skilli://commands/import?command=<file>` (repeatable) or
   `?url=https://…` (`CommandLink`, `Config/Info.plist`). Settings →
   Commands shows every command in full before Add; nothing is added from a
   link alone. Import… reads `.md` files; Share copies a link or exports the

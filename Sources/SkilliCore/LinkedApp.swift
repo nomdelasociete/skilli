@@ -1,10 +1,13 @@
 import CoreGraphics
 import Foundation
+import Synchronization
 
 /// An app skil.li drives through its own links (`cleanshot://capture-area`):
 /// each of its commands is a launcher row, a Catalog entry, a key and an
 /// agent action while the app is installed (docs/apps.md). Only links the
-/// app documents itself; CleanShot X's own windows do the work.
+/// app documents itself; CleanShot X's own windows do the work. CleanShot X
+/// is written here; the others come from app files (`LinkedAppFile`):
+/// skil.li's own, shipped with it, and the user's.
 public struct LinkedApp: Identifiable, Sendable {
     /// Short and stable: commands are "<id>.<command>" ("cleanshot.capture-area").
     public let id: String
@@ -25,6 +28,30 @@ public struct LinkedApp: Identifiable, Sendable {
     /// ⌘K on a file skil.li lists (an image in the clipboard history, a
     /// file found): what the app does with it, offered where its type fits.
     public let fileActions: [FileAction]
+    /// The oldest version its links work on; nil: any.
+    public let minimumVersion: String?
+    /// Where the app documents its links ("https://…"), shown on its page.
+    public let documentation: String?
+    /// Where it was read: nil for skil.li's own (CleanShot X, the files
+    /// shipped with it), the file's name for the user's ("Zed.json").
+    public let file: String?
+
+    public init(id: String, name: String, shortName: String, bundleID: String, scheme: String, commands: [AppLinkCommand],
+                groups: [CommandGroup], allowance: String? = nil, fileActions: [FileAction] = [], minimumVersion: String? = nil,
+                documentation: String? = nil, file: String? = nil) {
+        self.id = id
+        self.name = name
+        self.shortName = shortName
+        self.bundleID = bundleID
+        self.scheme = scheme
+        self.commands = commands
+        self.groups = groups
+        self.allowance = allowance
+        self.fileActions = fileActions
+        self.minimumVersion = minimumVersion
+        self.documentation = documentation
+        self.file = file
+    }
 
     /// One of the app's commands on a file skil.li already has: "Pin in
     /// CleanShot" runs `cleanshot.pin` with it.
@@ -48,9 +75,14 @@ public struct LinkedApp: Identifiable, Sendable {
 
     /// A few of an app's commands under one title ("Capture"), by their
     /// name after the app's id ("capture-area").
-    public struct CommandGroup: Sendable {
+    public struct CommandGroup: Sendable, Equatable {
         public let title: String
         public let commands: [String]
+
+        public init(title: String, commands: [String]) {
+            self.title = title
+            self.commands = commands
+        }
     }
 
     /// The commands of each group, in its order.
@@ -60,7 +92,25 @@ public struct LinkedApp: Identifiable, Sendable {
         }
     }
 
-    public static let all: [LinkedApp] = [.cleanShot]
+    /// The apps written here: they win over any file that names their id,
+    /// bundle id or scheme.
+    public static let builtIn: [LinkedApp] = [.cleanShot]
+
+    /// Read from app files (`LinkedAppFile.load`), set once they are read:
+    /// at launch before the shortcuts, then again when a file changed.
+    private static let fromFiles = Mutex<[LinkedApp]>([])
+
+    /// Every app skil.li knows how to drive, installed or not: the built-in
+    /// ones, then the files' in the order they were read.
+    public static var all: [LinkedApp] {
+        builtIn + fromFiles.withLock { $0 }
+    }
+
+    /// The apps the files define now (already checked against the
+    /// built-in ones and each other).
+    public static func useFiles(_ apps: [LinkedApp]) {
+        fromFiles.withLock { $0 = apps }
+    }
 
     public static func app(id: String) -> LinkedApp? {
         all.first { $0.id == id }
@@ -70,6 +120,33 @@ public struct LinkedApp: Identifiable, Sendable {
     public static func command(id: String) -> AppLinkCommand? {
         guard let dot = id.firstIndex(of: ".") else { return nil }
         return app(id: String(id[..<dot]))?.commands.first { $0.id == id }
+    }
+
+    /// The command (and variant) a raw link runs when its app's file says
+    /// it asks first: an agent's `open_url` cannot go round it. Its scheme
+    /// and path, and the variant's parameters among the link's, any case;
+    /// nil when nothing in it asks.
+    public static func asksFirst(_ url: URL) -> (command: AppLinkCommand, variant: AppLinkCommand.Variant?)? {
+        guard let scheme = url.scheme?.lowercased(), let app = all.first(where: { $0.scheme == scheme }) else { return nil }
+        let given = (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []).map { "\($0.name.lowercased())=\(($0.value ?? "").lowercased())" }
+        for command in app.commands {
+            guard let own = command.url(), Self.samePath(own, url) else { continue }
+            if command.asksFirst { return (command, nil) }
+            if let variant = command.variants.first(where: { $0.asksFirst && $0.query.allSatisfy { given.contains("\($0.name.lowercased())=\($0.value.lowercased())") } }) {
+                return (command, variant)
+            }
+        }
+        return nil
+    }
+
+    /// Host and path alike, any case, percent-decoded, one trailing slash
+    /// aside: an app may read `/Share/All` as `/share/all`.
+    private static func samePath(_ one: URL, _ other: URL) -> Bool {
+        func trimmed(_ url: URL) -> String {
+            let path = url.path(percentEncoded: false).lowercased()
+            return path.hasSuffix("/") ? String(path.dropLast()) : path
+        }
+        return one.host(percentEncoded: false)?.lowercased() == other.host(percentEncoded: false)?.lowercased() && trimmed(one) == trimmed(other)
     }
 }
 
@@ -122,14 +199,19 @@ public struct AppLinkCommand: Hashable, Sendable {
         public let query: [Parameter]
         /// The app's version that first took these parameters.
         public let since: String?
+        /// Asked first in skil.li's card when a link, Ask or an agent runs
+        /// it (CleanShot's upload: the capture leaves the Mac); never
+        /// trusted with Always. Picked in the launcher or on a key, it runs.
+        public let asksFirst: Bool
 
-        public init(id: String, title: String, label: String, symbol: String, query: [Parameter], since: String? = nil) {
+        public init(id: String, title: String, label: String, symbol: String, query: [Parameter], since: String? = nil, asksFirst: Bool = false) {
             self.id = id
             self.title = title
             self.label = label
             self.symbol = symbol
             self.query = query
             self.since = since
+            self.asksFirst = asksFirst
         }
     }
 
@@ -146,7 +228,9 @@ public struct AppLinkCommand: Hashable, Sendable {
 
     /// "cleanshot.capture-area": the app's id, a dot, the command's name.
     public let id: String
-    /// The link's path, its host: `capture-area` in `cleanshot://capture-area`.
+    /// The link after its scheme: its host (`capture-area` in
+    /// `cleanshot://capture-area`), then a path (`zoom.us/join`); one that
+    /// starts with "/" has no host (`msteams:/l/meeting/new`).
     public let path: String
     public let title: String
     /// What it does, in one line of the user's words (Catalog, Ask).
@@ -161,9 +245,13 @@ public struct AppLinkCommand: Hashable, Sendable {
     /// The files its link takes as `filepath`; nil: none. An agent's
     /// `file` goes there, instead of what `input` reads (or the app asks).
     public let files: FileTypes?
+    /// Parameters every run of it gives, before a variant's.
+    public let query: [Parameter]
+    /// Asked first when a link, Ask or an agent runs it (`Variant.asksFirst`).
+    public let asksFirst: Bool
 
     public init(id: String, path: String, title: String, oneLine: String, symbol: String, keywords: [String] = [], input: Input = .none,
-                variants: [Variant] = [], since: String? = nil, files: FileTypes? = nil) {
+                variants: [Variant] = [], since: String? = nil, files: FileTypes? = nil, query: [Parameter] = [], asksFirst: Bool = false) {
         self.id = id
         self.path = path
         self.title = title
@@ -174,6 +262,14 @@ public struct AppLinkCommand: Hashable, Sendable {
         self.variants = variants
         self.since = since
         self.files = files
+        self.query = query
+        self.asksFirst = asksFirst
+    }
+
+    /// Whether running it, or `variant` of it, asks first from a link, Ask
+    /// or an agent.
+    public func asksFirst(variant: Variant?) -> Bool {
+        asksFirst || variant?.asksFirst == true
     }
 
     /// The app's id ("cleanshot").
@@ -200,15 +296,36 @@ public struct AppLinkCommand: Hashable, Sendable {
         AppVersion.isAtLeast(version, since)
     }
 
-    /// Its link: `scheme://path?…`, the variant's parameters, then what
-    /// skil.li read for it (`extra`).
+    /// Its link: `scheme://path?…`, its own parameters, the variant's,
+    /// then what skil.li read for it (`extra`).
     public func url(variant: Variant? = nil, extra: [Parameter] = []) -> URL? {
         guard let scheme = app?.scheme else { return nil }
+        return Self.url(scheme: scheme, path: path, query: query + (variant?.query ?? []) + extra)
+    }
+
+    /// Its link in `app`, known or not yet (an app shown before it is
+    /// added).
+    public func url(in app: LinkedApp, variant: Variant? = nil) -> URL? {
+        Self.url(scheme: app.scheme, path: path, query: query + (variant?.query ?? []))
+    }
+
+    /// `scheme://host/rest?…`, or `scheme:/rest?…` for a path that starts
+    /// with "/"; `+` in a value encoded too (some apps read it as a space).
+    static func url(scheme: String, path: String, query: [Parameter]) -> URL? {
         var components = URLComponents()
         components.scheme = scheme
-        components.host = path
-        let items = (variant?.query ?? []) + extra
-        if !items.isEmpty { components.queryItems = items.map { URLQueryItem(name: $0.name, value: $0.value) } }
+        if path.hasPrefix("/") {
+            components.path = path
+        } else if let slash = path.firstIndex(of: "/") {
+            components.host = String(path[..<slash])
+            components.path = String(path[slash...])
+        } else {
+            components.host = path
+        }
+        if !query.isEmpty {
+            components.queryItems = query.map { URLQueryItem(name: $0.name, value: $0.value) }
+            components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        }
         return components.url
     }
 }
@@ -263,7 +380,7 @@ public enum CleanShot {
         .init(id: "annotate", title: "Capture and Annotate", label: "Annotate", symbol: "pencil.tip.crop.circle", query: [.init("action", "annotate")], since: "4.7"),
         .init(id: "pin", title: "Capture and Pin", label: "Pin", symbol: "pin", query: [.init("action", "pin")], since: "4.7"),
         .init(id: "upload", title: "Capture and Upload to Cloud", label: "Upload", symbol: "icloud.and.arrow.up", query: [.init("action", "upload")],
-              since: "4.7")
+              since: "4.7", asksFirst: true)
     ]
 
     /// Settings' tabs (`tab=`, 4.7+).

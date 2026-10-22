@@ -162,6 +162,7 @@ public enum SettingsSearch {
         "agendaHiddenCalendars": "",
         "githubAccount": "",
         "cleanShotTextLineBreaks": "",
+        "appFiles": "",
         "scheduledAsks": "",
         "skilliesInMenuBar": "skillies",
         "section.backups": "backupFolder"

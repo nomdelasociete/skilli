@@ -185,12 +185,15 @@ extension SkilliAction {
     /// written, or with one of its variants' parameters
     /// ("cleanshot://capture-area?action=copy"). Nil for any other link.
     static func appLink(url: String) -> SkilliAction? {
-        guard let components = URLComponents(string: url), let scheme = components.scheme?.lowercased(), let path = components.host,
+        guard let given = URL(string: url), let scheme = given.scheme?.lowercased(),
               let app = LinkedApp.all.first(where: { $0.scheme == scheme }) else { return nil }
-        let query = (components.queryItems ?? []).map { AppLinkCommand.Parameter($0.name, $0.value ?? "") }
-        for command in app.commands where command.path == path && command.input == .none {
-            if query.isEmpty { return .mac(.appLink(command, variant: nil)) }
-            if let variant = command.variants.first(where: { $0.query == query }) { return .mac(.appLink(command, variant: variant.id)) }
+        // As skil.li writes it: host, path, then the command's and the
+        // variant's parameters in their order.
+        for command in app.commands where command.input == .none {
+            if command.url()?.absoluteString == given.absoluteString { return .mac(.appLink(command, variant: nil)) }
+            if let variant = command.variants.first(where: { command.url(variant: $0)?.absoluteString == given.absoluteString }) {
+                return .mac(.appLink(command, variant: variant.id))
+            }
         }
         return nil
     }

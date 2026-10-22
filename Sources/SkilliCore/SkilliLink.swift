@@ -169,8 +169,10 @@ public enum SkilliLink: Equatable, Sendable {
         // skillie is.
         case .askByVoice, .dictate, .transform, .prompt, .snippet, .skillie, .shortcut: true
         // A linked app's command opens it, seen at once: a capture, the
-        // editor, desktop icons, its history (docs/apps.md).
-        case .window, .type, .ask, .settings, .layout, .quicklink, .appLink: false
+        // editor, desktop icons, its history (docs/apps.md); one its file
+        // says asks first (`AppLinkCommand.asksFirst`) asks.
+        case .appLink(let id): LinkedApp.command(id: id)?.asksFirst ?? false
+        case .window, .type, .ask, .settings, .layout, .quicklink: false
         }
     }
 }

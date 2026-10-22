@@ -5,8 +5,10 @@ Catalog, ⌘K, keys, links, Ask and agents, with the front window and the
 latest screenshot (Order 1 and 3); Settings → Apps (Order 2); files into
 CleanShot: ⌘K on clipboard images and files found, the Finder selection's
 rows, agents' and skillies' `file` (Order 4); the user's shortcuts in
-Apple's Shortcuts app, the same way (Next apps 1). Still proposed: the
-next apps.
+Apple's Shortcuts app, the same way (Next apps 1); app files, skil.li's
+own (Warp, Zed, Microsoft Teams) and the user's, with `create_app_link` and
+`skilli://apps/import` (Next apps 2 and 3). Still proposed: a command's
+typed argument.
 
 Asked for: everything CleanShot X does, from skil.li, so that Raycast is no
 longer needed for it; and one place for the apps skil.li drives through
@@ -140,6 +142,21 @@ Design spec:
 - Settings' search opens the app's page at the row (a command, a
   shortcut, Line breaks in Capture Text). Keys and the Catalog list the
   same commands; their settings live here.
+- **App files** (2026-10-21): an app file's app is a row like the others,
+  and its page the same, its header with two more buttons beside Open:
+  Documentation (where the app documents its links) and, for the user's
+  own file, Show File. With no options, the header sits atop the first
+  group. The user's files left out come last in the list, under "2 App
+  Files Left Out": a row each (an orange triangle, the file's name, why in
+  one or two caption lines), the footer "Fixed and saved, a file is read
+  again as the launcher opens." with Show in Finder.
+- **Adding from a link**: a sheet over the pane, "Add This App?", one line
+  on trust, then a card per app (its icon, or a dashed one when it is not
+  installed; its name, bundle id, scheme and number of commands; where
+  its links are documented; "from a link" or the site), and in it every
+  command: its symbol, title, "Asks first" in orange where it does, and
+  the exact link it opens in monospace, a variant under it the same way.
+  Cancel, Add App. What cannot be added is said in orange above.
 
 What CleanShot's API state shows: whether it is on cannot be read (checked
 2026-10-21 on CleanShot X 5.0.1): turning Allow URL scheme API off changes
@@ -185,11 +202,131 @@ real.
    | Agents | `list_shortcuts`, `run_shortcut` (name, input or selection): the text it gave back |
    | Skillies | `open` its link, or `"$SKILLI_CLI" call run_shortcut name=… input=…` (waits, exit 0/1/2; skillies/README.md) |
 
-2. Apps with documented schemes, to check one by one: Slack, Zoom (already
-   parsed in Agenda), Notion.
-3. App files: `~/Library/Application Support/skil.li/Apps/*.json`, written by
-   an agent (`create_app_link`, like `create_skillie`) or a `skilli://` import,
-   shown whole before Add, as Commands imports are.
+2. Done: **the next apps**, as app files skil.li ships (below). Read in
+   each app's own documentation on 2026-10-21; only links that work
+   without the user's own ids (a team, a channel, a meeting number).
+
+   | App | Shipped | Its documentation |
+   |---|---|---|
+   | Warp | Warp Settings, Appearance, MCP Servers, Agent Settings, Environments, Platform, Billing and Usage, Team Settings (`warp://settings`, `warp://settings/<page>`) | docs.warp.dev, "URI Scheme" |
+   | Zed | Zed Settings (`zed://settings`), Agent Tool Permissions, Agent Skills, Edit Predictions (`zed://settings/<section>`, the links Zed's own docs use) | zed.dev/docs, "CLI Reference" (URL handling), "Tool Permissions", "Skills", "Edit Prediction" |
+   | Microsoft Teams | New Teams Meeting (`msteams:/l/meeting/new`: its scheduling form, every parameter optional) | learn.microsoft.com, "Deep links for workflows in Teams" (`https://teams.microsoft.com/l/meeting/new`) and "Deep links" (the `msteams:` form for the desktop app) |
+
+   Each was run once for real on the test Mac (2026-10-21): every Warp
+   link opens its Settings page, every Zed link its settings section, and
+   Teams' its "New meeting" form.
+
+   Left out, and why:
+
+   - Slack: without a team id and a channel or user id (Slack accepts no
+     names), only `slack://open`, which does what opening Slack does.
+     Messages already go through `send_message`.
+   - Zoom: Zoom no longer documents its client's scheme (the page is gone;
+     `zoomus://` only in its mobile SDK). Joining by number is not
+     documented; joins already work from the Agenda.
+   - Notion, Discord, Signal, 1Password, Outlook, GitHub Desktop: no app
+     link documented by the vendor (Notion's pages open from their https
+     address; 1Password's item links need the item; GitHub Desktop's
+     `openRepo` is only in its source).
+   - WhatsApp: `whatsapp://send` is documented for the iPhone; on the Mac
+     it only brings WhatsApp forward (tried), no new message.
+   - Docker Desktop: only its extension Marketplace page by extension id,
+     in a release note; no reference of its links.
+   - Linear: documents `linear://` + a page's address, but its Mac app
+     declares no scheme, and an issue needs its id.
+
+   Taking one typed value (a meeting number, an email, a search) would add
+   more: Teams' chat and call with an email (`msteams:/l/chat/0/0?users=`,
+   `/l/call/0/0?users=`), Warp's settings search (`warp://settings?q=`),
+   Things' and Todoist's add and search. That needs a command argument the
+   way skillies ask for theirs in the launcher: not built yet.
+   Documented and ID-free, not shipped because they are not on the test
+   Mac to be run once for real: Things 3 (`things:///show?id=today`…),
+   Todoist (`todoist://today`…, 9.2+), Bear (`bear://x-callback-url/today`…),
+   Fantastical (`x-fantastical://show/calendar`). An app file of the user's
+   adds any of them today.
+3. Done: **app files** (below).
+
+## App files
+
+Any app that documents its links is one JSON file: skil.li's own in its
+bundle (`Contents/Resources/Apps`: Warp, Zed, Teams), the user's in
+`~/Library/Application Support/skil.li/Apps/*.json`. Each one gets
+everything CleanShot X has: launcher rows (its icon, its name as the
+accessory), the Catalog (In Your Apps), ⌘K variants, keys (Add Shortcut →
+the app), links (`skilli://run/system:link:<app>.<command>`), Ask, agents
+and skillies (`run_action`), and a page in Settings → Apps.
+
+```json
+{
+  "id": "nimbus",
+  "name": "Nimbus Notes",
+  "shortName": "Nimbus",
+  "bundleID": "com.example.Nimbus",
+  "scheme": "nimbus",
+  "minimumVersion": "2.0",
+  "documentation": "https://example.com/nimbus/links",
+  "note": "What the app needs first, one line, on its page",
+  "commands": [
+    {
+      "id": "new-note",
+      "path": "x-callback-url/create",
+      "title": "New Nimbus Note",
+      "description": "Opens a new note",
+      "words": ["note", "new", "nouvelle", "note"],
+      "symbol": "square.and.pencil",
+      "query": [{ "name": "open_note", "value": "yes" }],
+      "variants": [{ "id": "pinned", "title": "New Pinned Note", "label": "Pinned", "symbol": "pin",
+                     "query": [{ "name": "pin", "value": "yes" }], "since": "2.4" }],
+      "group": "Write"
+    },
+    {
+      "id": "share",
+      "path": "/share/all",
+      "title": "Share All Notes",
+      "description": "Sends every note to the team",
+      "asksFirst": true,
+      "group": "Write"
+    }
+  ]
+}
+```
+
+(A made-up app: `nimbus://x-callback-url/create?open_note=yes`, with
+`&pin=yes` for its variant, and `nimbus:/share/all`, which asks first.)
+
+- Required: `id` (lowercase, digits, hyphens; a command's id is
+  `<id>.<command id>`), `name`, `bundleID`, `scheme`, `commands` (1 to
+  60), and each command's `id`, `path`, `title`, `description` (one line,
+  its period dropped); a variant's `id`, `title`, `label`, `query`.
+- `path`: what follows `scheme://`, a host then a path
+  (`zoom.us/join`); one that starts with "/" has no host
+  (`msteams:/l/meeting/new`). Its parameters go in `query`, in order;
+  a variant's come after its command's. `+` is sent encoded.
+- `minimumVersion` and `since`: the app's version from its bundle; a
+  command the installed version does not take is not listed.
+- `asksFirst`: asked in skil.li's card every time a link, Ask or an agent
+  runs it (also when an agent opens the same raw link), never trusted with
+  Always; for what sends, deletes, pays or calls someone. Picked in the
+  launcher or on a key, it runs.
+- Read strictly: a key skil.li does not read, a value of the wrong kind,
+  past its length, two lines, a reserved scheme (`http`, `https`, `file`,
+  `mailto`, `tel`, `skilli`…) or id, an SF Symbol macOS does not have, and
+  the whole file is left out. So is a file that names an app skil.li
+  drives already (id, bundle id or scheme): CleanShot X first, then
+  skil.li's files, then the user's by name. Settings → Apps lists each
+  file left out with why, at the bottom of the list; fixed and saved, it
+  is read again as the launcher opens.
+- Added three ways: written by hand; by the user's SI (`create_app_link`:
+  the installed app by name, its scheme, which the app must declare, the
+  address of its documentation, the commands; the approval card shows
+  every link); or by a link, `skilli://apps/import?app=<the file>` (repeatable)
+  or `?url=https://…/app.json`, which opens Settings → Apps with each app
+  and every link it opens, Add or Cancel. Nothing replaces a file: one
+  whose app is driven already is refused, said.
+- Opened in the app the file names, whichever app macOS gives the scheme
+  to. A file removed takes its rows with it; keys on its commands come
+  back with it.
 
 ## Order
 
@@ -200,4 +337,7 @@ real.
    checked with a real capture, one display).
 4. Done: files into CleanShot (⌘K on clipboard images and files found, the
    Finder selection's rows, `run_action` with `file`).
-5. Done: Shortcuts. Then the next apps.
+5. Done: Shortcuts.
+6. Done: app files; Warp's, Zed's and Teams' links.
+7. Next: one typed argument on a command (Teams' chat and call, Warp's
+   settings search, a Things to-do), the way skillies ask for theirs.

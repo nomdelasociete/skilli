@@ -17,9 +17,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// keep theirs in memory.
     private let recentSearches: RecentSearchStore
     private lazy var launcher = LauncherController(index: appIndex, usage: usage, learning: learning, recentSearches: recentSearches)
-    private lazy var settings = SettingsWindowController(preferences: preferences) { [unowned self] in
-        self.makeSettingsContext()
-    }
+    private lazy var settings: SettingsWindowController = {
+        let settings = SettingsWindowController(preferences: preferences) { [unowned self] in
+            self.makeSettingsContext()
+        }
+        // An app added from a link: its rows at once.
+        settings.apps.onAppsChanged = { [unowned self] in self.launcher.reloadSources() }
+        return settings
+    }()
     /// The self-test keeps its own Keychain item: never the user's API key.
     private lazy var ai = AIStore(
         preferences: preferences,
@@ -360,6 +365,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.mode = mode
         // The self-test's sensitive form fields never touch the user's.
         if case .selftest = mode { FormSecrets.prefix = "selftest-" }
+        // The linked apps' files before the shortcuts, which name their
+        // commands by id: a few small files, read here without their SF
+        // Symbols (checked off the main thread just after). The self-test
+        // keeps its own folder; the benchmark reads skil.li's only.
+        switch mode {
+        case .normal: break
+        case .selftest:
+            LinkedApps.folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/Apps", isDirectory: true)
+        case .benchmark: LinkedApps.folder = nil
+        }
+        LinkedApps.readFiles(force: true, checkSymbols: false)
         switch mode {
         case .normal:
             shortcuts = ShortcutStore(fileURL: ShortcutStore.defaultFileURL)
@@ -973,6 +989,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startToolServer() {
         guard let toolSocketPath else { return }
         toolServer.tools.performAction = { [weak self] action in self?.actions.perform(action, triggeredAt: .now) }
+        toolServer.tools.appsChanged = { [weak self] in self?.launcher.reloadSources() }
         toolServer.tools.findApp = { [weak self] name in
             // The app's own name, give or take case, accents and a version
             // ("Affinity Designer" → "Affinity Designer 2"): never whatever
@@ -1386,7 +1403,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `skilli://commands/import?…` from a web page or a shared link:
     /// Settings → Commands shows what it would add, and nothing is added
-    /// until the user says so. Every other `skilli://` link runs what it
+    /// until the user says so; `skilli://apps/import?…` the same in
+    /// Settings → Apps. Every other `skilli://` link runs what it
     /// names (`LinkRunner`: asked first when it must; one skil.li does not
     /// know says so). The self-test and benchmark ignore links.
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -1396,6 +1414,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         for url in urls {
+            // An app's links (`skilli://apps/import`): Settings → Apps shows it whole first.
+            if let request = AppFileLink.parse(url) {
+                settings.apps.page = nil
+                settings.show(pane: .apps)
+                Task { await settings.apps.receive(request) }
+                continue
+            }
             guard let request = CommandLink.parse(url) else {
                 Log.actions.notice("Link \(url.host() ?? "", privacy: .public)")
                 links.open(url)

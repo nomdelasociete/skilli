@@ -1,0 +1,69 @@
+{
+  "id": "zed",
+  "name": "Zed",
+  "bundleID": "dev.zed.Zed",
+  "scheme": "zed",
+  "documentation": "https://zed.dev/docs/reference/cli",
+  "commands": [
+    {
+      "id": "settings",
+      "path": "settings",
+      "title": "Zed Settings",
+      "description": "Opens Zed's settings editor",
+      "words": [
+        "zed réglages",
+        "zed préférences",
+        "zed paramètres"
+      ],
+      "symbol": "gearshape",
+      "group": "Settings"
+    },
+    {
+      "id": "tool-permissions",
+      "path": "settings/agent.tool_permissions",
+      "title": "Zed Agent Tool Permissions",
+      "description": "Opens what Zed's agent may run without asking",
+      "words": [
+        "tools",
+        "permissions",
+        "zed ai",
+        "ia zed",
+        "outils",
+        "autorisations"
+      ],
+      "symbol": "lock.shield",
+      "group": "Agent"
+    },
+    {
+      "id": "skills",
+      "path": "settings/agent.skills",
+      "title": "Zed Agent Skills",
+      "description": "Opens the skills Zed's agent uses",
+      "words": [
+        "skills",
+        "zed ai",
+        "ia zed",
+        "compétences"
+      ],
+      "symbol": "book",
+      "group": "Agent"
+    },
+    {
+      "id": "edit-predictions",
+      "path": "settings/edit_predictions.providers",
+      "title": "Zed Edit Predictions",
+      "description": "Opens which provider predicts your next edit in Zed",
+      "words": [
+        "edit predictions",
+        "completion",
+        "autocomplete",
+        "copilot",
+        "prédictions",
+        "complétion",
+        "provider"
+      ],
+      "symbol": "wand.and.stars",
+      "group": "Agent"
+    }
+  ]
+}

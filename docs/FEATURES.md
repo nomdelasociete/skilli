@@ -444,8 +444,29 @@ back.
   agents and skillies (its link, or `$SKILLI_CLI call run_shortcut` with
   an input or the selection). A shortcut made, renamed or deleted shows
   the next time the launcher opens.
+- **Warp, Zed and Microsoft Teams**: the links each documents itself, as
+  skil.li's own app files. Warp: Warp Settings, Appearance, MCP Servers,
+  Agent Settings, Environments, Platform, Billing and Usage, Team
+  Settings. Zed: Zed Settings, Agent Tool Permissions, Agent Skills, Edit
+  Predictions. Teams: New Teams Meeting (its scheduling form). Rows,
+  Catalog, keys, links, Ask, agents and skillies as CleanShot's.
+- **Your app files**: any other app that documents its links, in a file
+  of your own (`~/Library/Application Support/skil.li/Apps/*.json`: the
+  app's bundle id, scheme, name and oldest version, then its commands with
+  their path, title, words in English and French, symbol, parameters,
+  variants and what asks first). Each one gets everything CleanShot has:
+  rows, Catalog, ⌘K variants, keys, links, Ask, agents and skillies
+  (`run_action`), a page here. Your SI adds one ("ajoute les liens de
+  Warp": `create_app_link`, the app shown whole in the card), or a
+  `skilli://apps/import` link does (the app and every link it opens shown
+  before Add). A file skil.li cannot read, or one naming an app it drives
+  already (CleanShot X wins), is left out and said at the bottom of the
+  list, with why; fixed and saved, it is read again as the launcher opens.
+  A command that sends, deletes or calls asks first from links, Ask and
+  agents, every time.
 
 Settings: each app's page: its version and what it has, Open, its
+links' documentation and your file (Documentation, Show File), its
 options (CleanShot: Line breaks in Capture Text), then its commands (or
 shortcuts), each with its keys; ⋯ on a row (or a right-click): Add
 Shortcut, Add a Shortcut for a variant (Capture and Copy…, With the

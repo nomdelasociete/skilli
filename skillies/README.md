@@ -97,9 +97,30 @@ Everything the launcher runs, a skillie runs too, two ways:
   take `file` too, instead of what they read. A type CleanShot does not open, a
   file that is not there, a path that is not full or an empty `file` exits 1
   and says why; nothing opens.
+  The other apps skil.li drives (Warp, Zed, and any app in your app
+  files) are `run_action` too, by `<app id>.<command id>`; a variant goes
+  in `variant` the same way:
+
+  ```bash
+  "$SKILLI_CLI" call run_action id=warp.mcp                  # Warp's MCP servers
+  "$SKILLI_CLI" call run_action id=zed.tool-permissions      # Zed's agent tool permissions
+  ```
+
+  A command its app file says asks first (it sends, deletes or calls
+  someone) asks in skil.li's card every time; declined, the call exits 1.
 - **Fire and forget**: `open "skilli://run/<entry>"`, the link ⌘K → Copy Link
-  gives on any row (`skilli://run/system:link:cleanshot.capture-area`). What
-  could change the Mac asks first, as for any link.
+  gives on any row (`skilli://run/system:link:cleanshot.capture-area`,
+  `skilli://run/system:link:warp.settings`). What could change the Mac
+  asks first, as for any link.
+
+## Add an app's links
+
+An app that documents its own links (its URL scheme) can be driven like
+CleanShot X: put an app file in `~/Library/Application Support/skil.li/Apps`
+(docs/apps.md, "App files", gives the format), ask your SI to add it
+(`create_app_link`), or share it as a link that shows it whole before Add:
+`skilli://apps/import?app=<the file, percent-encoded>` or
+`skilli://apps/import?url=https://example.com/app.json`.
 
 ## Run the user's shortcuts
 
