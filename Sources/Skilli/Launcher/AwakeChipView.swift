@@ -69,6 +69,11 @@ final class AwakeChipView: NSView {
 
     override func mouseEntered(with event: NSEvent) { hovered = true }
     override func mouseExited(with event: NSEvent) { hovered = false }
+    /// Hidden under the pointer (clicked, a key typed): no exit comes.
+    override func viewDidHide() {
+        super.viewDidHide()
+        hovered = false
+    }
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .pointingHand)
