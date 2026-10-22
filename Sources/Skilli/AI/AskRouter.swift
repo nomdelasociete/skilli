@@ -216,43 +216,46 @@ enum AskRouter {
     /// quit) does not move it.
     static let sureRoute = 0.8
 
-    /// Two routes this close are a close call (Decisions on "rappelle-moi
-    /// dans une heure trente de sortir le linge": timer 51 %, plans 41 %).
+    /// Two answers this close are a close call (Decisions on "rappelle-moi
+    /// dans une heure trente de sortir le linge": timer 51 %, plans 41 %;
+    /// on "déconnecte le clavier bluetooth": command list none 42 %, the
+    /// keyboard 39 %).
     static let closeCall = 0.15
 
-    /// The route answer, or, on a close call, the routes within
-    /// `closeCall` of the likeliest asked again alone (eleven options down
-    /// to two, four at most seen): one more request, for close calls only. Their
-    /// shared probability is split as the second answer says (its
-    /// probabilities: on two options both engines' confidence is the lead
-    /// over the other, 51 / 49 → 2 %); the other routes keep theirs. The
-    /// first answer when the second fails or names none of them.
-    private static func settled(_ routed: DecisionResult, instruction: String, input: String, provider: DecisionProvider,
-                                key: String) async -> DecisionResult {
-        let ranked = routed.probabilities.sorted { $0.value > $1.value }
-        guard let top = ranked.first?.value else { return routed }
-        let close = ranked.prefix { top - $0.value < closeCall }.map(\.key).filter { value in question.options.contains { $0.value == value } }
-        guard close.count >= 2 else { return routed }
-        let narrow = DecisionQuestion(name: question.name,
-                                      instructions: question.instructions + " It is one of these: which one does the request ask for?",
-                                      options: question.options.filter { close.contains($0.value) })
+    /// The answer to `asked` (the route, or the Mac command), or, on a
+    /// close call, its options within `closeCall` of the likeliest asked
+    /// again alone (eleven routes down to two, four at most seen): one more
+    /// request, for close calls only. Their shared probability is split as
+    /// the second answer says (its probabilities: on two options both
+    /// engines' confidence is the lead over the other, 51 / 49 → 2 %); the
+    /// other options keep theirs. The first answer when the second fails or
+    /// names none of them.
+    private static func settled(_ first: DecisionResult, _ asked: DecisionQuestion, instruction: String, input: String,
+                                provider: DecisionProvider, key: String) async -> DecisionResult {
+        let ranked = first.probabilities.sorted { $0.value > $1.value }
+        guard let top = ranked.first?.value else { return first }
+        let close = ranked.prefix { top - $0.value < closeCall }.map(\.key).filter { value in asked.options.contains { $0.value == value } }
+        guard close.count >= 2 else { return first }
+        let narrow = DecisionQuestion(name: asked.name,
+                                      instructions: asked.instructions + " It is one of these: which one does the request ask for?",
+                                      options: asked.options.filter { close.contains($0.value) })
         let answer: DecisionResult
         do {
             answer = try await DecisionClient.decide(narrow, input: input, provider: provider, key: key)
         } catch {
-            Log.actions.error("Ask close call by \(provider.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
-            return routed
+            Log.actions.error("Ask \(asked.name, privacy: .public) close call by \(provider.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            return first
         }
         // An answer that is none of them: the first one stands.
-        guard close.contains(answer.choice) else { return routed }
-        let shared = close.reduce(0) { $0 + (routed.probabilities[$1] ?? 0) }
-        var probabilities = routed.probabilities
+        guard close.contains(answer.choice) else { return first }
+        let shared = close.reduce(0) { $0 + (first.probabilities[$1] ?? 0) }
+        var probabilities = first.probabilities
         for value in close {
             probabilities[value] = shared * (answer.probabilities[value] ?? (answer.choice == value ? 1 : 0))
         }
         let confidence = probabilities[answer.choice] ?? answer.confidence
-        Log.trace("Ask close call by \(provider.rawValue) “\(instruction)”: "
-                  + close.map { "\($0) \(Int((routed.probabilities[$0] ?? 0) * 100))%" }.joined(separator: ", ")
+        Log.trace("Ask \(asked.name) close call by \(provider.rawValue) “\(instruction)”: "
+                  + close.map { "\($0) \(Int((first.probabilities[$0] ?? 0) * 100))%" }.joined(separator: ", ")
                   + " → \(answer.choice) \(Int(answer.confidence * 100))% ["
                   + close.map { "\($0) \(Int((answer.probabilities[$0] ?? -1) * 100))" }.joined(separator: ", ") + "]")
         return DecisionResult(choice: answer.choice, confidence: confidence, probabilities: probabilities)
@@ -331,7 +334,7 @@ enum AskRouter {
             guard case .bluetooth(let target, _) = action else { return [] }
             return [.bluetooth(target, connect: true), .bluetooth(target, connect: false)]
         }
-        questions.append(DecisionQuestion(
+        let commandQuestion = DecisionQuestion(
             name: "command",
             instructions: "Which Mac command, window placement, sound device or app command (\(appCommandsSaid)) does the user ask for? A sound device is where the sound plays, named or described: a screen or TV (l'écran, la télé) plays through its own speakers. Answer none when it is not one of these.",
             options: (MacAction.all + MacAction.appLinks()).map { .init(value: $0.rawValue, description: $0.description) }
@@ -340,7 +343,8 @@ enum AskRouter {
                 + sounds.enumerated().map { .init(value: "sound\($0.offset)", description: $0.element.description) }
                 + radios.enumerated().map { .init(value: "radio\($0.offset)", description: $0.element.description) }
                 + [.init(value: "none", description: "None of these commands")]
-        ))
+        )
+        questions.append(commandQuestion)
         /// An option of the command question: a sound or Bluetooth device
         /// by position, else a Mac command by id.
         func action(_ key: String) -> MacAction? {
@@ -416,10 +420,17 @@ enum AskRouter {
             guard let key = keys[provider] else { continue }
             let start = ContinuousClock.now
             do {
-                let answers = try await DecisionClient.decide(questions, input: input, provider: provider, key: key)
+                var answers = try await DecisionClient.decide(questions, input: input, provider: provider, key: key)
                 guard let first = answers[question.name] else { continue }
-                let routed = await settled(first, instruction: instruction, input: input, provider: provider, key: key)
+                let routed = await settled(first, question, instruction: instruction, input: input, provider: provider, key: key)
                 guard let picked = AskRoute(rawValue: routed.choice) else { continue }
+                // A Mac command, and the list's "none" just over a command:
+                // the same close call, on the list (else no command, and the
+                // route falls to the agent).
+                if picked == .command, let listed = answers[commandQuestion.name], listed.choice == "none" {
+                    answers[commandQuestion.name] = await settled(listed, commandQuestion, instruction: instruction, input: input,
+                                                                  provider: provider, key: key)
+                }
                 let elapsed = ContinuousClock.now - start
                 let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
                 var ranked: [(item: MenuReader.Item, probability: Double)] = []
