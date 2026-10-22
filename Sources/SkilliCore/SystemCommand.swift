@@ -135,7 +135,7 @@ public enum SystemCommand: String, CaseIterable, Sendable {
         case .hideOtherApps: "Hide every app except the one in front"
         case .showAllApps: "Show every hidden app again"
         case .toggleMicrophone: "Mute the microphone, or turn it back on"
-        case .wifiOn: "Turn Wi-Fi on when it is off (rallume le wifi); not restart it, not open its settings"
+        case .wifiOn: "Turn Wi-Fi on when it is off (allume le wifi); not restart it (off then on again), not open its settings"
         case .wifiOff: "Turn Wi-Fi off (coupe le wifi): the Mac goes offline unless a cable connects it; not restart it, not open its settings"
         case .showDesktop: "Show the desktop (montre le bureau): every window of every app moves aside; again brings them back"
         }
