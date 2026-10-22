@@ -1,3 +1,6 @@
+// Requests for the self-tests: compiled only with SKILLI_SELFTEST, never
+// in a release (script/release/build.sh checks).
+#if SKILLI_SELFTEST
 import Foundation
 
 /// Requests labeled with the route Ask should take, in French and English,
@@ -347,3 +350,4 @@ enum AskRouteCorpus {
         .init("tous les soirs à 22h résume ma journée", .schedule)
     ]
 }
+#endif
