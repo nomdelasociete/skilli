@@ -26,7 +26,7 @@ previews, downloads and `catalog.json` are generated from these exact files.
 
 A maintainer reviews the code before merge. The website build validates metadata
 and builds the site; **it does not execute contributed scripts**. Publishing is
-`npx wrangler deploy` after the build (see
+`npx wrangler deploy --config website/wrangler.jsonc` after the build (see
 [`website/README.md`](../website/README.md)). A new skillie needs no manual website edit
 beyond that deploy.
 

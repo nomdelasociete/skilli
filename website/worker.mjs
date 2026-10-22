@@ -26,7 +26,9 @@ export function route(request) {
   if (pathname === "/website" || pathname.startsWith("/website/")) {
     const stripped = pathname.slice("/website".length);
     const next = stripped === "" || stripped === "/" ? "/" : stripped;
-    return redirect(new URL(next + url.search, url).toString(), 301);
+    // Join onto the origin. new URL("//host", base) would leave this host.
+    const path = next.startsWith("/") ? next : `/${next}`;
+    return redirect(url.origin + path + url.search, 301);
   }
   return null;
 }

@@ -40,6 +40,10 @@ test("old /website paths strip the prefix and keep the query", () => {
     ask("/website/skillies/files/week-number.sh").headers.get("location"),
     ORIGIN + "/skillies/files/week-number.sh",
   );
+  assert.equal(
+    ask("/website//attacker.example?x=1").headers.get("location"),
+    ORIGIN + "//attacker.example?x=1",
+  );
 });
 
 test("ordinary pages stay on the static site", () => {
