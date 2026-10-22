@@ -49,14 +49,26 @@ So the recorder is mostly glue: two audio sources, files, one transcript.
 - Settings → Recorder (its own pane): where to keep them, delete after N
   days, language (else Ask's), record the Mac's sound or the microphone
   only, the meeting card's Record button on or off; the recordings list last.
-- Agents: `list_recordings`, `get_transcript` (and the `$SKILLI_CLI call`
-  equivalents), so Claude Code or Codex can write chapters, as omarchy's
-  does with the user's own coding agent.
+- Deleting: a recording deleted by hand goes through `UndoableDeletes`
+  (Undo ⌘Z for 10 s). Delete after N days works as the clipboard's
+  retention: pruned at launch and then hourly, never at the moment the
+  setting changes, a line under it says what the next pass removes; an
+  expired recording goes to the Trash, not deleted for good.
+- Agents: `list_recordings` (titles, dates, lengths) and `get_transcript`
+  (and the `$SKILLI_CLI call` equivalents), so Claude Code or Codex can
+  write chapters, as omarchy's does with the user's own coding agent.
 
 ## Privacy and consent
 
-- Audio and transcripts never leave the Mac. A summary goes to the user's
-  own AI only when they ask for it, said on the button ("Summary by Claude").
+- Audio never leaves the Mac. A transcript leaves it only by an explicit
+  action of the user, each time, and only as text:
+
+  | Flow | Goes to | What is sent | Consent |
+  |---|---|---|---|
+  | Record, transcribe, play, search | nowhere | nothing | — |
+  | "Summary by Claude" | the user's own AI (its provider) | the transcript's text | the button, which names where it goes |
+  | `get_transcript` | the agent that calls it (Claude Code, Codex…), then its provider | that recording's transcript | asked every time in the card, naming the recording (`ToolPolicy` `everyTime`: no Always Allow) |
+  | `list_recordings` | the agent | titles, dates, lengths, no words | the tool rights of a read |
 - Never a hidden recording: the red dot stays while recording, and the
   first time, a card says that the others in the call must agree (in many
   countries, France included, recording a private conversation without
@@ -77,7 +89,7 @@ with the script read.
 ## To check before building
 
 - The Core Audio process tap: which permission macOS 26 asks
-  ("System Audio Recording Only" or the full Screen Recording one), and
+  ("System Audio Recording Only" or the full Screen Recording permission), and
   that it hears calls in Zoom, Meet in a browser, Teams and FaceTime.
 - `SpeechAnalyzer` on a one-hour file: time and memory on the mini, and
   whether a file input preset beats the live one.
