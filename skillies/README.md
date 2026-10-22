@@ -24,10 +24,12 @@ previews, downloads and `catalog.json` are generated from these exact files.
    describing what you tested and any dependencies. Do not edit generated files
    under `website/skillies/files/` or the generated catalog HTML.
 
-A maintainer reviews the code before merge. The Railway build validates metadata
-and builds the site; **it does not execute contributed scripts**. Railway rebuilds the website
-on relevant merges to `main` once its GitHub service is connected (see
-[`website/README.md`](../website/README.md)). A new skillie needs no manual website edit.
+A maintainer reviews the code before merge. The website build validates metadata
+and builds the site; **it does not execute contributed scripts**. A merge to
+`main` publishes through Workers Builds when `skillies/` changes (see
+[`website/README.md`](../website/README.md)). By hand, after the build:
+`npx wrangler@4.151.3 deploy --config website/wrangler.jsonc`. A new skillie
+needs no manual website edit beyond that publish.
 
 ## Act in apps, and wait for the step
 

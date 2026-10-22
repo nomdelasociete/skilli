@@ -251,7 +251,7 @@ unsigned, its unit tests run.
    `I+4nuoWKfHEjDRI6pOl/wO04kxCWkFSpzglqJMphf24=`).
 4. A GitHub release `v<version>-<build>` of this repository (public,
    GPL-3.0, since 2026-10-18): the DMG and zip, plus `skil.li.dmg` and
-   `appcast.xml` under stable names. The website's Caddy redirects `skil.li/download`
+   `appcast.xml` under stable names. The website redirects `skil.li/download`
    and `skil.li/appcast.xml` to the latest release's, so the files can move
    without an app update.
 5. The Homebrew cask `Casks/skilli.rb` in **nomdelasociete/homebrew-tap**
