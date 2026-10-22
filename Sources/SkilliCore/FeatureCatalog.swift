@@ -246,6 +246,7 @@ public enum FeatureCatalog {
         ("start-timer", true, "catalog.timer"),
         ("timer:", false, "catalog.timer"),
         ("keep-awake-for", true, "catalog.awake"),
+        ("kept-awake", true, "catalog.awake"),
         ("create-event", true, "catalog.event"),
         ("add-reminder", true, "catalog.remind"),
         ("system:sound.output.", false, "catalog.soundOutput"),

@@ -465,9 +465,10 @@ final class SkilliTools {
                        group: .apps, risk: .changes,
                        parameters: [.init(name: "name", description: "The layout's name, as list_windows gives it.")]),
         ToolDefinition(name: "keep_awake", title: "Keep the Mac awake",
-                       description: "Keeps the Mac and its display awake for some minutes, until a time of day, or until let sleep again; or lets it sleep as usual.",
+                       description: "Keeps the Mac and its display awake for some minutes, until a time of day, some minutes longer than now set, or until let sleep again; or lets it sleep as usual.",
                        group: .system, risk: .changes,
                        parameters: [.init(name: "minutes", description: "How many minutes, or empty.", isRequired: false),
+                                    .init(name: "more", description: "Minutes added to the time left (60: one hour longer), or empty.", isRequired: false),
                                     .init(name: "until", description: "A time of day, 24-hour HH:MM, or empty.", isRequired: false),
                                     .init(name: "sleep", description: "true to let the Mac sleep as usual again.", options: ["false", "true"], isRequired: false)]),
         ToolDefinition(name: "set_volume", title: "Set the volume",
@@ -891,6 +892,12 @@ final class SkilliTools {
         case "keep_awake":
             guard let systemCommands else { throw Failure(message: "Mac commands are not available.") }
             if (arguments["sleep"] as? String) == "true" { return systemCommands.keepAwake(.allowSleep) }
+            // One hour longer, as the launcher's ⌘K: from the end set, from
+            // now when it is kept awake until let sleep (or not at all).
+            if let more = (arguments["more"] as? String).flatMap({ Int($0.trimmingCharacters(in: .whitespaces)) }) ?? (arguments["more"] as? Int), more > 0 {
+                let left = systemCommands.awakeUntil.map { max(0, Int($0.timeIntervalSinceNow.rounded())) } ?? 0
+                return systemCommands.keepAwake(.awake(seconds: left + more * 60))
+            }
             if let minutes = (arguments["minutes"] as? String).flatMap({ Int($0.trimmingCharacters(in: .whitespaces)) }) ?? (arguments["minutes"] as? Int), minutes > 0 {
                 return systemCommands.keepAwake(.awake(seconds: minutes * 60))
             }

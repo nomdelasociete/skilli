@@ -2234,9 +2234,23 @@ re-investigating.
   grammar is the launcher's only: in Ask, the route picks Keep Awake and
   the length or the end time is read by Jev (`AskValues`, see "Ask never
   acts on a regex reading of a sentence"); unsure, done with ⌘Z.
-  Agents: `keep_awake` (minutes, until, sleep). While awake, a cup in the
-  menu bar with the time left ("59 min", "1 h 20"; `AwakeIndicator`), its
-  menu: until when, Allow Sleep.
+  Agents: `keep_awake` (minutes, until, more: minutes added to the time
+  left, sleep). While awake, a cup in the
+  menu bar with the time left ("59 min", "1 h 20"; `AwakeIndicator`,
+  `AwakeStatus.left`), its menu: until when, Allow Sleep. In the launcher
+  (2026-10-22: "no info in the app" on how to stop it): the same full cup
+  and time left at the right of the empty field (`AwakeChipView`, a
+  keycap's wash; outside the modes, gone at the first key, nothing read
+  once words are typed; `updateAwakeChip`). A click types "awake". The
+  words about it (`AwakeRequest.mentions`: "awake", "keep awake",
+  "caffeinate"…) list it running, first (after a length typed, second):
+  "Keeping Awake · 42 min left (until 14:05)" (`AwakeStatus.title`,
+  `LauncherItem.keptAwake`), ↩ Allow Sleep, ⌘K Keep Awake 1 h Longer
+  (untimed: Allow Sleep in 1 h); it stands for Keep Awake's own row
+  ("Allow Sleep" while awake), which leaves the list. ⌘K stays the
+  selected row's (rule 5): the chip is reached by a click or by typing.
+  Running timers keep their menu bar count and the "timer" rows, no chip.
+  `selftest calc` (`keepAwakeSeenInTheLauncher`).
 - Ask and connected services (`ServiceMention` in SkilliCore): the act route
   reads "look something up in, or do something with, one of their connected
   services". A request that names a connected server ("nimbus deployment" or

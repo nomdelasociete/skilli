@@ -54,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             rebuildStatusMenu()
             awakeIndicator.update(awake: systemCommands.isKeepingAwake, until: systemCommands.awakeUntil)
+            launcher.awakeChanged()
         }
         // Settings → Windows → Space between windows, read at each press.
         commands.windows.gap = { [preferences] in CGFloat(preferences.windowGap) }
@@ -613,6 +614,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.timerRemaining = { [timers] timer in timers.remaining(timer) }
         launcher.onStartTimer = { [weak self] request in self?.startTimer(request) }
         launcher.onKeepAwake = { [weak self] request in self?.aiActions.keepAwake(request) }
+        launcher.awakeState = { [weak self] in (self?.systemCommands.isKeepingAwake ?? false, self?.systemCommands.awakeUntil) }
         launcher.onCancelTimer = { [timers] timer in timers.cancel(timer.id) }
         aiActions.startTimer = { [weak self] request in self?.startTimer(request) ?? UUID() }
         aiActions.cancelTimer = { [timers] id in timers.cancel(id) }

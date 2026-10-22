@@ -1,4 +1,5 @@
 import AppKit
+import SkilliCore
 
 /// While the Mac is kept awake: a cup in the menu bar with the time left
 /// ("59 min", "1 h 20"), so it is seen to work; its menu says until when
@@ -47,7 +48,7 @@ final class AwakeIndicator: NSObject {
 
     private func refresh() {
         guard let item else { return }
-        item.button?.title = until.map { " " + Self.left(until: $0) } ?? ""
+        item.button?.title = until.map { " " + AwakeStatus.left(until: $0) } ?? ""
         let menu = NSMenu()
         let said = NSMenuItem(title: until.map { "Keeping the Mac awake until \($0.formatted(date: .omitted, time: .shortened))" }
                                   ?? "Keeping the Mac awake until you let it sleep",
@@ -142,13 +143,5 @@ final class AwakeIndicator: NSObject {
             }
         }
         return rep
-    }
-
-    /// "59 min", "1 h 20", "3 h": the time left, rounded up to the minute.
-    static func left(until: Date, now: Date = .now) -> String {
-        let minutes = max(1, Int((until.timeIntervalSince(now) / 60).rounded(.up)))
-        guard minutes >= 60 else { return "\(minutes) min" }
-        let hours = minutes / 60, rest = minutes % 60
-        return rest == 0 ? "\(hours) h" : "\(hours) h \(String(format: "%02d", rest))"
     }
 }

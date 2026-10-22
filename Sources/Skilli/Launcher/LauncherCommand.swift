@@ -55,6 +55,9 @@ enum LauncherItem {
     case keepAwake(AwakeRequest)
     /// A timer counting down: Return cancels it.
     case runningTimer(TimerCenter.Running)
+    /// The Mac kept awake now, until then (nil: until let sleep): Return
+    /// lets it sleep.
+    case keptAwake(until: Date?)
     /// "g skilli": Google's results for skilli. No query: the link itself.
     /// A browser tab open now (Search Tabs).
     case browserTab(BrowserTabs.Tab)
@@ -132,6 +135,8 @@ enum LauncherItem {
         case .startTimer(let request): "Start Timer · " + (request.label.isEmpty ? "" : request.label + " · ") + TimerRequest.spoken(request.seconds)
         case .keepAwake(let request): Self.awakeTitle(request)
         case .runningTimer(let timer): timer.title
+        case .keptAwake(let until):
+            AwakeStatus.title(until: until) { DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .short) }
         case .browserTab(let tab): tab.title
         case .file(let file): file.name
         case .contact(let match): match.record.name
@@ -183,6 +188,7 @@ enum LauncherItem {
         case .startTimer: "start-timer"
         case .keepAwake: "keep-awake-for"
         case .runningTimer(let timer): "timer:\(timer.id)"
+        case .keptAwake: "kept-awake"
         case .browserTab(let tab): "tab:\(tab.title)"
         case .file(let file): "file:\(file.url.path)"
         case .contact(let match): "contact:\(match.record.id)"

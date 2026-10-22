@@ -38,3 +38,41 @@ final class AwakeRequestTests: XCTestCase {
     }
 
 }
+
+final class AwakeStatusTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+    private func time(_ date: Date) -> String { "T+\(Int(date.timeIntervalSince(now)))" }
+
+    func testMentionsTheWordsWithOrWithoutALength() {
+        XCTAssertTrue(AwakeRequest.mentions("awake"))
+        XCTAssertTrue(AwakeRequest.mentions("keep awake"))
+        XCTAssertTrue(AwakeRequest.mentions("Awake 2h"))
+        XCTAssertTrue(AwakeRequest.mentions("caffeinate"))
+        XCTAssertTrue(AwakeRequest.mentions("allow sleep"))
+        XCTAssertTrue(AwakeRequest.mentions("éveillé"))
+        XCTAssertFalse(AwakeRequest.mentions("awa"), "whole words only: a few letters open an app")
+        XCTAssertFalse(AwakeRequest.mentions("sleep"), "the Sleep command")
+        XCTAssertFalse(AwakeRequest.mentions("timer 10 min"))
+        XCTAssertFalse(AwakeRequest.mentions(""))
+    }
+
+    func testTimeLeft() {
+        XCTAssertEqual(AwakeStatus.left(until: now.addingTimeInterval(42 * 60), now: now), "42 min")
+        XCTAssertEqual(AwakeStatus.left(until: now.addingTimeInterval(41 * 60 + 1), now: now), "42 min", "rounded up")
+        XCTAssertEqual(AwakeStatus.left(until: now.addingTimeInterval(80 * 60), now: now), "1 h 20")
+        XCTAssertEqual(AwakeStatus.left(until: now.addingTimeInterval(65 * 60), now: now), "1 h 05")
+        XCTAssertEqual(AwakeStatus.left(until: now.addingTimeInterval(3 * 3_600), now: now), "3 h")
+        XCTAssertEqual(AwakeStatus.left(until: now.addingTimeInterval(-5), now: now), "1 min", "never 0")
+    }
+
+    func testRunningTitle() {
+        XCTAssertEqual(AwakeStatus.title(until: now.addingTimeInterval(42 * 60), now: now, time: time),
+                       "Keeping Awake · 42 min left (until T+2520)")
+        XCTAssertEqual(AwakeStatus.title(until: nil, now: now, time: time), "Keeping Awake · until you allow sleep")
+    }
+
+    func testOneHourLonger() {
+        XCTAssertEqual(AwakeStatus.secondsLonger(until: now.addingTimeInterval(42 * 60), now: now), 42 * 60 + 3_600)
+        XCTAssertEqual(AwakeStatus.secondsLonger(until: now.addingTimeInterval(-30), now: now), 3_600, "ended: an hour from now")
+    }
+}
