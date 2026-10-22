@@ -14266,6 +14266,14 @@ final class SelfTest {
         } != nil
         let actions = launcher.shownActions.map(\.title).joined(separator: ", ")
         await captureLauncherBothWays(as: "launcher-awake-actions")
+        // ↓ ↩ only on this row's own list: never another row's action.
+        guard clicked, listed, offered else {
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            record(name, false, "chip “\(chipSaid)”: \(chipShown); clicked → “awake”: \(clicked); rows “\(rows)”: \(listed); ⌘K “\(actions)”: \(offered); stopped before ↩", nil)
+            return
+        }
         await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         let longer = await waitUntil(timeout: 1) {
@@ -14300,6 +14308,16 @@ final class SelfTest {
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         _ = commands.keepAwake(.allowSleep)
 
+        // Left open, it counts down: 61 s left reads "2 min", then "1 min"
+        // at the next tick (20 s).
+        _ = commands.keepAwake(.awake(seconds: 61))
+        _ = await open()
+        let twoLeft = await waitUntil(timeout: 1) { launcher.awakeChipText == "2 min" } != nil
+        let oneLeft = await waitUntil(timeout: 26) { launcher.awakeChipText == "1 min" } != nil
+        let counted = twoLeft && oneLeft
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        _ = commands.keepAwake(.allowSleep)
+
         // Not kept awake: no chip, no running row.
         _ = await open()
         await pause(150)
@@ -14311,11 +14329,11 @@ final class SelfTest {
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
 
         record(name, chipShown && goneOnKey && backOnDelete && clicked && listed && footerSays && noTwin && offered && longer && quiet
-                   && both && slept && cupAlone && untimedListed && untimedOffered && noChip && noRow,
+                   && both && slept && cupAlone && untimedListed && untimedOffered && counted && noChip && noRow,
                "chip “\(chipSaid)”: \(chipShown), gone on a key: \(goneOnKey), back on ⌫: \(backOnDelete); clicked → “awake”: \(clicked); "
                    + "rows “\(rows)”: \(listed), footer \(footer): \(footerSays), no “Allow Sleep” twin: \(noTwin); ⌘K “\(actions)”: \(offered), "
                    + "1 h longer: \(longer), no card: \(quiet); “awake 2h” → “\(bothRows)”: \(both); “awake” ↩ slept, cup gone: \(slept); "
-                   + "untimed: cup alone \(cupAlone), listed \(untimedListed), Allow Sleep in 1 h \(untimedOffered); not awake: no chip \(noChip), no row \(noRow)", nil)
+                   + "untimed: cup alone \(cupAlone), listed \(untimedListed), Allow Sleep in 1 h \(untimedOffered); counted down while open: \(counted); not awake: no chip \(noChip), no row \(noRow)", nil)
     }
 
     /// The Mac commands through macOS's own APIs, no keys pressed, no other

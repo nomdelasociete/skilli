@@ -108,6 +108,9 @@ final class LauncherController: NSObject {
     /// The cup and the time left at the right of the empty field while the
     /// Mac is kept awake.
     private let awakeChip = AwakeChipView()
+    /// While it shows and the Mac is kept awake for a while: the time left
+    /// counted down on the chip and the running row.
+    private var awakeTicks: Timer?
     private var fieldFrame: NSRect = .zero
     /// Self-test hooks.
     var isKilling: Bool { killMode }
@@ -774,6 +777,7 @@ final class LauncherController: NSObject {
         installOutsideClickMonitor()
         showSelectionPreview(from: focused)
         // Off the show path: once the panel is up.
+        DispatchQueue.main.async { [weak self] in self?.countAwakeDown() }
         if onOpened != nil {
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.panel.isVisible else { return }
@@ -826,6 +830,8 @@ final class LauncherController: NSObject {
         closeActions()
         clearNote()
         panel.orderOut(nil)
+        awakeTicks?.invalidate()
+        awakeTicks = nil
         if wasVisible { onClosed?() }
         leaveMode(update: false)
         // A hint the Catalog left in the field ("12 × 4 · …") goes with it.
@@ -3621,9 +3627,35 @@ final class LauncherController: NSObject {
     /// Keep Awake changed while the launcher shows (it ended, the menu
     /// bar's Allow Sleep): the chip, and the running row when it is listed.
     func awakeChanged() {
+        countAwakeDown()
         guard panel.isVisible, mode == nil else { return }
         let text = searchField.stringValue
         if AwakeRequest.mentions(text) { updateResults(query: text) } else { updateAwakeChip(empty: text.isEmpty) }
+    }
+
+    /// A tick every 20 s while it shows and Keep Awake has an end (as the
+    /// menu bar's cup counts); none otherwise, gone as it hides.
+    private func countAwakeDown() {
+        guard panel.isVisible, awakeState().until != nil else {
+            awakeTicks?.invalidate()
+            awakeTicks = nil
+            return
+        }
+        guard awakeTicks == nil else { return }
+        let timer = Timer(timeInterval: 20, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.awakeTick() }
+        }
+        timer.tolerance = 5
+        RunLoop.main.add(timer, forMode: .common)
+        awakeTicks = timer
+    }
+
+    /// The time left again: on the chip, or on the running row (redrawn in
+    /// place, the selection kept).
+    private func awakeTick() {
+        guard panel.isVisible, mode == nil else { return }
+        updateAwakeChip(empty: searchField.stringValue.isEmpty)
+        if results.contains(where: { if case .keptAwake = $0 { true } else { false } }) { showRows() }
     }
 
     /// The chip clicked: "awake" typed, its running row first.

@@ -2234,14 +2234,17 @@ re-investigating.
   grammar is the launcher's only: in Ask, the route picks Keep Awake and
   the length or the end time is read by Jev (`AskValues`, see "Ask never
   acts on a regex reading of a sentence"); unsure, done with ⌘Z.
-  Agents: `keep_awake` (minutes, until, more: minutes added to the time
-  left, sleep). While awake, a cup in the
-  menu bar with the time left ("59 min", "1 h 20"; `AwakeIndicator`,
-  `AwakeStatus.left`), its menu: until when, Allow Sleep. In the launcher
-  (2026-10-22: "no info in the app" on how to stop it): the same full cup
-  and time left at the right of the empty field (`AwakeChipView`, a
-  keycap's wash; outside the modes, gone at the first key, nothing read
-  once words are typed; `updateAwakeChip`). A click types "awake". The
+  Agents: `keep_awake` (minutes, until, more, sleep; a week at most).
+  `more` adds to the time left when it has an end; untimed (or not awake),
+  it counts from now: `more=60` is Allow Sleep in 1 h. While awake, a cup
+  in the menu bar with the time left ("59 min", "1 h 20"; `AwakeIndicator`,
+  `AwakeStatus.left`), the cup alone when untimed; its menu: until when,
+  Allow Sleep. In the launcher (2026-10-22: "no info in the app" on how to
+  stop it): the same full cup at the right of the empty field, with the
+  time left, or alone when untimed (`AwakeChipView`, a keycap's wash;
+  outside the modes, gone at the first key, nothing read once words are
+  typed; `updateAwakeChip`), counted down every 20 s while the launcher
+  shows (`countAwakeDown`, no timer otherwise). A click types "awake". The
   words about it (`AwakeRequest.mentions`: "awake", "keep awake",
   "caffeinate"…) list it running, first (after a length typed, second):
   "Keeping Awake · 42 min left (until 14:05)" (`AwakeStatus.title`,

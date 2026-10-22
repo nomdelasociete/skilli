@@ -165,6 +165,9 @@ final class AgentContext {
 /// the main actor: Accessibility, the clipboard and the card live there.
 @MainActor
 final class SkilliTools {
+    /// The longest Keep Awake an agent may ask for: a week, as typed in the
+    /// launcher (`AwakeRequest`).
+    static let longestAwakeMinutes = 7 * 24 * 60
     private let selection: SelectionService
     /// The front window's elements, for the screen tools.
     let ui = UIReader()
@@ -892,13 +895,21 @@ final class SkilliTools {
         case "keep_awake":
             guard let systemCommands else { throw Failure(message: "Mac commands are not available.") }
             if (arguments["sleep"] as? String) == "true" { return systemCommands.keepAwake(.allowSleep) }
+            // A week at most, as typed in the launcher: never a length that
+            // overflows once in seconds.
+            func length(_ name: String) throws -> Int? {
+                guard let value = (arguments[name] as? String).flatMap({ Int($0.trimmingCharacters(in: .whitespaces)) }) ?? (arguments[name] as? Int),
+                      value > 0 else { return nil }
+                guard value <= Self.longestAwakeMinutes else { throw Failure(message: "“\(name)” is 1 to \(Self.longestAwakeMinutes) minutes (a week).") }
+                return value
+            }
             // One hour longer, as the launcher's ⌘K: from the end set, from
             // now when it is kept awake until let sleep (or not at all).
-            if let more = (arguments["more"] as? String).flatMap({ Int($0.trimmingCharacters(in: .whitespaces)) }) ?? (arguments["more"] as? Int), more > 0 {
+            if let more = try length("more") {
                 let left = systemCommands.awakeUntil.map { max(0, Int($0.timeIntervalSinceNow.rounded())) } ?? 0
-                return systemCommands.keepAwake(.awake(seconds: left + more * 60))
+                return systemCommands.keepAwake(.awake(seconds: min(left + more * 60, Self.longestAwakeMinutes * 60)))
             }
-            if let minutes = (arguments["minutes"] as? String).flatMap({ Int($0.trimmingCharacters(in: .whitespaces)) }) ?? (arguments["minutes"] as? Int), minutes > 0 {
+            if let minutes = try length("minutes") {
                 return systemCommands.keepAwake(.awake(seconds: minutes * 60))
             }
             if let until = arguments["until"] as? String, !until.isEmpty {

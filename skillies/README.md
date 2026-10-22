@@ -119,13 +119,14 @@ A long job can keep the Mac awake while it runs, then let it sleep:
 
 ```bash
 "$SKILLI_CLI" call keep_awake minutes=90   # awake 1 h 30 (or until=18:30)
-"$SKILLI_CLI" call keep_awake more=60      # one hour longer than set now (the launcher's ⌘K)
+"$SKILLI_CLI" call keep_awake more=60      # one hour longer than set now; with no end set, Allow Sleep in 1 h
 "$SKILLI_CLI" call keep_awake sleep=true   # Allow Sleep
 open "skilli://run/system:keepAwake"       # Keep Awake on, or Allow Sleep while it is
 ```
 
-While it is kept awake, the cup shows in the menu bar and at the right of
-the launcher's empty field, with the time left.
+Lengths go up to a week. While it is kept awake, the cup shows in the menu
+bar and at the right of the launcher's empty field, with the time left (the
+cup alone when it has no end).
 
 ## Add an app's links
 
