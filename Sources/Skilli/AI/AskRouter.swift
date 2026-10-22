@@ -211,6 +211,10 @@ enum AskRouter {
         AskValues.durationQuestions + AskValues.levelQuestions + [AskValues.labelQuestion(spans: AskValues.spans(of: instruction))]
     }
 
+    /// A route this likely is sure of itself: what another question read
+    /// (an app named, a quit) does not move it.
+    static let sureRoute = 0.8
+
     /// Two routes this close are a close call (Decisions on "rappelle-moi
     /// dans une heure trente de sortir le linge": timer 51 %, plans 41 %).
     static let closeCall = 0.15
@@ -503,10 +507,14 @@ enum AskRouter {
                 var route = picked
                 // Quit, force quit or uninstall an app named: the name is
                 // read once the route is known.
-                let appAction = answers["command"].flatMap { answer in
+                // Not over a route sure of itself: "lance Zoom" (Jev: open
+                // 78 %, quit 62 %) quit Zoom.
+                var appAction = answers["command"].flatMap { answer in
                     AppAction(rawValue: answer.choice).flatMap { (answer.probabilities[$0.rawValue] ?? 0) >= 0.5 ? $0 : nil }
                 }
-                if appAction != nil, route == .act || route == .open || route == .answer && !hasSelection { route = .command }
+                if appAction != nil, route == .act || route == .open || route == .answer && !hasSelection {
+                    if routed.confidence < sureRoute { route = .command } else { appAction = nil }
+                }
                 // "Command" with no command that fits: "ouvre les réglages
                 // système" sounds like one (Decisions: command 40 %, act
                 // 8 %). An app or a menu item that fits (60 %, what opens at
@@ -528,7 +536,7 @@ enum AskRouter {
                 switch route {
                 case .find where menuBest < 0.5 && appBest >= 0.85: route = .open
                 case .open where appBest < 0.5 && menuBest >= 0.85: route = .find
-                case .act where (menuBest >= 0.85 || appBest >= 0.85) && routed.confidence < 0.8: route = menuBest >= appBest ? .find : .open
+                case .act where (menuBest >= 0.85 || appBest >= 0.85) && routed.confidence < sureRoute: route = menuBest >= appBest ? .find : .open
                 default: break
                 }
                 // "ouvre les réglages système dans la partie display": the
