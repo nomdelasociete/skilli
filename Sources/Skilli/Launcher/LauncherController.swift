@@ -130,8 +130,9 @@ final class LauncherController: NSObject {
     var onSnippet: ((Snippet, _ copy: Bool) -> Void)?
     /// Search Snippets: ⇥ asks the decision model which snippet fits what
     /// is typed ("my iban"); whether it can (Settings → Snippets, a key).
+    /// `maybe`: none fits, but "none" narrowly won over that snippet.
     var snippetMeaningAvailable: (() -> Bool)?
-    var snippetMeaning: ((String) async -> (snippets: [Snippet], label: String)?)?
+    var snippetMeaning: ((String) async -> (snippets: [Snippet], maybe: Snippet?, label: String)?)?
     /// Search Snippets' preview: the snippet as the expander would type it
     /// now, and the variables it cannot fill without asking.
     var snippetPreviewPieces: ((Snippet) -> (pieces: [Snippet.Piece], unfilled: Set<PromptTemplate.Variable>))?
@@ -152,13 +153,18 @@ final class LauncherController: NSObject {
     private var menuCandidates: [MenuSearch.Candidate]?
     private var menuTask: Task<Void, Never>?
     private var snippetMeaningOn = false
-    private var snippetFound: (query: String, snippets: [Snippet], label: String)?
+    private var snippetFound: (query: String, snippets: [Snippet], maybe: Snippet?, label: String)?
     private var snippetMeaningPending: String?
     private var snippetMeaningTask: Task<Void, Never>?
     /// Self-test hooks.
     var isInSnippets: Bool { mode == .snippets }
     var snippetsPreview: SnippetPreviewView { snippetPreview }
     var isShowingSnippetMeaning: Bool { snippetFound?.query == searchField.stringValue }
+    /// Nothing picked by meaning, one dimmed "maybe?" row instead: never
+    /// selected by itself (↓ selects it, ↩ then types it).
+    var isShowingSnippetMaybe: Bool {
+        mode == .snippets && isShowingSnippetMeaning && snippetFound?.snippets.isEmpty == true && snippetFound?.maybe != nil
+    }
     /// The calculator's answer: typed in the app in front (↩, like a clip,
     /// a snippet or an emoji: D4) or copied (⌘↩, ⌘C).
     var onCalculation: ((Calculator.Result, _ paste: Bool) -> Void)?
@@ -350,6 +356,9 @@ final class LauncherController: NSObject {
     }
     var shownAliasCaps: [String?] {
         results.indices.map { (tableView.view(atColumn: 0, row: $0, makeIfNecessary: false) as? ResultCellView)?.aliasText }
+    }
+    var shownMaybeMarks: [Bool] {
+        results.indices.map { (tableView.view(atColumn: 0, row: $0, makeIfNecessary: false) as? ResultCellView)?.isMaybe ?? false }
     }
     /// Where ⌘K's links go (Messages, Phone, mail); self-tests keep them.
     var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
@@ -1193,7 +1202,7 @@ final class LauncherController: NSObject {
                 .map(LauncherItem.openWindow)
         } else if mode == .snippets {
             if let snippetFound, snippetFound.query == text {
-                results = snippetFound.snippets.map(LauncherItem.snippet)
+                results = (snippetFound.snippets.isEmpty ? snippetFound.maybe.map { [$0] } ?? [] : snippetFound.snippets).map(LauncherItem.snippet)
             } else {
                 snippetFound = nil
                 // By name, keyword or first words, in memory: the best first.
@@ -1572,7 +1581,9 @@ final class LauncherController: NSObject {
         laps.lap("labels")
         showRows()
         laps.lap("rows")
-        if !results.isEmpty {
+        if isShowingSnippetMaybe {
+            tableView.deselectAll(nil)
+        } else if !results.isEmpty {
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
             tableView.scrollRowToVisible(0)
         }
@@ -2085,7 +2096,7 @@ final class LauncherController: NSObject {
             guard let self, !Task.isCancelled, self.mode == .snippets, self.searchField.stringValue == text else { return }
             self.snippetMeaningPending = nil
             if let found {
-                self.snippetFound = (text, found.snippets, found.label)
+                self.snippetFound = (text, found.snippets, found.maybe, found.label)
                 self.updateResults(query: text)
             } else {
                 self.updateResults(query: text)
@@ -3497,6 +3508,8 @@ final class LauncherController: NSObject {
         let item = results.indices.contains(row) ? results[row] : nil
         let footer = mode == .github && github?.isSignedIn != true
             ? [(label: "Settings", key: "↩")]
+            // The "maybe?" row, not selected: ↓ reaches it.
+            : isShowingSnippetMaybe && item == nil ? [(label: "Maybe", key: "↓")]
             : LauncherFooter.hints(main: item.flatMap { mainAction(for: $0)?.title }, tab: tab(for: item))
         // Under ⌘K's list: put back as it closes.
         if actionPanel.isHidden { hints.setHints(footer) } else { footerBeforeActions = footer }
@@ -4139,6 +4152,7 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             cell.setAlias(beside == nil ? aliasByID[id] : nil)
             cell.setPinned(mode == nil && pinsNow.ids.contains(id))
             cell.setTrailingKeycap(mode == .snippets ? Self.keywordCap(results[row]) : nil)
+            cell.setMaybe(isShowingSnippetMaybe)
         }
         return true
     }

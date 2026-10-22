@@ -81,6 +81,13 @@ known for sure, each row left out when it holds nothing:
   as today.
 - ⇥ by meaning: the rows it picked, the pane follows the selection as
   for typed searches.
+- ⇥ by meaning, "none" narrowly ahead (`SnippetMeaning.maybe`: none
+  above 60 %, the best snippet still at 14 % or more): that snippet as
+  one row, its name in `secondaryLabelColor`, its icon at half strength
+  and "maybe?" after the name in `tertiaryLabelColor`, its keyword's
+  keycap as usual. Nothing selected: the pane shows the quiet tile, the
+  footer "Maybe ↓", ↩ does nothing; ↓ selects the row (it stays dimmed),
+  the pane follows, ↩ types it.
 - Light and dark: semantic colors only (`labelColor` washes, the accent
   at 16 % under filled parts, `secondaryLabelColor` for unfilled tokens).
 
@@ -100,8 +107,10 @@ keycaps and no alias cap, ↓ moving the pane, `{date}` and the clipboard
 filled (or the token left as written), the caret, every Information row,
 a row shown in under 8 ms (0.23 ms measured), code under its language,
 a long snippet without a keyword, the quiet tile, ⇥'s pick in the pane,
-the list whole again after esc. Captures, light and dark:
-`launcher-snippets`, `-code`, `-long`, `-empty`, `-meaning`. Judged on
+the list whole again after esc; `snippetsMaybeRow`: the "maybe?" row
+dimmed and not selected, ↩ typing nothing, ↓ selecting it, ↩ typing it.
+Captures, light and dark: `launcher-snippets`, `-code`, `-long`,
+`-empty`, `-meaning`, `-maybe`, `-maybe-selected`. Judged on
 the mini against Clipboard History's `launcher-clipboard-preview-*`
 (`selftest previews`, which also covers the clipboard preview on its
 shared parts).

@@ -203,4 +203,17 @@ final class SnippetTests: XCTestCase {
         let many = Dictionary(uniqueKeysWithValues: (0..<12).map { ("s\($0)", 0.08) })
         XCTAssertEqual(SnippetMeaning.picked(many, choice: "s0", count: 12).count, 8)
     }
+
+    /// "none" sure, the snippet it split with as a maybe: only when it
+    /// keeps enough, and never beside picks.
+    func testMeaningMaybeIsTheSnippetNoneSplitWith() {
+        XCTAssertEqual(SnippetMeaning.maybe(["none": 0.68, "s5": 0.31, "s2": 0.01], choice: "none", count: 12), 5)
+        XCTAssertEqual(SnippetMeaning.maybe(["none": 0.85, "s5": 0.15], choice: "none", count: 12), 5)
+        XCTAssertNil(SnippetMeaning.maybe(["none": 0.87, "s5": 0.13], choice: "none", count: 12), "a request no snippet is about")
+        XCTAssertNil(SnippetMeaning.maybe(["none": 0.55, "s5": 0.45], choice: "none", count: 12), "picked as usual")
+        XCTAssertNil(SnippetMeaning.maybe(["s5": 0.6, "none": 0.4], choice: "s5", count: 12))
+        XCTAssertNil(SnippetMeaning.maybe(["none": 0.7, "s14": 0.3], choice: "none", count: 12), "an unknown index")
+        XCTAssertEqual(SnippetMeaning.maybe(["none": 0.7, "s3": 0.15, "s1": 0.15], choice: "none", count: 12), 1, "a tie: the first")
+        XCTAssertEqual(SnippetMeaning.picked(["none": 0.68, "s5": 0.31], choice: "none", count: 12), [], "a maybe is not a pick")
+    }
 }
