@@ -278,6 +278,10 @@ final class LinkedAppFileTests: XCTestCase {
         // A raw link an agent opens cannot go round it.
         XCTAssertEqual(LinkedApp.asksFirst(try XCTUnwrap(URL(string: "nimbus:/share/all")))?.command.id, "nimbus.share")
         XCTAssertNil(LinkedApp.asksFirst(try XCTUnwrap(URL(string: "nimbus://show/today"))))
+        // Nor by another case, an encoded letter or a trailing slash.
+        for variant in ["nimbus:/Share/All", "NIMBUS:/SHARE/ALL/", "nimbus:/%73hare/all"] {
+            XCTAssertEqual(LinkedApp.asksFirst(try XCTUnwrap(URL(string: variant)))?.command.id, "nimbus.share", variant)
+        }
         // CleanShot's upload is its variant that asks first.
         let area = try XCTUnwrap(LinkedApp.command(id: "cleanshot.capture-area"))
         XCTAssertTrue(area.asksFirst(variant: area.variant(id: "upload")))

@@ -139,9 +139,14 @@ public struct LinkedApp: Identifiable, Sendable {
         return nil
     }
 
+    /// Host and path alike, any case, percent-decoded, one trailing slash
+    /// aside: an app may read `/Share/All` as `/share/all`.
     private static func samePath(_ one: URL, _ other: URL) -> Bool {
-        func trimmed(_ path: String) -> String { path.hasSuffix("/") ? String(path.dropLast()) : path }
-        return one.host()?.lowercased() == other.host()?.lowercased() && trimmed(one.path()) == trimmed(other.path())
+        func trimmed(_ url: URL) -> String {
+            let path = url.path(percentEncoded: false).lowercased()
+            return path.hasSuffix("/") ? String(path.dropLast()) : path
+        }
+        return one.host(percentEncoded: false)?.lowercased() == other.host(percentEncoded: false)?.lowercased() && trimmed(one) == trimmed(other)
     }
 }
 

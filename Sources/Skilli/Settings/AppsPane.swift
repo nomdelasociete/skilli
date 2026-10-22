@@ -88,17 +88,26 @@ final class AppsPaneModel {
     }
 
     /// A plain GET: no cookies, no cache (a web page chose the address).
+    /// Stopped past an app file's size as it comes, and after 15 s in all:
+    /// the link opens it before the user sees anything.
     private static func download(_ url: URL) async throws -> String {
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
-        let session = URLSession(configuration: .ephemeral)
-        defer { session.finishTasksAndInvalidate() }
-        let (data, response) = try await session.data(for: request)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForResource = 15
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let tooLarge = SystemCommands.Failure(message: "not an app file (over \(LinkedAppFile.largest / 1024) KB)")
+        let (bytes, response) = try await session.bytes(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else { throw SystemCommands.Failure(message: "the server answered \(status)") }
-        guard data.count <= LinkedAppFile.largest, let text = String(data: data, encoding: .utf8) else {
-            throw SystemCommands.Failure(message: "not an app file")
+        guard response.expectedContentLength <= Int64(LinkedAppFile.largest) else { throw tooLarge }
+        var data = Data()
+        for try await byte in bytes {
+            data.append(byte)
+            guard data.count <= LinkedAppFile.largest else { throw tooLarge }
         }
+        guard let text = String(data: data, encoding: .utf8) else { throw SystemCommands.Failure(message: "not an app file") }
         return text
     }
 

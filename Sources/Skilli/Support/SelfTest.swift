@@ -2287,11 +2287,28 @@ final class SelfTest {
         let createdRight = created.status == 0 && LinkedApp.command(id: "selftest-agent.open") != nil
             && manager.fileExists(atPath: folder.appendingPathComponent("selftest-agent.json").path)
         details.append("create_app_link: refused \(refusedRight) “\(refused.output.prefix(70))”, added \(createdRight) “\(created.output.prefix(70))”")
+        // Its approval card: every command and variant with the very link it
+        // opens; an app too long to show whole is refused, never cut.
+        var cardRight = false
+        var tooLongRefused = false
+        if let definition = SkilliTools.definition("create_app_link") {
+            let variantJSON = #"[{"id":"open","path":"showNote","title":"Selftest Card Note","description":"Opens a note","variants":[{"id":"pinned","title":"Selftest Card Pinned","label":"Pinned","query":[{"name":"pin","value":"yes"}]}]}]"#
+            let card = SkilliTools.summary(of: definition, arguments: ["app": "Notes", "scheme": "notes", "documentation": "https://example.com/notes-links",
+                                                                      "id": "selftest-card", "commands": variantJSON])
+            cardRight = card.contains("Selftest Card Note: notes://showNote") && card.contains("Selftest Card Pinned: notes://showNote?pin=yes")
+            let many = (1...40).map { #"{"id":"c\#($0)","path":"show/page-\#($0)","title":"Selftest Long Command \#($0)","description":"Opens page \#($0) of the long selftest app"}"# }
+            let manyJSON = "[" + many.joined(separator: ",") + "]"
+            let long = await skilliCall("create_app_link", String(decoding: (try? JSONSerialization.data(withJSONObject: [
+                "app": "Calendar", "scheme": "x-selftest-long", "documentation": "https://example.com/long-links", "id": "selftest-long", "commands": manyJSON
+            ])) ?? Data(), as: UTF8.self))
+            tooLongRefused = long.status == 1 && long.output.contains("Too many links") && LinkedApp.app(id: "selftest-long") == nil
+            details.append("its card: full links \(cardRight); too long refused \(tooLongRefused) “\(long.output.prefix(60))”")
+        }
 
         let passed = read && leftOut && rowRan && accessory == "Selftest Notes" && variantRan && listed.contains("New Pinned Selftest Note") && inCatalog
             && called && callAsked && callOpenedNothing && linkRan && linkAsked && askRan && askAsked
             && rowShown && leftOutShown && pageRows && pageButtons && listOverflow <= 1 && pageOverflow <= 1 && shippedOverflow <= 1
-            && sheet && pressed && added && refusedRight && createdRight
+            && sheet && pressed && added && refusedRight && createdRight && cardRight && tooLongRefused
         record(name, passed, details.joined(separator: "; "), nil)
     }
 
