@@ -211,8 +211,9 @@ enum AskRouter {
         AskValues.durationQuestions + AskValues.levelQuestions + [AskValues.labelQuestion(spans: AskValues.spans(of: instruction))]
     }
 
-    /// A route this likely is sure of itself: what another question read
-    /// (an app named, a quit) does not move it.
+    /// A route this likely (its probability, not the answer's confidence)
+    /// is sure of itself: what another question read (an app named, a
+    /// quit) does not move it.
     static let sureRoute = 0.8
 
     /// Two routes this close are a close call (Decisions on "rappelle-moi
@@ -222,8 +223,9 @@ enum AskRouter {
     /// The route answer, or, on a close call, the two likeliest routes
     /// asked again alone, eleven options down to two: one more request,
     /// for close calls only. Their shared probability is split as the
-    /// second answer says; the other routes keep theirs. The first answer
-    /// when the second fails.
+    /// second answer says (its probabilities: on two options both engines'
+    /// confidence is the lead over the other, 51 / 49 → 2 %); the other
+    /// routes keep theirs. The first answer when the second fails.
     private static func settled(_ routed: DecisionResult, instruction: String, input: String, provider: DecisionProvider,
                                 key: String) async -> DecisionResult {
         let ranked = routed.probabilities.sorted { $0.value > $1.value }
@@ -241,8 +243,8 @@ enum AskRouter {
             probabilities[value] = shared * (answer.probabilities[value] ?? (answer.choice == value ? 1 : 0))
         }
         let confidence = probabilities[answer.choice] ?? answer.confidence
-        Log.trace("Ask close call “\(instruction)”: \(pair[0]) \(Int(ranked[0].value * 100))%, \(pair[1]) \(Int(ranked[1].value * 100))% → "
-                  + "\(answer.choice) \(Int(answer.confidence * 100))%")
+        Log.trace("Ask close call by \(provider.rawValue) “\(instruction)”: \(pair[0]) \(Int(ranked[0].value * 100))%, \(pair[1]) \(Int(ranked[1].value * 100))% → "
+                  + "\(answer.choice) \(Int(answer.confidence * 100))% [" + pair.map { "\($0) \(Int((answer.probabilities[$0] ?? -1) * 100))" }.joined(separator: ", ") + "]")
         return DecisionResult(choice: answer.choice, confidence: confidence, probabilities: probabilities)
     }
 
@@ -513,7 +515,7 @@ enum AskRouter {
                     AppAction(rawValue: answer.choice).flatMap { (answer.probabilities[$0.rawValue] ?? 0) >= 0.5 ? $0 : nil }
                 }
                 if appAction != nil, route == .act || route == .open || route == .answer && !hasSelection {
-                    if routed.confidence < sureRoute { route = .command } else { appAction = nil }
+                    if (routed.probabilities[route.rawValue] ?? 0) < sureRoute { route = .command } else { appAction = nil }
                 }
                 // "Command" with no command that fits: "ouvre les réglages
                 // système" sounds like one (Decisions: command 40 %, act
@@ -536,7 +538,8 @@ enum AskRouter {
                 switch route {
                 case .find where menuBest < 0.5 && appBest >= 0.85: route = .open
                 case .open where appBest < 0.5 && menuBest >= 0.85: route = .find
-                case .act where (menuBest >= 0.85 || appBest >= 0.85) && routed.confidence < sureRoute: route = menuBest >= appBest ? .find : .open
+                case .act where (menuBest >= 0.85 || appBest >= 0.85) && (routed.probabilities[AskRoute.act.rawValue] ?? 0) < sureRoute:
+                    route = menuBest >= appBest ? .find : .open
                 default: break
                 }
                 // "ouvre les réglages système dans la partie display": the
