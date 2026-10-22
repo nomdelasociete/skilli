@@ -48,8 +48,17 @@ final class AwakeChipView: NSView {
         NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2).fill()
         let cup = Self.cupSize
         var x = Self.padding
-        if let image = AwakeIndicator.cup?.tinted(.secondaryLabelColor) {
-            image.draw(in: NSRect(x: x, y: ((bounds.height - cup.height) / 2).rounded(), width: cup.width, height: cup.height))
+        if let image = AwakeIndicator.cup {
+            // The text's own color through the cup's shape: tinting over its
+            // black ink drew it darker than the words beside it.
+            let rect = NSRect(x: x, y: ((bounds.height - cup.height) / 2).rounded(), width: cup.width, height: cup.height)
+            let mask = NSImage(size: cup, flipped: false) { frame in
+                NSColor.secondaryLabelColor.setFill()
+                frame.fill()
+                image.draw(in: frame, from: .zero, operation: .destinationIn, fraction: 1)
+                return true
+            }
+            mask.draw(in: rect)
         }
         x += cup.width + Self.gap
         guard !shownText.isEmpty else { return }
