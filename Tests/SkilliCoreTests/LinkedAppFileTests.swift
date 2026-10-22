@@ -303,6 +303,40 @@ final class LinkedAppFileTests: XCTestCase {
         XCTAssertNotNil(LinkedApp.command(id: "cleanshot.capture-area"))
     }
 
+    // MARK: The approval card
+
+    /// An agent's app (`create_app_link`) is shown whole before it is
+    /// added, the app not known yet: every field that changes what skil.li
+    /// does with it, and only symbols and groups left out.
+    func testTheApprovalCardShowsEverythingThatChangesBehaviour() throws {
+        let app = try LinkedAppFile.read(file(), file: "")
+        XCTAssertNil(LinkedApp.app(id: "nimbus"), "not added yet")
+        let card = LinkedAppFile.card(app)
+        for shown in [
+            "Nimbus Notes, nimbus links, commands “nimbus.…”",
+            "Documented at https://example.com/nimbus/links",
+            "Needs Nimbus 2.0 or later",
+            "Nimbus Today: nimbus://show/today",
+            "nimbus.today: “Shows today's notes” · found by notes, today, aujourd'hui",
+            "New Nimbus Note: nimbus://x-callback-url/create?open_note=yes",
+            "New Pinned Note: nimbus://x-callback-url/create?open_note=yes&pin=yes · variant “pinned” · from version 2.4",
+            "Share All Notes (asks first): nimbus:/share/all",
+            "nimbus.share: “Sends every note to the team”"
+        ] {
+            XCTAssertTrue(card.contains(shown), "the card lacks “\(shown)”:\n\(card)")
+        }
+        XCTAssertFalse(card.contains("sun.max"), "symbols only change how it is drawn")
+        XCTAssertLessThanOrEqual(card.count, LinkedAppFile.cardLimit)
+        // The limit is on the whole text, words and lines included.
+        let many = file { object in
+            object["commands"] = (1...30).map { index -> [String: Any] in
+                ["id": "c\(index)", "path": "show/\(index)", "title": "Page \(index)", "description": "Opens page \(index)",
+                 "words": ["page", "seite", "pagina"]]
+            }
+        }
+        XCTAssertGreaterThan(LinkedAppFile.card(try LinkedAppFile.read(many, file: "")).count, LinkedAppFile.cardLimit)
+    }
+
     // MARK: Import links
 
     func testAnImportLinkCarriesWholeFiles() throws {

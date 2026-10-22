@@ -109,6 +109,39 @@ public enum LinkedAppFile {
         return nil
     }
 
+    /// The most the approval card of an agent's app (`create_app_link`)
+    /// may hold: an app is shown whole there or not added.
+    public static let cardLimit = 2_000
+
+    /// What an app file adds, whole, as the approval card shows it before
+    /// it is added: everything that changes what skil.li does with it (the
+    /// ids agents run, where its links are documented, the version they
+    /// need, its note; each command's link, its one line Ask and the
+    /// Catalog read, the words that find it, what asks first, each
+    /// variant's link). Only its symbols and groups are left out: they
+    /// change how Settings draws it. The app need not be known yet.
+    public static func card(_ app: LinkedApp) -> String {
+        var lines = ["\(app.name), \(app.scheme) links, commands “\(app.id).…”"]
+        if let documentation = app.documentation { lines.append("Documented at \(documentation)") }
+        if let minimum = app.minimumVersion { lines.append("Needs \(app.shortName) \(minimum) or later") }
+        if let note = app.allowance { lines.append("Its page says: \(note)") }
+        for command in app.commands {
+            lines.append("\(command.title)\(command.asksFirst ? " (asks first)" : ""): \(command.url(in: app)?.absoluteString ?? command.path)")
+            // Its words after the short name skil.li adds to every command.
+            var about = ["\(command.id): “\(command.oneLine)”"]
+            let words = command.keywords.dropFirst()
+            if !words.isEmpty { about.append("found by " + words.joined(separator: ", ")) }
+            if let since = command.since, since != app.minimumVersion { about.append("from version \(since)") }
+            lines.append("  " + about.joined(separator: " · "))
+            for variant in command.variants {
+                let since = variant.since.flatMap { $0 == command.since ? nil : " · from version \($0)" } ?? ""
+                lines.append("  \(variant.title)\(variant.asksFirst ? " (asks first)" : ""): \(command.url(in: app, variant: variant)?.absoluteString ?? "")"
+                             + " · variant “\(variant.id)”\(since)")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
     /// The text written for `object` (an agent's app, an import): keys
     /// sorted, slashes kept, as people read it.
     public static func text(_ object: [String: Any]) throws -> String {

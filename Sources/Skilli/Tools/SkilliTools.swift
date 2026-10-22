@@ -651,7 +651,7 @@ final class SkilliTools {
         // one too long to show whole is refused, never cut.
         if definition.name == "create_app_link" {
             guard let text = appLinkSummary(arguments) else { return "Not an app file skil.li can read: it will say why." }
-            return text.count > appLinkSummaryLimit ? "Too many links to show whole here: skil.li will refuse it." : text
+            return text.count > LinkedAppFile.cardLimit ? "Too much to show whole here: skil.li will refuse it." : text
         }
         let values = definition.parameters.compactMap { parameter -> String? in
             guard let value = arguments[parameter.name] else { return nil }
@@ -979,8 +979,8 @@ final class SkilliTools {
             }
             let built = try Self.appFile(arguments, bundleID: bundleID)
             // What the card could not show whole is not added.
-            if let shown = Self.appLinkSummary(arguments), shown.count > Self.appLinkSummaryLimit {
-                throw Failure(message: "Too many links to show the user whole (\(shown.count) characters, \(Self.appLinkSummaryLimit) at most): add fewer commands at a time.")
+            if let shown = Self.appLinkSummary(arguments), shown.count > LinkedAppFile.cardLimit {
+                throw Failure(message: "Too many links to show the user whole (\(shown.count) characters, \(LinkedAppFile.cardLimit) at most): add fewer commands at a time.")
             }
             do {
                 let app = try LinkedApps.add(built.text)
@@ -1238,22 +1238,11 @@ final class SkilliTools {
         }
     }
 
-    /// The most an app's links may take in the approval card: what it adds
-    /// is shown whole or not added.
-    nonisolated static let appLinkSummaryLimit = 2_000
-
-    /// create_app_link's app as the approval card shows it: its name,
-    /// scheme and documentation, then each command and variant with the
-    /// very link it opens (the app is not one skil.li knows yet). Nil when
-    /// it is not an app file.
+    /// create_app_link's app as the approval card shows it, whole
+    /// (`LinkedAppFile.card`); nil when it is not an app file.
     nonisolated static func appLinkSummary(_ arguments: [String: Any]) -> String? {
         guard let built = try? appFile(arguments, bundleID: nil), let app = try? LinkedAppFile.read(Data(built.text.utf8), file: "") else { return nil }
-        let commands = app.commands.map { command in
-            "\(command.title)\(command.asksFirst ? " (asks first)" : ""): \(command.url(in: app)?.absoluteString ?? command.path)"
-                + command.variants.map { "\n  \($0.title)\($0.asksFirst ? " (asks first)" : ""): \(command.url(in: app, variant: $0)?.absoluteString ?? "")" }
-                .joined()
-        }
-        return (["\(app.name), \(app.scheme) links" + (app.documentation.map { ", documented at \($0)" } ?? "")] + commands).joined(separator: "\n")
+        return LinkedAppFile.card(app)
     }
 
     /// create_app_link's arguments as an app file (`LinkedAppFile`): its
