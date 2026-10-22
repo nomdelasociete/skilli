@@ -44,19 +44,25 @@ Live at **https://skil.li**. The Worker `skilli-website`
 custom domain. There is no database, no tracking endpoint, and no execution of
 submitted skillies.
 
-Deploy from the repository root when `website/`, `skillies/` or `assets/brand/`
-change. A merge to `main` does not deploy by itself. No GitHub Action publishes
-the site.
+A merge to `main` publishes when it changes `website/`, `skillies/` or
+`assets/brand/`. Workers Builds on `skilli-website` runs
+`python3 website/build.py`, then
+`npx wrangler@4.151.3 deploy --config website/wrangler.jsonc`, from the
+repository root. No GitHub Action publishes the site. Preview branches do not
+publish. Other commits on `main` do not publish.
+
+The same commands publish by hand before that merge, or when Builds is down:
 
 ```sh
 python3 website/build.py
 python3 -m unittest discover -s website/tests
 node --test website/tests/worker.test.mjs
-npx wrangler deploy --config website/wrangler.jsonc
+npx wrangler@4.151.3 deploy --config website/wrangler.jsonc
 ```
 
-`CLOUDFLARE_API_TOKEN` is required for a non-interactive deploy. It stays out of
-the repository. The account id is in `wrangler.jsonc`.
+`CLOUDFLARE_API_TOKEN` is required for a non-interactive deploy from a machine.
+It stays out of the repository. Workers Builds uses its own token, also kept
+out of the repository. The account id is in `wrangler.jsonc`.
 
 `website/worker.mjs` keeps the routes the site already had:
 
@@ -68,8 +74,8 @@ the repository. The account id is in `wrangler.jsonc`.
 - Responses send `Cache-Control: public, max-age=0, must-revalidate`.
 
 Python validates metadata and builds the catalog, then the Worker serves only
-the files in `dist/site`. Check the live site after `wrangler deploy`. A local
-build is not proof of deployment.
+the files in `dist/site`. Check the live site after the build finishes, whether
+Builds ran it or you did. A local build is not proof of deployment.
 
 ## Motion and performance copy
 

@@ -225,12 +225,18 @@ only checks relevant to the change. Documentation-only edits need link/path and
 diff checks, not native tests or a full browser suite. Fetch the current branch
 before coding, preserve unrelated app work, and follow the repository PR workflow.
 No GitHub Actions for the website. The user allows a repository workflow only
-if it becomes strictly necessary for the native macOS build. Publish the site
-with `npx wrangler deploy --config website/wrangler.jsonc` after `website/`,
-`skillies/` or `assets/brand/` change.
+if it becomes strictly necessary for the native macOS build. A merge to `main`
+that changes `website/`, `skillies/` or `assets/brand/` publishes the site
+(2026-10-22): Workers Builds on the Worker `skilli-website` runs
+`python3 website/build.py`, then
+`npx wrangler@4.151.3 deploy --config website/wrangler.jsonc`, from the
+repository root. Other paths on `main` do not publish. Preview branches do not
+publish. The same deploy command publishes by hand before that merge, or when
+Builds is down.
 
-For publishing, verify the live result after that deploy; a merge alone is
-not proof of deployment. Keep this record and operational README consistent.
+For publishing, verify the live result after the build finishes. A merge starts
+the publish; the live site is the proof it succeeded. Keep this record and
+operational README consistent.
 
 ## Approved v4 glass hero (October 12)
 
