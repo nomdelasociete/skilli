@@ -258,9 +258,13 @@ extension LauncherController {
             return [first]
         // Kept awake: an hour more (timed), or an end in an hour (until
         // let sleep).
+        // The end read again as it runs: the row may be older than it.
         case .keptAwake(let until):
             return [first, act(until == nil ? "Allow Sleep in 1 h" : "Keep Awake 1 h Longer", "plus.circle") { [weak self] in
-                self?.onKeepAwake?(.awake(seconds: until.map { AwakeStatus.secondsLonger(until: $0) } ?? AwakeStatus.longer))
+                guard let self else { return }
+                let awake = self.awakeState()
+                guard awake.awake else { return }
+                self.onKeepAwake?(.awake(seconds: awake.until.map { AwakeStatus.secondsLonger(until: $0) } ?? AwakeStatus.longer))
             }]
         case .process(let group, let port):
             var list = [first, key("Force Quit", "bolt.circle", .openThird)]

@@ -907,7 +907,12 @@ final class SkilliTools {
             // now when it is kept awake until let sleep (or not at all).
             if let more = try length("more") {
                 let left = systemCommands.awakeUntil.map { max(0, Int($0.timeIntervalSinceNow.rounded())) } ?? 0
-                return systemCommands.keepAwake(.awake(seconds: min(left + more * 60, Self.longestAwakeMinutes * 60)))
+                // Past a week: refused, the end set left as it is.
+                let seconds = left + more * 60
+                guard seconds <= Self.longestAwakeMinutes * 60 else {
+                    throw Failure(message: "“more” would keep the Mac awake past a week (\(Self.longestAwakeMinutes) minutes): nothing changed.")
+                }
+                return systemCommands.keepAwake(.awake(seconds: seconds))
             }
             if let minutes = try length("minutes") {
                 return systemCommands.keepAwake(.awake(seconds: minutes * 60))
