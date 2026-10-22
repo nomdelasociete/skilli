@@ -6,6 +6,12 @@ import Foundation
 public enum AwakeStatus {
     /// What "1 h Longer" adds.
     public static let longer = 3_600
+    /// The words for stopping it, everywhere a person reads them (the
+    /// launcher, the menu bar's cup, the status menu); 2026-10-22: "Allow
+    /// Sleep" did not say it clearly. "allow sleep" still works typed.
+    public static let turnOff = "Turn Off Keep Awake"
+    /// The chip's own, under the pointer: "42 min · Turn Off".
+    public static let chipTurnOff = "Turn Off"
 
     /// "59 min", "1 h 20", "3 h": the time left, rounded up to the minute.
     public static func left(until: Date, now: Date = .now) -> String {
@@ -15,12 +21,19 @@ public enum AwakeStatus {
         return rest == 0 ? "\(hours) h" : "\(hours) h \(String(format: "%02d", rest))"
     }
 
-    /// The running row: "Keeping Awake · 42 min left (until 14:05)", as
-    /// "Keep Awake · 1 h (until 14:05)" asks for it; untimed, "Keeping
-    /// Awake · until you allow sleep". `time`: "14:05" in the user's format.
+    /// The running row, its state and its end plainly: "Keep Awake on ·
+    /// until 14:05 (42 min left)"; untimed, "Keep Awake on · until you turn
+    /// it off". `time`: "14:05" in the user's format.
     public static func title(until: Date?, now: Date = .now, time: (Date) -> String) -> String {
-        guard let until else { return "Keeping Awake · until you allow sleep" }
-        return "Keeping Awake · \(left(until: until, now: now)) left (until \(time(until)))"
+        guard let until else { return "Keep Awake on · until you turn it off" }
+        return "Keep Awake on · until \(time(until)) (\(left(until: until, now: now)) left)"
+    }
+
+    /// The chip: the time left, and under the pointer what a click does
+    /// ("42 min · Turn Off"; untimed, the cup alone or "Turn Off").
+    public static func chip(left: String, hovered: Bool) -> String {
+        guard hovered else { return left }
+        return left.isEmpty ? chipTurnOff : "\(left) · \(chipTurnOff)"
     }
 
     /// Seconds from now to an hour past `until` (an hour from now when it

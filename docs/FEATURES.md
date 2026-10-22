@@ -323,14 +323,16 @@ Commands for the Mac itself, from the launcher, Ask ("mets la musique en
 pause") or a shortcut. Irreversible ones ask first.
 
 - **Power and screen**: **Lock Screen**, **Sleep**, **Sleep Displays**,
-  **Restart**, **Shut Down**, **Log Out**, **Keep Awake** (until run
-  again), **Keep Awake for a While** (`awake 2h`, "until 6pm"; a cup in
-  the menu bar). While it is kept awake, the cup shows at the right of
-  the launcher's empty field, with the time left ("42 min") or alone when
-  it has no end; a click on it, or typing `awake`, lists it running
-  ("Keeping Awake · 42 min left (until 14:05)", or "Keeping Awake · until
-  you allow sleep"): ↩ Allow Sleep, ⌘K Keep Awake 1 h Longer, or Allow
-  Sleep in 1 h when it has no end.
+  **Restart**, **Shut Down**, **Log Out**, **Keep Awake** (until turned
+  off), **Keep Awake for a While** (`awake 2h`, "until 6pm"; a cup in the
+  menu bar, its menu: **Turn Off Keep Awake**). While it is kept awake,
+  the cup shows at the right of the launcher's empty field, with the time
+  left ("42 min") or alone when it has no end; under the pointer it says
+  "42 min · Turn Off", and a click turns Keep Awake off. Typing `awake`
+  lists it running ("Keep Awake on · until 14:05 (42 min left)", or "Keep
+  Awake on · until you turn it off"): ↩ Turn Off Keep Awake, ⌘K Keep
+  Awake 1 h Longer, or Turn Off in 1 h when it has no end. `turn off
+  awake`, `awake off`, `coupe awake` turn it off too.
 - **Appearance and Finder**: **Toggle Dark Mode**, **Toggle Hidden
   Files**, **Show Desktop**, **Eject All Disks**, **Empty Trash**.
 - **Apps**: **Quit All Apps**, **Quit Other Apps**, **Hide Other Apps**,

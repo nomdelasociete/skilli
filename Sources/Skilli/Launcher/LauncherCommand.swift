@@ -51,12 +51,12 @@ enum LauncherItem {
     case openWindow(WindowArranger.OpenWindow)
     /// "timer 10 min pâtes": Return starts it.
     case startTimer(TimerRequest)
-    /// "awake 1 hour", "allow sleep": Return does it.
+    /// "awake 1 hour", "turn off awake": Return does it.
     case keepAwake(AwakeRequest)
     /// A timer counting down: Return cancels it.
     case runningTimer(TimerCenter.Running)
-    /// The Mac kept awake now, until then (nil: until let sleep): Return
-    /// lets it sleep.
+    /// The Mac kept awake now, until then (nil: until turned off): Return
+    /// turns it off.
     case keptAwake(until: Date?)
     /// "g skilli": Google's results for skilli. No query: the link itself.
     /// A browser tab open now (Search Tabs).
@@ -105,10 +105,10 @@ enum LauncherItem {
     /// A menu item of the app in front (Search Menu Items): Return chooses it.
     case menuItem(MenuSearch.Entry, MenuReader.Item)
 
-    /// "Keep Awake · 1 h (until 14:05)", "Allow Sleep".
+    /// "Keep Awake · 1 h (until 14:05)", "Turn Off Keep Awake".
     static func awakeTitle(_ request: AwakeRequest) -> String {
         switch request {
-        case .allowSleep: return "Allow Sleep"
+        case .allowSleep: return AwakeStatus.turnOff
         case .awake(let seconds):
             let until = DateFormatter.localizedString(from: .now.addingTimeInterval(TimeInterval(seconds)), dateStyle: .none, timeStyle: .short)
             return "Keep Awake · \(AwakeRequest.spoken(seconds)) (until \(until))"

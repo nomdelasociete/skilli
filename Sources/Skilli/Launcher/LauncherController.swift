@@ -478,7 +478,8 @@ final class LauncherController: NSObject {
     private var thumbnails: [Int64: NSImage] = [:]
     private var appIcons: [String: NSImage] = [:]
     private var processRefresh: Task<Void, Never>?
-    /// Mac commands with their title now ("Allow Sleep" while kept awake).
+    /// Mac commands with their title now ("Turn Off Keep Awake" while kept
+    /// awake).
     var systemCommands: (() -> [(command: MacAction, title: String)])?
     var onSystemCommand: ((MacAction) -> Void)?
     /// ⌘K on a shortcut's row: run with the text selected where the
@@ -1057,8 +1058,8 @@ final class LauncherController: NSObject {
         var made = Catalog()
         for (command, title) in systemCommands?() ?? [] {
             let isPane = if case .settings = command { true } else { false }
-            // Its title as shown, and its own: "Allow Sleep" is still named
-            // Keep Awake, the current sound device without "(current)".
+            // Its title as shown, and its own: "Turn Off Keep Awake" is still
+            // named Keep Awake, the current sound device without "(current)".
             var names = [title]
             for name in command.names where !names.contains(name) { names.append(name) }
             made.entries.append(.init(candidates: (names + command.keywords).map(FuzzyCandidate.init), item: .system(command, title: title),
@@ -1365,12 +1366,14 @@ final class LauncherController: NSObject {
             if let awakeRequest { results.insert(.keepAwake(awakeRequest), at: 0) }
             // Kept awake now: the words about it ("awake", "keep awake")
             // show it running, ↩ lets it sleep; after a length typed, the
-            // new one first. It stands for Keep Awake's own row, "Allow
-            // Sleep" while awake; "allow sleep" typed is that row already.
+            // new one first. It stands for Keep Awake's own row, "Turn Off
+            // Keep Awake" while awake; "turn off awake" typed is that row
+            // already.
             let awake = awakeState()
-            if awake.awake, awakeRequest != .allowSleep, catalog.shows("catalog.awake"), onKeepAwake != nil, AwakeRequest.mentions(text) {
+            if awake.awake, catalog.shows("catalog.awake"), onKeepAwake != nil, AwakeRequest.mentions(text) {
+                // One "Turn Off Keep Awake" row, never two alike.
                 results.removeAll { if case .system(.system(.keepAwake), _) = $0 { true } else { false } }
-                results.insert(.keptAwake(until: awake.until), at: awakeRequest == nil ? 0 : 1)
+                if awakeRequest != .allowSleep { results.insert(.keptAwake(until: awake.until), at: awakeRequest == nil ? 0 : 1) }
             }
             // "volume 30", "mets le son à 30 %": the level, first.
             if catalog.shows("catalog.volume"), let level = VolumeRequest.parse(text), onSystemCommand != nil {
@@ -3624,13 +3627,13 @@ final class LauncherController: NSObject {
         if awakeChip.isHidden == awake.awake { awakeChip.isHidden = !awake.awake }
     }
 
-    /// Keep Awake changed while the launcher shows (it ended, the menu
-    /// bar's Allow Sleep): the chip, and the running row when it is listed.
+    /// Keep Awake changed while the launcher shows (it ended, turned off
+    /// from the chip or the menu bar): the rows read again, since Keep
+    /// Awake's own row is titled by it ("Turn Off Keep Awake" while awake,
+    /// pinned in the empty field too), and the chip with them.
     func awakeChanged() {
         countAwakeDown()
-        guard panel.isVisible, mode == nil else { return }
-        let text = searchField.stringValue
-        if AwakeRequest.mentions(text) { updateResults(query: text) } else { updateAwakeChip(empty: text.isEmpty) }
+        reloadSources()
     }
 
     /// A tick every 20 s while it shows and Keep Awake has an end (as the
@@ -3658,16 +3661,11 @@ final class LauncherController: NSObject {
         if results.contains(where: { if case .keptAwake = $0 { true } else { false } }) { showRows() }
     }
 
-    /// The chip clicked: "awake" typed, its running row first.
-    private func typeAwake() {
-        searchField.stringValue = AwakeRequest.word
-        searchField.currentEditor()?.selectedRange = NSRange(location: (AwakeRequest.word as NSString).length, length: 0)
-        updateResults(query: AwakeRequest.word)
-    }
-
-    /// Self-test hooks: what the chip says ("" for the cup alone, nil while
-    /// hidden), and where it is on screen.
+    /// Self-test hooks: the time left the chip says ("" for the cup alone,
+    /// nil while hidden), the words drawn now, and where it is on screen.
     var awakeChipText: String? { awakeChip.isHidden ? nil : awakeChip.shownText }
+    var awakeChipDrawn: String? { awakeChip.isHidden ? nil : awakeChip.drawnText }
+    var awakeChipTip: String? { awakeChip.isHidden ? nil : awakeChip.toolTip }
     var awakeChipScreenFrame: NSRect? {
         guard !awakeChip.isHidden, let window = awakeChip.window else { return nil }
         return window.convertToScreen(awakeChip.convert(awakeChip.bounds, to: nil))
@@ -3901,7 +3899,7 @@ final class LauncherController: NSObject {
         // field is empty, so it never sits over words.
         awakeChip.frame = NSRect(x: Layout.width - 24, y: ((Layout.searchHeight - AwakeChipView.height) / 2).rounded(), width: 0, height: AwakeChipView.height)
         awakeChip.isHidden = true
-        awakeChip.onClick = { [weak self] in self?.typeAwake() }
+        awakeChip.onTurnOff = { [weak self] in self?.onKeepAwake?(.allowSleep) }
         bar.addSubview(awakeChip)
         return bar
     }
@@ -4253,7 +4251,7 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             cell.configure(title: (timer.label.isEmpty ? "Timer" : timer.label) + " · " + TimerRequest.clock(timerRemaining?(timer) ?? 0) + " left",
                            accessory: "Cancel Timer", icon: CommandIcon.image(for: "timer"))
         case .keptAwake:
-            cell.configure(title: item.title, accessory: "Allow Sleep", icon: CommandIcon.image(for: "cup.and.saucer.fill"))
+            cell.configure(title: item.title, accessory: AwakeStatus.turnOff, icon: CommandIcon.image(for: "cup.and.saucer.fill"))
         case .layout(let layout):
             cell.configure(title: layout.name, accessory: "Layout · \(layout.summary)", icon: CommandIcon.image(for: "rectangle.3.group"))
         case .saveLayout(let name):

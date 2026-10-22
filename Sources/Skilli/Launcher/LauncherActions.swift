@@ -92,7 +92,7 @@ extension LauncherController {
         case .saveLayout, .openWindow, .startTimer, .keepAwake, .runningTimer, .createEvent, .addReminder,
              .brewUpgradeAll, .setup, .ask, .siCommand, .system:
             (Self.openTitle(item), "return")
-        case .keptAwake: ("Allow Sleep", "moon.zzz")
+        case .keptAwake: (AwakeStatus.turnOff, "power")
         case .process: ("Quit", "xmark.circle")
         case .clip, .snippet, .emoji: ("Paste", "doc.on.clipboard")
         case .gif(let gif):
@@ -257,10 +257,10 @@ extension LauncherController {
              .brewUpgradeAll, .setup, .ask, .siCommand, .system, .scriptArgument, .scriptChoice:
             return [first]
         // Kept awake: an hour more (timed), or an end in an hour (until
-        // let sleep).
+        // turned off).
         // The end read again as it runs: the row may be older than it.
         case .keptAwake(let until):
-            return [first, act(until == nil ? "Allow Sleep in 1 h" : "Keep Awake 1 h Longer", "plus.circle") { [weak self] in
+            return [first, act(until == nil ? "Turn Off in 1 h" : "Keep Awake 1 h Longer", "plus.circle") { [weak self] in
                 guard let self else { return }
                 let awake = self.awakeState()
                 guard awake.awake else { return }
@@ -442,7 +442,7 @@ extension LauncherController {
         case .saveLayout: "Save Layout"
         case .openWindow: "Bring Forward"
         case .startTimer: "Start Timer"
-        case .keepAwake: "Keep Awake"
+        case .keepAwake(let request): request == .allowSleep ? AwakeStatus.turnOff : "Keep Awake"
         case .runningTimer: "Cancel Timer"
         case .createEvent: "Add to Calendar"
         case .addReminder: "Add Reminder"

@@ -1,7 +1,7 @@
 import Foundation
 
 /// "awake 1 hour", "do not sleep 1", "garde le mac éveillé 2h", "caffeinate
-/// until 6pm", "pas de veille jusqu'à 18h30", "allow sleep": read without a
+/// until 6pm", "pas de veille jusqu'à 18h30", "turn off awake": read without a
 /// model, like a timer. A bare number is hours (keeping a Mac awake for
 /// one minute is not what anyone means), unless it is above 24.
 public enum AwakeRequest: Equatable, Sendable {
@@ -21,7 +21,9 @@ public enum AwakeRequest: Equatable, Sendable {
     ]
     private static let offPhrases: [[String]] = [
         ["allow", "sleep"], ["awake", "off"], ["stop", "awake"], ["let", "it", "sleep"], ["laisse", "dormir"], ["laisse", "le", "mac", "dormir"],
-        ["autorise", "la", "veille"], ["veille", "normale"]
+        ["autorise", "la", "veille"], ["veille", "normale"],
+        ["turn", "off", "awake"], ["turn", "off", "keep", "awake"], ["turn", "awake", "off"], ["stop", "keeping", "awake"], ["stop", "keep", "awake"],
+        ["coupe", "awake"], ["coupe", "le", "awake"], ["desactive", "awake"], ["desactiver", "awake"], ["desactive", "le", "awake"], ["desactiver", "le", "awake"]
     ]
 
     /// Nil when the text does not ask to keep the Mac awake for a while

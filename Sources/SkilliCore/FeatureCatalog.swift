@@ -504,7 +504,7 @@ public enum FeatureCatalog {
         case .sleep: "Puts the Mac to sleep"
         case .sleepDisplays: "Turns the displays off; the Mac keeps running"
         case .toggleDarkMode: "Switches between dark and light appearance"
-        case .keepAwake: "Keeps the Mac awake until you run it again"
+        case .keepAwake: "Keeps the Mac awake until you turn it off"
         case .toggleHiddenFiles: "Shows or hides hidden files in Finder"
         case .ejectDisks: "Ejects every external and network disk"
         case .emptyTrash: "Empties the Trash, once you confirm"

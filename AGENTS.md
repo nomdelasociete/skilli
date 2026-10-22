@@ -2225,33 +2225,43 @@ re-investigating.
 - Keep Awake for a while (`AwakeRequest` in SkilliCore,
   `SystemCommands.keepAwake`): "awake 1 hour", "do not sleep 1", "garde le
   mac éveillé 2h", "caffeinate until 6pm", "pas de veille jusqu'à 18h30",
-  "allow sleep" typed in the launcher (whole words, accents ignored; a
+  "turn off awake" typed in the launcher (whole words, accents ignored; a
   bare number is hours up to 24, minutes above; "until/jusqu'à" a time,
   today or tomorrow) show "Keep Awake · 1 h (until 14:05)" first. The
   same power assertion as Keep
-  Awake, released by a timer; the status menu says "Keeping the Mac Awake
-  until 14:05 — Allow Sleep". Plain "keep awake" stays the toggle. That
+  Awake, released by a timer; the status menu says "Turn Off Keep Awake
+  (until 14:05)". Plain "keep awake" stays the toggle. That
   grammar is the launcher's only: in Ask, the route picks Keep Awake and
   the length or the end time is read by Jev (`AskValues`, see "Ask never
   acts on a regex reading of a sentence"); unsure, done with ⌘Z.
   Agents: `keep_awake` (minutes, until, more, sleep; a week at most).
   `more` adds to the time left when it has an end; untimed (or not awake),
-  it counts from now: `more=60` is Allow Sleep in 1 h. While awake, a cup
-  in the menu bar with the time left ("59 min", "1 h 20"; `AwakeIndicator`,
-  `AwakeStatus.left`), the cup alone when untimed; its menu: until when,
-  Allow Sleep. In the launcher (2026-10-22: "no info in the app" on how to
-  stop it): the same full cup at the right of the empty field, with the
-  time left, or alone when untimed (`AwakeChipView`, a keycap's wash;
+  it counts from now: `more=60` is Turn Off in 1 h. Turning it off is
+  "Turn Off Keep Awake" wherever it is read (`AwakeStatus.turnOff`;
+  2026-10-22, "Allow Sleep" read as: "la désactivation n'est pas claire
+  du tout"): the launcher's rows, footer and ⌘K, the menu bar cup's menu,
+  the status menu, Keep Awake's own row while awake. "allow sleep",
+  "awake off", "stop awake", "turn off awake", "coupe awake", "désactive
+  awake" still work typed. While awake, a cup in the menu bar with the
+  time left ("59 min", "1 h 20"; `AwakeIndicator`, `AwakeStatus.left`),
+  the cup alone when untimed; its menu: "Keep Awake on until 14:05", Turn
+  Off Keep Awake. In the launcher (2026-10-22: "no info in the app" on how
+  to stop it): the same full cup at the right of the empty field, with
+  the time left, or alone when untimed (`AwakeChipView`, a keycap's wash;
   outside the modes, gone at the first key, nothing read once words are
   typed; `updateAwakeChip`), counted down every 20 s while the launcher
-  shows (`countAwakeDown`, no timer otherwise). A click types "awake". The
+  shows (`countAwakeDown`, no timer otherwise). Under the pointer it
+  widens to say its click, "42 min · Turn Off" ("Turn Off" untimed;
+  `AwakeStatus.chip`), its tooltip and Accessibility label "Turn Off Keep
+  Awake (42 min left)"; a click turns Keep Awake off at once, the chip
+  goes, the launcher stays, nothing said (reversible: no question). The
   words about it (`AwakeRequest.mentions`: "awake", "keep awake",
   "caffeinate"…) list it running, first (after a length typed, second):
-  "Keeping Awake · 42 min left (until 14:05)" (`AwakeStatus.title`,
-  `LauncherItem.keptAwake`), ↩ Allow Sleep, ⌘K Keep Awake 1 h Longer
-  (untimed: Allow Sleep in 1 h); it stands for Keep Awake's own row
-  ("Allow Sleep" while awake), which leaves the list. ⌘K stays the
-  selected row's (rule 5): the chip is reached by a click or by typing.
+  "Keep Awake on · until 14:05 (42 min left)" (`AwakeStatus.title`,
+  `LauncherItem.keptAwake`), ↩ Turn Off Keep Awake, ⌘K Keep Awake 1 h
+  Longer (untimed: Turn Off in 1 h); it stands for Keep Awake's own row
+  ("Turn Off Keep Awake" while awake), which leaves the list. ⌘K stays the
+  selected row's (rule 5): the chip is reached by the pointer or by typing.
   Running timers keep their menu bar count and the "timer" rows, no chip.
   `selftest calc` (`keepAwakeSeenInTheLauncher`).
 - Ask and connected services (`ServiceMention` in SkilliCore): the act route

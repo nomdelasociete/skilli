@@ -511,10 +511,10 @@ final class SystemCommands {
         guard startAwake() else { return "macOS did not let skil.li keep the Mac awake." }
         defaults.set(0.0, forKey: Self.awakeKey)
         onChange?()
-        return "Keeping the Mac awake until you run Keep Awake again."
+        return "Keep Awake is on until you turn it off."
     }
 
-    /// "awake 1 hour", "allow sleep": awake for a while (replacing what was
+    /// "awake 1 hour", "turn off awake": awake for a while (replacing what was
     /// set), then normal sleep again on its own.
     func keepAwake(_ request: AwakeRequest) -> String {
         keepAwake(request, until: nil)
@@ -524,7 +524,7 @@ final class SystemCommands {
     private func keepAwake(_ request: AwakeRequest, until end: Date?) -> String {
         switch request {
         case .allowSleep:
-            return awakeAssertion == nil ? "The Mac already sleeps as usual." : allowSleep()
+            return awakeAssertion == nil ? "Keep Awake is already off." : allowSleep()
         case .awake(let seconds):
             guard awakeAssertion != nil || startAwake() else { return "macOS did not let skil.li keep the Mac awake." }
             let until = end ?? Date.now.addingTimeInterval(TimeInterval(seconds))
@@ -567,7 +567,7 @@ final class SystemCommands {
         awakeTimer?.invalidate()
         awakeTimer = nil
         onChange?()
-        return "The Mac may sleep again."
+        return "Keep Awake is off: the Mac sleeps as usual."
     }
 
     private static func time(_ date: Date) -> String {

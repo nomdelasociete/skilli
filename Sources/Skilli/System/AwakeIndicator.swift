@@ -6,7 +6,7 @@ import SkilliCore
 /// and lets the Mac sleep again. Gone when it sleeps as usual.
 @MainActor
 final class AwakeIndicator: NSObject {
-    /// Allow Sleep, from its menu.
+    /// Turn Off Keep Awake, from its menu.
     var allowSleep: (() -> Void)?
     private var item: NSStatusItem?
     private var until: Date?
@@ -50,13 +50,13 @@ final class AwakeIndicator: NSObject {
         guard let item else { return }
         item.button?.title = until.map { " " + AwakeStatus.left(until: $0) } ?? ""
         let menu = NSMenu()
-        let said = NSMenuItem(title: until.map { "Keeping the Mac awake until \($0.formatted(date: .omitted, time: .shortened))" }
-                                  ?? "Keeping the Mac awake until you let it sleep",
+        let said = NSMenuItem(title: until.map { "Keep Awake on until \($0.formatted(date: .omitted, time: .shortened))" }
+                                  ?? "Keep Awake on until you turn it off",
                               action: nil, keyEquivalent: "")
         said.isEnabled = false
         menu.addItem(said)
         menu.addItem(.separator())
-        let sleep = NSMenuItem(title: "Allow Sleep", action: #selector(allowSleepNow), keyEquivalent: "")
+        let sleep = NSMenuItem(title: AwakeStatus.turnOff, action: #selector(allowSleepNow), keyEquivalent: "")
         sleep.target = self
         menu.addItem(sleep)
         item.menu = menu

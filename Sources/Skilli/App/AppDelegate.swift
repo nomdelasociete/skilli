@@ -513,7 +513,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 default: true
                 }
             }.map { action in
-                (action, action == .system(.keepAwake) && self?.systemCommands.isKeepingAwake == true ? "Allow Sleep" : action.title)
+                (action, action == .system(.keepAwake) && self?.systemCommands.isKeepingAwake == true ? AwakeStatus.turnOff : action.title)
             } + MacAction.sounds().map { action in
                 guard case .sound(let target) = action, target.uid == (target.output ? current.output : current.input) else { return (action, action.title) }
                 return (action, action.title + " (current)")
@@ -1813,8 +1813,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         menu.addItem(Self.infoItem(remapper.statusDescription))
         if systemCommands.isKeepingAwake {
-            let until = systemCommands.awakeUntilText.map { " \($0)" } ?? ""
-            let awake = NSMenuItem(title: "Keeping the Mac Awake\(until) — Allow Sleep", action: #selector(allowSleep), keyEquivalent: "")
+            let until = systemCommands.awakeUntilText.map { " (\($0))" } ?? ""
+            let awake = NSMenuItem(title: AwakeStatus.turnOff + until, action: #selector(allowSleep), keyEquivalent: "")
             awake.target = self
             menu.addItem(awake)
         }
