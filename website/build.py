@@ -117,6 +117,15 @@ def build(preview=False):
             shutil.copyfile(ROOT / 'website' / name, output / name)
         target = output / 'skillies'
     render(entries, ROOT / 'website/skillies/index.template.html', target)
+    if not preview:
+        (output / '_headers').write_text(
+            "/*\n"
+            "  Cache-Control: public, max-age=0, must-revalidate\n"
+            "\n"
+            "/skillies/files/*\n"
+            "  Cache-Control: public, max-age=0, must-revalidate\n"
+            "  Content-Disposition: attachment\n"
+        )
     print(f'Built {len(entries)} skillies → {target}')
 
 

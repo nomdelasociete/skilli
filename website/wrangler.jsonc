@@ -1,0 +1,17 @@
+{
+  "name": "skilli-website",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-22",
+  "account_id": "78885a506d3acfd58faaa3db08aca8d8",
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "skil.li", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": "../dist/site",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none",
+    "run_worker_first": ["/health", "/download", "/appcast.xml", "/website", "/website/*"]
+  }
+}
