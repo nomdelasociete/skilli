@@ -220,23 +220,22 @@ enum AskRouter {
     /// dans une heure trente de sortir le linge": timer 51 %, plans 41 %).
     static let closeCall = 0.15
 
-    /// The route answer, or, on a close call, the two likeliest routes
-    /// asked again alone, eleven options down to two: one more request,
-    /// for close calls only. Their shared probability is split as the
-    /// second answer says (its probabilities: on two options both engines'
-    /// confidence is the lead over the other, 51 / 49 → 2 %); the other
-    /// routes keep theirs. The first answer when the second fails or
-    /// names neither.
+    /// The route answer, or, on a close call, the routes within
+    /// `closeCall` of the likeliest asked again alone (eleven options down
+    /// to two or three): one more request, for close calls only. Their
+    /// shared probability is split as the second answer says (its
+    /// probabilities: on two options both engines' confidence is the lead
+    /// over the other, 51 / 49 → 2 %); the other routes keep theirs. The
+    /// first answer when the second fails or names none of them.
     private static func settled(_ routed: DecisionResult, instruction: String, input: String, provider: DecisionProvider,
                                 key: String) async -> DecisionResult {
         let ranked = routed.probabilities.sorted { $0.value > $1.value }
-        guard ranked.count >= 2, ranked[0].value - ranked[1].value < closeCall else { return routed }
-        let pair = [ranked[0].key, ranked[1].key]
-        let options = question.options.filter { pair.contains($0.value) }
-        guard options.count == 2 else { return routed }
+        guard let top = ranked.first?.value else { return routed }
+        let close = ranked.prefix { top - $0.value < closeCall }.map(\.key).filter { value in question.options.contains { $0.value == value } }
+        guard close.count >= 2 else { return routed }
         let narrow = DecisionQuestion(name: question.name,
-                                      instructions: question.instructions + " It is one of these two: which one does the request ask for?",
-                                      options: options)
+                                      instructions: question.instructions + " It is one of these: which one does the request ask for?",
+                                      options: question.options.filter { close.contains($0.value) })
         let answer: DecisionResult
         do {
             answer = try await DecisionClient.decide(narrow, input: input, provider: provider, key: key)
@@ -244,16 +243,18 @@ enum AskRouter {
             Log.actions.error("Ask close call by \(provider.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
             return routed
         }
-        // An answer that is neither of the two: the first one stands.
-        guard pair.contains(answer.choice) else { return routed }
-        let shared = ranked[0].value + ranked[1].value
+        // An answer that is none of them: the first one stands.
+        guard close.contains(answer.choice) else { return routed }
+        let shared = close.reduce(0) { $0 + (routed.probabilities[$1] ?? 0) }
         var probabilities = routed.probabilities
-        for value in pair {
+        for value in close {
             probabilities[value] = shared * (answer.probabilities[value] ?? (answer.choice == value ? 1 : 0))
         }
         let confidence = probabilities[answer.choice] ?? answer.confidence
-        Log.trace("Ask close call by \(provider.rawValue) “\(instruction)”: \(pair[0]) \(Int(ranked[0].value * 100))%, \(pair[1]) \(Int(ranked[1].value * 100))% → "
-                  + "\(answer.choice) \(Int(answer.confidence * 100))% [" + pair.map { "\($0) \(Int((answer.probabilities[$0] ?? -1) * 100))" }.joined(separator: ", ") + "]")
+        Log.trace("Ask close call by \(provider.rawValue) “\(instruction)”: "
+                  + close.map { "\($0) \(Int((routed.probabilities[$0] ?? 0) * 100))%" }.joined(separator: ", ")
+                  + " → \(answer.choice) \(Int(answer.confidence * 100))% ["
+                  + close.map { "\($0) \(Int((answer.probabilities[$0] ?? -1) * 100))" }.joined(separator: ", ") + "]")
         return DecisionResult(choice: answer.choice, confidence: confidence, probabilities: probabilities)
     }
 
