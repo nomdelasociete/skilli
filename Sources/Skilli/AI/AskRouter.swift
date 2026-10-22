@@ -222,7 +222,7 @@ enum AskRouter {
 
     /// The route answer, or, on a close call, the routes within
     /// `closeCall` of the likeliest asked again alone (eleven options down
-    /// to two or three): one more request, for close calls only. Their
+    /// to two, four at most seen): one more request, for close calls only. Their
     /// shared probability is split as the second answer says (its
     /// probabilities: on two options both engines' confidence is the lead
     /// over the other, 51 / 49 → 2 %); the other routes keep theirs. The
