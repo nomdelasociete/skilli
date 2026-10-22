@@ -16735,13 +16735,13 @@ final class SelfTest {
     /// The snippets a person names by what they need, decided on the
     /// user's keys: names, keywords and first words only.
     private func snippetsPickedByMeaning() async {
-        let (library, id) = meaningSnippets()
+        let (library, ids) = meaningSnippets()
         let cases: [(String, String)] = [
-            ("mon iban", id["IBAN perso"] ?? ""),
-            ("l'adresse du bureau", id["Adresse bureau"] ?? ""),
-            ("dire non poliment", id["Refus poli"] ?? ""),
-            ("my VAT number", id["Numéro de TVA"] ?? ""),
-            ("a link to book a meeting with me", id["Lien Calendly"] ?? "")
+            ("mon iban", ids["IBAN perso"] ?? ""),
+            ("l'adresse du bureau", ids["Adresse bureau"] ?? ""),
+            ("dire non poliment", ids["Refus poli"] ?? ""),
+            ("my VAT number", ids["Numéro de TVA"] ?? ""),
+            ("a link to book a meeting with me", ids["Lien Calendly"] ?? "")
         ]
         for provider in DecisionProvider.allCases {
             let name = "Snippets by meaning with \(provider.title): IBAN, office address, a polite no, VAT number, booking link, among 12 snippets"
@@ -16772,8 +16772,8 @@ final class SelfTest {
     /// Requests close to a snippet without being it are said, not judged
     /// (a maybe is what they are).
     private func snippetsMaybeByMeaning() async {
-        let (library, id) = meaningSnippets()
-        let no = id["Refus poli"]
+        let (library, ids) = meaningSnippets()
+        let no = ids["Refus poli"]
         let polite = ["dire non poliment", "répondre non poliment", "répondre non aimablement", "dire non courtoisement"]
         let unrelated = ["mon numéro de sécu", "my passport number", "une recette de crêpes", "the tracking number of my parcel",
                          "mon numéro de carte vitale", "les conditions générales de vente", "a sorry for being late message",
