@@ -305,8 +305,29 @@ public enum LinkedAppFile {
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { throw Failure(message: "\(place): “\(key)” is empty.") }
             guard trimmed.count <= length else { throw Failure(message: "\(place): “\(key)” is longer than \(length) characters.") }
-            guard !trimmed.contains(where: { $0.isNewline }) else { throw Failure(message: "\(place): “\(key)” is on more than one line.") }
+            try oneLine(trimmed, "“\(key)”")
             return trimmed
+        }
+
+        /// What a text shown in the approval card or a list may not hold: a
+        /// line break, another control character, or what turns text
+        /// around (bidirectional controls), any of which could draw lines
+        /// of its own there.
+        func oneLine(_ text: String, _ named: String) throws {
+            guard !text.contains(where: \.isNewline) else { throw Failure(message: "\(place): \(named) is on more than one line.") }
+            if let scalar = text.unicodeScalars.first(where: Fields.isControl) {
+                throw Failure(message: "\(place): \(named) holds a control character (U+\(String(scalar.value, radix: 16, uppercase: true))).")
+            }
+        }
+
+        /// Control characters, line and paragraph separators, and the
+        /// bidirectional marks and overrides.
+        static func isControl(_ scalar: Unicode.Scalar) -> Bool {
+            switch scalar.properties.generalCategory {
+            case .control, .lineSeparator, .paragraphSeparator: return true
+            default: return [0x061C, 0x200E, 0x200F].contains(scalar.value) || (0x202A...0x202E).contains(scalar.value)
+                || (0x2066...0x2069).contains(scalar.value)
+            }
         }
 
         func identifier(_ key: String, length: Int) throws -> String {
@@ -349,6 +370,7 @@ public enum LinkedAppFile {
             guard trimmed.allSatisfy({ !$0.isEmpty && $0.count <= 40 }) else {
                 throw Failure(message: "\(place): each of “\(key)” has 1 to 40 characters.")
             }
+            for word in trimmed { try oneLine(word, "a word of “\(key)”") }
             return trimmed
         }
 
@@ -371,9 +393,8 @@ public enum LinkedAppFile {
                 guard let value = item["value"] as? String else {
                     throw Failure(message: "\(fields.place): “value” must be text" + (item["value"] == nil ? " (it is missing)." : "."))
                 }
-                guard value.count <= 500, !value.contains(where: { $0.isNewline }) else {
-                    throw Failure(message: "\(fields.place): “value” is one line of 500 characters at most.")
-                }
+                guard value.count <= 500 else { throw Failure(message: "\(fields.place): “value” is longer than 500 characters.") }
+                try fields.oneLine(value, "“value”")
                 return AppLinkCommand.Parameter(name, value)
             }
         }

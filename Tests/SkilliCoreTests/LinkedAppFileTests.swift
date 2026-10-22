@@ -231,6 +231,44 @@ final class LinkedAppFileTests: XCTestCase {
         XCTAssertNil(problem(file()))
     }
 
+    /// Every text shown on one line (in the approval card, a row, a list)
+    /// refuses a line break, a control character and the bidirectional
+    /// controls: none can draw lines of its own in the card.
+    func testNoSingleLineFieldTakesALineBreakOrAControlCharacter() {
+        func variant(_ edit: @escaping (inout [String: Any]) -> Void) -> Data {
+            command { command in
+                var variant: [String: Any] = ["id": "pinned", "title": "Pinned", "label": "Pinned", "query": [["name": "pin", "value": "yes"]]]
+                edit(&variant)
+                command["variants"] = [variant]
+            }
+        }
+        let fields: [(String, (String) -> Data)] = [
+            ("name", { bad in self.file { $0["name"] = bad } }),
+            ("shortName", { bad in self.file { $0["shortName"] = bad } }),
+            ("note", { bad in self.file { $0["note"] = bad } }),
+            ("documentation", { bad in self.file { $0["documentation"] = "https://example.com/" + bad } }),
+            ("title", { bad in self.command { $0["title"] = bad } }),
+            ("description", { bad in self.command { $0["description"] = bad } }),
+            ("group", { bad in self.command { $0["group"] = bad } }),
+            ("words", { bad in self.command { $0["words"] = ["fine", bad] } }),
+            ("variant title", { bad in variant { $0["title"] = bad } }),
+            ("variant label", { bad in variant { $0["label"] = bad } }),
+            ("value", { bad in self.command { $0["query"] = [["name": "q", "value": bad]] } })
+        ]
+        // A line break, a tab, a bell, the line separator, a right-to-left
+        // override, a first-strong isolate.
+        let bad = ["Two\nlines", "Two\rlines", "a\tb", "a\u{07}b", "a\u{2028}b", "a\u{202E}b", "a\u{2068}b"]
+        for (field, data) in fields {
+            for text in bad {
+                let message = problem(data(text)) ?? ""
+                XCTAssertTrue(message.contains("more than one line") || message.contains("control character"),
+                              "\(field) took \(text.debugDescription): “\(message)”")
+            }
+        }
+        // Accents, emoji and their joiners stay.
+        XCTAssertNil(problem(command { $0["words"] = ["réunion", "👩‍💻", "aujourd'hui"] }))
+    }
+
     // MARK: Clashes
 
     func testTheBuiltInAppWinsAnyClash() {
