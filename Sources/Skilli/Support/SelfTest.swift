@@ -14338,6 +14338,12 @@ final class SelfTest {
         await clear()
         for character in "turn off awake" { await pressKey(character) }
         let offRow = await waitUntil(timeout: 1) { launcher.topResultName == AwakeStatus.turnOff && self.turnOffRowsCount(launcher) == 1 } != nil
+        // ↩ only on the turn-off row: never Ask "turn off awake" or another row.
+        guard offRow else {
+            for _ in 0..<2 { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+            record(name, false, "“turn off awake” did not list “\(AwakeStatus.turnOff)” first: “\(launcher.resultTitles.prefix(3).joined(separator: " | "))”; stopped before ↩", nil)
+            return
+        }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         let offTyped = await waitUntil(timeout: 1) { !commands.isKeepingAwake && self.context.awakeIndicator.shown == nil } != nil
 

@@ -3627,13 +3627,12 @@ final class LauncherController: NSObject {
     }
 
     /// Keep Awake changed while the launcher shows (it ended, turned off
-    /// from the chip or the menu bar): the chip, and the running row when
-    /// it is listed.
+    /// from the chip or the menu bar): the rows read again, since Keep
+    /// Awake's own row is titled by it ("Turn Off Keep Awake" while awake,
+    /// pinned in the empty field too), and the chip with them.
     func awakeChanged() {
         countAwakeDown()
-        guard panel.isVisible, mode == nil else { return }
-        let text = searchField.stringValue
-        if AwakeRequest.mentions(text) { updateResults(query: text) } else { updateAwakeChip(empty: text.isEmpty) }
+        reloadSources()
     }
 
     /// A tick every 20 s while it shows and Keep Awake has an end (as the
