@@ -42,6 +42,20 @@ public enum ServiceMention {
         }
     }
 
+    /// The names the request says whole, as consecutive words ("ouvre mon
+    /// portfolio" says the project "portfolio"; "relance le wifi" does not
+    /// say "Restart Wi-Fi"). A one-word name counts from four letters and
+    /// when it is not a common word. For the user's own things (projects,
+    /// skillies, shortcuts): what the decision is told, never what decides.
+    public static func said(in request: String, names: [String]) -> [String] {
+        let words = words(request)
+        return names.filter { name in
+            let name = Self.words(name)
+            guard name.count > 1 || name.first.map({ $0.count >= 4 && !common.contains($0) }) == true else { return false }
+            return contains(words, name)
+        }
+    }
+
     /// Words of the request that are also the subject of a tool
     /// ("deployments" in listDeployments), plural or not: a hint, not a
     /// proof ("tasks" is a common word).

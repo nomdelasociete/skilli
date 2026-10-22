@@ -14,6 +14,17 @@ final class ServiceMentionTests: XCTestCase {
         XCTAssertEqual(ServiceMention.named(in: "explique ce texte", services: services), [])
     }
 
+    func testNamesSaidWhole() {
+        let names = ["portfolio", "nimbus-api", "Restart Wi-Fi", "Log Water", "api", "notes", "skilli"]
+        XCTAssertEqual(ServiceMention.said(in: "ouvre mon portfolio", names: names), ["portfolio"])
+        XCTAssertEqual(ServiceMention.said(in: "ouvre le projet skilli dans cursor", names: names), ["skilli"])
+        XCTAssertEqual(ServiceMention.said(in: "ouvre nimbus-api", names: names), ["nimbus-api"])
+        XCTAssertEqual(ServiceMention.said(in: "je veux bosser sur l'api nimbus", names: names), [], "the words, not in order; a short name alone")
+        XCTAssertEqual(ServiceMention.said(in: "relance le wifi", names: names), [])
+        XCTAssertEqual(ServiceMention.said(in: "log water", names: names), ["Log Water"])
+        XCTAssertEqual(ServiceMention.said(in: "ouvre mes notes", names: names), [], "a common word is not a name said")
+    }
+
     func testToolWordsAndDescription() {
         let tools = ["whoami", "listDeployments", "getTask", "listTasks", "create_milestone", "updateUserEmail"]
         XCTAssertEqual(ServiceMention.toolWords(in: "liste mes deployments en retard", tools: tools), ["deployment"])
