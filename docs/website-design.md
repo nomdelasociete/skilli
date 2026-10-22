@@ -18,8 +18,8 @@ supersede this record; update the relevant section when a choice changes.
 
 ## Message and page hierarchy
 
-The site is entirely in English. Product name: `skil.li`; repository and Railway
-project: `skilli`. The app is a fast, lightweight native macOS launcher with
+The site is entirely in English. Product name: `skil.li`; repository: `skilli`.
+The website is the Cloudflare Worker `skilli-website`. The app is a fast, lightweight native macOS launcher with
 customizable shortcuts, key sequences, contextual actions, voice and the user's AI.
 
 The opening screen is an atmosphere and identity screen: logo, animated mint halo,
@@ -196,7 +196,7 @@ on scroll rather than becoming a duplicate logo. Show the GitHub logo/link as
 an OSS navigation element, with a public star count when GitHub's unauthenticated
 API answers. Desktop links jump to real landing sections (launcher, speed, key
 sequences, skillies, BYOK, FAQ). The primary CTA is **Get it**, which opens the
-FAQ “How do I get it?”: Download skil.li (`/download`, Caddy's redirect to the
+FAQ “How do I get it?”: Download skil.li (`/download`, the Worker's redirect to the
 latest notarised DMG on GitHub) and the Homebrew command. On small screens
 the same links open in a hamburger sheet (focus trap, Escape, `aria-expanded`).
 Preserve responsive layout and keyboard focus states.
@@ -225,10 +225,11 @@ only checks relevant to the change. Documentation-only edits need link/path and
 diff checks, not native tests or a full browser suite. Fetch the current branch
 before coding, preserve unrelated app work, and follow the repository PR workflow.
 No GitHub Actions for the website. The user allows a repository workflow only
-if it becomes strictly necessary for the native macOS build. Railway watches
-`main` directly.
+if it becomes strictly necessary for the native macOS build. Publish the site
+with `npx wrangler deploy --config website/wrangler.jsonc` after `website/`,
+`skillies/` or `assets/brand/` change.
 
-For publishing, verify the live result after Railway finishes; a merge alone is
+For publishing, verify the live result after that deploy; a merge alone is
 not proof of deployment. Keep this record and operational README consistent.
 
 ## Approved v4 glass hero (October 12)

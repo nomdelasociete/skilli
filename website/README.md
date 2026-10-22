@@ -37,35 +37,39 @@ assets. Restricted local font trials are excluded. The public JSON catalog at
 and SHA-256 hashes. It is available for future consumers; the native app does
 not currently fetch it.
 
-## Railway
+## Cloudflare
 
-Live at **https://skil.li** as of October 12, 2026. Railway project **skilli**,
-workspace **Nom De La Société**, service **website**, environment **production**.
-Cloudflare DNS points the custom domain to Railway; HTTPS is active.
+Live at **https://skil.li**. The Worker `skilli-website`
+(`website/wrangler.jsonc`) serves the static build. `skil.li` is that Worker's
+custom domain. There is no database, no tracking endpoint, and no execution of
+submitted skillies.
 
-The service uses these settings:
-
-- GitHub repository: `nomdelasociete/skilli`, branch: `main`, auto-deploy on.
-- Repository root: `/` (the build needs both `website/` and `skillies/`).
-- Dockerfile: `website/Dockerfile`; no build/start command overrides.
-- Watch paths: `/website/**`, `/skillies/**`, `/assets/brand/**`.
-- Health check: `/health`; HTTP target port: `8080` (or the injected `PORT`).
-
-The GitHub source is connected. Railway's GitHub integration builds relevant merges
-directly, without a GitHub Actions workflow or waiting for CI. Subsequent native
-app-only changes do not rebuild this service. The landing page is served directly at `/`. Old `/website/…` URLs permanently
-redirect to the corresponding root path, preserving query strings.
-
-The image validates metadata and builds the catalog with Python, then serves only static files with
-Caddy. Python and repository sources are absent from the runtime image. There
-is no database, tracking endpoint or execution of submitted skillies.
-
-To verify the deployment image locally:
+Deploy from the repository root when `website/`, `skillies/` or `assets/brand/`
+change. A merge to `main` does not deploy by itself. No GitHub Action publishes
+the site.
 
 ```sh
-docker build -f website/Dockerfile -t skilli-website .
-docker run --rm -p 8080:8080 -e PORT=8080 skilli-website
+python3 website/build.py
+python3 -m unittest discover -s website/tests
+node --test website/tests/worker.test.mjs
+npx wrangler deploy --config website/wrangler.jsonc
 ```
+
+`CLOUDFLARE_API_TOKEN` is required for a non-interactive deploy. It stays out of
+the repository. The account id is in `wrangler.jsonc`.
+
+`website/worker.mjs` keeps the routes the site already had:
+
+- `/download` redirects (302) to the latest DMG on GitHub.
+- `/appcast.xml` redirects (302) to the latest Sparkle feed.
+- `/website` and `/website/…` redirect (301) to the same path at the root, query kept.
+- `/health` answers `ok`.
+- `/skillies/files/*` is served as a download (`Content-Disposition: attachment`).
+- Responses send `Cache-Control: public, max-age=0, must-revalidate`.
+
+Python validates metadata and builds the catalog, then the Worker serves only
+the files in `dist/site`. Check the live site after `wrangler deploy`. A local
+build is not proof of deployment.
 
 ## Motion and performance copy
 
@@ -87,7 +91,7 @@ change.
 Production origin: `https://skil.li`. The landing page and Skillies collection
 have separate descriptions, canonical URLs, Open Graph and X card metadata,
 and JSON-LD (SoftwareApplication and CollectionPage). Public URLs use the domain root;
-Caddy redirects old `/website/…` links to the root paths. The custom domain is connected and verified.
+The Worker redirects old `/website/…` links to the root paths. The custom domain is `skil.li`.
 Public social crawlers cannot access the localhost preview.
 
 `assets/social-preview-v4.jpg` is the shared 1200 × 630 social image. Its editable
