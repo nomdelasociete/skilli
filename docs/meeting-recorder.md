@@ -2,8 +2,8 @@
 
 Status: 2026-10-22, spec agreed. Nothing built.
 
-Asked for: a meeting recorder like omarchy-meeting-recorder
-(github.com/jankeesvw/omarchy-meeting-recorder): your microphone and the
+Asked for: a meeting recorder like omarchy-meeting-recorder (an
+open-source recorder for Omarchy Linux): your microphone and the
 Mac's sound as two tracks, transcribed on this Mac, nothing sent anywhere,
 no bot joining the call.
 
