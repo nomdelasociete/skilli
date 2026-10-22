@@ -1,6 +1,6 @@
 # Meeting recorder
 
-Status: 2026-10-22, spec only. Nothing built.
+Status: 2026-10-22, spec agreed. Nothing built.
 
 Asked for: a meeting recorder like omarchy-meeting-recorder
 (github.com/jankeesvw/omarchy-meeting-recorder): your microphone and the
@@ -85,9 +85,9 @@ with the script read.
   microphone also hears the other side. Measure how bad the double
   transcript gets, and drop "Them" words heard again by the microphone.
 
-## Questions for you
+## Decided (2026-10-22)
 
-1. Start by hand only, or also offer Record on the meeting card as a call
-   starts? (Proposed: both, never automatic.)
-2. Summary by your AI (Claude) at the end: offered as a button, or done
-   every time? (Proposed: a button.)
+1. A recording starts by hand (launcher, key, link, skillie) or from the
+   Record button on the meeting card as a call starts. Never automatic.
+2. The summary and chapters by the user's AI are a button ("Summary by
+   Claude"), never sent on their own.
