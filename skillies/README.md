@@ -115,13 +115,13 @@ Everything the launcher runs, a skillie runs too, two ways:
 
 ## Keep the Mac awake
 
-A long job can keep the Mac awake while it runs, then let it sleep:
+A long job can keep the Mac awake while it runs, then turn it off:
 
 ```bash
 "$SKILLI_CLI" call keep_awake minutes=90   # awake 1 h 30 (or until=18:30)
-"$SKILLI_CLI" call keep_awake more=60      # one hour longer than set now; with no end set, Allow Sleep in 1 h
-"$SKILLI_CLI" call keep_awake sleep=true   # Allow Sleep
-open "skilli://run/system:keepAwake"       # Keep Awake on, or Allow Sleep while it is
+"$SKILLI_CLI" call keep_awake more=60      # one hour longer than set now; with no end set, Turn Off in 1 h
+"$SKILLI_CLI" call keep_awake sleep=true   # Turn Off Keep Awake
+open "skilli://run/system:keepAwake"       # Keep Awake on, or Turn Off Keep Awake while it is
 ```
 
 Lengths go up to a week. While it is kept awake, the cup shows in the menu

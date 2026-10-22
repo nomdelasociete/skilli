@@ -14207,20 +14207,23 @@ final class SelfTest {
                    + "Keep Awake again with no time released it: \(released), cup gone: \(cupGone); nothing read: said \(unreadSaid), left on \(unreadKept)", nil)
     }
 
-    /// Kept awake, seen in the launcher: the cup and the time left at the
-    /// right of the empty field (gone at the first key, back on ⌫); a real
-    /// click types "awake", its running row first with Allow Sleep ↩ and,
-    /// in ⌘K, Keep Awake 1 h Longer, which adds the hour; "awake 2h" lists
-    /// the new length first, the running row next; ↩ on "awake" lets it
-    /// sleep, the menu bar's cup and the chip gone. Untimed: the cup
-    /// alone, Allow Sleep in 1 h.
+    /// Kept awake, seen in the launcher and turned off from it: the cup and
+    /// the time left at the right of the empty field (gone at the first
+    /// key, back on ⌫); under the real pointer it says "42 min · Turn Off"
+    /// (its tooltip too) and a real click turns Keep Awake off at once, the
+    /// launcher still open, no card. "awake" lists it running, "Keep Awake
+    /// on · until 14:05 (42 min left)", Turn Off Keep Awake ↩ and, in ⌘K,
+    /// Keep Awake 1 h Longer, which adds the hour; "awake 2h" lists the new
+    /// length first; "turn off awake" ↩ turns it off. Untimed: the cup
+    /// alone, "Turn Off" under the pointer, Turn Off in 1 h.
     private func keepAwakeSeenInTheLauncher() async {
-        let name = "Keep Awake in the launcher: the cup and time left beside the empty field, a click lists it running (Allow Sleep ↩, ⌘K 1 h Longer), “awake” ↩ lets it sleep; untimed: the cup alone"
+        let name = "Keep Awake in the launcher: the cup and time left beside the empty field, “· Turn Off” under the pointer and a click turns it off; “awake” lists it running (Turn Off Keep Awake ↩, ⌘K 1 h Longer); untimed: the cup alone"
         guard let commands = context.tools.tools.systemCommands else {
             record(name, false, "no system commands", nil)
             return
         }
         let launcher = context.launcher
+        let popover = context.aiActions.popover
         defer { if commands.isKeepingAwake { _ = commands.keepAwake(.allowSleep) } }
         func open() async -> Bool {
             if launcher.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
@@ -14232,6 +14235,22 @@ final class SelfTest {
         func clear() async {
             for _ in 0..<launcher.query.count { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
         }
+        /// The real pointer over the chip (nil: no chip), or away from it.
+        func chipPoint() -> CGPoint? {
+            guard let frame = launcher.awakeChipScreenFrame, let height = NSScreen.screens.first?.frame.height else { return nil }
+            return CGPoint(x: frame.midX, y: height - frame.midY)
+        }
+        func moveMouse(to point: CGPoint) async {
+            CGEvent(mouseEventSource: CGEventSource(stateID: .hidSystemState), mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?
+                .post(tap: .cghidEventTap)
+            await pause(150)
+        }
+        func pointerAway() async {
+            guard let height = NSScreen.screens.first?.frame.height else { return }
+            let glass = launcher.glassFrame
+            await moveMouse(to: CGPoint(x: glass.midX, y: height - glass.midY))
+        }
+        func turnOffRows() -> Int { launcher.resultTitles.filter { $0 == AwakeStatus.turnOff }.count }
 
         // Timed: 42 minutes left.
         _ = commands.keepAwake(.awake(seconds: 42 * 60))
@@ -14239,39 +14258,64 @@ final class SelfTest {
             record(name, false, "the launcher did not open", nil)
             return
         }
-        let chipShown = await waitUntil(timeout: 1) { launcher.awakeChipText == "42 min" } != nil
-        let chipSaid = launcher.awakeChipText ?? "hidden"
+        await pointerAway()
+        let chipShown = await waitUntil(timeout: 1) { launcher.awakeChipDrawn == "42 min" } != nil
+        let chipSaid = launcher.awakeChipDrawn ?? "hidden"
         await captureLauncherBothWays(as: "launcher-awake-chip")
         await pressKey("a")
         let goneOnKey = await waitUntil(timeout: 1) { launcher.awakeChipText == nil } != nil
         await pressKey(nil, code: CGKeyCode(kVK_Delete))
         let backOnDelete = await waitUntil(timeout: 1) { launcher.awakeChipText == "42 min" } != nil
 
-        // A real click on it: "awake" typed, the running row first.
-        var clicked = false
-        if let frame = launcher.awakeChipScreenFrame, let height = NSScreen.screens.first?.frame.height {
-            await mouseClick(at: CGPoint(x: frame.midX, y: height - frame.midY))
-            clicked = await waitUntil(timeout: 1) { launcher.query == AwakeRequest.word } != nil
+        // Under the real pointer: what a click does, and its tooltip.
+        var hovered = false, tip = "", hoverSaid = ""
+        if let point = chipPoint() {
+            await moveMouse(to: point)
+            hovered = await waitUntil(timeout: 1) { launcher.awakeChipDrawn == "42 min · Turn Off" } != nil
+            hoverSaid = launcher.awakeChipDrawn ?? "hidden"
+            tip = launcher.awakeChipTip ?? ""
+            await captureLauncherBothWays(as: "launcher-awake-chip-hover")
         }
-        let listed = await waitUntil(timeout: 1) { (launcher.topResultName ?? "").hasPrefix("Keeping Awake · 42 min left (until ") } != nil
+        let tipSays = tip == "Turn Off Keep Awake (42 min left)"
+        // A real click: off at once, the chip gone, the launcher still
+        // open, nothing said, the menu bar's cup gone.
+        var turnedOff = false
+        if let point = chipPoint() {
+            await mouseClick(at: point)
+            turnedOff = await waitUntil(timeout: 1) {
+                !commands.isKeepingAwake && launcher.awakeChipText == nil && self.context.awakeIndicator.shown == nil
+            } != nil
+        }
+        let stayedOpen = launcher.isVisible
+        await pause(300)
+        let quiet = !popover.isVisible
+        await captureLauncherBothWays(as: "launcher-awake-turned-off")
+        await pointerAway()
+
+        // Typed: the running row first, its state and end said plainly.
+        _ = commands.keepAwake(.awake(seconds: 42 * 60))
+        _ = await open()
+        for character in "awake" { await pressKey(character) }
+        let listed = await waitUntil(timeout: 1) {
+            let top = launcher.topResultName ?? ""
+            return top.hasPrefix("Keep Awake on · until ") && top.hasSuffix(" (42 min left)")
+        } != nil
         let rows = launcher.resultTitles.prefix(3).joined(separator: " | ")
         let footer = launcher.shownFooter
-        let footerSays = footer.first == "Allow Sleep ↩"
-        // Keep Awake's own row ("Allow Sleep" while awake) leaves for it.
-        let noTwin = !launcher.resultTitles.contains("Allow Sleep")
+        let footerSays = footer.first == "Turn Off Keep Awake ↩"
+        // Keep Awake's own row ("Turn Off Keep Awake" while awake) leaves for it.
+        let noTwin = turnOffRows() == 0
         await captureLauncherBothWays(as: "launcher-awake-running")
         await pressKey("k", flags: .maskCommand)
         let offered = await waitUntil(timeout: 1) {
-            launcher.shownActions.map(\.title).prefix(2) == ["Allow Sleep", "Keep Awake 1 h Longer"]
+            launcher.shownActions.map(\.title).prefix(2) == ["Turn Off Keep Awake", "Keep Awake 1 h Longer"]
         } != nil
         let actions = launcher.shownActions.map(\.title).joined(separator: ", ")
         await captureLauncherBothWays(as: "launcher-awake-actions")
         // ↓ ↩ only on this row's own list: never another row's action.
-        guard clicked, listed, offered else {
-            await pressKey(nil, code: CGKeyCode(kVK_Escape))
-            await pressKey(nil, code: CGKeyCode(kVK_Escape))
-            await pressKey(nil, code: CGKeyCode(kVK_Escape))
-            record(name, false, "chip “\(chipSaid)”: \(chipShown); clicked → “awake”: \(clicked); rows “\(rows)”: \(listed); ⌘K “\(actions)”: \(offered); stopped before ↩", nil)
+        guard listed, offered else {
+            for _ in 0..<3 { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+            record(name, false, "chip “\(chipSaid)”: \(chipShown); hover “\(hoverSaid)”: \(hovered); click turned it off: \(turnedOff); rows “\(rows)”: \(listed); ⌘K “\(actions)”: \(offered); stopped before ↩", nil)
             return
         }
         await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
@@ -14279,32 +14323,42 @@ final class SelfTest {
         let longer = await waitUntil(timeout: 1) {
             abs((commands.awakeUntil?.timeIntervalSinceNow ?? 0) - Double(102 * 60)) < 30 && !launcher.isVisible
         } != nil
-        let quiet = !context.aiActions.popover.isVisible
+        let quietLonger = !popover.isVisible
 
         // A length typed: the new one first, the running row next; then
-        // "awake" ↩ lets it sleep.
+        // "turn off awake" ↩ turns it off.
         _ = await open()
         for character in "awake 2h" { await pressKey(character) }
         let both = await waitUntil(timeout: 1) {
             let titles = launcher.resultTitles
-            return titles.count > 1 && titles[0].hasPrefix("Keep Awake · 2 h") && titles[1].hasPrefix("Keeping Awake · 1 h 42 left")
+            return titles.count > 1 && titles[0].hasPrefix("Keep Awake · 2 h") && titles[1].hasPrefix("Keep Awake on · until ")
+                && titles[1].hasSuffix(" (1 h 42 left)")
         } != nil
         let bothRows = launcher.resultTitles.prefix(2).joined(separator: " | ")
         await clear()
-        for character in "awake" { await pressKey(character) }
-        _ = await waitUntil(timeout: 1) { (launcher.topResultName ?? "").hasPrefix("Keeping Awake") }
+        for character in "turn off awake" { await pressKey(character) }
+        let offRow = await waitUntil(timeout: 1) { launcher.topResultName == AwakeStatus.turnOff && self.turnOffRowsCount(launcher) == 1 } != nil
         await pressKey(nil, code: CGKeyCode(kVK_Return))
-        let slept = await waitUntil(timeout: 1) { !commands.isKeepingAwake && self.context.awakeIndicator.shown == nil } != nil
+        let offTyped = await waitUntil(timeout: 1) { !commands.isKeepingAwake && self.context.awakeIndicator.shown == nil } != nil
 
-        // Untimed: the cup alone; ⌘K gives it an end in an hour.
+        // Untimed: the cup alone, "Turn Off" under the pointer; ⌘K gives it
+        // an end in an hour.
         _ = try? await commands.run(.keepAwake)
         _ = await open()
-        let cupAlone = await waitUntil(timeout: 1) { launcher.awakeChipText == "" } != nil
+        await pointerAway()
+        let cupAlone = await waitUntil(timeout: 1) { launcher.awakeChipDrawn == "" } != nil
         await captureLauncherBothWays(as: "launcher-awake-chip-untimed")
+        var untimedHover = false
+        if let point = chipPoint() {
+            await moveMouse(to: point)
+            untimedHover = await waitUntil(timeout: 1) { launcher.awakeChipDrawn == "Turn Off" } != nil
+            await captureLauncherBothWays(as: "launcher-awake-chip-untimed-hover")
+            await pointerAway()
+        }
         for character in "keep awake" { await pressKey(character) }
-        let untimedListed = await waitUntil(timeout: 1) { launcher.topResultName == "Keeping Awake · until you allow sleep" } != nil
+        let untimedListed = await waitUntil(timeout: 1) { launcher.topResultName == "Keep Awake on · until you turn it off" } != nil
         await pressKey("k", flags: .maskCommand)
-        let untimedOffered = await waitUntil(timeout: 1) { launcher.shownActions.map(\.title).contains("Allow Sleep in 1 h") } != nil
+        let untimedOffered = await waitUntil(timeout: 1) { launcher.shownActions.map(\.title).contains("Turn Off in 1 h") } != nil
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         _ = commands.keepAwake(.allowSleep)
 
@@ -14324,16 +14378,23 @@ final class SelfTest {
         let noChip = launcher.awakeChipText == nil
         for character in "awake" { await pressKey(character) }
         await pause(150)
-        let noRow = !(launcher.topResultName ?? "").hasPrefix("Keeping Awake")
+        let noRow = !(launcher.topResultName ?? "").hasPrefix("Keep Awake on")
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
 
-        record(name, chipShown && goneOnKey && backOnDelete && clicked && listed && footerSays && noTwin && offered && longer && quiet
-                   && both && slept && cupAlone && untimedListed && untimedOffered && counted && noChip && noRow,
-               "chip “\(chipSaid)”: \(chipShown), gone on a key: \(goneOnKey), back on ⌫: \(backOnDelete); clicked → “awake”: \(clicked); "
-                   + "rows “\(rows)”: \(listed), footer \(footer): \(footerSays), no “Allow Sleep” twin: \(noTwin); ⌘K “\(actions)”: \(offered), "
-                   + "1 h longer: \(longer), no card: \(quiet); “awake 2h” → “\(bothRows)”: \(both); “awake” ↩ slept, cup gone: \(slept); "
-                   + "untimed: cup alone \(cupAlone), listed \(untimedListed), Allow Sleep in 1 h \(untimedOffered); counted down while open: \(counted); not awake: no chip \(noChip), no row \(noRow)", nil)
+        record(name, chipShown && goneOnKey && backOnDelete && hovered && tipSays && turnedOff && stayedOpen && quiet
+                   && listed && footerSays && noTwin && offered && longer && quietLonger && both && offRow && offTyped
+                   && cupAlone && untimedHover && untimedListed && untimedOffered && counted && noChip && noRow,
+               "chip “\(chipSaid)”: \(chipShown), gone on a key: \(goneOnKey), back on ⌫: \(backOnDelete); hover “\(hoverSaid)”: \(hovered), tooltip “\(tip)”: \(tipSays); "
+                   + "click turned it off: \(turnedOff), launcher still open: \(stayedOpen), no card: \(quiet); "
+                   + "rows “\(rows)”: \(listed), footer \(footer): \(footerSays), no twin: \(noTwin); ⌘K “\(actions)”: \(offered), 1 h longer: \(longer), no card: \(quietLonger); "
+                   + "“awake 2h” → “\(bothRows)”: \(both); “turn off awake” first: \(offRow), ↩ off and cup gone: \(offTyped); "
+                   + "untimed: cup alone \(cupAlone), “Turn Off” under the pointer \(untimedHover), listed \(untimedListed), Turn Off in 1 h \(untimedOffered); "
+                   + "counted down while open: \(counted); not awake: no chip \(noChip), no row \(noRow)", nil)
+    }
+
+    private func turnOffRowsCount(_ launcher: LauncherController) -> Int {
+        launcher.resultTitles.filter { $0 == AwakeStatus.turnOff }.count
     }
 
     /// The Mac commands through macOS's own APIs, no keys pressed, no other

@@ -468,12 +468,12 @@ final class SkilliTools {
                        group: .apps, risk: .changes,
                        parameters: [.init(name: "name", description: "The layout's name, as list_windows gives it.")]),
         ToolDefinition(name: "keep_awake", title: "Keep the Mac awake",
-                       description: "Keeps the Mac and its display awake for some minutes, until a time of day, some minutes longer than now set, or until let sleep again; or lets it sleep as usual.",
+                       description: "Keeps the Mac and its display awake for some minutes, until a time of day, some minutes longer than now set, or until turned off; or turns Keep Awake off.",
                        group: .system, risk: .changes,
                        parameters: [.init(name: "minutes", description: "How many minutes, or empty.", isRequired: false),
                                     .init(name: "more", description: "Minutes added to the time left (60: one hour longer), or empty.", isRequired: false),
                                     .init(name: "until", description: "A time of day, 24-hour HH:MM, or empty.", isRequired: false),
-                                    .init(name: "sleep", description: "true to let the Mac sleep as usual again.", options: ["false", "true"], isRequired: false)]),
+                                    .init(name: "sleep", description: "true to turn Keep Awake off: the Mac sleeps as usual.", options: ["false", "true"], isRequired: false)]),
         ToolDefinition(name: "set_volume", title: "Set the volume",
                        description: "Sets the Mac's output volume, 0 to 100.",
                        group: .system, risk: .changes,
@@ -904,7 +904,7 @@ final class SkilliTools {
                 return value
             }
             // One hour longer, as the launcher's ⌘K: from the end set, from
-            // now when it is kept awake until let sleep (or not at all).
+            // now when it is kept awake until turned off (or not at all).
             if let more = try length("more") {
                 let left = systemCommands.awakeUntil.map { max(0, Int($0.timeIntervalSinceNow.rounded())) } ?? 0
                 // Past a week: refused, the end set left as it is.

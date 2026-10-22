@@ -30,6 +30,9 @@ final class AwakeRequestTests: XCTestCase {
     func testOffAndNotAwake() {
         XCTAssertEqual(AwakeRequest.parse("allow sleep"), .allowSleep)
         XCTAssertEqual(AwakeRequest.parse("laisse le mac dormir"), .allowSleep)
+        for typed in ["turn off awake", "Turn Off Keep Awake", "awake off", "stop awake", "stop keeping awake", "coupe awake", "désactive awake", "désactiver le awake"] {
+            XCTAssertEqual(AwakeRequest.parse(typed), .allowSleep, typed)
+        }
         XCTAssertNil(AwakeRequest.parse("keep awake"), "no duration: the Keep Awake command")
         XCTAssertNil(AwakeRequest.parse("réveille-moi dans 10 minutes"), "a wake-up, not staying awake")
         XCTAssertNil(AwakeRequest.parse("timer 10 min"))
@@ -67,8 +70,16 @@ final class AwakeStatusTests: XCTestCase {
 
     func testRunningTitle() {
         XCTAssertEqual(AwakeStatus.title(until: now.addingTimeInterval(42 * 60), now: now, time: time),
-                       "Keeping Awake · 42 min left (until T+2520)")
-        XCTAssertEqual(AwakeStatus.title(until: nil, now: now, time: time), "Keeping Awake · until you allow sleep")
+                       "Keep Awake on · until T+2520 (42 min left)")
+        XCTAssertEqual(AwakeStatus.title(until: nil, now: now, time: time), "Keep Awake on · until you turn it off")
+    }
+
+    func testChipSaysWhatAClickDoesUnderThePointer() {
+        XCTAssertEqual(AwakeStatus.chip(left: "42 min", hovered: false), "42 min")
+        XCTAssertEqual(AwakeStatus.chip(left: "42 min", hovered: true), "42 min · Turn Off")
+        XCTAssertEqual(AwakeStatus.chip(left: "", hovered: false), "", "untimed: the cup alone")
+        XCTAssertEqual(AwakeStatus.chip(left: "", hovered: true), "Turn Off")
+        XCTAssertFalse(AwakeStatus.turnOff.localizedCaseInsensitiveContains("sleep"), "no “Allow Sleep” jargon")
     }
 
     func testOneHourLonger() {
