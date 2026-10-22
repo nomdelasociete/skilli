@@ -225,7 +225,8 @@ enum AskRouter {
     /// for close calls only. Their shared probability is split as the
     /// second answer says (its probabilities: on two options both engines'
     /// confidence is the lead over the other, 51 / 49 → 2 %); the other
-    /// routes keep theirs. The first answer when the second fails.
+    /// routes keep theirs. The first answer when the second fails or
+    /// names neither.
     private static func settled(_ routed: DecisionResult, instruction: String, input: String, provider: DecisionProvider,
                                 key: String) async -> DecisionResult {
         let ranked = routed.probabilities.sorted { $0.value > $1.value }
@@ -243,6 +244,8 @@ enum AskRouter {
             Log.actions.error("Ask close call by \(provider.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
             return routed
         }
+        // An answer that is neither of the two: the first one stands.
+        guard pair.contains(answer.choice) else { return routed }
         let shared = ranked[0].value + ranked[1].value
         var probabilities = routed.probabilities
         for value in pair {
