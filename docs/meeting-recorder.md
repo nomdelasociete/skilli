@@ -69,6 +69,7 @@ So the recorder is mostly glue: two audio sources, files, one transcript.
   | "Summary by Claude" | the user's own AI (its provider) | the transcript's text | the button, which names where it goes |
   | `get_transcript` | the agent that calls it (Claude Code, Codex…), then its provider | that recording's transcript | asked every time in the card, naming the recording (`ToolPolicy` `everyTime`: no Always Allow) |
   | `list_recordings` | the agent | titles, dates, lengths, no words | the tool rights of a read |
+
 - Never a hidden recording: the red dot stays while recording, and the
   first time, a card says that the others in the call must agree (in many
   countries, France included, recording a private conversation without
