@@ -124,6 +124,9 @@ final class SelfTest {
         /// emoji, clipboard and files by meaning) on the user's decision
         /// keys: no keys typed, no windows, nothing opened.
         case decide
+        /// Only Ask's routes on volume (`AskRouteCorpus`, both halves) on
+        /// the user's decision keys: no keys typed, nothing opened.
+        case routes
         /// Only the clipboard history on a scratch store and a private
         /// pasteboard (OCR included): no keys, safe while the Mac is in use.
         case clipboard
@@ -697,7 +700,12 @@ final class SelfTest {
             await clipboardFindsByMeaning()
             return finish()
         }
+        if scope == .routes {
+            await askRoutesOnVolume()
+            return finish()
+        }
         if scope == .decide {
+            await askRoutesOnVolume()
             await filesPickedByMeaning()
             await emojiByFeelingLive()
             await clipboardFindsByMeaning()
@@ -19622,6 +19630,95 @@ final class SelfTest {
     /// The real router on the user's own decision keys (read only): what
     /// the user types picks answer, rewrite or act, with recent projects and
     /// skillies in the request as in real use (none of them pulled in).
+    /// Ask's route on volume: every request of `AskRouteCorpus` on each
+    /// decision key, with what a real Mac sends along (Finder in front and
+    /// its menus, installed apps, recent projects, skillies, shortcuts,
+    /// System Settings' panes, connected services). Right per route, for
+    /// the half a change may be tuned on and for the half it never is;
+    /// only the tuned half's misses are listed, with the routes'
+    /// probabilities. Decided only, nothing opened.
+    private func askRoutesOnVolume() async {
+        var menu: [MenuReader.Item] = []
+        if let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first {
+            let pid = finder.processIdentifier
+            menu = await Task.detached { MenuReader.shareableItems(pid: pid) }.value
+        }
+        let home = NSHomeDirectory()
+        func project(_ path: String, _ editor: String, _ bundleID: String, _ rank: Int) -> EditorProject {
+            EditorProject(path: home + path, kind: .folder, editor: editor, bundleID: bundleID, rank: rank)
+        }
+        let cursor = "com.todesktop.230313mzl4w4u92"
+        let projects = [project("/Documents/Github/skilli", "Cursor", cursor, 0), project("/Code/nimbus-api", "Zed", "dev.zed.Zed", 0),
+                        project("/Code/nimbus-web", "Cursor", cursor, 1), project("/Sites/portfolio", "Sublime Text", "com.sublimetext.4", 0),
+                        project("/dotfiles", "Cursor", cursor, 2)]
+        let scripts = [("Backup Photos", "Copies the photo library to the NAS"), ("Restart Wi-Fi", "Turns Wi-Fi off and on again"),
+                       ("Deploy Website", "Builds the site and uploads it"), ("Clear DNS Cache", "Flushes the DNS cache")].compactMap { title, description in
+            ScriptCommand.parse("#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title \(title)\n# @skilli.mode compact\n# @skilli.description \(description)\n",
+                                path: "/tmp/\(title).sh")
+        }
+        let shortcuts = ["Morning Routine", "Log Water", "Start Focus Session", "Envoyer mon heure d'arrivée"].enumerated()
+            .map { AppleShortcut(id: "volume-\($0.offset)", name: $0.element) }
+        // Apps a Mac commonly has, with the kind their Info.plist gives.
+        let apps = [("Safari", "web browser"), ("Google Chrome", "web browser"), ("Mail", "productivity"), ("Calendar", "productivity"),
+                    ("Notes", "productivity"), ("Reminders", "productivity"), ("Clock", "utilities"), ("Photos", "photography"),
+                    ("Music", "music"), ("Messages", "social networking"), ("Preview", "graphics design"), ("TextEdit", "productivity"),
+                    ("Calculator", "utilities"), ("System Settings", "utilities"), ("Terminal", "developer tools"), ("Xcode", "developer tools"),
+                    ("Cursor", "developer tools"), ("Zed", "developer tools"), ("Sublime Text", "developer tools"),
+                    ("Visual Studio Code", "developer tools"), ("Slack", "business"), ("Zoom", "business"), ("Notion", "productivity"),
+                    ("Spotify", "music"), ("Figma", "graphics design"), ("Affinity Designer 2", "graphics design"), ("Keynote", "productivity"),
+                    ("Pages", "productivity"), ("Numbers", "productivity"), ("1Password", "productivity"), ("Obsidian", "productivity"),
+                    ("WhatsApp", "social networking")]
+            .map { AppCandidates.App(name: $0.0, url: URL(fileURLWithPath: "/Applications/\($0.0).app"), kind: $0.1) }
+        let settings = SystemSettingsPanes.all()
+        let services: [(name: String, tools: [String])] = [
+            (name: "nimbus-deployment", tools: ["whoami", "listUsers", "listDeployments", "getDeployment", "listMilestones", "listTasks", "getTask",
+                                               "createTask", "updateTask", "createDeployment", "setFeatureFlag", "listAuditLog"]),
+            (name: "linear", tools: ["list_issues", "get_issue", "create_issue", "list_projects"])
+        ]
+        func item(_ decision: AskRouter.Decision?) -> String? {
+            switch decision?.command?.command {
+            case .project(let project)?: project.name
+            case .script(let script)?: script.title
+            case .shortcut(let shortcut, _)?: shortcut.name
+            default: nil
+            }
+        }
+        for provider in DecisionProvider.allCases {
+            for (half, cases, listsMisses) in [("tuned on", AskRouteCorpus.tune, true), ("never tuned on", AskRouteCorpus.holdout, false)] {
+                let name = "Ask's routes on volume with \(provider.title), the half \(half): \(cases.count) requests in French and English, 90 % right or more"
+                guard let key = userDecisionKeys[provider] else {
+                    checks.append(Check(name: name, passed: true, skipped: true, detail: "no \(provider.title) key saved in Settings", latencyMs: nil))
+                    continue
+                }
+                var right: [AskRoute: Int] = [:], total: [AskRoute: Int] = [:]
+                var misses: [String] = []
+                var slowest: Duration = .zero
+                for request in cases {
+                    let start = ContinuousClock.now
+                    let decision = await AskRouter.decide(request.text, hasSelection: request.selected, app: "Finder", menu: menu, apps: apps,
+                                                          projects: projects, scripts: scripts, shortcuts: shortcuts, settings: settings,
+                                                          services: services, keys: [provider: key])
+                    slowest = max(slowest, .now - start)
+                    total[request.route, default: 0] += 1
+                    if decision?.route == request.route, request.item == nil || item(decision) == request.item {
+                        right[request.route, default: 0] += 1
+                    } else {
+                        let routes = decision?.routes.prefix(2).map { "\($0.route.rawValue) \(Int($0.probability * 100)) %" }.joined(separator: ", ") ?? ""
+                        misses.append("“\(request.text)” → \(decision?.route.rawValue ?? "failed")\(item(decision).map { " \($0)" } ?? "")"
+                            + " (wanted \(request.route.rawValue)\(request.item.map { " \($0)" } ?? ""); \(routes))")
+                    }
+                }
+                let count = right.values.reduce(0, +)
+                let perRoute = AskRoute.allCases.compactMap { route in total[route].map { "\(route.rawValue) \(right[route] ?? 0)/\($0)" } }
+                record(name, Double(count) >= 0.9 * Double(cases.count),
+                       "\(count)/\(cases.count) (\(count * 100 / max(cases.count, 1)) %): " + perRoute.joined(separator: ", ")
+                           + (listsMisses && !misses.isEmpty ? "; missed: " + misses.joined(separator: "; ") : "")
+                           + "; slowest \(Int(slowest.milliseconds)) ms",
+                       slowest.milliseconds)
+            }
+        }
+    }
+
     private func askRoutesLive() async {
         let home = NSHomeDirectory()
         let projects = [EditorProject(path: home + "/Documents/Github/skilli", kind: .folder, editor: "Cursor", bundleID: "com.todesktop.230313mzl4w4u92", rank: 0),

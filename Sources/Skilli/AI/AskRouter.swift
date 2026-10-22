@@ -89,9 +89,9 @@ enum AskRouter {
             .init(value: AskRoute.command.rawValue,
                   description: "A Mac command: lock the screen, sleep, dark or light mode, keep the Mac awake (for a while, until a time), show the desktop (montre le bureau), show hidden files, eject disks, empty the Trash, restart, shut down; music and sound (play, pause, next song, louder, mute, the volume at a level); test the internet speed; pick a color on screen; paste their latest screenshot; battery, disk, memory or IP; turn the keyboard off to clean it; or put the front window somewhere: left or right half, full, center, the other display; or play the sound through other speakers, headphones, AirPods or the display, or switch the microphone; or quit, force quit or uninstall an app they name (kill creative cloud, désinstalle Slack); or open one of their recent code projects in its editor (Cursor, VS Code, Zed…); or run one of their own commands (skillies) by its name or what it does; or take a screenshot or a screen recording with CleanShot X (an area, the window in front, the whole screen, a scrolling page), read the text in an area, annotate or pin their latest screenshot, hide the desktop icons"),
             .init(value: AskRoute.timer.rawValue,
-                  description: "Start a timer: a countdown that rings when the time is up (un minuteur de dix minutes, timer for an hour and a half, préviens-moi dans 20 minutes). Not keeping the Mac awake for a while or until a time (pas de veille jusqu'à 18h30), not a reminder of something to do (rappelle-moi d'appeler Paul demain)"),
+                  description: "Start a timer: a countdown that rings when the time is up. The request gives only a length or an end time, and at most what the countdown is for (the pasta, a nap), nothing to do or remember (un minuteur de dix minutes, timer for an hour and a half, préviens-moi dans 20 minutes). As soon as it says something to do or remember, even after a delay, it is a reminder, not a timer (rappelle-moi dans 20 minutes d'appeler Paul, remind me in 2 hours to pick up the parcel). Not keeping the Mac awake for a while or until a time (pas de veille jusqu'à 18h30)"),
             .init(value: AskRoute.plans.rawValue,
-                  description: "Their Calendar and Reminders on this Mac: add a reminder or a to-do (rappelle-moi d'appeler Paul demain, remind me to buy bread, n'oublie pas de…), add an event (rdv demain 14h avec Paul, bloque 2h demain matin), or tell them what is in them (qu'est-ce que j'ai demain, ma prochaine réunion, rejoins la réunion, suis-je libre jeudi, mes dispos, mes rappels). Not tasks or issues in a connected service, not a countdown timer"),
+                  description: "Their Calendar and Reminders on this Mac: add a reminder, something to do or remember, with or without a date, a time, a delay or a place (rappelle-moi d'appeler Paul demain, rappelle-moi dans 20 minutes d'appeler Paul, remind me to buy bread, n'oublie pas de…), or a to-do; add an event (rdv demain 14h avec Paul, bloque 2h demain matin); or tell them what is in them (qu'est-ce que j'ai demain, ma prochaine réunion, rejoins la réunion, suis-je libre jeudi, mes dispos, mes rappels). Not tasks or issues in a connected service, not a countdown with nothing to do (un minuteur de dix minutes)"),
             .init(value: AskRoute.contact.rawValue,
                   description: "Someone they may know, named: who they are, their number, email or address (qui est Paul Durand, c'est qui Jean-François de chez Lumière, le numéro de Paul), or write an email to them (crée un mail à François de chez Horizon, écris à Paul pour lui dire que…). Their contacts are looked in first. Not a message on Slack or another app"),
             .init(value: AskRoute.control.rawValue,
@@ -211,6 +211,53 @@ enum AskRouter {
         AskValues.durationQuestions + AskValues.levelQuestions + [AskValues.labelQuestion(spans: AskValues.spans(of: instruction))]
     }
 
+    /// A route this likely (its probability, not the answer's confidence)
+    /// is sure of itself: what another question read (an app named, a
+    /// quit) does not move it.
+    static let sureRoute = 0.8
+
+    /// Two routes this close are a close call (Decisions on "rappelle-moi
+    /// dans une heure trente de sortir le linge": timer 51 %, plans 41 %).
+    static let closeCall = 0.15
+
+    /// The route answer, or, on a close call, the routes within
+    /// `closeCall` of the likeliest asked again alone (eleven options down
+    /// to two, four at most seen): one more request, for close calls only. Their
+    /// shared probability is split as the second answer says (its
+    /// probabilities: on two options both engines' confidence is the lead
+    /// over the other, 51 / 49 → 2 %); the other routes keep theirs. The
+    /// first answer when the second fails or names none of them.
+    private static func settled(_ routed: DecisionResult, instruction: String, input: String, provider: DecisionProvider,
+                                key: String) async -> DecisionResult {
+        let ranked = routed.probabilities.sorted { $0.value > $1.value }
+        guard let top = ranked.first?.value else { return routed }
+        let close = ranked.prefix { top - $0.value < closeCall }.map(\.key).filter { value in question.options.contains { $0.value == value } }
+        guard close.count >= 2 else { return routed }
+        let narrow = DecisionQuestion(name: question.name,
+                                      instructions: question.instructions + " It is one of these: which one does the request ask for?",
+                                      options: question.options.filter { close.contains($0.value) })
+        let answer: DecisionResult
+        do {
+            answer = try await DecisionClient.decide(narrow, input: input, provider: provider, key: key)
+        } catch {
+            Log.actions.error("Ask close call by \(provider.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            return routed
+        }
+        // An answer that is none of them: the first one stands.
+        guard close.contains(answer.choice) else { return routed }
+        let shared = close.reduce(0) { $0 + (routed.probabilities[$1] ?? 0) }
+        var probabilities = routed.probabilities
+        for value in close {
+            probabilities[value] = shared * (answer.probabilities[value] ?? (answer.choice == value ? 1 : 0))
+        }
+        let confidence = probabilities[answer.choice] ?? answer.confidence
+        Log.trace("Ask close call by \(provider.rawValue) “\(instruction)”: "
+                  + close.map { "\($0) \(Int((routed.probabilities[$0] ?? 0) * 100))%" }.joined(separator: ", ")
+                  + " → \(answer.choice) \(Int(answer.confidence * 100))% ["
+                  + close.map { "\($0) \(Int((answer.probabilities[$0] ?? -1) * 100))" }.joined(separator: ", ") + "]")
+        return DecisionResult(choice: answer.choice, confidence: confidence, probabilities: probabilities)
+    }
+
     /// The route and who picked it ("Jev · 0.27 s"); nil without a decision
     /// key, or when every provider failed.
     static func route(_ instruction: String, hasSelection: Bool, ai: AIStore) async -> (route: AskRoute, label: String)? {
@@ -253,6 +300,15 @@ enum AskRouter {
                 return words.isEmpty || named.contains(service.name) ? nil : "\(service.name) (\(words.joined(separator: ", ")))"
             }
             if !hinted.isEmpty { input += "\nWords of the request match tools of: \(hinted.joined(separator: "; "))." }
+        }
+        // The user's own things the request names whole ("ouvre mon
+        // portfolio": the project, 21 % for Decisions when not told): told,
+        // as services are; the questions still decide.
+        let said = [("recent project", ServiceMention.said(in: instruction, names: projects.prefix(40).map(\.name))),
+                    ("command (skillie)", ServiceMention.said(in: instruction, names: scripts.prefix(60).map(\.title))),
+                    ("shortcut", ServiceMention.said(in: instruction, names: shortcuts.map(\.name)))]
+        for (kind, names) in said where !names.isEmpty {
+            input += "\nThe request says the name of the user's \(kind) " + names.map { "“\($0)”" }.joined(separator: ", ") + "."
         }
         let chunks = MenuCandidates.chunks(menu)
         var questions = [question, opensSettings]
@@ -361,7 +417,9 @@ enum AskRouter {
             let start = ContinuousClock.now
             do {
                 let answers = try await DecisionClient.decide(questions, input: input, provider: provider, key: key)
-                guard let routed = answers[question.name], let picked = AskRoute(rawValue: routed.choice) else { continue }
+                guard let first = answers[question.name] else { continue }
+                let routed = await settled(first, instruction: instruction, input: input, provider: provider, key: key)
+                guard let picked = AskRoute(rawValue: routed.choice) else { continue }
                 let elapsed = ContinuousClock.now - start
                 let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
                 var ranked: [(item: MenuReader.Item, probability: Double)] = []
@@ -464,10 +522,14 @@ enum AskRouter {
                 var route = picked
                 // Quit, force quit or uninstall an app named: the name is
                 // read once the route is known.
-                let appAction = answers["command"].flatMap { answer in
+                // Not over a route sure of itself: "lance Zoom" (Jev: open
+                // 78 %, quit 62 %) quit Zoom.
+                var appAction = answers["command"].flatMap { answer in
                     AppAction(rawValue: answer.choice).flatMap { (answer.probabilities[$0.rawValue] ?? 0) >= 0.5 ? $0 : nil }
                 }
-                if appAction != nil, route == .act || route == .open || route == .answer && !hasSelection { route = .command }
+                if appAction != nil, route == .act || route == .open || route == .answer && !hasSelection {
+                    if (routed.probabilities[route.rawValue] ?? 0) < sureRoute { route = .command } else { appAction = nil }
+                }
                 // "Command" with no command that fits: "ouvre les réglages
                 // système" sounds like one (Decisions: command 40 %, act
                 // 8 %). An app or a menu item that fits (60 %, what opens at
@@ -482,10 +544,15 @@ enum AskRouter {
                 // is asked to be told.
                 let isPane = if case .settings? = command?.0 { true } else { false }
                 if route == .act || route == .answer && !isPane, (command?.1 ?? 0) >= 0.85 { route = .command }
+                // Not when the agent is sure: an app named in what it is
+                // asked to do is not an app to open ("dis à Thomas sur Slack
+                // que…": act 88 %, Slack sure, opened Slack; Jev, 4 of the
+                // 10 agent requests `AskRouteCorpus` tunes on).
                 switch route {
                 case .find where menuBest < 0.5 && appBest >= 0.85: route = .open
                 case .open where appBest < 0.5 && menuBest >= 0.85: route = .find
-                case .act where menuBest >= 0.85 || appBest >= 0.85: route = menuBest >= appBest ? .find : .open
+                case .act where (menuBest >= 0.85 || appBest >= 0.85) && (routed.probabilities[AskRoute.act.rawValue] ?? 0) < sureRoute:
+                    route = menuBest >= appBest ? .find : .open
                 default: break
                 }
                 // "ouvre les réglages système dans la partie display": the
