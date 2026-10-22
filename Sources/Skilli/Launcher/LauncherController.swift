@@ -1370,9 +1370,10 @@ final class LauncherController: NSObject {
             // Keep Awake" while awake; "turn off awake" typed is that row
             // already.
             let awake = awakeState()
-            if awake.awake, awakeRequest != .allowSleep, catalog.shows("catalog.awake"), onKeepAwake != nil, AwakeRequest.mentions(text) {
+            if awake.awake, catalog.shows("catalog.awake"), onKeepAwake != nil, AwakeRequest.mentions(text) {
+                // One "Turn Off Keep Awake" row, never two alike.
                 results.removeAll { if case .system(.system(.keepAwake), _) = $0 { true } else { false } }
-                results.insert(.keptAwake(until: awake.until), at: awakeRequest == nil ? 0 : 1)
+                if awakeRequest != .allowSleep { results.insert(.keptAwake(until: awake.until), at: awakeRequest == nil ? 0 : 1) }
             }
             // "volume 30", "mets le son à 30 %": the level, first.
             if catalog.shows("catalog.volume"), let level = VolumeRequest.parse(text), onSystemCommand != nil {
