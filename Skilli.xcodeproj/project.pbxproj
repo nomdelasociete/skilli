@@ -270,6 +270,7 @@
 		D11E28E659E0B8AA9A8AF634 /* Homebrew.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EB2977D47F16E58FA8D87C4 /* Homebrew.swift */; };
 		D2114ED685E2C9A4FDDC17D3 /* BrewPackage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD907BC9FD0A9478E050918 /* BrewPackage.swift */; };
 		D234194A60F0765621652D2C /* WiFi.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF9DC2C6C11F6C0B0E10E03C /* WiFi.swift */; };
+		D384D868629E48E3D1BB7FDD /* AwakeStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6650ECA5F6A1027FFBEA23F0 /* AwakeStatus.swift */; };
 		D3E144FF185E68F2338ADFAD /* LauncherGuides.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2F7A9AB31CE80034CA1D6A /* LauncherGuides.swift */; };
 		D7B8BED54E881B7183D10A9A /* SystemCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916CDD21647F22C4D1C18D23 /* SystemCommand.swift */; };
 		D82D0DF2F1BA4F17C2500FB8 /* Calculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D67AD4AB98FDA10B6E6CC9 /* Calculator.swift */; };
@@ -290,6 +291,7 @@
 		E3AE3FF3AA2A65E5134CD271 /* ContactActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA6507F2ED34CE65EB82539A /* ContactActions.swift */; };
 		E409DE61A5AB92CE5FDBE04B /* LauncherAlias.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9228C3900A60446368311189 /* LauncherAlias.swift */; };
 		E430BDB6D3D93668967F12CF /* PromptFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A251BA4D0B60AEA39A96308 /* PromptFile.swift */; };
+		E52F3EDED3DDA75717E4F414 /* AwakeChipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E23092B68A7985F89C4A4DB /* AwakeChipView.swift */; };
 		E567CC3E7742505794497EA5 /* MCPOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F4086CD6F54E9BD93594CDD /* MCPOAuth.swift */; };
 		E65F7A2AC88700271783D31F /* ScreenDimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8533CCA2285962422F9F6084 /* ScreenDimmer.swift */; };
 		E6E53C56DDA4054009275786 /* SkilliTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = C05E0E349D2BACF64F1D5421 /* SkilliTools.swift */; };
@@ -441,6 +443,7 @@
 		4960285969C94AE5F3B6CEE2 /* ClipboardPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPane.swift; sourceTree = "<group>"; };
 		4962F983FC418D79BD10F2E1 /* AwakeIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AwakeIndicator.swift; sourceTree = "<group>"; };
 		4CEC9C21A84E642EA8273653 /* AskValues+Schedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AskValues+Schedule.swift"; sourceTree = "<group>"; };
+		4E23092B68A7985F89C4A4DB /* AwakeChipView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AwakeChipView.swift; sourceTree = "<group>"; };
 		4EA51B92C127D5758C086CEF /* FormProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormProfile.swift; sourceTree = "<group>"; };
 		4ED70BFD03C11B2A2B00BBD0 /* QuitRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuitRequest.swift; sourceTree = "<group>"; };
 		4F4086CD6F54E9BD93594CDD /* MCPOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPOAuth.swift; sourceTree = "<group>"; };
@@ -473,6 +476,7 @@
 		62D0F221E67A7E6E6CB14CD2 /* PrivacyMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyMap.swift; sourceTree = "<group>"; };
 		647FE5DF22E6127D94001A33 /* DisplayArrival.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayArrival.swift; sourceTree = "<group>"; };
 		6600E397D54C1645B5932506 /* CatalogReach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogReach.swift; sourceTree = "<group>"; };
+		6650ECA5F6A1027FFBEA23F0 /* AwakeStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AwakeStatus.swift; sourceTree = "<group>"; };
 		6769184126A983619C3AA5EE /* BrandHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandHeader.swift; sourceTree = "<group>"; };
 		676F38237780D688FB54E070 /* LayoutEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutEditing.swift; sourceTree = "<group>"; };
 		681B1DF90B710853EBD7142C /* MainMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainMenu.swift; sourceTree = "<group>"; };
@@ -700,6 +704,7 @@
 				EC5768CCE5C617E4426FDFEE /* AudioRoute.swift */,
 				C0FA8B8C1C0D91083CB431DD /* AutoQuit.swift */,
 				ABBA1856FB3B2457E58EDAB8 /* AwakeRequest.swift */,
+				6650ECA5F6A1027FFBEA23F0 /* AwakeStatus.swift */,
 				059D7C24F82A37F30C340CC6 /* BackupPlan.swift */,
 				516D2305BCD384C1B18505BF /* BindingEngine.swift */,
 				BC195406C0635E35673CE5FE /* BluetoothRoute.swift */,
@@ -814,6 +819,7 @@
 			isa = PBXGroup;
 			children = (
 				F1C30A1224C12866EE9C70AB /* ActionPanel.swift */,
+				4E23092B68A7985F89C4A4DB /* AwakeChipView.swift */,
 				6600E397D54C1645B5932506 /* CatalogReach.swift */,
 				DA261C1F8FF2369BF9F1A367 /* CatalogViews.swift */,
 				61892FB77FB4F33A30C7052E /* ClipboardPreviewView.swift */,
@@ -1337,6 +1343,7 @@
 				71C5EEDE564D84387080C6CD /* AudioRoute.swift in Sources */,
 				600A8D6FAC2692E9604222E7 /* AutoQuit.swift in Sources */,
 				6BB0D536F26DB5C2E94C2041 /* AwakeRequest.swift in Sources */,
+				D384D868629E48E3D1BB7FDD /* AwakeStatus.swift in Sources */,
 				89438C36C85E5874DC9BF601 /* BackupPlan.swift in Sources */,
 				EB52A594F6AB6043C83F41B8 /* BindingEngine.swift in Sources */,
 				6F2ED068C0271D219CD92A72 /* BluetoothRoute.swift in Sources */,
@@ -1475,6 +1482,7 @@
 				BAC24DB971ABBF73B69721E0 /* AudioDevices.swift in Sources */,
 				41B438C862A536845B37B341 /* AutoQuitter.swift in Sources */,
 				3CE1A5A3FE2A813CA92DDA87 /* AutomationAccess.swift in Sources */,
+				E52F3EDED3DDA75717E4F414 /* AwakeChipView.swift in Sources */,
 				B73B312E05EEA4E2524E55E5 /* AwakeIndicator.swift in Sources */,
 				03BA8E30516F94CD3738CF89 /* BackupCenter.swift in Sources */,
 				F4F8A05FC564CAF9B21B7276 /* BackupPane.swift in Sources */,

@@ -105,6 +105,12 @@ final class LauncherController: NSObject {
     /// The app unfolded with Tab: its processes one by one.
     private var unfolded: String?
     private let modeChip = ModeChip(title: "Kill", color: .systemRed)
+    /// The cup and the time left at the right of the empty field while the
+    /// Mac is kept awake.
+    private let awakeChip = AwakeChipView()
+    /// While it shows and the Mac is kept awake for a while: the time left
+    /// counted down on the chip and the running row.
+    private var awakeTicks: Timer?
     private var fieldFrame: NSRect = .zero
     /// Self-test hooks.
     var isKilling: Bool { killMode }
@@ -391,6 +397,9 @@ final class LauncherController: NSObject {
     var onStartTimer: ((TimerRequest) -> Void)?
     /// "awake 1 hour": keeps the Mac awake for that long.
     var onKeepAwake: ((AwakeRequest) -> Void)?
+    /// Whether the Mac is kept awake now, and until when (nil: until let
+    /// sleep): the chip in the empty field, the running row for "awake".
+    var awakeState: () -> (awake: Bool, until: Date?) = { (false, nil) }
     var onCancelTimer: ((TimerCenter.Running) -> Void)?
     /// Quicklinks: "g skilli" opens Google's results.
     var quicklinks: (() -> [Quicklink])?
@@ -768,6 +777,7 @@ final class LauncherController: NSObject {
         installOutsideClickMonitor()
         showSelectionPreview(from: focused)
         // Off the show path: once the panel is up.
+        DispatchQueue.main.async { [weak self] in self?.countAwakeDown() }
         if onOpened != nil {
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.panel.isVisible else { return }
@@ -820,6 +830,8 @@ final class LauncherController: NSObject {
         closeActions()
         clearNote()
         panel.orderOut(nil)
+        awakeTicks?.invalidate()
+        awakeTicks = nil
         if wasVisible { onClosed?() }
         leaveMode(update: false)
         // A hint the Catalog left in the field ("12 × 4 · …") goes with it.
@@ -1091,6 +1103,7 @@ final class LauncherController: NSObject {
         var laps = Laps()
         let query = FuzzyMatcher.Query(text)
         if mode == nil { rootQuery = text }
+        updateAwakeChip(empty: text.isEmpty)
         if mode == .catalog {
             // Filtered in memory: the entries were read as it opened.
             results = Self.catalogRows(FeatureCatalog.filter(catalogEntries, text))
@@ -1348,8 +1361,16 @@ final class LauncherController: NSObject {
             if catalog.shows("catalog.timer"), let request = TimerRequest.parse(text), onStartTimer != nil {
                 results.insert(.startTimer(request), at: 0)
             }
-            if catalog.shows("catalog.awake"), let request = AwakeRequest.parse(text), onKeepAwake != nil {
-                results.insert(.keepAwake(request), at: 0)
+            let awakeRequest = catalog.shows("catalog.awake") && onKeepAwake != nil ? AwakeRequest.parse(text) : nil
+            if let awakeRequest { results.insert(.keepAwake(awakeRequest), at: 0) }
+            // Kept awake now: the words about it ("awake", "keep awake")
+            // show it running, ↩ lets it sleep; after a length typed, the
+            // new one first. It stands for Keep Awake's own row, "Allow
+            // Sleep" while awake; "allow sleep" typed is that row already.
+            let awake = awakeState()
+            if awake.awake, awakeRequest != .allowSleep, catalog.shows("catalog.awake"), onKeepAwake != nil, AwakeRequest.mentions(text) {
+                results.removeAll { if case .system(.system(.keepAwake), _) = $0 { true } else { false } }
+                results.insert(.keptAwake(until: awake.until), at: awakeRequest == nil ? 0 : 1)
             }
             // "volume 30", "mets le son à 30 %": the level, first.
             if catalog.shows("catalog.volume"), let level = VolumeRequest.parse(text), onSystemCommand != nil {
@@ -2929,6 +2950,11 @@ final class LauncherController: NSObject {
             onCancelTimer?(timer)
             return
         }
+        if case .keptAwake = picked {
+            hide()
+            onKeepAwake?(.allowSleep)
+            return
+        }
         if case .emoji(let emoji) = picked {
             // Found by meaning: those words find it by name next time.
             let saidAs = isShowingFeeling ? feeling?.query : nil
@@ -3015,7 +3041,7 @@ final class LauncherController: NSObject {
             hide()
             onSystemCommand?(command)
             return
-        case .process, .clip, .snippet, .calculation, .emoji, .gif, .layout, .saveLayout, .openWindow, .startTimer, .keepAwake, .runningTimer, .quicklink, .browserTab, .file, .contact, .event, .createEvent, .reminder, .addReminder, .project, .script, .scriptArgument, .scriptChoice, .visit, .brew, .brewUpgradeAll,
+        case .process, .clip, .snippet, .calculation, .emoji, .gif, .layout, .saveLayout, .openWindow, .startTimer, .keepAwake, .runningTimer, .keptAwake, .quicklink, .browserTab, .file, .contact, .event, .createEvent, .reminder, .addReminder, .project, .script, .scriptArgument, .scriptChoice, .visit, .brew, .brewUpgradeAll,
              .pullRequest, .githubNotification, .catalog, .catalogHeader, .menuItem:
             return
         }
@@ -3587,6 +3613,66 @@ final class LauncherController: NSObject {
     var shownActions: [(title: String, key: String?)] { actionPanel.shown.map { ($0.title, $0.key?.label) } }
     var selectedActionTitle: String? { actionPanel.selectedAction?.title }
 
+    // MARK: - Kept awake
+
+    /// The chip shown, with the time left now, or hidden: outside the
+    /// modes with nothing typed, while the Mac is kept awake. Nothing read
+    /// once words are typed.
+    private func updateAwakeChip(empty: Bool) {
+        let awake = mode == nil && empty ? awakeState() : (awake: false, until: nil)
+        if awake.awake { awakeChip.show(left: awake.until.map { AwakeStatus.left(until: $0) } ?? "") }
+        if awakeChip.isHidden == awake.awake { awakeChip.isHidden = !awake.awake }
+    }
+
+    /// Keep Awake changed while the launcher shows (it ended, the menu
+    /// bar's Allow Sleep): the chip, and the running row when it is listed.
+    func awakeChanged() {
+        countAwakeDown()
+        guard panel.isVisible, mode == nil else { return }
+        let text = searchField.stringValue
+        if AwakeRequest.mentions(text) { updateResults(query: text) } else { updateAwakeChip(empty: text.isEmpty) }
+    }
+
+    /// A tick every 20 s while it shows and Keep Awake has an end (as the
+    /// menu bar's cup counts); none otherwise, gone as it hides.
+    private func countAwakeDown() {
+        guard panel.isVisible, awakeState().until != nil else {
+            awakeTicks?.invalidate()
+            awakeTicks = nil
+            return
+        }
+        guard awakeTicks == nil else { return }
+        let timer = Timer(timeInterval: 20, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.awakeTick() }
+        }
+        timer.tolerance = 5
+        RunLoop.main.add(timer, forMode: .common)
+        awakeTicks = timer
+    }
+
+    /// The time left again: on the chip, or on the running row (redrawn in
+    /// place, the selection kept).
+    private func awakeTick() {
+        guard panel.isVisible, mode == nil else { return }
+        updateAwakeChip(empty: searchField.stringValue.isEmpty)
+        if results.contains(where: { if case .keptAwake = $0 { true } else { false } }) { showRows() }
+    }
+
+    /// The chip clicked: "awake" typed, its running row first.
+    private func typeAwake() {
+        searchField.stringValue = AwakeRequest.word
+        searchField.currentEditor()?.selectedRange = NSRange(location: (AwakeRequest.word as NSString).length, length: 0)
+        updateResults(query: AwakeRequest.word)
+    }
+
+    /// Self-test hooks: what the chip says ("" for the cup alone, nil while
+    /// hidden), and where it is on screen.
+    var awakeChipText: String? { awakeChip.isHidden ? nil : awakeChip.shownText }
+    var awakeChipScreenFrame: NSRect? {
+        guard !awakeChip.isHidden, let window = awakeChip.window else { return nil }
+        return window.convertToScreen(awakeChip.convert(awakeChip.bounds, to: nil))
+    }
+
     // MARK: - Layout
 
     private func position() {
@@ -3810,6 +3896,13 @@ final class LauncherController: NSObject {
         modeChip.frame.origin = NSPoint(x: fieldX, y: ((Layout.searchHeight - modeChip.frame.height) / 2).rounded())
         modeChip.isHidden = true
         bar.addSubview(modeChip)
+
+        // The cup at the field's right end, on its line; only while the
+        // field is empty, so it never sits over words.
+        awakeChip.frame = NSRect(x: Layout.width - 24, y: ((Layout.searchHeight - AwakeChipView.height) / 2).rounded(), width: 0, height: AwakeChipView.height)
+        awakeChip.isHidden = true
+        awakeChip.onClick = { [weak self] in self?.typeAwake() }
+        bar.addSubview(awakeChip)
         return bar
     }
 
@@ -4159,6 +4252,8 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
         case .runningTimer(let timer):
             cell.configure(title: (timer.label.isEmpty ? "Timer" : timer.label) + " · " + TimerRequest.clock(timerRemaining?(timer) ?? 0) + " left",
                            accessory: "Cancel Timer", icon: CommandIcon.image(for: "timer"))
+        case .keptAwake:
+            cell.configure(title: item.title, accessory: "Allow Sleep", icon: CommandIcon.image(for: "cup.and.saucer.fill"))
         case .layout(let layout):
             cell.configure(title: layout.name, accessory: "Layout · \(layout.summary)", icon: CommandIcon.image(for: "rectangle.3.group"))
         case .saveLayout(let name):

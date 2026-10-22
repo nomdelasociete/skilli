@@ -325,7 +325,12 @@ pause") or a shortcut. Irreversible ones ask first.
 - **Power and screen**: **Lock Screen**, **Sleep**, **Sleep Displays**,
   **Restart**, **Shut Down**, **Log Out**, **Keep Awake** (until run
   again), **Keep Awake for a While** (`awake 2h`, "until 6pm"; a cup in
-  the menu bar).
+  the menu bar). While it is kept awake, the cup shows at the right of
+  the launcher's empty field, with the time left ("42 min") or alone when
+  it has no end; a click on it, or typing `awake`, lists it running
+  ("Keeping Awake · 42 min left (until 14:05)", or "Keeping Awake · until
+  you allow sleep"): ↩ Allow Sleep, ⌘K Keep Awake 1 h Longer, or Allow
+  Sleep in 1 h when it has no end.
 - **Appearance and Finder**: **Toggle Dark Mode**, **Toggle Hidden
   Files**, **Show Desktop**, **Eject All Disks**, **Empty Trash**.
 - **Apps**: **Quit All Apps**, **Quit Other Apps**, **Hide Other Apps**,

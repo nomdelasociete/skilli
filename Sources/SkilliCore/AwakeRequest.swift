@@ -29,9 +29,8 @@ public enum AwakeRequest: Equatable, Sendable {
     /// words, its row showing what was read before ↩; Ask reads sentences
     /// with the decision model (`AskValues`), never this.
     public static func parse(_ text: String, now: Date = .now, calendar: Calendar = .current) -> AwakeRequest? {
-        let folded = text.lowercased().folding(options: .diacriticInsensitive, locale: nil)
-            .replacingOccurrences(of: "’", with: "'")
-        let words = folded.split { !$0.isLetter && !$0.isNumber }.map(String.init)
+        let folded = fold(text)
+        let words = words(folded)
         if offPhrases.contains(where: { contains(words, $0) }) { return .allowSleep }
         guard phrases.contains(where: { contains(words, $0) }) else { return nil }
         if let seconds = untilTime(in: folded, now: now, calendar: calendar) { return .awake(seconds: seconds) }
@@ -45,6 +44,22 @@ public enum AwakeRequest: Equatable, Sendable {
         }
         guard total > 0, total <= 7 * 24 * 3_600 else { return nil }
         return .awake(seconds: total)
+    }
+
+    /// Whether the words are about keeping the Mac awake at all, a length
+    /// said or not ("awake", "keep awake", "caffeinate", "allow sleep"):
+    /// while it is kept awake, the launcher then shows it running.
+    public static func mentions(_ text: String) -> Bool {
+        let words = words(fold(text))
+        return (phrases + offPhrases).contains { contains(words, $0) }
+    }
+
+    private static func fold(_ text: String) -> String {
+        text.lowercased().folding(options: .diacriticInsensitive, locale: nil).replacingOccurrences(of: "’", with: "'")
+    }
+
+    private static func words(_ folded: String) -> [String] {
+        folded.split { !$0.isLetter && !$0.isNumber }.map(String.init)
     }
 
     /// "until 6pm", "till 18:30", "jusqu'à 18h", "jusqu'a 18h30": seconds
