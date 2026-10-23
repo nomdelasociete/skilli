@@ -109,9 +109,11 @@ On this Mac, at Stop, with progress in the menu bar.
   ↩ still records: the recording is kept, its transcript pending, made
   from the done window once a language or engine that works is picked.
   `meeting.json`'s `engine` is the engine that made the transcript, after
-  a fallback too.
+  a fallback too, and `null` while the transcript is pending.
 - Transcribe again in another language, or with the other engine, from the
-  done window.
+  done window, with the same check: a language or engine this Mac cannot
+  use says why and leaves the current transcript as it is (a pending one
+  stays pending until a choice that works is picked).
 
 ## Done
 
@@ -162,12 +164,14 @@ The recording's window (a window, not a card: it is read and edited):
 
 ## Privacy and consent
 
-- Audio, video and screen never leave the Mac. A transcript leaves it only
-  by an explicit action of the user, each time, and only as text, with one
-  exception: a skillie the user marked to run on its own when a transcript
-  is done. Marking it says, in its row, that it will get every recording
-  from now on (Undo ⌘Z for 10 s); the done window shows that it ran and
-  when; unmarking stops it.
+- skil.li never sends audio, video or the screen anywhere. A transcript
+  leaves the Mac only by an explicit action of the user, each time, and
+  only as text, with one exception: a skillie the user marked to run on
+  its own when a transcript is done. It gets the recording's folder, media
+  included, and does whatever the user's own script does with it. Marking
+  it says, in its row, that it will get every recording from now on (Undo
+  ⌘Z for 10 s); the done window shows that it ran and when; unmarking
+  stops it.
 
   | Flow | Goes to | What is sent | Consent |
   |---|---|---|---|
