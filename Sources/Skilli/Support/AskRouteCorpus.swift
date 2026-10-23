@@ -181,6 +181,10 @@ enum AskRouteCorpus {
         .init("trouve mes issues linear assignées", .act),
         .init("partage cette page avec Julie sur Slack", .act),
         .init("télécharge la facture et envoie-la à la compta", .act),
+        // An app named, something else asked of it: not opened.
+        .init("mets Chrome comme navigateur par défaut", .act),
+        .init("make Safari my default browser", .act),
+        .init("fais que les PDF s'ouvrent toujours avec Preview", .act),
 
         // A menu of the app in front (Finder in the fixture).
         .init("où est le menu pour créer un nouveau dossier ?", .find),
@@ -336,6 +340,9 @@ enum AskRouteCorpus {
         .init("poste sur Slack que la release est sortie", .act),
         .init("envoie un SMS à maman pour lui dire que j'arrive", .act),
         .init("cherche le dernier mail de la banque et transfère-le à mon comptable", .act),
+        .init("change default browser to Arc", .act),
+        .init("définis Google Chrome comme navigateur par défaut", .act),
+        .init("use TextEdit as the default app for text files", .act),
 
         .init("où se trouve l'option pour afficher la barre d'état ?", .find),
         .init("in which menu is Print?", .find),

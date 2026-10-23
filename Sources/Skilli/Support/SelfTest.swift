@@ -19991,7 +19991,7 @@ final class SelfTest {
         let shortcuts = ["Morning Routine", "Log Water", "Start Focus Session", "Envoyer mon heure d'arrivée"].enumerated()
             .map { AppleShortcut(id: "volume-\($0.offset)", name: $0.element) }
         // Apps a Mac commonly has, with the kind their Info.plist gives.
-        let apps = [("Safari", "web browser"), ("Google Chrome", "web browser"), ("Mail", "productivity"), ("Calendar", "productivity"),
+        let apps = [("Safari", "web browser"), ("Google Chrome", "web browser"), ("Arc", "web browser"), ("Mail", "productivity"), ("Calendar", "productivity"),
                     ("Notes", "productivity"), ("Reminders", "productivity"), ("Clock", "utilities"), ("Photos", "photography"),
                     ("Music", "music"), ("Messages", "social networking"), ("Preview", "graphics design"), ("TextEdit", "productivity"),
                     ("Calculator", "utilities"), ("System Settings", "utilities"), ("Terminal", "developer tools"), ("Xcode", "developer tools"),

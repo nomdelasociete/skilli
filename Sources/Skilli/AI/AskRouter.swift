@@ -403,9 +403,9 @@ enum AskRouter {
         for (index, chunk) in appChunks.enumerated() {
             questions.append(DecisionQuestion(
                 name: "app\(index)",
-                instructions: "Which of these installed apps does the user want to open, by its name or by what it does? Answer none when no app fits.",
+                instructions: "Which of these installed apps does the user want to open or switch to, by its name or by what it does? Answer none when no app fits, or when the request names an app only as what something else is done to or with (made the default app, one of its settings changed, something sent through it): opening it is not what they ask.",
                 options: chunk.map { .init(value: $0.name, description: $0.kind.isEmpty ? "App" : "App for \($0.kind)") }
-                    + [.init(value: "none", description: "None of these apps fits the request")]
+                    + [.init(value: "none", description: "None of these apps fits the request, or opening one is not what is asked")]
             ))
         }
         for (index, chunk) in chunks.enumerated() {
