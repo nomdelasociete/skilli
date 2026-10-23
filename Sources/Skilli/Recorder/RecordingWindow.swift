@@ -49,6 +49,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var currentTime: Double { player?.currentTime().seconds ?? 0 }
     var litLine: Int? { view.litLine }
     var shownState: String { view.stateText }
+    var spaceHint: String? { view.spaceHint }
     /// Where a line is on screen (AppKit's coordinates), to click it.
     func screenFrame(ofLine row: Int) -> NSRect? { view.screenFrame(ofLine: row) }
 
@@ -244,6 +245,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     private var position: Double = 0
 
     var stateText: String { state.isHidden ? "" : state.stringValue }
+    var spaceHint: String? { hints.shown.first { $0.key == "space" }?.label }
 
     override var isFlipped: Bool { true }
 
@@ -398,6 +400,11 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         time.stringValue = "\(MeetingTranscript.clock(position)) / \(MeetingTranscript.clock(duration))"
         playButton.image = Theme.symbol(playing ? "pause.fill" : "play.fill", pointSize: 18, weight: .medium)
         playButton.setAccessibilityLabel(playing ? "Pause" : "Play")
+        // Space's hint says what it does now.
+        let space = playing ? "Pause" : "Play"
+        if let first = hints.shown.first, first.key == "space", first.label != space {
+            hints.setHints([(space, "space")] + hints.shown.dropFirst())
+        }
     }
 
     @objc private func playPressed() { onPlay?() }

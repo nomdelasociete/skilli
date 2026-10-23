@@ -131,7 +131,7 @@ when closed.
   from the line's start. The line playing is lit (the selection
   capsule) and kept in sight while it plays, unless the user scrolled in
   the last 3 s.
-- **Keys**, in a hint bar at the bottom: space plays or pauses, ⌘C
+- **Keys**, in a hint bar at the bottom: space plays or pauses (its hint says which), ⌘C
   copies the transcript (as `transcript.md` has it), ⌘↩ shows the folder
   in Finder, ⌘⌫ deletes the recording: at once, to the Trash, the window
   closes and the undo card offers Undo ⌘Z for 10 s (`UndoableDeletes`).

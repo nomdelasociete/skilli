@@ -23212,13 +23212,15 @@ final class SelfTest {
                 await pause(60)
             }
             let third = controller.shownLines[2]
-            clickedPlays = await waitUntil(timeout: 3) { controller.playing && controller.litLine == 2 } != nil
-            clickDetail = String(format: "playing %@ at %.2f s (the line starts at %.2f s), lit %@", "\(controller.playing)", controller.currentTime,
-                                 third.start, controller.litLine.map(String.init) ?? "none")
+            clickedPlays = await waitUntil(timeout: 3) { controller.playing && controller.litLine == 2 && controller.spaceHint == "Pause" } != nil
+            clickDetail = String(format: "playing %@ at %.2f s (the line starts at %.2f s), lit %@, space says “%@”", "\(controller.playing)", controller.currentTime,
+                                 third.start, controller.litLine.map(String.init) ?? "none", controller.spaceHint ?? "")
             await captureRecordingWindow(controller, as: "recorder-window-playing")
             // Space pauses it.
             await pressKey(nil, code: CGKeyCode(kVK_Space))
-            _ = await waitUntil(timeout: 2) { !controller.playing }
+            let pausedAgain = await waitUntil(timeout: 2) { !controller.playing && controller.spaceHint == "Play" } != nil
+            clickedPlays = clickedPlays && pausedAgain
+            clickDetail += ", space pauses \(pausedAgain)"
         }
         controller.close()
         let inStep = found.0.count == 2 && found.1.count == 2 && drift < 0.002 && abs(lengths.me - lengths.them) < 0.05
