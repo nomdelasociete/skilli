@@ -20,6 +20,12 @@ enum SkilliMain {
         if let status = TestForm.runIfRequested(ProcessInfo.processInfo.arguments) {
             exit(status)
         }
+        #if SKILLI_SELFTEST
+        // `Skilli recorderprobe …`: the meeting recorder's measurements.
+        if let status = RecorderProbe.runIfRequested(ProcessInfo.processInfo.arguments) {
+            exit(status)
+        }
+        #endif
         let app = NSApplication.shared
         let delegate = AppDelegate(mode: LaunchMode(arguments: ProcessInfo.processInfo.arguments))
         app.delegate = delegate

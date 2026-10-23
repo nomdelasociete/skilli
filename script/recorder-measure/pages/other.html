@@ -1,0 +1,4 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Other</title>
+<style>body{margin:0;background:#fff;color:#000;font:bold 110px Menlo,monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh}#k{font-size:60px}</style></head>
+<body><div id=k>OTHER TAB</div><div id=f>F 0</div><div id=t>T 0.0</div><div id=v>V start</div>
+<script>let n=0;const t0=performance.now();function tick(){n++;f.textContent='F '+n;t.textContent='T '+((performance.now()-t0)/1000).toFixed(1);requestAnimationFrame(tick)}requestAnimationFrame(tick);function vis(){v.textContent='V '+document.visibilityState}document.addEventListener('visibilitychange',vis);setInterval(vis,250);vis();</script></body></html>
