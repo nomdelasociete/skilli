@@ -202,8 +202,7 @@ final class MicrophoneTrack {
     /// `StandInClock.ppm` fast or slow against the host's. Nothing before
     /// the player's start.
     private nonisolated static func standInTap(_ inbox: AudioInbox, player: AVAudioPlayerNode) -> AVAudioNodeTapBlock {
-        nonisolated(unsafe) let player = player
-        return { buffer, time in
+        { buffer, time in
             // Before the player's start (a buffer of the schedule it
             // stopped, read after it started again): not the file's.
             guard let played = player.playerTime(forNodeTime: time), played.isSampleTimeValid, played.sampleTime >= 0 else { return }
