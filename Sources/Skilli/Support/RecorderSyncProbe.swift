@@ -149,7 +149,7 @@ final class RecorderSyncProbe {
         // The click: 10 ms of 2 kHz, played by `afplay` (another process,
         // its own audio setup).
         let click = directory.appendingPathComponent("click.wav")
-        RecorderProbe.writeWAV((0..<480).map { 0.3 * sin(Float($0) * 2 * .pi * 2000 / 48000) }, rate: 48000, to: click)
+        try RecorderProbe.writeWAV((0..<480).map { 0.3 * sin(Float($0) * 2 * .pi * 2000 / 48000) }, rate: 48000, to: click)
 
         // The microphone's clock, when it is allowed (never asked here).
         let mic = Clock()
@@ -237,7 +237,7 @@ final class RecorderSyncProbe {
             }
             offset += length
         }
-        RecorderProbe.writeWAV(kept, rate: rate, to: directory.appendingPathComponent("them.wav"))
+        try RecorderProbe.writeWAV(kept, rate: rate, to: directory.appendingPathComponent("them.wav"))
 
         report["events"] = events.count
         report["frames"] = sink.frames

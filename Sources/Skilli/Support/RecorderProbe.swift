@@ -260,13 +260,20 @@ enum RecorderProbe {
         }
     }
 
-    static func writeWAV(_ samples: [Float], rate: Double, to url: URL) {
-        guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1),
-              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
-              let file = try? AVAudioFile(forWriting: url, settings: format.settings) else { return }
+    /// Mono samples as a WAV file; one that cannot be made or written
+    /// throws, so the run fails (its report says why).
+    static func writeWAV(_ samples: [Float], rate: Double, to url: URL) throws {
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1) else {
+            throw NSError(domain: "no audio format at \(rate) Hz", code: 1)
+        }
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        guard !samples.isEmpty else { return }
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)) else {
+            throw NSError(domain: "no audio buffer for \(samples.count) samples", code: 2)
+        }
         buffer.frameLength = AVAudioFrameCount(samples.count)
         samples.withUnsafeBufferPointer { buffer.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
-        try? file.write(from: buffer)
+        try file.write(from: buffer)
     }
 
     static func tap(_ args: [String], into report: inout [String: Any]) async throws {
@@ -293,7 +300,7 @@ enum RecorderProbe {
         report["loudest"] = db.max() ?? -200
         report["heard"] = db.filter { $0 > -60 }.count
         report["playing"] = playing
-        writeWAV(samples, rate: tap.rate, to: URL(fileURLWithPath: args[1]).deletingPathExtension().appendingPathExtension("wav"))
+        try writeWAV(samples, rate: tap.rate, to: URL(fileURLWithPath: args[1]).deletingPathExtension().appendingPathExtension("wav"))
     }
 
     // MARK: - ScreenCaptureKit
