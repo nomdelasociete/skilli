@@ -1,9 +1,10 @@
 # Meeting recorder: the views of phase 1
 
-Spec, 2026-10-23, written before building. `docs/meeting-recorder.md`
+Spec, 2026-10-23, written before building, then brought in line with
+three rounds of captures on the test Mac (light and dark). `docs/meeting-recorder.md`
 says what is recorded, kept and measured; this says what phase 1 shows.
-Each view is drawn by the code that runs it; captured on the test Mac,
-light and dark, and looked over before the pull request.
+Each view is drawn by the code that runs it (`remote recorder` saves
+`recorder-*.png`).
 
 ## The Record card
 
@@ -18,12 +19,12 @@ keyboard: the user opened it to name the recording.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ ● RECORD A MEETING                            English ▾  │
+│ ● RECORD A MEETING                             English ⌃⌄ │
 │                                                          │
 │ Meeting 14:30▌                                           │  26 pt, editable
 │                                                          │
 │ 🎙  Microphone      MacBook Pro Microphone      ▮▮▮▮▯▯   │  live
-│ 🔊  The Mac's sound  every app                  ▮▮▯▯▯▯   │  live
+│ 🔊  The Mac's sound  Every app                  ▮▮▯▯▯▯   │  live
 │                                                          │
 │ ⓘ  The others in the call must agree to be recorded: in │  first time only
 │    many countries, France included, recording a private │
@@ -34,10 +35,11 @@ keyboard: the user opened it to name the recording.
 ```
 
 - **Eyebrow**: a red dot and "RECORD A MEETING", letterspaced, as the
-  meeting card's "STARTS IN". On the right, the language: a pop-up of
-  the languages this Mac transcribes (`SpeechTranscriber`), on Ask's
-  language, else the keyboard's (`VoiceInput`'s rule). Chosen for this
-  recording only.
+  meeting card's "STARTS IN". On the right, the language as a word and a
+  chevron ("English", its region only when this Mac has it in several);
+  a click lists the languages this Mac transcribes (`SpeechTranscriber`).
+  Ask's language, else the keyboard's (`VoiceInput`'s rule); chosen for
+  this recording only.
 - **The name**: a field in the meeting card's title type (26 pt
   semibold), its text selected so typing replaces it. "Meeting 14:30"
   (the time the card opened), or what `rec …`, the link or the tool
@@ -75,10 +77,10 @@ keyboard: the user opened it to name the recording.
  ● 12:04 ⣀⣤⣶⣤   ← mic above, the Mac below
 ```
 
-- A red dot (the system's red), the time in monospaced digits, two small
-  waves side by side in height: the microphone above, the Mac's sound
-  below, the last 2 s of each track's level as thin bars (label color,
-  the bar's own tint).
+- A red dot (the system's red), the time in monospaced digits, then two
+  small waves: the microphone growing up from the middle, the Mac's sound
+  down, the last 1.5 s of each track's level as 2 pt bars a point apart
+  (sharp on a 1x screen), in the label color.
 - Paused: the dot hollow and grey, the time stops, the waves flat.
 - Its menu:
 
@@ -150,9 +152,9 @@ last second). The Record card's place and frame:
 │ ● UNFINISHED RECORDING                                   │  orange dot
 │                                                          │
 │ Weekly sync                                              │
-│ 18 min, stopped Wed 22 Oct at 14:48                      │
+│ 18 min, stopped Wed 22 Oct at 14:48                      │  its files' length
 │ ──────────────────────────────────────────────────────── │
-│ Discard ⌘⌫    Later esc                       ( Save ↩ ) │
+│ Later esc    Discard ⌘⌫                       ( Save ↩ ) │
 └──────────────────────────────────────────────────────────┘
 ```
 

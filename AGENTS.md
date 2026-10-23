@@ -2161,7 +2161,15 @@ re-investigating.
   pause, after an engine started again) by the host clock; pauses, the
   start and the stop are host moments, the same for both tracks, cut to
   the sample (a frame counts by its middle); a track whose source went
-  away is padded to the stop. Files: AAC 48 kHz mono in fragments of a
+  away is padded to the stop, one past it cut there (the last half second
+  waits in memory for that). A device whose clock runs fast or slow (a
+  USB or Bluetooth microphone: 100 ppm is 345 ms an hour) is kept within
+  a quarter of a millisecond of the host clock, smoothed over a second:
+  one frame left out or played twice per buffer (`resumeJumps` says each
+  track's slip at a resume: under half a millisecond). A source at
+  another rate is resampled to 48 kHz, its run placed by when the
+  converter's output began (it holds part of each buffer), a fresh
+  converter after a restart. Files: AAC 48 kHz mono in fragments of a
   second (`movieFragmentInterval`): a SIGKILL leaves a file that plays to
   its last second (measured: a plain MP4 does not open at all). Never on
   the real-time thread: anything but copying into `AudioInbox` (room

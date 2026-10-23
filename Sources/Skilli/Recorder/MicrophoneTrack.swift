@@ -88,7 +88,7 @@ final class MicrophoneTrack {
             state = .none
             return
         }
-        state = .on(AVCaptureDevice.default(for: .audio)?.localizedName ?? "Microphone")
+        state = .on(deviceName)
         observer = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.startAgain() }
         }
@@ -112,6 +112,15 @@ final class MicrophoneTrack {
         #endif
         let input = engine.inputNode
         input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0), block: Self.tap(inbox))
+    }
+
+    /// The default input's name, as the card shows it (the self-test's
+    /// stand-in: a common one, never the test Mac's own devices).
+    private var deviceName: String {
+        #if SKILLI_SELFTEST
+        if standIn != nil { return "MacBook Pro Microphone" }
+        #endif
+        return AVCaptureDevice.default(for: .audio)?.localizedName ?? "Microphone"
     }
 
     /// The tap off its node (the stand-in's player, else the input, which
@@ -139,7 +148,7 @@ final class MicrophoneTrack {
             #if SKILLI_SELFTEST
             if standInPlaying { player?.play() }
             #endif
-            state = .on(AVCaptureDevice.default(for: .audio)?.localizedName ?? "Microphone")
+            state = .on(deviceName)
             Log.trace("Recorder: the microphone started again (\(restarts))")
         } catch {
             Log.actions.error("Recorder: the microphone did not start again (\(error.localizedDescription, privacy: .public))")
