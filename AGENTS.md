@@ -84,7 +84,16 @@ xcodebuild -project Skilli.xcodeproj -scheme Skilli -destination 'platform=macOS
   hardware-like key events in a test window, a TextEdit document and a Safari
   textarea, then relaunches skil.li if it was running. It steals focus for
   ~25 s and aborts the moment focus is not where it expects, so synthetic keys
-  never land in the user's apps. Needs Accessibility for the Debug build.
+  never land in the user's apps: a scope's steps go through
+  `finish(after:)`, which runs none after that (the report counts them).
+  A run that stops moving on still ends with its report written:
+  `SelfTestWatchdog`, from its own queue, 60 s after the focus was lost,
+  when the main run loop has not answered for 60 s, or after 30 min without
+  a check. Walks of skil.li's own Accessibility tree use
+  `walkAX` (each element once: while skil.li is not the active app, its
+  application lists itself among its children). SIGTERM is heard off the
+  main queue and ends skil.li even with the main thread held (2026-10-22: a
+  run held for 9 h). Needs Accessibility for the Debug build.
   It writes `dist/settings-<pane>.png`, captured from the window server
   (ScreenCaptureKit, own windows only: no Screen Recording permission).
   A check that types into the test window makes the control it types into

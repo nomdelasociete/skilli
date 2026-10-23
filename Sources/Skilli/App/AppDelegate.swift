@@ -1795,6 +1795,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.showWelcome(at: step)
                     return self?.setup
                 },
+                reportPath: outputPath,
                 recorder: { [weak self] in self?.recorderCenter }
             ))
             SelfTest.emit(await test.run(scope: scope), to: outputPath)
@@ -1808,17 +1809,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `pkill` sends SIGTERM, which bypasses `applicationWillTerminate`.
     /// Route it through NSApp so a Caps Lock mapping we installed is removed.
+    /// Heard off the main queue, which does not run while the main thread
+    /// is held: by code that does not return (2026-10-22, a self-test's
+    /// Accessibility walk: SIGTERM unheard for 9 hours), or by a menu's or a
+    /// modal session's loop entered from a main-queue job.
     private func routeTerminationSignal() {
         signal(SIGTERM, SIG_IGN)
-        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        signalSource = Self.terminationSource()
+    }
+
+    private nonisolated static func terminationSource() -> DispatchSourceSignal {
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global(qos: .userInitiated))
         source.setEventHandler {
-            MainActor.assumeIsolated {
-                NSApp.terminate(nil)
+            // Still there 10 s on, the main thread is not coming back:
+            // ended as SIGTERM would.
+            terminateFromAnyThread(grace: .seconds(10)) {
+                signal(SIGTERM, SIG_DFL)
+                raise(SIGTERM)
             }
         }
         source.resume()
-        signalSource = source
+        return source
     }
+
+    /// From any thread: `NSApp.terminate` on the main run loop, in the mode
+    /// it runs now and in the common ones. The run loop's own blocks run
+    /// inside a menu's or a modal session's loop, where the main queue does
+    /// not. Still running `grace` later, `otherwise` runs.
+    nonisolated static func terminateFromAnyThread(grace: DispatchTimeInterval, otherwise: @escaping @Sendable () -> Void) {
+        let main = CFRunLoopGetMain()
+        let terminate = {
+            MainActor.assumeIsolated {
+                guard !terminationAsked else { return }
+                terminationAsked = true
+                NSApp.terminate(nil)
+            }
+        }
+        CFRunLoopPerformBlock(main, CFRunLoopMode.commonModes.rawValue, terminate)
+        if let mode = CFRunLoopCopyCurrentMode(main) { CFRunLoopPerformBlock(main, mode.rawValue, terminate) }
+        CFRunLoopWakeUp(main)
+        DispatchQueue.global().asyncAfter(deadline: .now() + grace, execute: otherwise)
+    }
+
+    private static var terminationAsked = false
 
     // MARK: - Status item
 
