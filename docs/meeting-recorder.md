@@ -121,10 +121,11 @@ On this Mac, at Stop, with progress in the menu bar.
   from the done window once a language or engine that works is picked.
   `meeting.json`'s `engine` is the engine that made the transcript, after
   a fallback too, and `null` while the transcript is pending.
-- Transcribe again in another language, or with the other engine, from the
-  done window, with the same check: a language or engine this Mac cannot
-  use says why and leaves the current transcript as it is (a pending one
-  stays pending until a choice that works is picked).
+- Transcribe again in another language, or with another engine, from the
+  done window: the language and the engine picked are used as picked,
+  never another in their place. One this Mac cannot use says why and
+  leaves the current transcript as it is (a pending one stays pending
+  until a choice that works is picked).
 
 ## Done
 
