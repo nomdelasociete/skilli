@@ -156,7 +156,7 @@ final class MicrophoneTrack {
         let file = try AVAudioFile(forReading: standIn)
         player.stop()
         player.scheduleFile(file, at: nil)
-        StandInClock.started.withLock { $0 = hostTicks }
+        StandInClock.start(at: hostTicks)
         player.play(at: AVAudioTime(hostTime: hostTicks))
         standInPlaying = true
     }
@@ -168,17 +168,17 @@ final class MicrophoneTrack {
     #endif
 
     #if SKILLI_SELFTEST
-    /// The stand-in's buffers, timed as a microphone's are: when they were
-    /// heard, from the player's own timeline (a player node's tap says when
-    /// they will come out of the speakers). Nothing before it plays.
+    /// The stand-in's buffers, timed as a microphone with a steady clock
+    /// times them: by the frames it gave since it started playing (a player
+    /// node's tap says when they will come out of the speakers, and its
+    /// player time ran 0.5 % slow on the test Mac). Nothing before it plays.
     private nonisolated static func standInTap(_ inbox: AudioInbox, player: AVAudioPlayerNode) -> AVAudioNodeTapBlock {
         nonisolated(unsafe) let player = player
         return { buffer, time in
-            guard let played = player.playerTime(forNodeTime: time), played.isSampleTimeValid, let started = StandInClock.started.withLock({ $0 })
-            else { return }
-            let host = started + HostClock.ticks(Double(played.sampleTime) / played.sampleRate)
+            guard player.playerTime(forNodeTime: time) != nil, let (started, given) = StandInClock.take(Int64(buffer.frameLength)) else { return }
+            let rate = buffer.format.sampleRate
             inbox.put(buffer.audioBufferList, channels: Int(buffer.format.channelCount), frames: Int(buffer.frameLength),
-                      sampleTime: Double(played.sampleTime), hostTime: host, rate: buffer.format.sampleRate)
+                      sampleTime: Double(given), hostTime: started + HostClock.ticks(Double(given) / rate), rate: rate)
         }
     }
     #endif
@@ -196,8 +196,22 @@ final class MicrophoneTrack {
 }
 
 #if SKILLI_SELFTEST
-/// When the self-test's stand-in started playing (host ticks).
+/// When the self-test's stand-in started playing (host ticks), and the
+/// frames it gave since.
 enum StandInClock {
-    static let started = Mutex<UInt64?>(nil)
+    private static let state = Mutex<(started: UInt64?, given: Int64)>((nil, 0))
+
+    static func start(at ticks: UInt64) {
+        state.withLock { $0 = (ticks, 0) }
+    }
+
+    /// When it started and how many frames came before these `frames`.
+    static func take(_ frames: Int64) -> (UInt64, Int64)? {
+        state.withLock { clock in
+            guard let started = clock.started else { return nil }
+            defer { clock.given += frames }
+            return (started, clock.given)
+        }
+    }
 }
 #endif
