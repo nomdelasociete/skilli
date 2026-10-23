@@ -165,6 +165,12 @@ final class LauncherController: NSObject {
     var isShowingSnippetMaybe: Bool {
         mode == .snippets && isShowingSnippetMeaning && snippetFound?.snippets.isEmpty == true && snippetFound?.maybe != nil
     }
+    /// The "maybe?" row's place: after the "Allow …" rows, which stay
+    /// as they are (the first of them selected, as always).
+    private var snippetMaybeRow: Int? {
+        guard isShowingSnippetMaybe, let maybe = snippetFound?.maybe else { return nil }
+        return results.firstIndex { if case .snippet(let snippet) = $0 { snippet.id == maybe.id } else { false } }
+    }
     /// The calculator's answer: typed in the app in front (↩, like a clip,
     /// a snippet or an emoji: D4) or copied (⌘↩, ⌘C).
     var onCalculation: ((Calculator.Result, _ paste: Bool) -> Void)?
@@ -1581,7 +1587,7 @@ final class LauncherController: NSObject {
         laps.lap("labels")
         showRows()
         laps.lap("rows")
-        if isShowingSnippetMaybe {
+        if snippetMaybeRow == 0 {
             tableView.deselectAll(nil)
         } else if !results.isEmpty {
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
@@ -4152,7 +4158,7 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             cell.setAlias(beside == nil ? aliasByID[id] : nil)
             cell.setPinned(mode == nil && pinsNow.ids.contains(id))
             cell.setTrailingKeycap(mode == .snippets ? Self.keywordCap(results[row]) : nil)
-            cell.setMaybe(isShowingSnippetMaybe)
+            cell.setMaybe(row == snippetMaybeRow)
         }
         return true
     }

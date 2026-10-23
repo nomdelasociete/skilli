@@ -16816,8 +16816,9 @@ final class SelfTest {
     /// ⇥ by meaning with "none" narrowly ahead: the snippet it split with
     /// as one dimmed "maybe?" row, never selected by itself (the footer
     /// says ↓, ↩ types nothing until ↓ selects it), the preview on it
-    /// once selected, ↩ then types it. The answer is given here: no key,
-    /// no request.
+    /// once selected, ↩ then types it; after an "Allow …" row, only the
+    /// snippet's row is the maybe. The answer is given here: no key, no
+    /// request.
     private func snippetsMaybeRow() async {
         let name = "Search Snippets by meaning, “none” narrowly ahead: one dimmed “maybe?” row, not selected (the footer says ↓, ↩ types nothing), ↓ selects it and the preview follows, ↩ types it"
         let library = context.snippets
@@ -16860,9 +16861,30 @@ final class SelfTest {
         let typed = await waitUntil(timeout: 2) { self.textView.string == refusal.text } != nil
         await closeLauncher()
         let hinted = footer == ["Maybe ↓"] && footerSelected.first == "Paste ↩"
-        record(name, shown && dimmed && unselected && hinted && notTyped && selected && typed,
+
+        // An "Allow …" row first (a permission missing): it stays as it
+        // is, selected as always; only the snippet's row is the maybe.
+        let savedMissing = launcher.missingPermissions
+        launcher.missingPermissions = { [.contacts] }
+        defer { launcher.missingPermissions = savedMissing }
+        _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+        _ = await waitUntil(timeout: 1) { launcher.isVisible }
+        for character in "snip " { await pressKey(character) }
+        _ = await waitUntil(timeout: 1) { launcher.isInSnippets }
+        for character in "dire non poliment" { await pressKey(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Tab))
+        let besideAllow = await waitUntil(timeout: 2) { launcher.isShowingSnippetMaybe && launcher.resultTitles.last == "Refus poli" } != nil
+        let allowRows = launcher.resultTitles
+        let allowMarks = launcher.shownMaybeMarks
+        let allowKept = allowMarks.count == 2 && allowMarks == [false, true] && launcher.tableView.selectedRow == 0
+        await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
+        let downToMaybe = await waitUntil(timeout: 1) { launcher.tableView.selectedRow == 1 && preview.shownID == refusal.id } != nil
+        await closeLauncher()
+        record(name, shown && dimmed && unselected && hinted && notTyped && selected && typed && besideAllow && allowKept && downToMaybe,
                "rows \(rows): \(shown), dimmed: \(dimmed), not selected: \(unselected), footer \(footer) then \(footerSelected): \(hinted), "
-               + "↩ typed nothing: \(notTyped), ↓ selected it, preview on it: \(selected), ↩ typed it: \(typed); launcher-snippets-maybe(-selected)-light/-dark.png", nil)
+               + "↩ typed nothing: \(notTyped), ↓ selected it, preview on it: \(selected), ↩ typed it: \(typed); "
+               + "after an Allow row \(allowRows): \(besideAllow), marks \(allowMarks), Allow row selected as always: \(allowKept), ↓ to the maybe: \(downToMaybe); "
+               + "launcher-snippets-maybe(-selected)-light/-dark.png", nil)
     }
 
     /// "snip " turns the launcher into Search Snippets: the list narrows
