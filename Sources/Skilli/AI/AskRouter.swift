@@ -87,7 +87,7 @@ enum AskRouter {
             .init(value: AskRoute.open.rawValue,
                   description: "Open or switch to one app installed on their Mac, named or described by what it does: my vector drawing app, my mail, the calculator"),
             .init(value: AskRoute.command.rawValue,
-                  description: "A Mac command: lock the screen, sleep, dark or light mode, keep the Mac awake (for a while, until a time), show the desktop (montre le bureau), show hidden files, eject disks, empty the Trash, restart, shut down; music and sound (play, pause, next song, louder, mute, the volume at a level); test the internet speed; pick a color on screen; paste their latest screenshot; battery, disk, memory or IP; turn the keyboard off to clean it; or put the front window somewhere: left or right half, full, center, the other display; or play the sound through other speakers, headphones, AirPods or the display, or switch the microphone; or quit, force quit or uninstall an app they name (kill creative cloud, désinstalle Slack); or open one of their recent code projects in its editor (Cursor, VS Code, Zed…); or run one of their own commands (skillies) by its name or what it does; or take a screenshot or a screen recording with CleanShot X (an area, the window in front, the whole screen, a scrolling page), read the text in an area, annotate or pin their latest screenshot, hide the desktop icons"),
+                  description: "One of these Mac commands, and only these: lock the screen, sleep, dark or light mode, keep the Mac awake (for a while, until a time), show the desktop (montre le bureau), show hidden files, eject disks, empty the Trash, restart, shut down; music and sound (play, pause, next song, louder, mute, the volume at a level); test the internet speed; pick a color on screen; paste their latest screenshot; battery, disk, memory or IP; turn the keyboard off to clean it; or put the front window somewhere: left or right half, full, center, the other display; or play the sound through other speakers, headphones, AirPods or the display, or switch the microphone; or turn Wi-Fi on or off, connect or disconnect a Bluetooth device (AirPods, a keyboard); or quit, force quit or uninstall an app they name (kill creative cloud, désinstalle Slack); or open one of their recent code projects in its editor (Cursor, VS Code, Zed…); or run one of their own commands (skillies) by its name or what it does; or take a screenshot or a screen recording with CleanShot X (an area, the window in front, the whole screen, a scrolling page), read the text in an area, annotate or pin their latest screenshot, hide the desktop icons. Not another setting of the Mac changed, which none of these does"),
             .init(value: AskRoute.timer.rawValue,
                   description: "Start a timer: a countdown that rings when the time is up. The request gives only a length or an end time, and at most what the countdown is for (the pasta, a nap), nothing to do or remember (un minuteur de dix minutes, timer for an hour and a half, préviens-moi dans 20 minutes). As soon as it says something to do or remember, even after a delay, it is a reminder, not a timer (rappelle-moi dans 20 minutes d'appeler Paul, remind me in 2 hours to pick up the parcel). Not keeping the Mac awake for a while or until a time (pas de veille jusqu'à 18h30)"),
             .init(value: AskRoute.plans.rawValue,
@@ -95,9 +95,9 @@ enum AskRouter {
             .init(value: AskRoute.contact.rawValue,
                   description: "Someone they may know, named: who they are, their number, email or address (qui est Paul Durand, c'est qui Jean-François de chez Lumière, le numéro de Paul), or write an email to them (crée un mail à François de chez Horizon, écris à Paul pour lui dire que…). Their contacts are looked in first. Not a message on Slack or another app"),
             .init(value: AskRoute.control.rawValue,
-                  description: "Do it in the app in front, through its menus and what its window shows, when it takes steps or a choice: export or save as PDF into a folder, save it somewhere, click a button, a link or a tab, tick a box, turn a switch on, fill a field or a form, write the subject then send"),
+                  description: "Do it in the app in front, through its menus and what its window shows, when it takes steps or a choice: export or save as PDF into a folder, save it somewhere, click a button, a link or a tab, tick a box, turn a switch on, fill a field or a form, write the subject then send. Not a setting of the Mac itself (System Settings), whatever app is in front"),
             .init(value: AskRoute.act.rawValue,
-                  description: "Look something up in, or do something with, one of their connected services (listed with the request: their tasks, deployments, issues, pages…); or do something else on their Mac: send or share something, message someone, open a link, several steps, use one of their tools")
+                  description: "Look something up in, or do something with, one of their connected services (listed with the request: their tasks, deployments, issues, pages…); or do something else on their Mac: send or share something, message someone, open a link, several steps, use one of their tools; or change one setting of the Mac that no Mac command does. Not System Settings opened, which is an app to open")
         ]
     )
 
@@ -165,13 +165,14 @@ enum AskRouter {
 
     /// Wi-Fi turned off or its pane opened, AirPods connected or Bluetooth's
     /// pane: "open the wifi settings" is the pane, "coupe le wifi" is done.
+    /// Any pane runs only on yes ("où je règle night shift" too).
     /// Read by the model (a list of settings words once decided it).
     static let opensSettings = DecisionQuestion(
         name: "opens_settings",
-        instructions: "Does the user ask to open a settings pane (open the Wi-Fi settings, les réglages Bluetooth, les paramètres de l'écran), rather than to do something (turn Wi-Fi off, connect my AirPods, passe en mode sombre)?",
+        instructions: "Does the user ask to open a settings pane (open the Wi-Fi settings, les réglages Bluetooth, les paramètres de l'écran) or where a setting is, rather than to have something done or a setting changed (turn Wi-Fi off, connect my AirPods, passe en mode sombre)?",
         options: [
-            .init(value: "yes", description: "Open a settings pane"),
-            .init(value: "no", description: "Do something, or anything else")
+            .init(value: "yes", description: "Open a settings pane, or where a setting is"),
+            .init(value: "no", description: "Do something or change a setting, or anything else")
         ]
     )
 
@@ -504,10 +505,13 @@ enum AskRouter {
                     let name = letters(pane.name)
                     return (name == "wifi" || name == "bluetooth") && letters(instruction).contains(name)
                 }.map { (MacAction.settings($0), 0.9) } : nil
+                // A pane is what runs only when opening it, or where a
+                // setting is, is asked: "masque le Dock" opened Desktop &
+                // Dock and changed nothing; the agent changes it.
                 let command = ([isRadio && namesSettings ? nil : direct, pick("project", projectActions, prefix: "project"),
                                 pick("skillie", scriptActions, prefix: "script"), namedPane]
                                + shortcutQuestions.map { pick($0.0, shortcutActions, prefix: "shortcut-") }
-                               + (doesIt ? [] : [pick("settings", paneActions, prefix: "pane")]))
+                               + (doesIt || !namesSettings ? [] : [pick("settings", paneActions, prefix: "pane")]))
                     .compactMap { $0 }
                     .filter { action, probability in
                         switch action {

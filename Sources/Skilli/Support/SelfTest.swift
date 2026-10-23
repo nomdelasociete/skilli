@@ -20073,6 +20073,10 @@ final class SelfTest {
             default: nil
             }
         }
+        // A missed command says which one ran: a pane opened, or another command.
+        func picked(_ decision: AskRouter.Decision?) -> String? {
+            item(decision) ?? (decision?.route == .command ? decision?.command.map { "“\($0.command.title)”" } : nil)
+        }
         for provider in DecisionProvider.allCases {
             for (half, cases, listsMisses) in [("tuned on", AskRouteCorpus.tune, true), ("never tuned on", AskRouteCorpus.holdout, false)] {
                 let name = "Ask's routes on volume with \(provider.title), the half \(half): \(cases.count) requests in French and English, 90 % right or more"
@@ -20094,7 +20098,7 @@ final class SelfTest {
                         right[request.route, default: 0] += 1
                     } else {
                         let routes = decision?.routes.prefix(2).map { "\($0.route.rawValue) \(Int($0.probability * 100)) %" }.joined(separator: ", ") ?? ""
-                        misses.append("“\(request.text)” → \(decision?.route.rawValue ?? "failed")\(item(decision).map { " \($0)" } ?? "")"
+                        misses.append("“\(request.text)” → \(decision?.route.rawValue ?? "failed")\(picked(decision).map { " \($0)" } ?? "")"
                             + " (wanted \(request.route.rawValue)\(request.item.map { " \($0)" } ?? ""); \(routes))")
                     }
                 }
