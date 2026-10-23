@@ -88,8 +88,10 @@ final class MeetingRecorder {
     func listen() async {
         guard phase == .idle else { return }
         phase = .listening
-        micInbox.keeping = false
-        macInbox.keeping = false
+        for inbox in [micInbox, macInbox] {
+            inbox.keeping = false
+            inbox.resetMeters()
+        }
         // The microphone first: skil.li then has an audio process the tap
         // can leave out.
         await microphone.start()

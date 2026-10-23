@@ -23013,6 +23013,15 @@ final class SelfTest {
         return titles
     }
 
+    /// The Record card has the keyboard before a key is pressed into it;
+    /// else every later check is skipped: no key may land in another app.
+    private func recordCardHasKeys(_ center: RecorderCenter, _ name: String) async -> Bool {
+        if await waitUntil(timeout: 1.5, { center.cardWindow?.isKeyWindow == true }) != nil { return true }
+        aborted = true
+        record(name, false, "the Record card did not take the keyboard (front: \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")): stopped so no key lands elsewhere", nil)
+        return false
+    }
+
     /// Types `text` into the launcher, open from the test window.
     private func typeInLauncher(_ text: String) async -> Bool {
         guard await openLauncher() else { return false }
@@ -23056,6 +23065,7 @@ final class SelfTest {
         let lines = "microphone “\(view.microphoneLine)”, the Mac's sound “\(view.macLine)”, note “\(view.noteText)”, language \(view.languageShown)"
         await captureRecordCard(center, as: "recorder-card")
         play?.terminate()
+        guard await recordCardHasKeys(center, name) else { return }
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         let gone = await waitUntil(timeout: 2) { !center.isCardVisible && center.recorder.phase == .idle } != nil
         let after = (try? FileManager.default.contentsOfDirectory(atPath: center.recordings.root.path))?.count ?? 0
@@ -23102,12 +23112,15 @@ final class SelfTest {
             record(name, false, "no Record card", nil)
             return
         }
-        let consentAgain = center.cardView.consentShown
+        // Shown until a first recording starts.
+        let consentUntilFirst = center.cardView.consentShown
+        guard await recordCardHasKeys(center, name) else { return }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         guard await waitUntil(timeout: 2, { center.recorder.phase == .recording }) != nil else {
             record(name, false, "↩ did not start the recording (\(center.recorder.phase))", nil)
             return
         }
+        let consentKept = context.preferences.recorderConsentShown
         let start = ContinuousClock.now
         try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
         let play = playElsewhere(them)
@@ -23151,26 +23164,40 @@ final class SelfTest {
         let shownLines = controller.shownLines.count
         await captureRecordingWindow(controller, as: "recorder-window")
         var clickedPlays = false
-        if controller.shownLines.count > 3 {
+        var clickDetail = "fewer than four lines"
+        if controller.shownLines.count > 3, let frame = controller.screenFrame(ofLine: 2) {
+            // A real click on the third line, its window in front.
+            controller.present()
+            _ = await waitUntil(timeout: 2) { controller.nsWindow.isKeyWindow }
+            let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
+            let point = CGPoint(x: frame.midX, y: screenHeight - frame.midY)
+            let source = CGEventSource(stateID: .hidSystemState)
+            for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
+                CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+                await pause(60)
+            }
             let third = controller.shownLines[2]
-            controller.seek(to: third.start, play: true)
             clickedPlays = await waitUntil(timeout: 3) { controller.playing && controller.litLine == 2 } != nil
+            clickDetail = String(format: "playing %@ at %.2f s (the line starts at %.2f s), lit %@", "\(controller.playing)", controller.currentTime,
+                                 third.start, controller.litLine.map(String.init) ?? "none")
             await captureRecordingWindow(controller, as: "recorder-window-playing")
-            controller.togglePlay()
+            // Space pauses it.
+            await pressKey(nil, code: CGKeyCode(kVK_Space))
+            _ = await waitUntil(timeout: 2) { !controller.playing }
         }
         controller.close()
         let inStep = found.0.count == 2 && found.1.count == 2 && drift < 0.02 && abs(lengths.me - lengths.them) < 0.05
-        let passed = consentAgain == false && bar.contains(":") && menu.contains("Pause Recording") && menu.contains("Stop and Transcribe")
+        let passed = consentUntilFirst && consentKept && bar.contains(":") && menu.contains("Pause Recording") && menu.contains("Stop and Transcribe")
             && liveRow.hasPrefix("Recording “played call”") && inStep && abs(lengths.me - cut) < 1.5
             && mine.errors <= 35 && theirs.errors <= 25 && both && shownLines == transcript.lines.count && clickedPlays
             && record.state == .done && record.engine == MeetingTranscriber.engine
         self.record(name, passed,
-                    String(format: "tracks %.2f s / %.2f s (call %.1f s); beeps me %@ them %@, offsets %@ (drift %.1f ms); errors per hundred words: me %.1f (%d words), them %.1f (%d words); %d lines (Me %d, Them %d); consent again %@; menu bar “%@”, menu %@; launcher row “%@”; a line clicked plays %@; %@ in %@",
+                    String(format: "tracks %.2f s / %.2f s (call %.1f s); beeps me %@ them %@, offsets %@ (drift %.1f ms); errors per hundred words: me %.1f (%d words), them %.1f (%d words); %d lines (Me %d, Them %d); consent until the first recording %@; menu bar “%@”, menu %@; launcher row “%@”; a line clicked: %@; %@ in %@",
                            lengths.me, lengths.them, cut, found.0.map { String(format: "%.3f", $0) }.joined(separator: ","),
                            found.1.map { String(format: "%.3f", $0) }.joined(separator: ","), offsets.map { String(format: "%.3f", $0) }.joined(separator: ","),
                            drift * 1000, mine.errors, mine.words, theirs.errors, theirs.words, transcript.lines.count,
-                           speakers.filter { $0 == .me }.count, speakers.filter { $0 == .them }.count, "\(consentAgain)", bar, menu.joined(separator: " | "),
-                           liveRow, "\(clickedPlays)", record.engine ?? "no engine", record.language),
+                           speakers.filter { $0 == .me }.count, speakers.filter { $0 == .them }.count, "\(consentUntilFirst && consentKept)", bar, menu.joined(separator: " | "),
+                           liveRow, clickDetail, record.engine ?? "no engine", record.language),
                     nil)
     }
 
@@ -23191,6 +23218,9 @@ final class SelfTest {
             record(name, false, "no Record card", nil)
             return
         }
+        // Said once: not after a first recording.
+        let consentGone = !center.cardView.consentShown
+        guard await recordCardHasKeys(center, name) else { return }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         guard await waitUntil(timeout: 2, { center.recorder.phase == .recording }) != nil else {
             record(name, false, "not recording", nil)
@@ -23208,7 +23238,13 @@ final class SelfTest {
         let stillFrozen = center.menuBar.shown == frozen
         let resumeMenu = await openRecorderMenu(center, capture: "recorder-menu-paused.png", pick: "Resume Recording")
         let resumed = await waitUntil(timeout: 2) { center.recorder.phase == .recording } != nil
-        await pause(8000)
+        await pause(4000)
+        // The audio setup changes (a device plugged): the microphone's
+        // engine starts again, its track keeps its time.
+        let restartsBefore = center.recorder.microphone.restarts
+        center.recorder.microphone.simulateConfigurationChange()
+        let restarted = center.recorder.microphone.restarts == restartsBefore + 1
+        await pause(4000)
         center.control(.stop)
         let done = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil && !center.openWindows.isEmpty } != nil
         guard done, let folder = newestRecording(in: center.recordings.root), let record = center.recordings.read(folder) else {
@@ -23227,12 +23263,12 @@ final class SelfTest {
         let step = abs(mean(after) - mean(before))
         let spread = (offsets.max() ?? 1) - (offsets.min() ?? 0)
         let expected = 16.0
-        let passed = paused && stillFrozen && resumed && resumeMenu.contains("Resume Recording") && record.pauses.count == 1
+        let passed = consentGone && paused && stillFrozen && resumed && restarted && resumeMenu.contains("Resume Recording") && record.pauses.count == 1
             && abs((record.pauses.first?.seconds ?? 0) - 4.3) < 1 && abs(lengths.me - lengths.them) < 0.05 && abs(lengths.me - expected) < 1
             && step < 0.01 && spread < 0.025 && before.count >= 10 && after.count >= 10
         self.record(name, passed,
-                    String(format: "paused %@, clock still “%@” %@, resumed %@; pause at %.2f s for %.2f s; tracks %.2f s / %.2f s (about %.0f s); %d beeps in step, offset %.1f ms before the pause, %.1f ms after (step %.1f ms, spread %.1f ms)",
-                           "\(paused)", frozen ?? "", "\(stillFrozen)", "\(resumed)", pauseAt, record.pauses.first?.seconds ?? 0, lengths.me, lengths.them,
+                    String(format: "consent gone %@; paused %@, clock still “%@” %@, resumed %@, the microphone started again %@; pause at %.2f s for %.2f s; tracks %.2f s / %.2f s (about %.0f s); %d beeps in step, offset %.1f ms before the pause, %.1f ms after (step %.1f ms, spread %.1f ms)",
+                           "\(consentGone)", "\(paused)", frozen ?? "", "\(stillFrozen)", "\(resumed)", "\(restarted)", pauseAt, record.pauses.first?.seconds ?? 0, lengths.me, lengths.them,
                            expected, offsets.count, mean(before) * 1000, mean(after) * 1000, step * 1000, spread * 1000),
                     nil)
     }
@@ -23285,13 +23321,14 @@ final class SelfTest {
         }
         let lengths = (me: trackLength(folder.appendingPathComponent("me.m4a")), them: trackLength(folder.appendingPathComponent("them.m4a")))
         let left = center.recordings.read(folder)
+        // It takes the keyboard only after a second without a key.
+        await pause(1200)
         let offered = center.offerUnfinishedNow()
         let view = center.cardView
         let shown = await waitUntil(timeout: 2) { center.isCardVisible && view.eyebrowText == "UNFINISHED RECORDING" } != nil
         let detail = view.detailText
         await captureRecordCard(center, as: "recorder-unfinished")
-        // It takes the keys after a second without one.
-        await pause(1100)
+        guard await recordCardHasKeys(center, name) else { return }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         let saved = await waitUntil(timeout: 60) { center.recorder.transcribing == nil && center.window(for: folder) != nil } != nil
         let after = center.recordings.read(folder)
@@ -23301,9 +23338,10 @@ final class SelfTest {
         // Discarded: to the Trash at once, ⌘Z brings it back.
         var discarded = false, inTrash = false, undone = false
         if let second = await recordThenKill(seconds: 5) {
+            await pause(1200)
             _ = center.offerUnfinishedNow()
             if await waitUntil(timeout: 2, { center.isCardVisible && view.eyebrowText == "UNFINISHED RECORDING" }) != nil {
-                await pause(1100)
+                guard await recordCardHasKeys(center, name) else { return }
                 await pressHolding(.maskCommand, keys: [CGKeyCode(kVK_Delete)])
                 discarded = await waitUntil(timeout: 3) { !FileManager.default.fileExists(atPath: second.path) } != nil
                 inTrash = await waitUntil(timeout: 2) { self.context.aiActions.popover.isVisible && self.context.aiActions.popover.shownTitle == "Recording Deleted" } != nil
@@ -23337,10 +23375,16 @@ final class SelfTest {
             return
         }
         let popover = context.aiActions.popover
+        let settings = context.tools.settings
+        let mode = settings.mode
+        // Ask Before Changes: opening the card runs, pausing and stopping ask.
+        settings.mode = .auto
+        defer { settings.mode = mode }
         let train = recorderScratch.appendingPathComponent("train.wav")
         center.recorder.standIn(microphone: train, alsoLeaveOut: [])
         await links.openNow(SkilliLink.record(title: "From a link").url)
         let linkCard = await waitUntil(timeout: 3) { center.isCardVisible && center.cardView.name == "From a link" } != nil
+        guard await recordCardHasKeys(center, name) else { return }
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         let linkClosed = await waitUntil(timeout: 2) { !center.isCardVisible && center.recorder.phase == .idle } != nil
         await links.openNow(SkilliLink.recording(.stop).url)
@@ -23349,6 +23393,10 @@ final class SelfTest {
 
         let started = Task { await self.skilliCall("record_meeting", #"{"title":"From a tool"}"#) }
         let toolCard = await waitUntil(timeout: 5) { center.isCardVisible && center.cardView.name == "From a tool" } != nil
+        guard await recordCardHasKeys(center, name) else {
+            started.cancel()
+            return
+        }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         let (status, said) = await started.value
         let (_, now) = await skilliCall("recording_status")

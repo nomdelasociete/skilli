@@ -49,6 +49,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var currentTime: Double { player?.currentTime().seconds ?? 0 }
     var litLine: Int? { view.litLine }
     var shownState: String { view.stateText }
+    /// Where a line is on screen (AppKit's coordinates), to click it.
+    func screenFrame(ofLine row: Int) -> NSRect? { view.screenFrame(ofLine: row) }
 
     /// What the folder holds now: the transcript once made, or why there is
     /// none.
@@ -235,7 +237,6 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     private var heightsWidth: CGFloat = 0
     /// The user scrolled the lines: following waits 3 s.
     private var scrolledAt: Date?
-    private var settingSelection = false
     var duration: Double = 0 {
         didSet { waveform.duration = duration }
     }
@@ -276,6 +277,8 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         table.intercellSpacing = NSSize(width: 0, height: 2)
         table.dataSource = self
         table.delegate = self
+        table.target = self
+        table.action = #selector(lineClicked)
         table.onSpace = { [weak self] in self?.onPlay?() }
         scroll.documentView = table
         scroll.hasVerticalScroller = true
@@ -358,6 +361,13 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         needsLayout = true
     }
 
+    func screenFrame(ofLine row: Int) -> NSRect? {
+        guard row < lines.count, let window else { return nil }
+        table.scrollRowToVisible(row)
+        let rect = table.convert(table.rect(ofRow: row), to: nil)
+        return window.convertToScreen(rect)
+    }
+
     func setPeaks(me: [Float], them: [Float]) {
         waveform.me = me
         waveform.them = them
@@ -374,9 +384,6 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         guard line != litLine else { return }
         let previous = litLine
         litLine = line
-        settingSelection = true
-        if let line { table.selectRowIndexes([line], byExtendingSelection: false) } else { table.deselectAll(nil) }
-        settingSelection = false
         for row in [previous, line].compactMap({ $0 }) where row < lines.count {
             (table.rowView(atRow: row, makeIfNecessary: false) as? LineRowView)?.isLit = row == line
         }
@@ -431,12 +438,13 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         return height
     }
 
-    /// A click on a line plays from its start.
-    func tableViewSelectionDidChange(_ notification: Notification) {
-        guard !settingSelection, table.selectedRow >= 0, table.selectedRow < lines.count else { return }
-        let line = lines[table.selectedRow]
+    /// A click on a line plays from its start (the one playing too: from
+    /// its start again).
+    @objc private func lineClicked() {
+        let row = table.clickedRow
+        guard row >= 0, row < lines.count else { return }
         scrolledAt = nil
-        onSeek?(line.start, true)
+        onSeek?(lines[row].start, true)
     }
 
     // MARK: - Layout
@@ -469,7 +477,11 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         hints.frame = NSRect(x: inset, y: bottom + 12, width: inner, height: 20)
         hints.setHints(hints.shown)
         scroll.frame = NSRect(x: inset - 12, y: y + 1, width: inner + 24, height: max(0, bottom - y - 1))
-        table.tableColumns.first?.width = scroll.contentSize.width
+        if table.tableColumns.first?.width != scroll.contentSize.width {
+            table.tableColumns.first?.width = scroll.contentSize.width
+            // Wrapped lines take another height at another width.
+            table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<lines.count))
+        }
         let stateHeight = state.isHidden ? 0 : (state.stringValue as NSString).boundingRect(
             with: NSSize(width: min(inner, 460), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: [.font: state.font!]).height + 4

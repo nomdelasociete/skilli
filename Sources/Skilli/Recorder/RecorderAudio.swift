@@ -85,6 +85,13 @@ final class AudioInbox: @unchecked Sendable {
         }
     }
 
+    /// Listened to afresh (the card opened again): the meters start over.
+    func resetMeters() {
+        os_unfair_lock_lock(lock)
+        (lastLevel, lastPut, firstPut, lastSound) = (0, 0, 0, 0)
+        os_unfair_lock_unlock(lock)
+    }
+
     /// The source started again (a change of the audio setup): its next
     /// buffer is placed by the host clock.
     func markRestart() {

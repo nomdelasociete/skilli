@@ -1,10 +1,7 @@
 # Meeting recorder
 
 Status: 2026-10-23, spec agreed, target raised: on par with omarchy's
-recorder, then better where skil.li knows the Mac. Phase 1 built
-(2026-10-23): the two tracks, pause, stop, recovery, the files, the
-transcript with its player, Me and Them, Record Meeting in the launcher,
-the menu bar; its views in `docs/meeting-recorder-views.md`.
+recorder, then better where skil.li knows the Mac. Nothing built.
 
 Asked for: a meeting recorder like omarchy-meeting-recorder (an
 open-source recorder for Omarchy Linux): your microphone and the
