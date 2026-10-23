@@ -180,6 +180,11 @@ final class SelfTest {
         /// by Jev or planned by Claude, the demo through Ask, recorded
         /// (the user's TypeSafe key, Claude; mouse and keys).
         case chess
+        /// Only "change default browser to …" typed in Ask: the agent does
+        /// it (the browser is not just opened), then puts the first one
+        /// back the same way. Changes the Mac's default browser for a while
+        /// (the user's decision key and Ask's model; keys, System Settings).
+        case defaultbrowser
         /// The launcher over a card, Mac commands, Kill Process and timers,
         /// then the calculator (keys).
         case calc
@@ -435,6 +440,11 @@ final class SelfTest {
         }
         if scope == .chess {
             await chessChecks()
+            return finish()
+        }
+        if scope == .defaultbrowser {
+            window.center()
+            await askChangesTheDefaultBrowser()
             return finish()
         }
         if scope == .doit {
@@ -15614,6 +15624,68 @@ final class SelfTest {
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         record(name, ticked && popover.phase != .failed,
                "steps \(steps), approvals \(approvals), ticked: \(ticked), \(Int(latency.milliseconds / 1_000)) s", latency.milliseconds)
+    }
+
+    /// "change default browser to google chrome" typed in Ask, as the user
+    /// types it: routed to the agent, not the browser opened ("change
+    /// default browser to arc" once opened Arc), and the agent changes it;
+    /// then the first browser asked back the same way.
+    private func askChangesTheDefaultBrowser() async {
+        let name = "Ask: “change default browser to …” → the agent changes it (not the browser opened), then puts it back"
+        func defaultBrowser() -> String? {
+            URL(string: "https://example.com").flatMap { NSWorkspace.shared.urlForApplication(toOpen: $0) }
+                .flatMap { Bundle(url: $0)?.bundleIdentifier?.lowercased() }
+        }
+        let installed = [("google chrome", "com.google.chrome"), ("arc", "company.thebrowser.browser"), ("safari", "com.apple.safari")]
+            .filter { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.1) != nil }
+        guard !userDecisionKeys.isEmpty, let before = defaultBrowser(),
+              let first = installed.first(where: { $0.1 == before }), let other = installed.first(where: { $0.1 != before }) else {
+            checks.append(Check(name: name, passed: true, skipped: true,
+                                detail: "needs a decision key and two of Chrome, Arc, Safari (default: \(defaultBrowser() ?? "none"))", latencyMs: nil))
+            return
+        }
+        await context.ai.refresh()
+        let popover = context.aiActions.popover
+        let settings = context.tools.settings
+        let mode = settings.mode
+        settings.mode = .auto
+        defer { settings.mode = mode }
+        // One request through Ask: typed, Return, each approval allowed,
+        // until the card is done.
+        func ask(_ request: String, capture: String) async -> String {
+            guard await focusTestWindow() else { return "no test window" }
+            window.makeFirstResponder(textView)
+            textView.string = ""
+            guard await openAsk() else { return "Ask did not open" }
+            for character in request { await pressKey(character) }
+            await pressKey(nil, code: CGKeyCode(kVK_Return))
+            let start = ContinuousClock.now
+            var approvals = 0
+            while approvals < 12 {
+                let settled = await waitUntil(timeout: 180) {
+                    popover.phase == .approving || popover.phase == .done || popover.phase == .failed || !popover.isVisible
+                } != nil
+                guard settled, popover.phase == .approving else { break }
+                approvals += 1
+                await pressKey(nil, code: CGKeyCode(kVK_Return))
+                await pause(500)
+            }
+            let took = Int((ContinuousClock.now - start).milliseconds / 1_000)
+            await pause(250)
+            if popover.isVisible { await saveScreenshot(of: popover.window, as: capture) }
+            let route = context.aiActions.lastRoute?.rawValue ?? "none"
+            let opened = context.aiActions.lastOpenedApp.map { ", opened \($0)" } ?? ""
+            let steps = context.aiActions.lastSteps.map(\.title)
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            return "route \(route)\(opened), phase \(popover.phase), steps \(steps), approvals \(approvals), \(took) s"
+        }
+        let there = await ask("change default browser to \(other.0)", capture: "ask-default-browser-changed.png")
+        let changed = defaultBrowser() == other.1
+        let back = await ask("change default browser to \(first.0)", capture: "ask-default-browser-back.png")
+        let restored = defaultBrowser() == before
+        record(name, changed && restored,
+               "to \(other.0): \(changed ? "changed" : "not changed (\(defaultBrowser() ?? "none"))") — \(there); back to \(first.0): "
+                   + "\(restored ? "changed" : "not changed (\(defaultBrowser() ?? "none"))") — \(back)", nil)
     }
 
     // MARK: - Emoji
