@@ -119,8 +119,9 @@ On this Mac, at Stop, with progress in the menu bar.
   after itself; an attendee's name written as a speaker label). 40 %
   fewer errors than macOS's best, two names in three right. Until it is
   downloaded: `SpeechTranscriber`, given no names (it ignores them).
-  `DictationTranscriber` is not used: more errors everywhere, little gain
-  on names.
+  `DictationTranscriber` is not a choice of engine (more errors
+  everywhere, little gain on names); its one use is the language fallback
+  below, for a language `SpeechTranscriber` does not have.
 - **Who spoke**: the microphone is the user; the Mac's sound is the others.
   Several voices on the other side, and an imported file (one track), are
   told apart by SpeakerKit (MIT, pyannote on Core ML, 11 MB), the number
@@ -129,9 +130,11 @@ On this Mac, at Stop, with progress in the menu bar.
   by giving it a name already used.
 - **No headphones**: the microphone also hears the other side (78 to 88 %
   of its words came back in the user's transcript). Those words are
-  dropped from Me by each word's time against Them (3 % left); whisper's
-  times are put back on the recording's clock first (its VAD's cuts added
-  back).
+  dropped from Me by each word's time against Them. Measured: 3 % left
+  with `SpeechTranscriber`, which gives each word's time; 30 to 37 % with
+  whisper, whose times are per line and on the audio without its VAD's
+  silences. For whisper, the times are put back on the recording's clock
+  first (the VAD's cuts added back); that is not measured yet (To check).
 - A language this Mac cannot transcribe: the Record card checks it before
   ↩, the default engine first (whisper when it is the one downloaded and
   set), then the others (`SpeechTranscriber.supportedLocales`,
@@ -265,6 +268,9 @@ Measured below. Still open:
 - No headphones with real speakers and a real microphone (the test Mac
   has neither): macOS's own echo cancellation (`AVAudioEngine`'s voice
   processing) against the word-level drop measured below.
+- The drop with whisper once its word times are put back on the
+  recording's clock (measured without it: 30 to 37 % of the other side
+  left, against 3 % with `SpeechTranscriber`).
 
 ## Measured
 
