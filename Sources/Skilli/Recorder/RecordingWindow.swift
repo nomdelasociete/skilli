@@ -234,7 +234,8 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     private var languageIDs: [String] = []
     private(set) var litLine: Int?
     private var heights: [Int: CGFloat] = [:]
-    private var heightsWidth: CGFloat = 0
+    /// The lines' width as last laid out: their heights are measured at it.
+    private var linesWidth: CGFloat = 0
     /// The user scrolled the lines: following waits 3 s.
     private var scrolledAt: Date?
     var duration: Double = 0 {
@@ -313,6 +314,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         self.lines = lines
         heights = [:]
         table.reloadData()
+        table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<lines.count))
         scroll.isHidden = false
         state.isHidden = !lines.isEmpty
         state.stringValue = lines.isEmpty ? "Nothing was said, or nothing the engine could hear." : ""
@@ -427,14 +429,9 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        // The column's width, set at each layout (the table's own may lag).
-        let width = max(tableView.tableColumns.first?.width ?? 0, 320)
-        if width != heightsWidth {
-            heights = [:]
-            heightsWidth = width
-        }
         if let height = heights[row] { return height }
-        let height = LineCell.height(of: lines[row], width: width)
+        // Before the first layout: the window's starting width.
+        let height = LineCell.height(of: lines[row], width: linesWidth > 0 ? linesWidth : 712)
         heights[row] = height
         return height
     }
@@ -478,9 +475,12 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         hints.frame = NSRect(x: inset, y: bottom + 12, width: inner, height: 20)
         hints.setHints(hints.shown)
         scroll.frame = NSRect(x: inset - 12, y: y + 1, width: inner + 24, height: max(0, bottom - y - 1))
-        if table.tableColumns.first?.width != scroll.contentSize.width {
-            table.tableColumns.first?.width = scroll.contentSize.width
+        let columnWidth = scroll.contentSize.width
+        if columnWidth != linesWidth {
+            linesWidth = columnWidth
+            table.tableColumns.first?.width = columnWidth
             // Wrapped lines take another height at another width.
+            heights = [:]
             table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<lines.count))
         }
         let stateHeight = state.isHidden ? 0 : (state.stringValue as NSString).boundingRect(
