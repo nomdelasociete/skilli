@@ -24,8 +24,9 @@ transcribed again in another language.
 1. It knows the meeting: the event's title names the recording, its
    attendees name the speakers to pick from, and it offers to stop when the
    call ends.
-2. Names heard right: the attendees and the user's contacts go to the speech
-   engine as words to expect (as Dictate does).
+2. Names heard right: the attendees and the user's contacts go to the
+   engine that takes words to expect (see Transcription), as Dictate's
+   names do.
 3. Found from the launcher: words said, by plain search; Ask "what did Paul
    say about the budget?" with the user's AI, on their action.
 4. Follow-ups in one key: action items become reminders, a recap mail goes
@@ -74,9 +75,12 @@ skillie):
 **A browser tab**: macOS records a window, not a tab inside it. The
 meeting's window is recorded; when the recording starts skil.li brings the
 meeting's tab to the front in it (Safari, Chrome's family), and the card
-says that another tab picked during the call is recorded too. Arc: the
-window only, the user brings the tab forward. Recording one tab whatever is
-in front would need a browser extension: not planned.
+says that another tab picked during the call is recorded too. When it
+cannot (Arc, a browser it does not script, its Automation permission not
+given, no tab on the meeting's address, a script that fails), the card
+says so and asks the user to bring the meeting's tab forward; ↩ then
+records the window as it is. Recording one tab whatever is in front would
+need a browser extension: not planned.
 
 ## During
 
@@ -92,12 +96,17 @@ in front would need a browser extension: not planned.
 
 On this Mac, at Stop, with progress in the menu bar.
 
-- **Engine**: macOS's `SpeechTranscriber` first, given the attendees' and
-  contacts' names. Before building, it is measured against whisper.cpp
-  (large-v3-turbo) on the same recorded calls (French and English, accents,
-  crosstalk, a one-hour call): errors per hundred words, time, memory. If
-  whisper wins clearly, it becomes an optional download for the recorder
-  only ("Better transcription, 1.6 GB"), never for Ask or Dictate.
+- **Engine**: macOS's `SpeechTranscriber` first. It takes no words to
+  expect (`VoiceInput`: only `DictationTranscriber` reads
+  `AnalysisContext.contextualStrings`), so before building three are
+  measured on the same recorded calls (French and English, accents,
+  crosstalk, a one-hour call, attendees with uncommon names):
+  `SpeechTranscriber`; `DictationTranscriber` given the attendees' and
+  contacts' names; whisper.cpp (large-v3-turbo) given them as its initial
+  prompt. Errors per hundred words, names right, time, memory. The best
+  one is the default. If it is whisper, it is an optional download for the
+  recorder only ("Better transcription, 1.6 GB"), never for Ask or
+  Dictate; until then, the best of macOS's two.
 - **Who spoke**: the microphone is the user; the Mac's sound is the others.
   Several voices on the other side, and an imported file (one track), are
   told apart by an on-device speaker-separation model, picked the same way:
