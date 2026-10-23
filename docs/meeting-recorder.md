@@ -112,8 +112,10 @@ On this Mac, at Stop, with progress in the menu bar.
   told apart by an on-device speaker-separation model, picked the same way:
   candidates measured on the same calls.
 - A language this Mac cannot transcribe: the Record card checks it before
-  ↩ (`SpeechTranscriber.supportedLocales`, then `DictationTranscriber`'s).
-  The first engine that has the language is used; when neither has it,
+  ↩, the default engine first (whisper when it is the one downloaded and
+  set), then the others (`SpeechTranscriber.supportedLocales`,
+  `DictationTranscriber`'s). The first engine that has the language is
+  used; when none has it,
   the card says so ("Italian can't be transcribed on this Mac yet") and
   ↩ still records: the recording is kept, its transcript pending, made
   from the done window once a language or engine that works is picked.
