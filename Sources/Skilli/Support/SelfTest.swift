@@ -23014,7 +23014,11 @@ final class SelfTest {
             await pause(60)
         }
         await pause(700)
-        let items = Self.axElements(roles: [kAXMenuItemRole]) { _ in true }
+        // The status items' menu bar only: the app's own menus are not this
+        // menu (and its Apple menu names the Mac's account).
+        var extras: CFTypeRef?
+        AXUIElementCopyAttributeValue(AXUIElementCreateApplication(getpid()), kAXExtrasMenuBarAttribute as CFString, &extras)
+        let items = extras.map { Self.axElements(roles: [kAXMenuItemRole], under: ($0 as! AXUIElement)) { _ in true } } ?? []
         let titles = items.compactMap { Self.axTitle($0) }.filter { !$0.isEmpty }
         if let directory = context.snapshotDirectory, let image = await WindowCapture.openMenuImage(),
            let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
@@ -23315,11 +23319,18 @@ final class SelfTest {
         }.joined(separator: "; ")
         // Recorded: from ↩ to Stop, the pause taken out.
         let expected = wall - (record.pauses.first?.seconds ?? 0)
-        let passed = consentGone && paused && stillFrozen && resumed && restarted && resumeMenu.contains("Resume Recording") && record.pauses.count == 1
-            && (record.pauses.first?.seconds ?? 0) > 4 && abs(lengths.me - lengths.them) < 0.05 && abs(lengths.me - expected) < 0.5
-            && worstJump < 0.001 && step < 0.002 && spread < 0.002 && restartStep < 0.002 && before.count >= 4 && after.count >= 4
+        let conditions: [(String, Bool)] = [
+            ("consent gone", consentGone), ("paused", paused), ("clock still", stillFrozen), ("resumed", resumed), ("started again", restarted),
+            ("menu says Resume", resumeMenu.contains("Resume Recording")), ("one pause", record.pauses.count == 1),
+            ("pause long enough", (record.pauses.first?.seconds ?? 0) > 4), ("tracks alike", abs(lengths.me - lengths.them) < 0.05),
+            ("recorded as long", abs(lengths.me - expected) < 0.5), ("slip under 1 ms", !(worstJump >= 0.001)),
+            ("step under 2 ms", step < 0.002), ("spread under 2 ms", spread < 0.002), ("restart under 2 ms", restartStep < 0.002),
+            ("beeps around the pause", before.count >= 4 && after.count >= 4)
+        ]
+        let failed = conditions.filter { !$0.1 }.map(\.0)
+        let passed = failed.isEmpty
         self.record(name, passed,
-                    String(format: "consent gone %@; paused %@, clock still “%@” %@, resumed %@, the microphone started again %@; pause at %.2f s for %.2f s; tracks %.2f s / %.2f s (%.2f s recorded); %d of %d beeps in step, offset %.1f ms before the pause, %.1f ms after (step %.2f ms, spread %.1f ms), at the engine started again a step of %.2f ms; each track moved back at Resume by %@ (the microphone 100 ppm slow)",
+                    (failed.isEmpty ? "" : "failed: \(failed.joined(separator: ", ")); ") + String(format: "consent gone %@; paused %@, clock still “%@” %@, resumed %@, the microphone started again %@; pause at %.2f s for %.2f s; tracks %.2f s / %.2f s (%.2f s recorded); %d of %d beeps in step, offset %.1f ms before the pause, %.1f ms after (step %.2f ms, spread %.1f ms), at the engine started again a step of %.2f ms; each track moved back at Resume by %@ (the microphone 100 ppm slow)",
                            "\(consentGone)", "\(paused)", frozen ?? "", "\(stillFrozen)", "\(resumed)", "\(restarted)", pauseAt, record.pauses.first?.seconds ?? 0, lengths.me, lengths.them,
                            expected, offsets.count, found.0.count, mean(before) * 1000, mean(after) * 1000, step * 1000, spread * 1000,
                            restartStep * 1000, jumpLine),

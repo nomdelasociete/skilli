@@ -146,7 +146,7 @@ final class MicrophoneTrack {
             try install(on: engine)
             try engine.start()
             #if SKILLI_SELFTEST
-            if standInPlaying { player?.play() }
+            if standInPlaying { resumeStandIn() }
             #endif
             state = .on(deviceName)
             Log.trace("Recorder: the microphone started again (\(restarts))")
@@ -158,15 +158,19 @@ final class MicrophoneTrack {
     #if SKILLI_SELFTEST
     private var standInPlaying = false
 
-    /// Self-test: the stand-in file plays from its start at the host time
-    /// `at` (what played before is dropped), its clock `ppm` fast or slow.
+    /// Self-test: the stand-in file plays from its start, the call's clock
+    /// starting at the host time `at` (what played before is dropped), its
+    /// clock `ppm` fast or slow. Played at once, never at a time: then the
+    /// player's own time counts from that time and its frames come later
+    /// (by 26 to 31 ms on the test Mac), where at once its time is the
+    /// frame it plays.
     func playStandIn(at hostTicks: UInt64, ppm: Double = 0) throws {
         guard let standIn, let player else { return }
         let file = try AVAudioFile(forReading: standIn)
         player.stop()
         player.scheduleFile(file, at: nil)
         StandInClock.start(at: hostTicks, ppm: ppm)
-        player.play(at: AVAudioTime(hostTime: hostTicks))
+        player.play()
         standInPlaying = true
     }
 
@@ -174,23 +178,38 @@ final class MicrophoneTrack {
     func simulateConfigurationChange() {
         startAgain()
     }
+
+    /// The engine started again: an engine reset drops what its player had
+    /// scheduled. The stand-in goes on where the call is now by its clock,
+    /// as a microphone deaf for the moment the engine took: that moment
+    /// lost, what follows in its place.
+    private func resumeStandIn() {
+        guard let standIn, let player, let file = try? AVAudioFile(forReading: standIn) else { return }
+        player.stop()
+        let from = StandInClock.rebase(at: mach_absolute_time(), rate: file.processingFormat.sampleRate)
+        if from < file.length {
+            player.scheduleSegment(file, startingFrame: from, frameCount: AVAudioFrameCount(file.length - from), at: nil)
+        }
+        player.play()
+    }
     #endif
 
     #if SKILLI_SELFTEST
     /// The stand-in's buffers, timed as a microphone's are, by its own
-    /// clock: the frames it gave since it started (and those its tap missed
-    /// while the engine started again, by the player's own time), each
-    /// `StandInClock.ppm` fast or slow against the host's. A player node's
-    /// tap says when its buffers will come out of the speakers, and its
-    /// player time alone ran 0.5 % slow on the test Mac. Nothing before it
-    /// plays.
+    /// clock: each one's sample time the file's frame (where the player
+    /// started in the file, plus its own time since: measured equal to the
+    /// frame it plays), its host time that frame by the call's clock,
+    /// `StandInClock.ppm` fast or slow against the host's. Nothing before
+    /// the player's start.
     private nonisolated static func standInTap(_ inbox: AudioInbox, player: AVAudioPlayerNode) -> AVAudioNodeTapBlock {
         nonisolated(unsafe) let player = player
         return { buffer, time in
-            guard let played = player.playerTime(forNodeTime: time), played.isSampleTimeValid else { return }
+            // Before the player's start (a buffer of the schedule it
+            // stopped, read after it started again): not the file's.
+            guard let played = player.playerTime(forNodeTime: time), played.isSampleTimeValid, played.sampleTime >= 0 else { return }
             let rate = buffer.format.sampleRate
             let playerFrame = Int64((Double(played.sampleTime) * rate / played.sampleRate).rounded())
-            guard let (host, given) = StandInClock.take(Int64(buffer.frameLength), at: playerFrame, rate: rate) else { return }
+            guard let (host, given) = StandInClock.take(at: playerFrame, rate: rate) else { return }
             inbox.put(buffer.audioBufferList, channels: Int(buffer.format.channelCount), frames: Int(buffer.frameLength),
                       sampleTime: Double(given), hostTime: host, rate: rate)
         }
@@ -210,15 +229,14 @@ final class MicrophoneTrack {
 }
 
 #if SKILLI_SELFTEST
-/// The self-test's stand-in microphone's clock: when it started playing
-/// (host ticks), how fast it runs against the host's, the frames it gave.
+/// The self-test's stand-in microphone's clock: when the call started
+/// (host ticks), how fast the microphone runs against the host's, the
+/// file's frame the player started at.
 enum StandInClock {
     private struct State {
         var started: UInt64?
         var ppm = 0.0
-        var given: Int64 = 0
-        /// The player's own frame the next buffer should start at.
-        var expected: Int64?
+        var from: Int64 = 0
     }
 
     private static let state = Mutex(State())
@@ -227,20 +245,26 @@ enum StandInClock {
         state.withLock { $0 = State(started: ticks, ppm: ppm) }
     }
 
-    /// The host time of a buffer of `frames` the player gave at its frame
-    /// `player`, and the device's sample time of it.
-    static func take(_ frames: Int64, at player: Int64, rate: Double) -> (UInt64, Int64)? {
+    /// The player starts again at `ticks` (stopped before): from where the
+    /// call is by the clock, the moment it took lost. That frame.
+    static func rebase(at ticks: UInt64, rate: Double) -> Int64 {
+        state.withLock { clock in
+            guard let started = clock.started else { return 0 }
+            let elapsed = HostClock.seconds(ticks > started ? ticks - started : 0)
+            clock.from = Int64((elapsed * rate * (1 + clock.ppm * 1e-6)).rounded())
+            return clock.from
+        }
+    }
+
+    /// The host time of the buffer at the player's own frame `player`, and
+    /// the device's sample time of it: the file's frame (frames the tap
+    /// missed, a gap).
+    static func take(at player: Int64, rate: Double) -> (UInt64, Int64)? {
         state.withLock { clock in
             guard let started = clock.started else { return nil }
-            // Frames played while the tap was off (the engine started
-            // again): counted, so the track places them as a gap.
-            if let expected = clock.expected, player > expected + 1 { clock.given += player - expected }
-            defer {
-                clock.given += frames
-                clock.expected = player + frames
-            }
-            let seconds = Double(clock.given) / (rate * (1 + clock.ppm * 1e-6))
-            return (started + HostClock.ticks(seconds), clock.given)
+            let frame = clock.from + player
+            let seconds = Double(frame) / (rate * (1 + clock.ppm * 1e-6))
+            return (started + HostClock.ticks(seconds), frame)
         }
     }
 }
