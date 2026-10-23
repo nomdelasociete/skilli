@@ -597,6 +597,7 @@ final class SelfTest {
             await snippetsExpandInSafari()
             await snippetsWaitForADelimiter()
             await snippetsFoundByMeaning()
+            await snippetsMaybeRow()
             await snippetDeleteUndoes()
             await clipboardPastesFromLauncher()
             await clipboardForgetUndoes()
@@ -728,6 +729,7 @@ final class SelfTest {
             await askRunsShortcuts()
             await historyPickedByMeaning()
             await snippetsPickedByMeaning()
+            await snippetsMaybeByMeaning()
             return finish()
         }
 
@@ -16706,31 +16708,40 @@ final class SelfTest {
                "waited: \(waited), space kept: \(kept), left out: \(dropped), ↩ after it: \(returned) (“\(returnShown)”), app left out: \(leftOut)", nil)
     }
 
+    /// Twelve snippets a person might keep, in memory; their ids by name.
+    private func meaningSnippets() -> (SnippetLibrary, [String: String]) {
+        let library = SnippetLibrary(folder: nil)
+        let snippets = [
+            ("IBAN perso", ";iban", "FR76 3000 6000 0112 3456 7890 189 — BIC AGRIFRPP882"),
+            ("Adresse bureau", ";bur", "14 avenue de l'Opéra, 75001 Paris, 3e étage"),
+            ("Adresse maison", ";mais", "12 rue des Lilas, 75011 Paris"),
+            ("Signature pro", ";sig", "Jean-François Martaing\nCEO, Nimbus"),
+            ("Merci rapide", ";mer", "Merci beaucoup, je regarde ça et je reviens vers toi."),
+            ("Refus poli", ";non", "Merci pour la proposition, mais ce ne sera pas possible pour nous cette fois-ci."),
+            ("Lien Calendly", ";cal", "https://calendly.com/camille/30min"),
+            ("Numéro de TVA", ";tva", "FR 12 345678901"),
+            ("Code wifi", ";wifi", "Réseau Bureau-5G, mot de passe dans 1Password"),
+            ("Bio courte", ";bio", "Fondateur de Nimbus, j'aide les équipes à déployer leurs outils."),
+            ("Horaires", ";hor", "Ouvert du lundi au vendredi, 9h–18h"),
+            ("Date du jour", ";date", "{date}")
+        ]
+        var ids: [String: String] = [:]
+        for (name, keyword, text) in snippets {
+            ids[name] = library.save(Snippet(id: "", name: name, keyword: keyword, text: text)).id
+        }
+        return (library, ids)
+    }
+
     /// The snippets a person names by what they need, decided on the
     /// user's keys: names, keywords and first words only.
     private func snippetsPickedByMeaning() async {
-        let library = SnippetLibrary(folder: nil)
-        func add(_ name: String, _ keyword: String, _ text: String) -> String {
-            library.save(Snippet(id: "", name: name, keyword: keyword, text: text)).id
-        }
-        let iban = add("IBAN perso", ";iban", "FR76 3000 6000 0112 3456 7890 189 — BIC AGRIFRPP882")
-        let office = add("Adresse bureau", ";bur", "14 avenue de l'Opéra, 75001 Paris, 3e étage")
-        _ = add("Adresse maison", ";mais", "12 rue des Lilas, 75011 Paris")
-        _ = add("Signature pro", ";sig", "Jean-François Martaing\nCEO, Nimbus")
-        _ = add("Merci rapide", ";mer", "Merci beaucoup, je regarde ça et je reviens vers toi.")
-        let no = add("Refus poli", ";non", "Merci pour la proposition, mais ce ne sera pas possible pour nous cette fois-ci.")
-        let calendly = add("Lien Calendly", ";cal", "https://calendly.com/camille/30min")
-        let vat = add("Numéro de TVA", ";tva", "FR 12 345678901")
-        _ = add("Code wifi", ";wifi", "Réseau Bureau-5G, mot de passe dans 1Password")
-        _ = add("Bio courte", ";bio", "Fondateur de Nimbus, j'aide les équipes à déployer leurs outils.")
-        _ = add("Horaires", ";hor", "Ouvert du lundi au vendredi, 9h–18h")
-        _ = add("Date du jour", ";date", "{date}")
+        let (library, ids) = meaningSnippets()
         let cases: [(String, String)] = [
-            ("mon iban", iban),
-            ("l'adresse du bureau", office),
-            ("dire non poliment", no),
-            ("my VAT number", vat),
-            ("a link to book a meeting with me", calendly)
+            ("mon iban", ids["IBAN perso"] ?? ""),
+            ("l'adresse du bureau", ids["Adresse bureau"] ?? ""),
+            ("dire non poliment", ids["Refus poli"] ?? ""),
+            ("my VAT number", ids["Numéro de TVA"] ?? ""),
+            ("a link to book a meeting with me", ids["Lien Calendly"] ?? "")
         ]
         for provider in DecisionProvider.allCases {
             let name = "Snippets by meaning with \(provider.title): IBAN, office address, a polite no, VAT number, booking link, among 12 snippets"
@@ -16747,10 +16758,133 @@ final class SelfTest {
                 slowest = max(slowest, .now - start)
                 let first = found?.snippets.first
                 passed = passed && first?.id == expected
-                details.append("“\(request)” → \(first?.name ?? "nothing")\(first?.id == expected ? "" : " (wrong)")")
+                // A maybe row is not a pick: said, never counted.
+                let maybe = found?.maybe.map { " (maybe \($0.name))" } ?? ""
+                details.append("“\(request)” → \(first?.name ?? "nothing")\(maybe)\(first?.id == expected ? "" : " (wrong)")")
             }
             record(name, passed, details.joined(separator: "; ") + ", slowest \(Int(slowest.milliseconds)) ms", slowest.milliseconds)
         }
+    }
+
+    /// "none" narrowly ahead, live: the "non" before an adverb Jev reads as
+    /// negating it ("dire non poliment") gets the polite no as a pick or
+    /// as the "maybe?" row; a request no snippet is about gets neither.
+    /// Requests close to a snippet without being it are said, not judged
+    /// (a maybe is what they are).
+    private func snippetsMaybeByMeaning() async {
+        let (library, ids) = meaningSnippets()
+        let no = ids["Refus poli"]
+        let polite = ["dire non poliment", "répondre non poliment", "répondre non aimablement", "dire non courtoisement"]
+        let unrelated = ["mon numéro de sécu", "my passport number", "une recette de crêpes", "the tracking number of my parcel",
+                         "mon numéro de carte vitale", "les conditions générales de vente", "a sorry for being late message",
+                         "félicitations pour le bébé", "no idea, a joke maybe"]
+        let close = ["mon numéro de SIRET", "l'adresse de ma mère", "my LinkedIn URL"]
+        for provider in DecisionProvider.allCases {
+            let name = "Snippets by meaning with \(provider.title): “non” before an adverb finds the polite no (a pick or a “maybe?” row), a request no snippet is about gets neither"
+            guard let key = userDecisionKeys[provider] else {
+                checks.append(Check(name: name, passed: true, skipped: true, detail: "no \(provider.title) key saved in Settings", latencyMs: nil))
+                continue
+            }
+            // What the row shows: the first pick, else the maybe.
+            func shown(_ found: (snippets: [Snippet], maybe: Snippet?, label: String)?) -> String {
+                guard let found else { return "no answer" }
+                return found.snippets.first?.name ?? found.maybe.map { "maybe \($0.name)" } ?? "nothing"
+            }
+            var passed = true
+            var details: [String] = []
+            for request in polite {
+                let found = await library.searchByMeaning(request, keys: [provider: key])
+                let right = found?.snippets.first?.id == no || found?.snippets.isEmpty == true && found?.maybe?.id == no
+                passed = passed && right
+                details.append("“\(request)” → \(shown(found))\(right ? "" : " (wrong)")")
+            }
+            for request in unrelated {
+                let found = await library.searchByMeaning(request, keys: [provider: key])
+                let right = found != nil && found?.snippets.isEmpty == true && found?.maybe == nil
+                passed = passed && right
+                details.append("“\(request)” → \(shown(found))\(right ? "" : " (wrong)")")
+            }
+            var said: [String] = []
+            for request in close {
+                let found = await library.searchByMeaning(request, keys: [provider: key])
+                said.append("“\(request)” → \(shown(found))")
+            }
+            record(name, passed, details.joined(separator: "; ") + "; close to a snippet, said only: " + said.joined(separator: "; "), nil)
+        }
+    }
+
+    /// ⇥ by meaning with "none" narrowly ahead: the snippet it split with
+    /// as one dimmed "maybe?" row, never selected by itself (the footer
+    /// says ↓, ↩ types nothing until ↓ selects it), the preview on it
+    /// once selected, ↩ then types it; after an "Allow …" row, only the
+    /// snippet's row is the maybe. The answer is given here: no key, no
+    /// request.
+    private func snippetsMaybeRow() async {
+        let name = "Search Snippets by meaning, “none” narrowly ahead: one dimmed “maybe?” row, not selected (the footer says ↓, ↩ types nothing), ↓ selects it and the preview follows, ↩ types it"
+        let library = context.snippets
+        let refusal = library.save(Snippet(id: "", name: "Refus poli", keyword: ";non",
+                                           text: "Merci pour la proposition, mais ce ne sera pas possible pour nous cette fois-ci."))
+        let other = library.save(Snippet(id: "", name: "Adresse bureau", keyword: ";bur", text: "14 avenue de l'Opéra, 75001 Paris"))
+        let launcher = context.launcher
+        let preview = launcher.snippetsPreview
+        let saved = (launcher.snippetMeaningAvailable, launcher.snippetMeaning)
+        launcher.snippetMeaningAvailable = { true }
+        launcher.snippetMeaning = { _ in ([], refusal, "Jev · 0.21 s") }
+        defer {
+            (launcher.snippetMeaningAvailable, launcher.snippetMeaning) = saved
+            library.delete(refusal.id)
+            library.delete(other.id)
+        }
+        guard await focusTestWindow() else { return }
+        window.makeFirstResponder(textView)
+        textView.string = ""
+        _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+        _ = await waitUntil(timeout: 1) { launcher.isVisible }
+        for character in "snip " { await pressKey(character) }
+        _ = await waitUntil(timeout: 1) { launcher.isInSnippets }
+        for character in "dire non poliment" { await pressKey(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Tab))
+        let shown = await waitUntil(timeout: 2) { launcher.isShowingSnippetMaybe && launcher.resultTitles == ["Refus poli"] } != nil
+        let rows = launcher.resultTitles
+        let dimmed = launcher.shownMaybeMarks == [true]
+        let unselected = launcher.tableView.selectedRow == -1 && preview.shownID == nil
+        let footer = launcher.shownFooter
+        await captureLauncherBothWays(as: "launcher-snippets-maybe")
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        await pause(300)
+        let notTyped = launcher.isVisible && textView.string.isEmpty
+        await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
+        let selected = await waitUntil(timeout: 1) { launcher.tableView.selectedRow == 0 && preview.shownID == refusal.id } != nil
+        let footerSelected = launcher.shownFooter
+        await captureLauncherBothWays(as: "launcher-snippets-maybe-selected")
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let typed = await waitUntil(timeout: 2) { self.textView.string == refusal.text } != nil
+        await closeLauncher()
+        let hinted = footer == ["Maybe ↓"] && footerSelected.first == "Paste ↩"
+
+        // An "Allow …" row first (a permission missing): it stays as it
+        // is, selected as always; only the snippet's row is the maybe.
+        let savedMissing = launcher.missingPermissions
+        launcher.missingPermissions = { [.contacts] }
+        defer { launcher.missingPermissions = savedMissing }
+        _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+        _ = await waitUntil(timeout: 1) { launcher.isVisible }
+        for character in "snip " { await pressKey(character) }
+        _ = await waitUntil(timeout: 1) { launcher.isInSnippets }
+        for character in "dire non poliment" { await pressKey(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Tab))
+        let besideAllow = await waitUntil(timeout: 2) { launcher.isShowingSnippetMaybe && launcher.resultTitles.last == "Refus poli" } != nil
+        let allowRows = launcher.resultTitles
+        let allowMarks = launcher.shownMaybeMarks
+        let allowKept = allowMarks.count == 2 && allowMarks == [false, true] && launcher.tableView.selectedRow == 0
+        await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
+        let downToMaybe = await waitUntil(timeout: 1) { launcher.tableView.selectedRow == 1 && preview.shownID == refusal.id } != nil
+        await closeLauncher()
+        record(name, shown && dimmed && unselected && hinted && notTyped && selected && typed && besideAllow && allowKept && downToMaybe,
+               "rows \(rows): \(shown), dimmed: \(dimmed), not selected: \(unselected), footer \(footer) then \(footerSelected): \(hinted), "
+               + "↩ typed nothing: \(notTyped), ↓ selected it, preview on it: \(selected), ↩ typed it: \(typed); "
+               + "after an Allow row \(allowRows): \(besideAllow), marks \(allowMarks), Allow row selected as always: \(allowKept), ↓ to the maybe: \(downToMaybe); "
+               + "launcher-snippets-maybe(-selected)-light/-dark.png", nil)
     }
 
     /// "snip " turns the launcher into Search Snippets: the list narrows

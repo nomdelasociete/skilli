@@ -104,10 +104,11 @@ final class SnippetLibrary: @unchecked Sendable {
     /// "my iban", "adresse bureau": the decision model picks among the
     /// snippets, each told by its name, keyword and first 80 characters as
     /// written (`SnippetMeaning`). Only on ⇥ in Search Snippets (Settings →
-    /// Snippets); nil when no key answered.
-    func searchByMeaning(_ request: String, keys: [DecisionProvider: String]) async -> (snippets: [Snippet], label: String)? {
+    /// Snippets); nil when no key answered. `maybe`: none picked, the
+    /// snippet "none" narrowly won over (`SnippetMeaning.maybe`).
+    func searchByMeaning(_ request: String, keys: [DecisionProvider: String]) async -> (snippets: [Snippet], maybe: Snippet?, label: String)? {
         let candidates = Array(all.prefix(SnippetMeaning.candidateLimit))
-        guard !candidates.isEmpty else { return ([], "") }
+        guard !candidates.isEmpty else { return ([], nil, "") }
         let question = DecisionQuestion(
             name: "snippet", instructions: SnippetMeaning.instructions,
             options: candidates.enumerated().map { index, snippet in
@@ -121,11 +122,18 @@ final class SnippetLibrary: @unchecked Sendable {
                 let answers = try await DecisionClient.decide([question], input: SnippetMeaning.input(request), provider: provider, key: key)
                 guard let answer = answers[question.name] else { continue }
                 let picked = SnippetMeaning.picked(answer.probabilities, choice: answer.choice, count: candidates.count).map { candidates[$0] }
+                let maybe = SnippetMeaning.maybe(answer.probabilities, choice: answer.choice, count: candidates.count).map { candidates[$0] }
                 let elapsed = ContinuousClock.now - start
                 let name = provider == .typeSafe ? "Jev" : "Decisions"
-                // The request and the names picked; never a snippet's text.
-                Log.trace("Snippets by meaning “\(request)”: \(candidates.count) snippets, \(name) picked \(picked.prefix(3).map(\.name)) in \(elapsed.compact)")
-                return (picked, "\(name) · \(String(format: "%.2f s", elapsed.milliseconds / 1_000))")
+                // The request, the names picked and the likeliest answers;
+                // never a snippet's text.
+                let likeliest = answer.probabilities.sorted { $0.value > $1.value }.prefix(3).map { entry in
+                    let shown = entry.key.first == "s" ? Int(entry.key.dropFirst()).flatMap { candidates.indices.contains($0) ? candidates[$0].name : nil } : nil
+                    return "\(shown ?? entry.key) \(Int((entry.value * 100).rounded())) %"
+                }
+                Log.trace("Snippets by meaning “\(request)”: \(candidates.count) snippets, \(name) picked \(picked.prefix(3).map(\.name))"
+                          + (maybe.map { ", maybe \($0.name)" } ?? "") + " \(likeliest) in \(elapsed.compact)")
+                return (picked, maybe, "\(name) · \(String(format: "%.2f s", elapsed.milliseconds / 1_000))")
             } catch {
                 Log.actions.error("Snippets by meaning with \(provider.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
             }

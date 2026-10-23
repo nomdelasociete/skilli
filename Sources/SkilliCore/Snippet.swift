@@ -302,16 +302,42 @@ public enum SnippetMeaning {
 
     public static let instructions = "Which of the user's snippets do they want to type? They say what they need in their own words, possibly in another language than the snippet's name (“my iban”, “adresse du bureau”, “polite no”): judge from each snippet's name, keyword and first words. Answer none when no snippet fits."
 
+    /// "none" chosen this likely: no snippet fits.
+    public static let noneSure = 0.6
+
+    /// What the best snippet keeps, "none" sure, for a "maybe?" row.
+    /// Jev reads "non" before an adverb as negating it ("dire non
+    /// poliment", "répondre non poliment": none at 40–85 %); when none
+    /// is sure, the polite no still keeps 15–38 %, while a request no
+    /// snippet is about leaves the best one 13 % at most (both engines,
+    /// 6 to 11 runs each). A request close to a snippet without being it
+    /// (a SIRET for the VAT number, 7–22 %) can show one: a maybe is what
+    /// it is.
+    public static let maybeShare = 0.14
+
     /// The snippets the answer points to, best first: those at 4 % and
     /// more, eight at most; none when the model is fairly sure none fits.
     public static func picked(_ probabilities: [String: Double], choice: String, count: Int) -> [Int] {
-        if choice == "none", (probabilities["none"] ?? 0) > 0.6 { return [] }
+        if choice == "none", (probabilities["none"] ?? 0) > noneSure { return [] }
         return probabilities
             .filter { $0.key != "none" && $0.value >= 0.04 }
             .sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
             .prefix(8)
             .compactMap { entry in entry.key.first == "s" ? Int(entry.key.dropFirst()) : nil }
             .filter { (0..<count).contains($0) }
+    }
+
+    /// When "none" is sure but the best snippet still keeps `maybeShare`:
+    /// that snippet, shown as a "maybe?" row, never as a pick. Nil
+    /// otherwise.
+    public static func maybe(_ probabilities: [String: Double], choice: String, count: Int) -> Int? {
+        guard choice == "none", (probabilities["none"] ?? 0) > noneSure,
+              let best = probabilities.filter({ $0.key != "none" })
+                  .max(by: { $0.value != $1.value ? $0.value < $1.value : $0.key > $1.key }),
+              best.value >= maybeShare, best.key.first == "s",
+              let index = Int(best.key.dropFirst()), (0..<count).contains(index)
+        else { return nil }
+        return index
     }
 
     /// "snip iban", "snippet iban" → "iban".

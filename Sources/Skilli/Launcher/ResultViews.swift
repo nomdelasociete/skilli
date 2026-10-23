@@ -35,6 +35,10 @@ final class ResultCellView: NSTableCellView {
     private let pin = NSImageView()
     private(set) var isPinned = false
     private static let pinSize: CGFloat = 12
+    /// A row the decision model is unsure of (Search Snippets, "none"
+    /// narrowly ahead): its title dimmed, "maybe?" after it.
+    private let maybeMark = NSTextField(labelWithString: "maybe?")
+    private(set) var isMaybe = false
 
     convenience init() {
         self.init(frame: NSRect(x: 0, y: 0, width: 700, height: 46))
@@ -64,6 +68,12 @@ final class ResultCellView: NSTableCellView {
         pin.isHidden = true
         pin.setAccessibilityLabel("Pinned")
         addSubview(pin)
+
+        maybeMark.font = Theme.Font.rowAccessory
+        maybeMark.textColor = .tertiaryLabelColor
+        maybeMark.isHidden = true
+        maybeMark.sizeToFit()
+        addSubview(maybeMark)
         layoutLabels()
     }
 
@@ -106,6 +116,15 @@ final class ResultCellView: NSTableCellView {
             }
         }
         trailingCap?.isHidden = text == nil
+        layoutLabels()
+    }
+
+    func setMaybe(_ maybe: Bool) {
+        guard maybe != isMaybe else { return }
+        isMaybe = maybe
+        title.textColor = maybe ? .secondaryLabelColor : .labelColor
+        icon.alphaValue = maybe ? 0.5 : 1
+        maybeMark.isHidden = !maybe
         layoutLabels()
     }
 
@@ -160,6 +179,15 @@ final class ResultCellView: NSTableCellView {
                 x += pinWidth + 8
             }
             aliasCap?.frame.origin = NSPoint(x: x, y: (bounds.height - (aliasCap?.frame.height ?? 0)) / 2)
+        }
+        // "maybe?" right after the title, on its baseline; a long title
+        // gives way to it.
+        if isMaybe {
+            let width = maybeMark.frame.width
+            let x = min(66 + ceil(title.attributedStringValue.size().width) + 8, titleEnd - width)
+            titleEnd = x - 2
+            let baseline = 14 + 18 - title.firstBaselineOffsetFromTop
+            maybeMark.frame.origin = NSPoint(x: x, y: (baseline + maybeMark.firstBaselineOffsetFromTop - maybeMark.frame.height).rounded())
         }
         title.frame = NSRect(x: 66, y: 14, width: max(0, titleEnd - 66), height: 18)
     }

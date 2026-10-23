@@ -2536,9 +2536,18 @@ re-investigating.
   unfilled, never the rest; a bank or card number or a key goes as what it
   is, "(an IBAN)", never itself: `ToolCallSummary.maskingSecrets`, also in
   every clipboard excerpt; `PrivacyMap.snippets`); the likely ones (≥ 4 %)
-  best first. Only on ⇥ and with Settings → Snippets → Find snippets by
-  meaning with ⇥ on (default). `selftest snippets` (keys; ⇥ on the user's
-  key), `selftest decide` (both providers).
+  best first. "none" above 60 % picks nothing; if the best snippet still
+  keeps 14 % (`SnippetMeaning.maybe`: Jev reads "non" before an adverb as
+  negating it, "dire non poliment" → none 40–85 %; none sure, the polite
+  no still keeps 15–38 %, a request no snippet is about ≤ 13 %), it
+  shows as one dimmed "maybe?" row, never selected by itself (the footer
+  says "Maybe ↓"; ↓ selects it, ↩ types it) and never counted as a pick
+  by the self-tests. Only on ⇥ and with Settings
+  → Snippets → Find snippets by meaning with ⇥ on (default). `selftest
+  snippets` (keys; ⇥ on the user's key; the maybe row on a given
+  answer), `selftest decide` (both providers; `snippetsMaybeByMeaning`:
+  "non" + adverb finds the polite no as a pick or a maybe, a request no
+  snippet is about neither).
   Search Snippets looks like Clipboard History (2026-10-21, spec
   `docs/snippet-preview.md`): the list narrows to 290 pt beside a
   preview (`LauncherController.setSplit`, one split for both modes), each
@@ -2565,8 +2574,9 @@ re-investigating.
   it. `selftest snippets` (`snippetsFoundByMeaning`): split, keycaps, ↓
   follows, `{date}` filled, the clipboard filled or left as written,
   the caret, every Information row, shown in under 8 ms, code, the quiet
-  tile, ⇥'s pick in the pane, the list whole again after esc;
-  `launcher-snippets(-code, -empty, -meaning)-light/-dark.png`.
+  tile, ⇥'s pick in the pane, the list whole again after esc, the
+  "maybe?" row (`snippetsMaybeRow`);
+  `launcher-snippets(-code, -empty, -meaning, -maybe, -maybe-selected)-light/-dark.png`.
 - Windows (`WindowLayout` in SkilliCore for the geometry, `WindowManager`
   for the moving): halves, quarters, thirds, two thirds, maximize, almost
   maximize, center, next and previous display, restore. ✦W then a key
