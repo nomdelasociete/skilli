@@ -36,7 +36,13 @@ final class RecorderCenter {
         indicator.onShowFolder = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
         return indicator
     }()
-    private var windows: [URL: RecordingWindowController] = [:]
+    /// Open windows by their folder's path, however the URL was written
+    /// (`/var/…` or `/private/var/…`, a trailing slash or not).
+    private var windows: [String: RecordingWindowController] = [:]
+
+    private static func key(_ folder: URL) -> String {
+        folder.resolvingSymlinksInPath().standardizedFileURL.path
+    }
     /// A tool or a skillie waiting for ↩ or esc in the card.
     private var waiting: CheckedContinuation<String?, Never>?
     /// Recordings never stopped, offered one after another.
@@ -57,7 +63,7 @@ final class RecorderCenter {
     var cardWindow: NSWindow? { card.window }
     var isCardVisible: Bool { card.isVisible }
     var menuBar: RecorderIndicator { indicator }
-    func window(for folder: URL) -> RecordingWindowController? { windows[folder] }
+    func window(for folder: URL) -> RecordingWindowController? { windows[Self.key(folder)] }
     var openWindows: [RecordingWindowController] { Array(windows.values) }
 
     /// The launcher's row for the recording on now.
@@ -153,7 +159,7 @@ final class RecorderCenter {
         indicator.update()
         onChange?()
         // The window open while its transcript is made follows it.
-        if let transcribing = recorder.transcribing, let window = windows[transcribing.folder], let record = recordings.read(transcribing.folder) {
+        if let transcribing = recorder.transcribing, let window = windows[Self.key(transcribing.folder)], let record = recordings.read(transcribing.folder) {
             window.show(record, transcript: nil, transcribing: transcribing.step)
         }
     }
@@ -169,16 +175,16 @@ final class RecorderCenter {
     func open(_ folder: URL) {
         guard let record = recordings.read(folder) else { return }
         let transcript = recordings.transcript(folder)
-        if let window = windows[folder] {
+        if let window = windows[Self.key(folder)] {
             window.show(record, transcript: transcript)
             window.present()
             return
         }
         let window = RecordingWindowController(folder: folder, record: record, transcript: transcript)
-        window.onClose = { [weak self] controller in self?.windows[controller.folder] = nil }
+        window.onClose = { [weak self] controller in self?.windows[Self.key(controller.folder)] = nil }
         window.onShowFolder = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
         window.onDelete = { [weak self] folder, record in
-            self?.windows[folder]?.close()
+            self?.windows[Self.key(folder)]?.close()
             self?.delete(folder, title: record.title)
         }
         window.onTranscribe = { [weak self] folder, record in
@@ -186,7 +192,7 @@ final class RecorderCenter {
             try? self.recordings.write(record, to: folder)
             self.recorder.transcribe(folder, record: record)
         }
-        windows[folder] = window
+        windows[Self.key(folder)] = window
         window.present()
     }
 

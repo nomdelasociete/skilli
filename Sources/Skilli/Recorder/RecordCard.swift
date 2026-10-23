@@ -391,6 +391,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         setEyebrow("RECORD A MEETING", dot: .systemRed)
         nameField.stringValue = name
         nameField.isHidden = false
+        nameField.isSelectable = true
         nameField.isEditable = true
         detail.isHidden = true
         languageMenu.isHidden = languageIDs.isEmpty
@@ -408,6 +409,9 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
 
     func showUnfinished(_ record: MeetingRecord) {
         isRecordCard = false
+        // Read, not edited: no caret, nothing selected from the card before.
+        window?.makeFirstResponder(nil)
+        nameField.isSelectable = false
         setEyebrow("UNFINISHED RECORDING", dot: .systemOrange)
         nameField.stringValue = record.title
         nameField.isEditable = false
@@ -447,7 +451,13 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
             names.append(MeetingTranscriber.name(of: picked))
             languageIDs.append(picked)
         }
-        languageMenu.set(names, picked: languageIDs.firstIndex(of: picked) ?? 0)
+        // The card says "French"; its region only when the Mac has the
+        // language in several (the menu names each).
+        let short = languageIDs.map(MeetingTranscriber.shortName(of:))
+        languageMenu.set(names, picked: languageIDs.firstIndex(of: picked) ?? 0) { index in
+            let language = short[index]
+            return short.filter { $0 == language }.count > 1 ? names[index] : language
+        }
         languageMenu.isHidden = !isRecordCard
     }
 
@@ -623,10 +633,19 @@ private final class LanguageButton: NSView {
 
     override var isFlipped: Bool { true }
 
-    func set(_ names: [String], picked: Int) {
+    /// `titled`: how the picked one reads on the card (the menu names
+    /// each in full).
+    private var titled: (Int) -> String = { _ in "" }
+
+    func set(_ names: [String], picked: Int, titled: @escaping (Int) -> String) {
         self.names = names
-        self.picked = picked
-        label.stringValue = names.indices.contains(picked) ? names[picked] : ""
+        self.titled = titled
+        pick(picked)
+    }
+
+    private func pick(_ index: Int) {
+        picked = index
+        label.stringValue = names.indices.contains(index) ? titled(index) : ""
         setAccessibilityValue(label.stringValue)
         needsLayout = true
     }
@@ -661,7 +680,7 @@ private final class LanguageButton: NSView {
     }
 
     @objc private func choose(_ item: NSMenuItem) {
-        set(names, picked: item.tag)
+        pick(item.tag)
         onPick?(item.tag)
     }
 }

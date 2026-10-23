@@ -16,9 +16,9 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     private let recorder: MeetingRecorder
     private var item: NSStatusItem?
     private var ticker: Timer?
-    /// The last 2 s of each track's level, eight a second.
-    private var mic = [Double](repeating: 0, count: 16)
-    private var mac = [Double](repeating: 0, count: 16)
+    /// The last 1.5 s of each track's level, eight a second.
+    private var mic = [Double](repeating: 0, count: 12)
+    private var mac = [Double](repeating: 0, count: 12)
 
     init(recorder: MeetingRecorder) {
         self.recorder = recorder
@@ -142,7 +142,8 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     static func recording(time: String, paused: Bool, mic: [Double], mac: [Double]) -> NSImage {
         let text = NSAttributedString(string: time, attributes: [.font: font, .foregroundColor: NSColor.labelColor])
         let textWidth = ceil(text.size().width)
-        let wavesWidth = CGFloat(mic.count) * 2 - 0.5
+        // Whole points: 2 pt bars a point apart stay sharp on a 1x screen.
+        let wavesWidth = CGFloat(mic.count) * 3 - 1
         let size = NSSize(width: 8 + 5 + textWidth + 6 + wavesWidth, height: height)
         let image = NSImage(size: size, flipped: false) { _ in
             let dot = NSRect(x: 0.5, y: (height - 8) / 2, width: 7.5, height: 7.5)
@@ -157,16 +158,18 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
             }
             let textSize = text.size()
             text.draw(at: NSPoint(x: 13, y: (height - textSize.height) / 2))
-            // The microphone grows up from the middle, the Mac's sound down.
-            let left = 13 + textWidth + 6
-            let middle = height / 2
+            // The microphone grows up from the middle, the Mac's sound down,
+            // a point apart; quiet speech still shows (square root).
+            let left = (13 + textWidth + 6).rounded()
+            let middle = (height / 2).rounded()
+            let room = middle - 2
             NSColor.labelColor.withAlphaComponent(paused ? 0.35 : 0.85).setFill()
             for index in mic.indices {
-                let x = left + CGFloat(index) * 2
-                let up = max(0.75, CGFloat(mic[index]) * (middle - 1))
-                let down = max(0.75, CGFloat(mac[index]) * (middle - 1))
-                NSRect(x: x, y: middle + 0.25, width: 1.5, height: up).fill()
-                NSRect(x: x, y: middle - 0.25 - down, width: 1.5, height: down).fill()
+                let x = left + CGFloat(index) * 3
+                let up = max(1, (CGFloat(mic[index]).squareRoot() * room).rounded())
+                let down = max(1, (CGFloat(mac[index]).squareRoot() * room).rounded())
+                NSRect(x: x, y: middle + 1, width: 2, height: up).fill()
+                NSRect(x: x, y: middle - 1 - down, width: 2, height: down).fill()
             }
             return true
         }
