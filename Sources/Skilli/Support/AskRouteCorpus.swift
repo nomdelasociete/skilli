@@ -185,6 +185,18 @@ enum AskRouteCorpus {
         .init("mets Chrome comme navigateur par défaut", .act),
         .init("make Safari my default browser", .act),
         .init("fais que les PDF s'ouvrent toujours avec Preview", .act),
+        // A setting changed, no Mac command for it: the agent, in System
+        // Settings (not its pane only opened).
+        .init("active le mode ne pas déranger", .act),
+        .init("baisse la luminosité de l'écran", .act),
+        .init("masque automatiquement le Dock", .act),
+        .init("turn on Night Shift", .act),
+        .init("désactive le défilement naturel", .act),
+        .init("change mon fond d'écran pour une couleur unie", .act),
+        .init("turn off notifications for Slack", .act),
+        .init("active le tap pour cliquer sur le trackpad", .act),
+        .init("agrandis le pointeur de la souris", .act),
+        .init("empêche Spotify de se lancer au démarrage", .act),
 
         // A menu of the app in front (Finder in the fixture).
         .init("où est le menu pour créer un nouveau dossier ?", .find),
@@ -343,6 +355,16 @@ enum AskRouteCorpus {
         .init("change default browser to Arc", .act),
         .init("définis Google Chrome comme navigateur par défaut", .act),
         .init("use TextEdit as the default app for text files", .act),
+        .init("turn on Do Not Disturb until tomorrow", .act),
+        .init("désactive Night Shift", .act),
+        .init("auto-hide the menu bar", .act),
+        .init("mets la luminosité au maximum", .act),
+        .init("turn on low power mode", .act),
+        .init("active le clic droit avec deux doigts", .act),
+        .init("désactive les notifications de Mail", .act),
+        .init("make the Dock smaller", .act),
+        .init("change the accent color to green", .act),
+        .init("enlève Zoom des éléments d'ouverture", .act),
 
         .init("où se trouve l'option pour afficher la barre d'état ?", .find),
         .init("in which menu is Print?", .find),
