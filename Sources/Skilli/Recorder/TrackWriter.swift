@@ -34,6 +34,10 @@ final class TrackWriter: @unchecked Sendable {
     private var converterRate = 0.0
     private var inNext: Double?
     private var outNext = 0.0
+    /// Frames given to the converter and frames it gave back: it holds some
+    /// of each buffer, so what comes out is older than what went in.
+    private var convertedIn = 0
+    private var convertedOut = 0
     /// The host time the newest buffer taken ends at.
     private var newest = 0.0
     private var failed = false
@@ -152,17 +156,23 @@ final class TrackWriter: @unchecked Sendable {
                 converter = nil
                 apply(timeline.place(sampleTime: chunk.sampleTime, hostTime: host, frames: chunk.frames), from: slice)
             } else {
-                if converterRate != chunk.rate || converter == nil {
+                // Another rate, the source started again, a gap in its own
+                // time: a converter afresh, placed by the host clock (what the
+                // old one still held is left out: a few milliseconds).
+                let gap = inNext.map { abs(chunk.sampleTime - $0) > 1 } ?? true
+                if converterRate != chunk.rate || converter == nil || chunk.restarted || gap {
                     converter = Self.converter(from: chunk.rate)
                     converterRate = chunk.rate
-                    inNext = nil
+                    (convertedIn, convertedOut) = (0, 0)
                     timeline.restarted()
                 }
-                // A gap in the source's own time: placed by the host clock.
-                if let inNext, abs(chunk.sampleTime - inNext) > 1 { timeline.restarted() }
                 inNext = chunk.sampleTime + Double(chunk.frames)
+                // What comes out now began this long before this buffer did.
+                let held = Double(convertedIn) / chunk.rate - Double(convertedOut) / Self.rate
                 let out = resampled(slice, rate: chunk.rate)
-                apply(timeline.place(sampleTime: outNext, hostTime: host, frames: out.count), from: out)
+                convertedIn += chunk.frames
+                convertedOut += out.count
+                apply(timeline.place(sampleTime: outNext, hostTime: host - held, frames: out.count), from: out)
                 outNext += Double(out.count)
             }
         }

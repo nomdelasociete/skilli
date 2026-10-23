@@ -22982,7 +22982,7 @@ final class SelfTest {
 
     /// Opens the recorder's menu in the menu bar with a real click, captures
     /// it, then chooses `pick` (else esc). Its items.
-    private func openRecorderMenu(_ center: RecorderCenter, capture: String, pick: String? = nil) async -> [String] {
+    private func openRecorderMenu(_ center: RecorderCenter, capture: String, pick: String? = nil, picked: () -> Void = {}) async -> [String] {
         guard let button = center.menuBar.button, let frame = button.window?.frame else { return [] }
         let source = CGEventSource(stateID: .hidSystemState)
         let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
@@ -23006,6 +23006,7 @@ final class SelfTest {
             try? png.write(to: directory.appendingPathComponent(capture))
         }
         if let pick, let item = items.first(where: { Self.axTitle($0) == pick }) {
+            picked()
             AXUIElementPerformAction(item, kAXPressAction as CFString)
         } else {
             for down in [true, false] {
@@ -23130,6 +23131,7 @@ final class SelfTest {
         }
         let consentKept = context.preferences.recorderConsentShown
         let start = ContinuousClock.now
+        var wall = 0.0
         try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
         let play = playElsewhere(them)
         defer { play?.terminate() }
@@ -23145,7 +23147,7 @@ final class SelfTest {
         // To the end of the call, then Stop from the menu bar.
         let left = cut + 0.6 - (ContinuousClock.now - start).milliseconds / 1000
         if left > 0 { try? await Task.sleep(for: .seconds(left)) }
-        _ = await openRecorderMenu(center, capture: "recorder-menu-stop.png", pick: "Stop and Transcribe")
+        _ = await openRecorderMenu(center, capture: "recorder-menu-stop.png", pick: "Stop and Transcribe", picked: { wall = (ContinuousClock.now - start).milliseconds / 1000 })
         let stopped = await waitUntil(timeout: 5) { center.recorder.phase == .idle } != nil
         _ = await waitUntil(timeout: 3) { center.recorder.transcribing != nil }
         if let button = center.menuBar.button, center.recorder.transcribing != nil { await captureStatusItem(button, "recorder-menubar-transcribing") }
@@ -23196,12 +23198,12 @@ final class SelfTest {
         controller.close()
         let inStep = found.0.count == 2 && found.1.count == 2 && drift < 0.02 && abs(lengths.me - lengths.them) < 0.05
         let passed = consentUntilFirst && consentKept && bar.contains(":") && menu.contains("Pause Recording") && menu.contains("Stop and Transcribe")
-            && liveRow.hasPrefix("Recording “played call”") && inStep && abs(lengths.me - cut) < 1.5
+            && liveRow.hasPrefix("Recording “played call”") && inStep && abs(lengths.me - wall) < 0.5
             && mine.errors <= 35 && theirs.errors <= 25 && both && shownLines == transcript.lines.count && clickedPlays
             && record.state == .done && record.engine == MeetingTranscriber.engine
         self.record(name, passed,
-                    String(format: "tracks %.2f s / %.2f s (call %.1f s); beeps me %@ them %@, offsets %@ (drift %.1f ms); errors per hundred words: me %.1f (%d words), them %.1f (%d words); %d lines (Me %d, Them %d); consent until the first recording %@; menu bar “%@”, menu %@; launcher row “%@”; a line clicked: %@; %@ in %@",
-                           lengths.me, lengths.them, cut, found.0.map { String(format: "%.3f", $0) }.joined(separator: ","),
+                    String(format: "tracks %.2f s / %.2f s (recorded %.2f s, the call %.1f s); beeps me %@ them %@, offsets %@ (drift %.1f ms); errors per hundred words: me %.1f (%d words), them %.1f (%d words); %d lines (Me %d, Them %d); consent until the first recording %@; menu bar “%@”, menu %@; launcher row “%@”; a line clicked: %@; %@ in %@",
+                           lengths.me, lengths.them, wall, cut, found.0.map { String(format: "%.3f", $0) }.joined(separator: ","),
                            found.1.map { String(format: "%.3f", $0) }.joined(separator: ","), offsets.map { String(format: "%.3f", $0) }.joined(separator: ","),
                            drift * 1000, mine.errors, mine.words, theirs.errors, theirs.words, transcript.lines.count,
                            speakers.filter { $0 == .me }.count, speakers.filter { $0 == .them }.count, "\(consentUntilFirst && consentKept)", bar, menu.joined(separator: " | "),

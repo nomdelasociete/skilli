@@ -145,7 +145,7 @@ final class LinkRunner {
             return
         }
         log.append("asked record \(control.rawValue)")
-        guard await approve("\(control.title)?", "“\(title)”. \(Self.fromALink)", false) != .deny else {
+        guard await approve(control.title, "“\(title)”. \(Self.fromALink)", false) != .deny else {
             log.append("declined record \(control.rawValue)")
             return
         }
