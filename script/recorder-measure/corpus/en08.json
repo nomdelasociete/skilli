@@ -1,0 +1,287 @@
+{
+  "id": "en08",
+  "language": "en",
+  "title": "Planning the team offsite",
+  "attendees": [
+    {
+      "id": "me",
+      "name": "Camille Rocher"
+    },
+    {
+      "id": "a",
+      "name": "Marisol Echeverría"
+    },
+    {
+      "id": "b",
+      "name": "Hamish Dunleavy"
+    },
+    {
+      "id": "c",
+      "name": "Oluwaseun Adebayo"
+    },
+    {
+      "id": "d",
+      "name": "Lachlan Whitcombe"
+    }
+  ],
+  "mentioned": [
+    "Ingrid Haugland",
+    "Priyanka Venkataraman",
+    "Tessellate"
+  ],
+  "turns": [
+    {
+      "speaker": "me",
+      "text": "Hello, everyone. Can you all hear me? I've got a new microphone and I don't trust it yet."
+    },
+    {
+      "speaker": "a",
+      "text": "You sound great, Camille. Better than the old one, honestly."
+    },
+    {
+      "speaker": "b",
+      "text": "Much better. You used to sound like you were in a cave.",
+      "overlap": true
+    },
+    {
+      "speaker": "me",
+      "text": "Thank you, Hamish, I think. Oluwaseun Adebayo, Lachlan Whitcombe, are you there?"
+    },
+    {
+      "speaker": "c",
+      "text": "I'm here."
+    },
+    {
+      "speaker": "d",
+      "text": "Here, sorry, I was looking for the mute button."
+    },
+    {
+      "speaker": "me",
+      "text": "Okay. The only topic today is the offsite. Ingrid has approved the budget in principle, forty thousand euros for twenty-two people, two days, in March. We need to choose a place, agree on an agenda, and decide who does what. Marisol Echeverría has been talking to Tessellate. Marisol, can you start?"
+    },
+    {
+      "speaker": "a",
+      "text": "Sure. So Tessellate came back with two options. The first is a country house about an hour from Lyon. From Paris it's two hours by train, door to door. Twenty-four rooms, a big meeting room, a kitchen garden, and they do all the food. Two days, everything included, thirty-one thousand. The second is a hotel in Lisbon, by the river, with flights. That comes to about forty-four thousand, so over budget, and that's before anyone takes a taxi."
+    },
+    {
+      "speaker": "b",
+      "text": "Lisbon, obviously."
+    },
+    {
+      "speaker": "me",
+      "text": "Why obviously, Hamish?"
+    },
+    {
+      "speaker": "b",
+      "text": "Because it's an offsite. The point is to go somewhere different. If we go to a house near Lyon, it's just a long meeting with better cheese. People will remember Lisbon."
+    },
+    {
+      "speaker": "a",
+      "text": "People will also remember being four thousand euros over budget.",
+      "overlap": true
+    },
+    {
+      "speaker": "b",
+      "text": "Four thousand out of forty. We cut the dinner budget a bit. Marisol, come on, you love Lisbon."
+    },
+    {
+      "speaker": "a",
+      "text": "I do love Lisbon. But it's not only the money, Hamish. Five people on the team have small kids. A flight means two nights away, minimum, plus the airport. With the train, they can be home on the second evening."
+    },
+    {
+      "speaker": "d",
+      "text": "And last year in Porto, half of us lost a day to the flights. Priyanka said that in her feedback, I remember."
+    },
+    {
+      "speaker": "b",
+      "text": "Priyanka organised Porto, so she's allowed to complain about it."
+    },
+    {
+      "speaker": "d",
+      "text": "She is. That's why she wrote it down."
+    },
+    {
+      "speaker": "me",
+      "text": "Oluwaseun, you haven't said anything. Where do you land?"
+    },
+    {
+      "speaker": "c",
+      "text": "Honestly, I care less about where and more about what we do there. Last year we had nine sessions in two days, and nobody remembers a single decision. I'd like one long strategy session on the first morning, properly prepared, and then everything else lighter."
+    },
+    {
+      "speaker": "d",
+      "text": "Yes. Please. Fewer workshops.",
+      "overlap": true
+    },
+    {
+      "speaker": "c",
+      "text": "So for me the house is fine, as long as it has one good room where twenty-two people can actually think."
+    },
+    {
+      "speaker": "a",
+      "text": "It does. I've seen photos, and Tessellate says there's a projector and decent wifi."
+    },
+    {
+      "speaker": "b",
+      "text": "Decent wifi. That's what they always say."
+    },
+    {
+      "speaker": "d",
+      "text": "Marisol, is there anything to do in the evenings? Or is it just us and the cows?"
+    },
+    {
+      "speaker": "a",
+      "text": "Um, there's a village about twenty minutes away on foot. And a fireplace. And yes, some cows."
+    },
+    {
+      "speaker": "b",
+      "text": "Lisbon has no cows. Just saying.",
+      "overlap": true
+    },
+    {
+      "speaker": "me",
+      "text": "Okay, let me be honest about where I am. Hamish, I like Lisbon too. But we're over budget, Ingrid Haugland won't give us more, and I don't want five people choosing between the offsite and their kids. I think it's the house."
+    },
+    {
+      "speaker": "b",
+      "text": "I think that's the wrong call, Camille, but I can live with it. Can I at least own the second afternoon? Not a trust exercise. Something people actually enjoy."
+    },
+    {
+      "speaker": "me",
+      "text": "Yes. It's yours."
+    },
+    {
+      "speaker": "b",
+      "text": "Then I'm in. There's a cooking class near there, I'll look into it."
+    },
+    {
+      "speaker": "d",
+      "text": "As long as nobody has to fall backwards into anyone's arms."
+    },
+    {
+      "speaker": "b",
+      "text": "Lachlan, I promise. No falling.",
+      "overlap": true
+    },
+    {
+      "speaker": "me",
+      "text": "Now the agenda. Oluwaseun, can you own the strategy session? You're the one who's been asking for it."
+    },
+    {
+      "speaker": "c",
+      "text": "I'll do it, but I need input. I'd like everyone to send me their top three problems for next year before the offsite, so we start from something real. And I'd like Ingrid to open it, even for twenty minutes."
+    },
+    {
+      "speaker": "me",
+      "text": "I'll ask her. She usually says yes if it's short."
+    },
+    {
+      "speaker": "a",
+      "text": "What about Priyanka? She's in the Singapore office until April. Do we fly her in, or does she join by video?"
+    },
+    {
+      "speaker": "me",
+      "text": "Good question, Marisol. What does the budget look like if we fly her in?"
+    },
+    {
+      "speaker": "a",
+      "text": "With the house at thirty-one, we'd have nine thousand left. Her flight is maybe fifteen hundred. So it fits."
+    },
+    {
+      "speaker": "d",
+      "text": "Then fly her in. She's on the team. Video for a two-day offsite is miserable."
+    },
+    {
+      "speaker": "c",
+      "text": "Agreed.",
+      "overlap": true
+    },
+    {
+      "speaker": "me",
+      "text": "Okay, we fly Priyanka in. Lachlan, the practical stuff. Dietary needs, train times, who needs a room on the ground floor. Can you run a short survey?"
+    },
+    {
+      "speaker": "d",
+      "text": "Sure. I'll send it on Monday and give people until Thursday to answer."
+    },
+    {
+      "speaker": "a",
+      "text": "Lachlan, please ask about the second night too. Some people might want to leave after dinner."
+    },
+    {
+      "speaker": "d",
+      "text": "Good point. I'll add it."
+    },
+    {
+      "speaker": "b",
+      "text": "Can we also agree that the first evening has no presentations? Last time someone did slides after dinner."
+    },
+    {
+      "speaker": "c",
+      "text": "That was me. I'm sorry. I've learned.",
+      "overlap": true
+    },
+    {
+      "speaker": "me",
+      "text": "No slides after dinner. That's now a rule. Let me sum up. The country house near Lyon, through Tessellate, two days in the second week of March. First morning, Oluwaseun's strategy session, with Ingrid opening. Second afternoon, Hamish's activity. Priyanka flies in. Around thirty-five thousand in total, with the activity and her flight."
+    },
+    {
+      "speaker": "a",
+      "text": "That sounds right.",
+      "overlap": true
+    },
+    {
+      "speaker": "me",
+      "text": "Actions. Marisol, confirm the dates with Tessellate and ask them to hold the house, by Friday."
+    },
+    {
+      "speaker": "a",
+      "text": "By Friday. I'll check the cancellation terms too."
+    },
+    {
+      "speaker": "me",
+      "text": "Hamish, a proposal for the second afternoon, with a price, by next Wednesday."
+    },
+    {
+      "speaker": "b",
+      "text": "Next Wednesday. And it'll be fun, Camille. That's my personal mission now."
+    },
+    {
+      "speaker": "d",
+      "text": "Hamish Dunleavy versus the budget, round two."
+    },
+    {
+      "speaker": "me",
+      "text": "Oluwaseun, a draft of the strategy session, and the email asking everyone for their three problems, by the end of next week."
+    },
+    {
+      "speaker": "c",
+      "text": "End of next week, yes."
+    },
+    {
+      "speaker": "me",
+      "text": "Lachlan, the survey goes out Monday. And I'll get final sign-off from Ingrid and ask her about the opening. Anything I've missed?"
+    },
+    {
+      "speaker": "d",
+      "text": "Someone should tell Priyanka Venkataraman before she hears it from someone else."
+    },
+    {
+      "speaker": "me",
+      "text": "Good point, Lachlan. I'll message her today."
+    },
+    {
+      "speaker": "b",
+      "text": "And tell her it was nearly Lisbon.",
+      "overlap": true
+    },
+    {
+      "speaker": "me",
+      "text": "I won't, Hamish. Thanks, everyone. Talk soon."
+    },
+    {
+      "speaker": "a",
+      "text": "Bye, Camille. Bye, all."
+    }
+  ]
+}

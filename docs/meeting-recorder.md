@@ -227,16 +227,363 @@ step with the sound.
 
 ## To check before building
 
-- The Core Audio process tap: which permission macOS 26 asks ("System Audio
-  Recording Only" or the full Screen Recording permission), and that it
-  hears calls in Zoom, Meet in a browser, Teams and FaceTime.
-- The engines and the speaker-separation candidates, measured as above.
-- ScreenCaptureKit on a Chrome and an Arc window while another app is in
-  front, and the tab brought forward in Chrome.
-- Webcam, screen and sound in step over an hour, with pauses.
-- Headphones: without them, the microphone also hears the other side.
-  Measure the double transcript and drop "Them" words heard again by the
-  microphone.
+Measured on 2026-10-23: see Measured below. Still open:
+
+- The tap on a real Zoom, Teams and FaceTime call (no account and no
+  second device on the test Mac); a WebRTC call in Chrome, Meet's way, was
+  measured.
+- The webcam in step with the rest (the test Mac has no camera), and a
+  USB or Bluetooth microphone's clock.
+- No headphones with real speakers and a real microphone (the test Mac
+  has neither): macOS's own echo cancellation (`AVAudioEngine`'s voice
+  processing) against the word-level drop measured below.
+
+## Measured
+
+2026-10-23, on the test Mac (Mac mini, M4, 24 GB, macOS 27.0.1), with
+`script/recorder-measure/` (its README says how to run it again). None of
+it is in the app: whisper.cpp and the speaker-separation packages were
+built in that folder's `work/`, which git ignores; the app probe
+(`Sources/Skilli/Support/RecorderProbe.swift`, `RecorderSyncProbe.swift`)
+compiles only with `SKILLI_SELFTEST`.
+
+### The calls
+
+Sixteen scripted calls with invented people: 107 min, 19,226 words, 1,029
+of them in names (`script/recorder-measure/corpus/`).
+
+- English: eight calls (44 min), 22 people, 28 voices: macOS's American,
+  British, Irish, Australian, South African and Indian voices, and Piper's
+  (VCTK and LibriTTS speakers); in two calls the user is a French voice
+  reading English (`en03`, `en07`), the strongest accent of the set.
+- French: the eight parts of one committee (63 min), six people, a
+  Canadian voice among them and an English voice reading French (Ysaline
+  Vandevelde).
+- The hour: the eight French parts as one call (63 min).
+- Each turn read by its person's voice; the other side through each
+  person's room and noise, then Opus at 24 or 32 kb/s (12 kb/s in `en02`
+  and `fr04`: a bad line); the user through a room and a noise floor. One
+  turn in eight starts before the last one ends (crosstalk).
+- Uncommon names (Kwabena Mensah, Zbigniew Kowalczyk, Maëlys Le Guennec,
+  Tancrède Abgrall, Atelier Quillard, Ostréa…), each said four times or
+  more.
+- Every candidate voice first read the same paragraph; one family no
+  engine could follow was left out (Piper's MLS French voices babble for
+  seconds on short sentences). Voices speak cleaner than people and do
+  not know the names either: real calls will score worse for every
+  engine. The choices rest on the ranking.
+
+### Speech engines
+
+Each track transcribed alone, as the recorder will: the microphone (me)
+and the Mac's sound (them). Errors per hundred words (substitutions,
+deletions and insertions against the script; case, punctuation, hyphens,
+fillers and how a number is written left out), pooled over the calls.
+Clean: words nobody else says at the time, by neither of the strongest
+accents, not on the bad line. Names right: each word of a name spelled as
+the script has it. Speed: seconds of audio per second of work on the M4,
+the model's load left out (whisper's: 0.4–1 s). Memory: the peak of the
+process doing the work (Apple's engines run in `localspeechrecognition`;
+the probe beside it stays at 20 MB). The names: the event's attendees
+first, then the contacts in no particular order, 100 at most (as
+`DictationVocabulary`), for `DictationTranscriber`; whisper's prompt, 450
+characters at most ("Attendees: …. Also: …."), holds the attendees and
+about 20 contacts, and is carried to every 30-second window
+(`--carry-initial-prompt`). VAD: whisper.cpp's Silero VAD.
+
+The sixteen calls (32 tracks, 19,226 words, 1,029 of them in names),
+errors per hundred words up to Bad line:
+
+| Engine | EN me | EN them | FR me | FR them | All | Clean | Crosstalk | Strong accent | Bad line | Names right | × real time | Peak memory |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `SpeechTranscriber` | 26.4 | 11.3 | 8.7 | 22.6 | **17.9** | 8.4 | 53.9 | 80.6 | 14.4 | 38.7 % | 122 | 0.3 GB |
+| `DictationTranscriber` | 26.7 | 18.0 | 10.6 | 29.7 | **23.4** | 13.8 | 75.9 | 79.1 | 23.1 | 38.8 % | 44 | 0.6 GB |
+| `DictationTranscriber` + names | 26.1 | 17.9 | 10.2 | 29.6 | **23.2** | 13.5 | 76.1 | 79.1 | 22.9 | 42.5 % | 40 | 0.6 GB |
+| whisper turbo + VAD | 12.9 | 6.5 | 7.8 | 18.2 | **12.6** | 5.8 | 35.6 | 58.4 | 11.1 | 51.5 % | 21 | 2.0 GB |
+| whisper turbo + VAD + names | 12.2 | 5.6 | 5.9 | 15.4 | **10.8** | 5.4 | 31.1 | 47.3 | 8.7 | 66.9 % | 27 | 2.0 GB |
+| whisper turbo q5_0 + VAD + names | 12.8 | 5.3 | 5.3 | 18.5 | **12.1** | 4.8 | 30.4 | 52.2 | 24.4 | 65.9 % | 28 | 0.9 GB |
+
+The hour (the French committee as one call), errors per hundred words:
+
+| Engine | Me | Them | All | Names right | × real time | Peak memory |
+|---|---|---|---|---|---|---|
+| `SpeechTranscriber` | 8.7 | 22.5 | **19.4** | 37.4 % | 123 | 0.2 GB |
+| `DictationTranscriber` + names | 10.9 | 30.5 | **26.1** | 42.0 % | 52 | 0.5 GB |
+| whisper turbo + VAD + names | 6.0 | 16.2 | **13.9** | 64.0 % | 28 | 2.6 GB |
+
+- `SpeechTranscriber` ignores the names: given or not, the same text,
+  word for word, in every call.
+- `DictationTranscriber` reads them, for little: names right 38.8 →
+  42.5 %. It makes more errors than `SpeechTranscriber` everywhere (23.2
+  against 17.9 per hundred; 76 against 54 in crosstalk), at a third of its
+  speed.
+- whisper large-v3-turbo with VAD and the names: the fewest errors in 31
+  of the 32 tracks, two thirds of the names right (72 % of the
+  attendees'): 69 % of the names in its prompt, 56 % of the others. It
+  gains most where the others fail: crosstalk, the strong accents, the bad
+  line.
+- The hour: every engine within a point of the eight parts heard alone;
+  nothing drifts over an hour. whisper took 4.6 min for both tracks (2.6 GB),
+  `SpeechTranscriber` 1 min.
+- Without VAD, whisper cannot take the microphone's track: it loops on
+  the silences while the others talk, the same line up to 324 times. On
+  four calls (`en01`, `en05`, `fr01`, `fr05`): 97.8 errors per hundred
+  words on that track (225.9 with the names), against 8.0 (5.5) with VAD.
+- The q5_0 model (0.57 GB to download instead of 1.62, 0.9 GB of memory
+  instead of 2): as good on clean speech (4.8 against 5.4), worse overall
+  (12.1 against 10.8), above all on the bad line, where it looped.
+- whisper's two failures: a line repeated over and over (the full model
+  on 1 track of 34, the hour's other side, 5 times; q5_0 on 2 of 32, up to
+  52 times), and once, with the names, attendees' names written as
+  speaker labels ("Camille Kerjean : …", 46 times in one track). Taking
+  both out after it (a line equal to the one before; "‹attendee› :"):
+  10.8 → 10.4 errors per hundred.
+
+**Pick: whisper large-v3-turbo, with VAD and the names, as the optional
+"Better transcription" download; `SpeechTranscriber`, without names,
+until it is downloaded.** whisper makes 40 % fewer errors and gets 1.7
+times as many names right. `DictationTranscriber` is worse than
+`SpeechTranscriber` on everything but names, and gains little there.
+
+### Telling voices apart
+
+On the Mac's sound (several people on one track) and on the one-track
+import (`mix`). Diarization error rate: missed speech, false alarms and
+speech given to the wrong speaker, over the script's speech (overlap
+counted, no collar; the reference marks where each synthesized turn
+sounds, so about 8 points of misses and false alarms are the reference's
+own, the same for all). Count right: calls where the number of speakers
+found is the real one. Told the count: given the event's attendees (less
+the user on the Mac's sound); every attendee speaks in these calls.
+
+| Candidate | The Mac's sound | Of it, wrong speaker | Count right | Told the count | One-track import | Count right | Told the count | × real time | Peak memory |
+|---|---|---|---|---|---|---|---|---|---|
+| SpeakerKit (Argmax's open-source SDK 1.1.1, MIT: pyannote community-1 on Core ML, 11 MB of models) | **10.8 %** | 3.4 % | 11 of 17 | 11.2 %, 17 of 17 | **12.7 %** | 9 of 17 | 12.7 %, 17 of 17 | 380 | 0.8 GB |
+| FluidAudio 0.17.7, offline (Apache 2.0: pyannote community-1 and VBx on Core ML, 21 MB) | 13.1 % | 4.7 % | 14 of 17 | 12.5 %, 17 of 17 | 14.7 % | 13 of 17 | 14.4 %, 17 of 17 | 260 | 0.5 GB |
+| sherpa-onnx 1.13.8 (Apache 2.0: pyannote segmentation 3.0 and WeSpeaker ResNet34, ONNX on the CPU; the 16 calls, not the hour) | 28.1 % | 21.6 % | 4 of 16 | – | 31.4 % | 5 of 16 | – | 16 | 0.3 GB |
+
+- SpeakerKit's wrong counts are one or two speakers too many, six times,
+  each holding 1 to 3 % of the speech; it never found too few on the
+  Mac's sound. FluidAudio's are one too few, three times: two people as
+  one.
+- Told the count, both find it every time, but every attendee speaks in
+  these calls; a real one has attendees who stay silent, and an exact
+  count then splits someone. FluidAudio told "at most one more than the
+  event has" does exactly as untold.
+
+**Pick: SpeakerKit, the count found by itself.** The fewest errors, the
+fastest, and its mistakes are an extra speaker with a few lines, which
+the user merges by giving it a name already used (Done), where
+FluidAudio's are two people under one name, which no rename undoes.
+
+### The Mac's sound: the Core Audio process tap
+
+A tap on every process but the probe's
+(`CATapDescription(stereoGlobalTapButExcludeProcesses:)`, a private
+aggregate device, one IO block), 5 to 8 s each, while something played.
+The test Mac's speakers were muted: the tap heard all the same (it takes
+the sound before the volume). What macOS checked is read in its privacy
+log (`tccd`), what the tap heard in its samples.
+
+| The app | What macOS checked | The tap |
+|---|---|---|
+| skil.li, Screen & System Audio Recording on (as for "do it here"), no `NSAudioCaptureUsageDescription` | Screen Recording (`kTCCServiceScreenCapture`, asked by `coreaudiod`): allowed | heard, every run, no prompt |
+| A new app, nothing allowed, with `NSAudioCaptureUsageDescription` | System Audio Recording Only (`kTCCServiceAudioCapture`): allowed at once, no window on screen (two new apps; 5 ms in the log for the first) | heard |
+| A new app, nothing allowed, without it | nothing | silence; every call returns `noErr` |
+
+| What played | The process playing | Tap on every process | Tap on the app's processes |
+|---|---|---|---|
+| A WebRTC call in Chrome: the other side's voice sent and received over `RTCPeerConnection`, as Meet does | `com.google.Chrome.helper` | heard, 3 of 3 | heard, 3 of 3 (with its helper) |
+| A recording played in a Chrome tab | `com.google.Chrome.helper` (Chrome's own process plays nothing) | heard, 3 of 3 | heard, 6 of 6 |
+| `afplay`, `say` | the tool | heard | – |
+| `say` to another output (a virtual device), the default output being the speakers | the tool | heard | – |
+| A Zoom, Teams or FaceTime call | – | not measured | – |
+
+ScreenCaptureKit's own sound (`capturesAudio`, the whole display) heard
+the same, 3 of 3, but only with Screen Recording itself.
+
+**Pick: one tap on every process but skil.li's.** It hears whatever app
+and whatever output the call uses; a tap on the meeting app has to find
+the app's helper processes (Chrome's sound is its helper's) and would
+miss what another process plays; ScreenCaptureKit's sound would make
+Screen Recording a must even with the screen off. The Screen Recording
+permission skil.li already asks for covers it.
+`NSAudioCaptureUsageDescription` goes in Info.plist for whoever never
+gave Screen Recording: without it the tap records silence and nothing
+says so.
+
+### The screen: ScreenCaptureKit on a browser's window
+
+A test page counting its frames (`requestAnimationFrame`), its window
+captured at four pictures a second for 14 s, the count read on each
+picture (Vision). Painting: the count goes up; frozen: the same count on
+every picture; another app in front: Finder.
+
+| The window | Chrome | Arc |
+|---|---|---|
+| In front | painting | painting |
+| Another app in front, the window in sight | painting | painting |
+| Half covered by another window | painting | painting |
+| Fully covered by another window | **frozen**, 3 runs of 3 | painting, 3 of 3 |
+| Minimized | no picture (the stream is suspended) | no picture |
+| Hidden (⌘H) | no picture | no picture |
+
+The meeting's tab brought forward in Chrome while its window is captured,
+by `BrowserTabReuse`'s script (`set active tab index`), run from the
+test's shell (skil.li had no Automation right for Chrome on the test Mac):
+
+| Chrome | The meeting's tab in the capture |
+|---|---|
+| Another app in front, the window in sight; the tab only | after 0.35, 0.50, 0.88 s |
+| The same, the window and Chrome brought forward too (`set index`, `activate`, as `BrowserTabReuse` does) | after 0.42, 0.52, 0.52 s |
+| Fully covered | never, 3 of 3: Chrome does not paint it |
+
+**Pick: the meeting's window as specified, with two rules.** Its tab is
+brought forward without bringing Chrome forward (the tab shows within a
+second, the user's app keeps the keyboard), and the recording watches its
+pictures: a window minimized or hidden gives none, and Chrome's, fully
+covered, gives the same picture again and again.
+
+### In step over an hour
+
+The probe's window (ScreenCaptureKit, each picture at its own time) went
+to an MP4 file, the Mac's sound (the tap) to a WAV file sample after
+sample, as the recorder would write them; every 10 s the window flashed
+white and a click played; a 30 s pause every 10 minutes, nothing written
+during it, the pauses taken out of both files' time. Then where each
+flash and each click landed in the files (a flash: a picture whose mean
+brightness jumps; a click: the sound over -40 dBFS).
+
+The first hour failed three ways, each a rule for the recorder:
+
+- The tap's IO block ran on a dispatch queue: macOS let it fall behind
+  while the display was off (23 min of the hour), 16,022 cycles never came,
+  and a file written sample after sample came out 23 minutes short of the
+  picture. On Core Audio's real-time thread (its IO block given no
+  queue), under a `beginActivity` (`.latencyCritical`,
+  `.idleSystemSleepDisabled`), and with a missed cycle written as silence
+  of its length (by the device's sample time), the second hour missed
+  no cycle.
+- The microphone's `AVAudioEngine` stopped after 62 s, and the probe's own
+  click player after about two minutes: a change of the audio setup
+  stops an engine and nothing starts it again. Started again on
+  `AVAudioEngineConfigurationChange`, the second hour's microphone went
+  on to the end (12 restarts). The recorder does the same and keeps the
+  track's time by the device's clock, not by the samples it got.
+- The display off, the picture stops too: no frames for those 23 min. A
+  recording keeps the display on, as a call does.
+
+| | First hour | Second hour |
+|---|---|---|
+| Clicks found in the sound file | 34 of 345 | **345 of 345** |
+| Flashes found in the picture | 195 of 345 | **345 of 345** |
+| The tap's cycles missed | 16,022 (23 min) | 0 |
+| The sound file against the picture | 23 min short | the same length |
+| Sound minus picture, 10-minute means | – | 233, 231, 224, 214, 222, 216 ms (each click ±14 ms) |
+| The output's clock against the Mac's | −11 ppm | −5.3 ppm: −19 ms an hour |
+| The microphone | stopped after 62 s | to the end, 12 restarts |
+
+The constant part of the offset (about 0.2 s) is the time `afplay` takes
+to play, the test's own. What the recorder would add is the change over
+the hour: 17 ms less at the end, as the output's clock predicts, and no
+step at any of the five pauses. In step means: well under one picture
+(33 ms at 30 pictures a second) after an hour, with no resampling.
+
+**Pick: each track by its own clock.** The sound written by the device's
+sample time (a missed cycle is silence of its length), the tap's IO on
+Core Audio's real-time thread under an activity that keeps macOS from
+napping it, every `AVAudioEngine` started again after a change of the
+audio setup, the pictures at their own times, a pause cut from all of
+them at the same moment, the display kept on while recording. The
+webcam is not measured (no camera on the test Mac).
+
+### No headphones
+
+The microphone's track with the other side heard again from the
+speakers (12 or 20 dB under the user's voice, 45 ms late, through a small
+speaker's band and the room), each engine on it and on the Mac's sound,
+then the drop the spec asks for: a word of the microphone's track goes
+when the Mac's sound has the same word from 0.5 s before to 2 s after, in
+runs of two words or more (a lone "yes" stays). The rule and its window
+were set before the runs, not tuned. The sixteen calls, the user's 5,008
+words; the other side's 14,218.
+
+| Engine | The other side | The user's errors per hundred words: headphones | No headphones | After the drop | The other side's words in the user's transcript: no headphones | After the drop |
+|---|---|---|---|---|---|---|
+| `SpeechTranscriber` | 12 dB under | 18.0 | 266.3 | **33.0** | 80.9 % | **2.7 %** |
+| `SpeechTranscriber` | 20 dB under | 18.0 | 260.7 | **38.1** | 77.8 % | **3.0 %** |
+| `DictationTranscriber` + names | 12 dB under | 19.0 | 198.6 | 49.5 | 58.9 % | 9.4 % |
+| `DictationTranscriber` + names | 20 dB under | 19.0 | 145.6 | 67.9 | 41.4 % | 15.6 % |
+| whisper turbo + VAD + names | 12 dB under | 9.2 | 281.8 | 130.4 | 88.1 % | 36.8 % |
+| whisper turbo + VAD + names | 20 dB under | 9.2 | 291.5 | 134.7 | 82.9 % | 30.4 % |
+
+- Without headphones the user's transcript holds most of the other side's
+  words again, even 20 dB under the voice: the transcript doubles.
+- With each word's time (Apple's engines), the drop takes most of them
+  out: 3 % left with `SpeechTranscriber`, 9 to 16 % with
+  `DictationTranscriber` (its two tracks agree less on the same words),
+  and at most 1.5 % of the user's own words go with them.
+- whisper gives times per line, not per word, once its VAD has cut the
+  silences (whisper.cpp 1.9.5's word times are then those of the audio
+  without its silences): the drop misses a third of the other side.
+
+**Pick: the drop by words, on each word's time.** Apple's engines give
+them; whisper's have to be put back on the recording's clock first (the
+VAD's cuts added back), not measured here. macOS's own echo cancellation
+is still to measure on a Mac with speakers and a microphone (To check).
+
+### What the measurements change in this spec
+
+Not changed above: the maintainer decides. Each point names the passage.
+
+1. **Target → Better 2** ("the attendees and the user's contacts go to
+   the engine that takes words to expect, as Dictate's names do"): that
+   engine, `DictationTranscriber`, gets 3.7 more points of names right
+   and makes 30 % more errors. Names come out right two times in three
+   only through whisper's prompt. Better 2 holds with the download;
+   without it no engine of macOS's hears names better.
+2. **Transcription → Engine**: whisper won (above). "Until then, the best
+   of macOS's two" is `SpeechTranscriber`, given no names. whisper runs
+   with VAD and its prompt carried to every window, on the full model
+   (1.6 GB; the 0.6 GB q5_0 one loops more), and two of its failures are
+   taken out after it: a segment repeated right after itself, an
+   attendee's name written as a speaker label.
+3. **Transcription → Who spoke** ("an on-device speaker-separation
+   model, picked the same way"): SpeakerKit, the count found by itself
+   (above).
+4. **What skil.li already has → Browser tabs**: `BrowserTabReuse` does
+   more than bring a tab forward: it loads its address in it (`set URL of
+   tab`), which for a meeting reloads the page and leaves the call. The
+   recorder needs the tab selected only (`set active tab index`), without
+   `activate`.
+5. **Before → A browser tab** ("the meeting's window is recorded"):
+   Chrome's window records only while some of it is in sight: fully
+   covered, the same picture again and again; minimized or hidden, no
+   picture, in any browser (Arc keeps painting under other windows). The
+   card says so for Chrome ("keep the meeting's window in sight"), and the
+   recording notices a window that stops giving pictures.
+6. **Privacy and consent** ("a source whose permission is missing shows
+   off in the Record card, with that permission named"): for the Mac's
+   sound, macOS says nothing: without the permission (or without
+   `NSAudioCaptureUsageDescription`) the tap records silence, every call
+   succeeding. Screen Recording, which skil.li asks for "do it here",
+   covers it; with the usage string, a Mac without it granted System
+   Audio Recording Only at once. The Record card's live meter is the
+   check: silence while the call talks.
+7. **To check before building** ("which permission macOS 26 asks"):
+   measured on macOS 27.0.1 (the test Mac's), not on 26.
+8. **During** ("Pause writes nothing to any track until Resume"; "written
+   as it comes"): measured in step over an hour with five pauses, but
+   only with rules the spec does not have: the tap's IO on the
+   real-time thread under an activity, missed cycles written as silence
+   by the sample time, engines started again after a change of the
+   audio setup, the display kept on. Each was measured failing without
+   it.
+9. **To check before building → Headphones**: without them the user's
+   transcript holds the other side's words again (78 to 88 % of them
+   with the two engines picked); the drop works (3 % left) only on each
+   word's time, which whisper gives once put back on the recording's
+   clock.
 
 ## Decided
 

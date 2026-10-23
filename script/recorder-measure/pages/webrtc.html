@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><title>WebRTC call</title></head><body style="font:40px Menlo">
+<div id=s>starting</div>
+<script>
+// A call in one page: the "other side" sends its microphone (Chrome's fake
+// device: a recorded call) over WebRTC; this side plays what it receives,
+// as Meet does.
+(async () => {
+  const mic = await navigator.mediaDevices.getUserMedia({audio: true}); console.log('PROBE mic', mic.getAudioTracks()[0].label);
+  const a = new RTCPeerConnection(), b = new RTCPeerConnection();
+  a.onicecandidate = e => e.candidate && b.addIceCandidate(e.candidate);
+  b.onicecandidate = e => e.candidate && a.addIceCandidate(e.candidate);
+  b.ontrack = e => { const el = new Audio(); el.srcObject = e.streams[0]; el.play(); s.textContent = 'in call'; document.title = 'WebRTC in call'; console.log('PROBE in call', e.track.kind, e.track.readyState); setInterval(async () => { const st = await b.getStats(); st.forEach(r => { if (r.type === 'inbound-rtp') console.log('PROBE inbound', r.kind, r.packetsReceived, r.audioLevel, r.totalAudioEnergy); }); }, 2000); };
+  mic.getTracks().forEach(t => a.addTrack(t, mic));
+  await a.setLocalDescription(await a.createOffer()); await b.setRemoteDescription(a.localDescription);
+  await b.setLocalDescription(await b.createAnswer()); await a.setRemoteDescription(b.localDescription);
+})().catch(e => { s.textContent = 'error ' + e; document.title = 'WebRTC error ' + e; console.log('PROBE error ' + e); });
+</script></body></html>
