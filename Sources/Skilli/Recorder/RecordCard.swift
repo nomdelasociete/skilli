@@ -299,7 +299,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
 
     private let dot = DotView()
     private let eyebrow = NSTextField(labelWithString: "")
-    private let languageMenu = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let languageMenu = LanguageButton()
     private let nameField = NSTextField(string: "")
     private let detail = NSTextField(labelWithString: "")
     private let microphoneRow = SourceRow(symbol: "mic.fill", title: "Microphone")
@@ -329,7 +329,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     var noteText: String { note.isHidden ? "" : note.text }
     var consentShown: Bool { !consent.isHidden }
     var detailText: String { detail.stringValue }
-    var languageShown: String { languageMenu.titleOfSelectedItem ?? "" }
+    var languageShown: String { languageMenu.shown }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -348,12 +348,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         detail.font = .systemFont(ofSize: 14)
         detail.textColor = .secondaryLabelColor
         detail.lineBreakMode = .byTruncatingTail
-        languageMenu.isBordered = false
-        languageMenu.font = .systemFont(ofSize: 13)
-        languageMenu.contentTintColor = .secondaryLabelColor
-        languageMenu.target = self
-        languageMenu.action = #selector(languagePicked)
-        languageMenu.setAccessibilityLabel("Language")
+        languageMenu.onPick = { [weak self] index in self?.languagePicked(index) }
         hairline.wantsLayer = true
         button.target = self
         button.action = #selector(primaryPressed)
@@ -371,8 +366,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         onPrimary?()
     }
 
-    @objc private func languagePicked() {
-        let index = languageMenu.indexOfSelectedItem
+    private func languagePicked(_ index: Int) {
         guard languageIDs.indices.contains(index) else { return }
         onLanguage?(languageIDs[index])
     }
@@ -447,17 +441,13 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
 
     func setLanguages(_ languages: [(id: String, name: String)], picked: String) {
         languageIDs = languages.map(\.id)
-        languageMenu.removeAllItems()
-        languageMenu.addItems(withTitles: languages.map(\.name))
-        if let index = languageIDs.firstIndex(of: picked) {
-            languageMenu.selectItem(at: index)
-        } else {
+        var names = languages.map(\.name)
+        if !languageIDs.contains(picked) {
             // Not one this Mac has: shown all the same, the note says so.
-            languageMenu.addItem(withTitle: MeetingTranscriber.name(of: picked))
+            names.append(MeetingTranscriber.name(of: picked))
             languageIDs.append(picked)
-            languageMenu.selectItem(at: languageIDs.count - 1)
         }
-        languageMenu.sizeToFit()
+        languageMenu.set(names, picked: languageIDs.firstIndex(of: picked) ?? 0)
         languageMenu.isHidden = !isRecordCard
     }
 
@@ -556,9 +546,8 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
 
         var y: CGFloat = 26
         dot.frame = NSRect(x: inset, y: y + 4, width: 9, height: 9)
-        languageMenu.sizeToFit()
-        let menuWidth = languageMenu.isHidden ? 0 : min(languageMenu.frame.width, inner / 2)
-        languageMenu.frame = NSRect(x: width - inset - menuWidth + 6, y: y - 4, width: menuWidth, height: 24)
+        let menuWidth = languageMenu.isHidden ? 0 : min(languageMenu.fittingWidth, inner / 2)
+        languageMenu.frame = NSRect(x: width - inset - menuWidth, y: y - 2, width: menuWidth, height: 20)
         eyebrow.frame = NSRect(x: inset + 17, y: y + 1, width: max(0, inner - 17 - menuWidth - 12), height: 16)
         y += 32
 
@@ -602,6 +591,78 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     var fittingHeight: CGFloat {
         layoutContent()
         return button.frame.maxY + 20
+    }
+}
+
+/// The language, as a word and a chevron in the secondary color; a click
+/// lists the languages this Mac transcribes, the one picked checked.
+private final class LanguageButton: NSView {
+    var onPick: ((Int) -> Void)?
+    private let label = NSTextField(labelWithString: "")
+    private let chevron = NSImageView()
+    private var names: [String] = []
+    private var picked = 0
+
+    var shown: String { label.stringValue }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        label.font = .systemFont(ofSize: 13)
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byTruncatingTail
+        chevron.image = Theme.symbol("chevron.up.chevron.down", pointSize: 10, weight: .semibold)
+        chevron.contentTintColor = .secondaryLabelColor
+        addSubview(label)
+        addSubview(chevron)
+        setAccessibilityRole(.popUpButton)
+        setAccessibilityLabel("Language")
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    override var isFlipped: Bool { true }
+
+    func set(_ names: [String], picked: Int) {
+        self.names = names
+        self.picked = picked
+        label.stringValue = names.indices.contains(picked) ? names[picked] : ""
+        setAccessibilityValue(label.stringValue)
+        needsLayout = true
+    }
+
+    var fittingWidth: CGFloat {
+        label.sizeToFit()
+        return ceil(label.frame.width) + 4 + 12
+    }
+
+    override func layout() {
+        super.layout()
+        label.sizeToFit()
+        let labelWidth = max(0, min(label.frame.width, bounds.width - 16))
+        label.frame = NSRect(x: 0, y: (bounds.height - label.frame.height) / 2, width: labelWidth, height: label.frame.height)
+        chevron.frame = NSRect(x: labelWidth + 4, y: (bounds.height - 12) / 2, width: 12, height: 12)
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let menu = NSMenu()
+        for (index, name) in names.enumerated() {
+            let item = NSMenuItem(title: name, action: #selector(choose(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = index
+            item.state = index == picked ? .on : .off
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: menu.items.indices.contains(picked) ? menu.items[picked] : nil, at: NSPoint(x: 0, y: bounds.height - 2), in: self)
+    }
+
+    @objc private func choose(_ item: NSMenuItem) {
+        set(names, picked: item.tag)
+        onPick?(item.tag)
     }
 }
 

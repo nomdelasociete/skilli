@@ -23018,7 +23018,12 @@ final class SelfTest {
     private func recordCardHasKeys(_ center: RecorderCenter, _ name: String) async -> Bool {
         if await waitUntil(timeout: 1.5, { center.cardWindow?.isKeyWindow == true }) != nil { return true }
         aborted = true
-        record(name, false, "the Record card did not take the keyboard (front: \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")): stopped so no key lands elsewhere", nil)
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
+        // macOS's own question in front (a permission skil.li asked for):
+        // its owner answers it once on this Mac.
+        let why = front == "com.apple.UserNotificationCenter" ? "macOS asks a question in front (a permission: answer it on this Mac once)" : "front: \(front)"
+        let view = center.cardView
+        record(name, false, "the Record card did not take the keyboard (\(why)): stopped so no key lands elsewhere; the card said microphone “\(view.microphoneLine)”, the Mac's sound “\(view.macLine)”, language “\(view.languageShown)”, note “\(view.noteText)”", nil)
         return false
     }
 
