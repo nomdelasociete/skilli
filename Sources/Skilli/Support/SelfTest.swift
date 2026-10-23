@@ -15681,7 +15681,12 @@ final class SelfTest {
         }
         let there = await ask("change default browser to \(other.0)", capture: "ask-default-browser-changed.png")
         let changed = defaultBrowser() == other.1
-        let back = await ask("change default browser to \(first.0)", capture: "ask-default-browser-back.png")
+        var back = await ask("change default browser to \(first.0)", capture: "ask-default-browser-back.png")
+        // Not back: asked once more, so the Mac is not left on another
+        // browser.
+        if defaultBrowser() != before {
+            back += "; asked again: " + (await ask("change default browser to \(first.0)", capture: "ask-default-browser-back-again.png"))
+        }
         let restored = defaultBrowser() == before
         record(name, changed && restored,
                "to \(other.0): \(changed ? "changed" : "not changed (\(defaultBrowser() ?? "none"))") — \(there); back to \(first.0): "
