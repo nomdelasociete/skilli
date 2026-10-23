@@ -154,7 +154,9 @@ final class TrackWriter: @unchecked Sendable {
             let slice = Array(samples[chunk.offset..<chunk.offset + chunk.frames])
             if abs(chunk.rate - Self.rate) < 1 {
                 converter = nil
-                apply(timeline.place(sampleTime: chunk.sampleTime, hostTime: host, frames: chunk.frames), from: slice)
+                let pieces = timeline.place(sampleTime: chunk.sampleTime, hostTime: host, frames: chunk.frames)
+                trace(pieces, host: host, sampleTime: chunk.sampleTime, frames: chunk.frames)
+                apply(pieces, from: slice)
             } else {
                 // Another rate, the source started again, a gap in its own
                 // time: a converter afresh, placed by the host clock (what the
@@ -172,11 +174,22 @@ final class TrackWriter: @unchecked Sendable {
                 let out = resampled(slice, rate: chunk.rate)
                 convertedIn += chunk.frames
                 convertedOut += out.count
-                apply(timeline.place(sampleTime: outNext, hostTime: host - held, frames: out.count), from: out)
+                let pieces = timeline.place(sampleTime: outNext, hostTime: host - held, frames: out.count)
+                trace(pieces, host: host - held, sampleTime: outNext, frames: out.count)
+                apply(pieces, from: out)
                 outNext += Double(out.count)
             }
         }
         flush(all: false)
+    }
+
+    /// Debug builds: where a run starts again (a gap filled, frames left
+    /// out), to read how each track keeps its time.
+    private func trace(_ pieces: [TrackTimeline.Piece], host: Double, sampleTime: Double, frames: Int) {
+        #if DEBUG
+        guard pieces.contains(where: { if case .silence = $0 { true } else if case .frames(let range) = $0 { range.lowerBound > 0 || range.count < frames } else { false } }) else { return }
+        Log.trace("Recorder track \(url.deletingPathExtension().lastPathComponent): host \(String(format: "%.4f", host - timeline.start)) sample \(Int(sampleTime)) frames \(frames) → \(pieces), written \(timeline.written)")
+        #endif
     }
 
     private func apply(_ pieces: [TrackTimeline.Piece], from source: [Float]) {
