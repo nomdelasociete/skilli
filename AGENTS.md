@@ -2151,7 +2151,8 @@ re-investigating.
   rebuilt when the output changes), its IO block on Core Audio's
   real-time thread (no queue: on one, macOS let it fall behind with the
   display off); `NSAudioCaptureUsageDescription` in Info.plist (without
-  it the tap records silence and says nothing); the microphone through
+  it the tap records silence and says nothing; with it macOS asks once,
+  System Audio Recording, even with Screen Recording allowed); the microphone through
   `AVAudioEngine` started again on `AVAudioEngineConfigurationChange`
   (`MicrophoneTrack`); a recording holds `beginActivity` with
   `.latencyCritical`, idle system and display sleep off. Each track

@@ -227,9 +227,10 @@ struct LauncherRecording: Equatable {
     let elapsed: Double
     let paused: Bool
 
-    /// "Recording “Weekly sync” · 12:04", "Paused · “Weekly sync” · 12:04".
+    /// "Recording “Weekly sync” · 12:04", "Paused “Weekly sync” · 12:04",
+    /// as the menu bar's menu says it.
     var title: String {
-        (paused ? "Paused · “\(name)”" : "Recording “\(name)”") + " · " + MeetingTranscript.clock(elapsed)
+        (paused ? "Paused “\(name)”" : "Recording “\(name)”") + " · " + MeetingTranscript.clock(elapsed)
     }
 }
 

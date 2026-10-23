@@ -47,8 +47,10 @@ keyboard: the user opened it to name the recording.
 - **The sources**, a row each: a symbol, the source, the device in the
   secondary color, and a level meter on the right (the meeting check's
   capsule, in the accent color). Both run while the card is open,
-  nothing written: the meters are the check. A tap macOS does not allow
-  records silence and says nothing (Measured), so only the sound tells.
+  nothing written: the meters are the check. macOS asks once, the first
+  time the tap starts (System Audio Recording: seen on the test Mac with
+  Screen Recording allowed); a tap it does not allow records silence and
+  says nothing (Measured), so only the sound tells.
   - The microphone never asked: macOS asks as the card opens (the card
     steps down to the floating level while it does). Not allowed: the
     row says "Not allowed · ⌘↩ opens Privacy", no meter.

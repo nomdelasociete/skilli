@@ -22,9 +22,16 @@ final class RecorderCenter {
         let card = RecordCard(recorder: recorder)
         card.onRecord = { [weak self] title, language in self?.begin(title: title, language: language) }
         card.onCancel = { [weak self] in self?.cancelled() }
-        card.onSave = { [weak self] folder, record in self?.recorder.save(unfinished: folder, record: record) }
-        card.onLater = { _, _ in }
-        card.onDiscard = { [weak self] folder, record in self?.delete(folder, title: record.title) }
+        // An unfinished one answered (Save, Later, Discard): the next.
+        card.onSave = { [weak self] folder, record in
+            self?.recorder.save(unfinished: folder, record: record)
+            self?.offerNext()
+        }
+        card.onLater = { [weak self] _, _ in self?.offerNext() }
+        card.onDiscard = { [weak self] folder, record in
+            self?.delete(folder, title: record.title)
+            self?.offerNext()
+        }
         card.onOpenPrivacy = { [weak self] permission in self?.openPrivacy(permission) }
         return card
     }()
@@ -226,7 +233,6 @@ final class RecorderCenter {
         guard !card.isVisible, !recorder.isRecording, !unfinished.isEmpty else { return }
         let (folder, record) = unfinished.removeFirst()
         Log.trace("Recorder: “\(record.title)” was never stopped: offered")
-        card.onLater = { [weak self] _, _ in self?.offerNext() }
         card.showUnfinished(folder, record: record)
     }
 

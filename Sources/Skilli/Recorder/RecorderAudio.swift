@@ -209,8 +209,9 @@ final class AudioInbox: @unchecked Sendable {
 /// it fall behind with the display off (Measured: 23 minutes missing in an
 /// hour). The default output changing (headphones, a display) rebuilds the
 /// aggregate on the new one; the tap's next buffer is placed by the host
-/// clock. macOS asks nothing and says nothing: without its permission the
-/// tap records silence (`AudioInbox.silentFor`).
+/// clock. macOS asks once, the first time (System Audio Recording, even
+/// with Screen Recording allowed, on the test Mac); not allowed, the tap
+/// records silence, every call succeeding (`AudioInbox.silentFor`).
 final class MacSoundTap: @unchecked Sendable {
     struct Failure: LocalizedError {
         let call: String

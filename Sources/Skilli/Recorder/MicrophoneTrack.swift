@@ -70,6 +70,7 @@ final class MicrophoneTrack {
         #if SKILLI_SELFTEST
         player?.stop()
         player = nil
+        standInPlaying = false
         #endif
         engine?.stop()
         engine = nil

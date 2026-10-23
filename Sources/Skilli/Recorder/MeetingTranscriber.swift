@@ -54,8 +54,8 @@ enum MeetingTranscriber {
         Locale.current.localizedString(forIdentifier: identifier) ?? identifier
     }
 
-    /// The language as the card and the window say it ("English" when one
-    /// English is all this Mac has… else its region too).
+    /// The language alone, as the window and `transcript.md` say it
+    /// ("English"; the card names the region when this Mac has several).
     static func shortName(of identifier: String) -> String {
         let locale = Locale(identifier: identifier)
         return locale.language.languageCode.flatMap { Locale.current.localizedString(forLanguageCode: $0.identifier) } ?? name(of: identifier)
