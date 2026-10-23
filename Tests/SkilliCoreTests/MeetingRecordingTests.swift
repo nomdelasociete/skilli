@@ -250,6 +250,71 @@ final class TrackTimelineTests: XCTestCase {
         XCTAssertEqual(timeline.overshoot(), 0)
     }
 
+    /// A microphone whose clock runs fast or slow (`ppm`) against the
+    /// host's, for an hour, paused 30 s every 10 minutes: how far the track
+    /// gets from the host clock (frames, over buffers recorded whole), how
+    /// much that moves across a pause, and where it ends.
+    private func drifting(ppm: Double) -> (worst: Int, worstJump: Int, end: Int, frames: Int) {
+        let rate = 48000.0, size = 512
+        let pauses = stride(from: 600.0, through: 3000.0, by: 600.0).map { ($0, $0 + 30) }
+        var timeline = TrackTimeline(rate: rate, start: 0)
+        for (from, to) in pauses {
+            timeline.pause(at: from)
+            timeline.resume(at: to)
+        }
+        timeline.finish(at: 3600)
+        func recorded(_ time: Double) -> Bool { time < 3600 && !pauses.contains { time >= $0.0 && time < $0.1 } }
+        var sample = 0.0, host = 0.0
+        var worst = 0.0, worstJump = 0.0
+        var last: Double?
+        var crossed = false
+        while host < 3600 {
+            _ = timeline.place(sampleTime: sample, hostTime: host, frames: size)
+            let end = host + Double(size) / (rate * (1 + ppm * 1e-6))
+            if recorded(host), recorded(end) {
+                let deviation = Double(timeline.written) - timeline.fileTime(of: end) * rate
+                worst = max(worst, abs(deviation))
+                if crossed, let last { worstJump = max(worstJump, abs(deviation - last)) }
+                last = deviation
+                crossed = false
+            } else {
+                crossed = true
+            }
+            sample += Double(size)
+            host = end
+        }
+        return (Int(worst.rounded()), Int(worstJump.rounded()), timeline.written, Int((timeline.fileTime(of: 3600) * rate).rounded()))
+    }
+
+    func testAFastMicrophoneStaysWithTheHostClock() {
+        let run = drifting(ppm: 100)
+        XCTAssertLessThanOrEqual(run.worst, 48, "never more than a millisecond off: \(run.worst) frames")
+        XCTAssertLessThanOrEqual(run.worstJump, 48, "a pause's re-placement under a millisecond: \(run.worstJump) frames")
+        XCTAssertLessThanOrEqual(abs(run.end - run.frames), 48, "the hour ends where it should")
+    }
+
+    func testASlowMicrophoneStaysWithTheHostClock() {
+        let run = drifting(ppm: -100)
+        XCTAssertLessThanOrEqual(run.worst, 48, "never more than a millisecond off: \(run.worst) frames")
+        XCTAssertLessThanOrEqual(run.worstJump, 48, "a pause's re-placement under a millisecond: \(run.worstJump) frames")
+        XCTAssertLessThanOrEqual(abs(run.end - run.frames), 48, "the hour ends where it should")
+    }
+
+    func testAFrameIsLeftOutOrPlayedTwiceAtMost() {
+        var timeline = TrackTimeline(rate: 48000, start: 0)
+        var sample = 0.0, host = 0.0
+        var counts: Set<Int> = []
+        // 300 ppm fast, for a minute: every buffer holds 512 frames, one
+        // less at most.
+        for _ in 0..<5625 {
+            let pieces = timeline.place(sampleTime: sample, hostTime: host, frames: 512)
+            counts.insert(pieces.reduce(0) { total, piece in if case .frames(let range) = piece { total + range.count } else { total } })
+            sample += 512
+            host += 512 / (48000 * 1.0003)
+        }
+        XCTAssertEqual(counts, [511, 512])
+    }
+
     func testAnHourOfBuffersStaysOnTheDevicesClock() {
         // 48 kHz, 512-frame cycles, one missed every 1000.
         var timeline = TrackTimeline(rate: 48000, start: 0)

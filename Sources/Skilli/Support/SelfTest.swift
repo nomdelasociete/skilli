@@ -22843,21 +22843,36 @@ final class SelfTest {
     /// `source`'s first `seconds` (16 kHz WAV) with a 40 ms beep at each of
     /// `beeps` (s), written to `name` in the scratch folder: the same beeps
     /// in both sides tell where each landed in its track.
-    nonisolated private static func clip(_ source: URL?, seconds: Double, beeps: [Double], to url: URL) -> Bool {
+    /// `ppm`: as a microphone whose clock runs that fast or slow hears it:
+    /// stretched (or squeezed) by as much, a frame of it a moment of the
+    /// call at that clock's rate.
+    nonisolated private static func clip(_ source: URL?, seconds: Double, beeps: [Double], ppm: Double = 0, to url: URL) -> Bool {
         let rate = 16000.0
-        let frames = Int(seconds * rate)
+        let factor = 1 + ppm * 1e-6
+        let frames = Int(seconds * rate * factor)
         guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1),
               let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frames)), let data = buffer.floatChannelData?[0]
         else { return false }
         buffer.frameLength = AVAudioFrameCount(frames)
         data.update(repeating: 0, count: frames)
+        let wanted = Int(seconds * rate) + 2
         if let source, let file = try? AVAudioFile(forReading: source), file.processingFormat.sampleRate == rate,
-           let read = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(frames)),
-           (try? file.read(into: read, frameCount: AVAudioFrameCount(min(Int64(frames), file.length)))) != nil, let samples = read.floatChannelData?[0] {
-            data.update(from: samples, count: Int(read.frameLength))
+           let read = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(wanted)),
+           (try? file.read(into: read, frameCount: AVAudioFrameCount(min(Int64(wanted), file.length)))) != nil, let samples = read.floatChannelData?[0] {
+            let count = Int(read.frameLength)
+            if ppm == 0 {
+                data.update(from: samples, count: min(count, frames))
+            } else {
+                for index in 0..<frames {
+                    let at = Double(index) / factor
+                    let low = Int(at), weight = Float(at - Double(low))
+                    guard low + 1 < count else { break }
+                    data[index] = samples[low] * (1 - weight) + samples[low + 1] * weight
+                }
+            }
         }
         for beep in beeps {
-            let start = Int(beep * rate)
+            let start = Int((beep * rate * factor).rounded())
             for index in start..<min(frames, start + Int(0.04 * rate)) {
                 data[index] = 0.6 * Float(sin(2 * Double.pi * 2000 * Double(index - start) / rate))
             }
@@ -22868,13 +22883,13 @@ final class SelfTest {
     }
 
     /// Where each beep (2 kHz, 40 ms) starts in a track, in seconds: the
-    /// 2 kHz power in 5 ms windows a millisecond apart.
+    /// 2 kHz power in 5 ms windows a quarter of a millisecond apart.
     nonisolated private static func beeps(in url: URL) -> [Double] {
         guard let file = try? AVAudioFile(forReading: url), file.length > 0,
               let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
               (try? file.read(into: buffer)) != nil, let data = buffer.floatChannelData?[0] else { return [] }
         let rate = file.processingFormat.sampleRate
-        let window = Int(rate * 0.005), hop = max(1, Int(rate * 0.001))
+        let window = Int(rate * 0.005), hop = max(1, Int(rate * 0.00025))
         let k = Float(2 * cos(2 * Double.pi * 2000 / rate))
         var powers: [Float] = []
         var start = 0
@@ -23106,7 +23121,9 @@ final class SelfTest {
         let turns = truth.turns.filter { $0.end <= cut - 0.5 }
         let beeps = [0.3, cut - 0.4]
         let me = recorderScratch.appendingPathComponent("en01-me.wav"), them = recorderScratch.appendingPathComponent("en01-them.wav")
-        guard Self.clip(call.appendingPathComponent("me.wav"), seconds: cut, beeps: beeps, to: me),
+        // The microphone's clock 100 ppm fast, as a USB or Bluetooth one may
+        // run: 7 ms off the other side by the end, uncorrected.
+        guard Self.clip(call.appendingPathComponent("me.wav"), seconds: cut, beeps: beeps, ppm: 100, to: me),
               Self.clip(call.appendingPathComponent("them.wav"), seconds: cut, beeps: beeps, to: them) else {
             record(name, false, "the call could not be cut", nil)
             return
@@ -23132,7 +23149,7 @@ final class SelfTest {
         let consentKept = context.preferences.recorderConsentShown
         let start = ContinuousClock.now
         var wall = 0.0
-        try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
+        try? center.recorder.microphone.playStandIn(at: mach_absolute_time(), ppm: 100)
         let play = playElsewhere(them)
         defer { play?.terminate() }
         // While it records: the menu bar, the launcher's row.
@@ -23196,13 +23213,13 @@ final class SelfTest {
             _ = await waitUntil(timeout: 2) { !controller.playing }
         }
         controller.close()
-        let inStep = found.0.count == 2 && found.1.count == 2 && drift < 0.02 && abs(lengths.me - lengths.them) < 0.05
+        let inStep = found.0.count == 2 && found.1.count == 2 && drift < 0.002 && abs(lengths.me - lengths.them) < 0.05
         let passed = consentUntilFirst && consentKept && bar.contains(":") && menu.contains("Pause Recording") && menu.contains("Stop and Transcribe")
             && liveRow.hasPrefix("Recording “played call”") && inStep && abs(lengths.me - wall) < 0.5
             && mine.errors <= 35 && theirs.errors <= 25 && both && shownLines == transcript.lines.count && clickedPlays
             && record.state == .done && record.engine == MeetingTranscriber.engine
         self.record(name, passed,
-                    String(format: "tracks %.2f s / %.2f s (recorded %.2f s, the call %.1f s); beeps me %@ them %@, offsets %@ (drift %.1f ms); errors per hundred words: me %.1f (%d words), them %.1f (%d words); %d lines (Me %d, Them %d); consent until the first recording %@; menu bar “%@”, menu %@; launcher row “%@”; a line clicked: %@; %@ in %@",
+                    String(format: "tracks %.2f s / %.2f s (recorded %.2f s, the call %.1f s); beeps me %@ them %@, offsets %@ (drift %.1f ms, the microphone 100 ppm fast); errors per hundred words: me %.1f (%d words), them %.1f (%d words); %d lines (Me %d, Them %d); consent until the first recording %@; menu bar “%@”, menu %@; launcher row “%@”; a line clicked: %@; %@ in %@",
                            lengths.me, lengths.them, wall, cut, found.0.map { String(format: "%.3f", $0) }.joined(separator: ","),
                            found.1.map { String(format: "%.3f", $0) }.joined(separator: ","), offsets.map { String(format: "%.3f", $0) }.joined(separator: ","),
                            drift * 1000, mine.errors, mine.words, theirs.errors, theirs.words, transcript.lines.count,
@@ -23221,7 +23238,8 @@ final class SelfTest {
             return
         }
         let train = recorderScratch.appendingPathComponent("pause-train.wav")
-        _ = Self.clip(nil, seconds: 30, beeps: stride(from: 0.5, to: 30, by: 0.5).map { $0 }, to: train)
+        // The microphone's clock 100 ppm slow, as a USB or Bluetooth one may run.
+        _ = Self.clip(nil, seconds: 30, beeps: stride(from: 0.5, to: 30, by: 0.5).map { $0 }, ppm: -100, to: train)
         center.recorder.standIn(microphone: train, alsoLeaveOut: [])
         center.showCard(title: "Pause check")
         guard await waitUntil(timeout: 3, { center.isCardVisible && center.cardView.microphoneLine != "Starting…" }) != nil else {
@@ -23237,7 +23255,7 @@ final class SelfTest {
             return
         }
         let began = ContinuousClock.now
-        try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
+        try? center.recorder.microphone.playStandIn(at: mach_absolute_time(), ppm: -100)
         let play = playElsewhere(train)
         defer { play?.terminate() }
         await pause(8000)
@@ -23284,9 +23302,9 @@ final class SelfTest {
         let expected = wall - (record.pauses.first?.seconds ?? 0)
         let passed = consentGone && paused && stillFrozen && resumed && restarted && resumeMenu.contains("Resume Recording") && record.pauses.count == 1
             && (record.pauses.first?.seconds ?? 0) > 4 && abs(lengths.me - lengths.them) < 0.05 && abs(lengths.me - expected) < 0.5
-            && step < 0.01 && spread < 0.025 && before.count >= 10 && after.count >= 10 && paired.count >= found.0.count - 2
+            && step < 0.001 && spread < 0.002 && before.count >= 10 && after.count >= 10 && paired.count >= found.0.count - 2
         self.record(name, passed,
-                    String(format: "consent gone %@; paused %@, clock still “%@” %@, resumed %@, the microphone started again %@; pause at %.2f s for %.2f s; tracks %.2f s / %.2f s (%.2f s recorded); %d of %d beeps in step, offset %.1f ms before the pause, %.1f ms after (step %.1f ms, spread %.1f ms)",
+                    String(format: "consent gone %@; paused %@, clock still “%@” %@, resumed %@, the microphone started again %@; pause at %.2f s for %.2f s; tracks %.2f s / %.2f s (%.2f s recorded); %d of %d beeps in step, offset %.1f ms before the pause, %.1f ms after (step %.2f ms, spread %.1f ms; the microphone 100 ppm slow, started again once)",
                            "\(consentGone)", "\(paused)", frozen ?? "", "\(stillFrozen)", "\(resumed)", "\(restarted)", pauseAt, record.pauses.first?.seconds ?? 0, lengths.me, lengths.them,
                            expected, offsets.count, found.0.count, mean(before) * 1000, mean(after) * 1000, step * 1000, spread * 1000),
                     nil)

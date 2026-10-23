@@ -221,7 +221,13 @@ public enum Speaker: String, Codable, Sendable, CaseIterable {
 /// buffer, after a pause, after the audio setup changed and the engine
 /// started again) at its place by the host clock. Pauses, the start and
 /// the stop are moments of the host clock, the same for every track, so a
-/// pause is cut from all of them at the same moment, to the sample.
+/// pause is cut from all of them at the same moment, to the sample. A
+/// device whose clock runs fast or slow against the host's (a USB or
+/// Bluetooth microphone: tens to hundreds of ppm) would slide away from the
+/// other tracks over a run: past half a millisecond off (smoothed over two
+/// seconds, so one late buffer moves nothing), one frame is left out or
+/// played twice per buffer until it is back, and a run started again after
+/// a pause jumps by less than a millisecond.
 public struct TrackTimeline: Sendable {
     /// What to write next: silence of that many frames, or that part of the
     /// buffer.
@@ -245,6 +251,13 @@ public struct TrackTimeline: Sendable {
     /// A jump of the sample time past this is a new timeline (a device
     /// that started over), placed by the host clock.
     private static let longestGap = 5.0
+    /// How far a run may be from the host clock (seconds), and over how
+    /// long that is smoothed, before a frame is left out or played twice.
+    private static let driftTolerance = 0.0005
+    private static let driftWindow = 2.0
+    /// Frames the run is ahead of the host clock (behind: below zero),
+    /// smoothed.
+    private var drift = 0.0
 
     public init(rate: Double, start: Double) {
         self.rate = rate
@@ -329,6 +342,7 @@ public struct TrackTimeline: Sendable {
             let last = end.map { min(frames, first(from: $0)) } ?? frames
             var from = index
             let to = max(from + 1, last)
+            var keep: Int = 0
             if let next, part == self.part, abs(sampleTime + Double(from) - next) <= Self.longestGap * rate {
                 let gap = Int((sampleTime + Double(from) - next).rounded())
                 if gap > 0 {
@@ -337,6 +351,12 @@ public struct TrackTimeline: Sendable {
                 } else if gap < 0 {
                     from = min(to, from - gap)
                 }
+                // How far the device's clock took the run from the host's.
+                let expected = fileTime(of: hostTime + Double(from) / rate) * rate
+                let weight = min(1, Double(to - from) / rate / Self.driftWindow)
+                drift += (Double(written) - expected - drift) * weight
+                let limit = max(1, Self.driftTolerance * rate)
+                keep = drift > limit && to - from > 2 ? -1 : drift < -limit && to > from ? 1 : 0
             } else {
                 let target = Int((fileTime(of: hostTime + Double(from) / rate) * rate).rounded())
                 if target > written {
@@ -345,10 +365,24 @@ public struct TrackTimeline: Sendable {
                 } else if target < written {
                     from = min(to, from + written - target)
                 }
+                drift = 0
             }
             if from < to {
-                pieces.append(.frames(from..<to))
-                written += to - from
+                let middle = from + (to - from) / 2
+                switch keep {
+                case -1:
+                    // Ahead: one frame left out.
+                    pieces.append(.frames(from..<middle))
+                    pieces.append(.frames(middle + 1..<to))
+                case 1:
+                    // Behind: one frame played twice.
+                    pieces.append(.frames(from..<middle + 1))
+                    pieces.append(.frames(middle..<to))
+                default:
+                    pieces.append(.frames(from..<to))
+                }
+                written += to - from + keep
+                drift += Double(keep)
             }
             next = sampleTime + Double(to)
             self.part = part
