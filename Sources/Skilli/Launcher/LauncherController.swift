@@ -416,6 +416,13 @@ final class LauncherController: NSObject {
     /// sleep): the chip in the empty field, the running row for "awake".
     var awakeState: () -> (awake: Bool, until: Date?) = { (false, nil) }
     var onCancelTimer: ((TimerCenter.Running) -> Void)?
+    /// "rec Weekly sync": the Record card with that name.
+    var onRecord: ((String) -> Void)?
+    /// The recording on now, for its row ("rec", "recording…").
+    var recordingState: () -> LauncherRecording? = { nil }
+    /// Its row's ↩ and ⌘K: stop, pause, resume; its folder.
+    var onRecordingControl: ((SkilliLink.RecordingControl) -> Void)?
+    var onShowRecordingFolder: (() -> Void)?
     /// Quicklinks: "g skilli" opens Google's results.
     var quicklinks: (() -> [Quicklink])?
     var onOpenURL: ((URL) -> Void)?
@@ -1389,6 +1396,17 @@ final class LauncherController: NSObject {
                 // One "Turn Off Keep Awake" row, never two alike.
                 results.removeAll { if case .system(.system(.keepAwake), _) = $0 { true } else { false } }
                 if awakeRequest != .allowSleep { results.insert(.keptAwake(until: awake.until), at: awakeRequest == nil ? 0 : 1) }
+            }
+            // "rec Weekly sync": the Record card with that name, first. While
+            // one records, the words about it show it, ↩ stops it; it stands
+            // for Record Meeting's own row (no second recording at once).
+            if catalog.shows("cmd:recordMeeting"), onRecord != nil {
+                if let live = recordingState(), RecordRequest.mentions(text) {
+                    results.removeAll { if case .command(let command) = $0 { command.id == .recordMeeting } else { false } }
+                    results.insert(.recording(live), at: 0)
+                } else if let name = RecordRequest.name(text) {
+                    results.insert(.recordNamed(name), at: 0)
+                }
             }
             // "volume 30", "mets le son à 30 %": the level, first.
             if catalog.shows("catalog.volume"), let level = VolumeRequest.parse(text), onSystemCommand != nil {
@@ -2975,6 +2993,16 @@ final class LauncherController: NSObject {
             onKeepAwake?(.allowSleep)
             return
         }
+        if case .recordNamed(let name) = picked {
+            hide()
+            onRecord?(name)
+            return
+        }
+        if case .recording = picked {
+            hide()
+            onRecordingControl?(.stop)
+            return
+        }
         if case .emoji(let emoji) = picked {
             // Found by meaning: those words find it by name next time.
             let saidAs = isShowingFeeling ? feeling?.query : nil
@@ -3061,7 +3089,8 @@ final class LauncherController: NSObject {
             hide()
             onSystemCommand?(command)
             return
-        case .process, .clip, .snippet, .calculation, .emoji, .gif, .layout, .saveLayout, .openWindow, .startTimer, .keepAwake, .runningTimer, .keptAwake, .quicklink, .browserTab, .file, .contact, .event, .createEvent, .reminder, .addReminder, .project, .script, .scriptArgument, .scriptChoice, .visit, .brew, .brewUpgradeAll,
+        case .process, .clip, .snippet, .calculation, .emoji, .gif, .layout, .saveLayout, .openWindow, .startTimer, .keepAwake, .runningTimer, .keptAwake,
+             .recordNamed, .recording, .quicklink, .browserTab, .file, .contact, .event, .createEvent, .reminder, .addReminder, .project, .script, .scriptArgument, .scriptChoice, .visit, .brew, .brewUpgradeAll,
              .pullRequest, .githubNotification, .catalog, .catalogHeader, .menuItem:
             return
         }
@@ -4272,6 +4301,11 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
                            accessory: "Cancel Timer", icon: CommandIcon.image(for: "timer"))
         case .keptAwake:
             cell.configure(title: item.title, accessory: AwakeStatus.turnOff, icon: CommandIcon.image(for: "cup.and.saucer.fill"))
+        case .recordNamed:
+            cell.configure(title: item.title, accessory: "Record Meeting", icon: CommandIcon.image(for: "record.circle"))
+        case .recording(let live):
+            cell.configure(title: item.title, accessory: live.paused ? "Paused" : "Stop and Transcribe",
+                           icon: CommandIcon.image(for: "record.circle.fill", tint: .systemRed))
         case .layout(let layout):
             cell.configure(title: layout.name, accessory: "Layout · \(layout.summary)", icon: CommandIcon.image(for: "rectangle.3.group"))
         case .saveLayout(let name):

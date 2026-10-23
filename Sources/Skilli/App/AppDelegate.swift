@@ -171,7 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// its own). Settings is not one: an agent's question there is answered
     /// with ↩ in the card.
     private var ownWindowHasKeyboard: Bool {
-        madeDisplayPrompt?.isKey == true || madeMeetingCard?.isKey == true
+        madeDisplayPrompt?.isKey == true || madeMeetingCard?.isKey == true || madeRecorderCenter?.cardWindow?.isKeyWindow == true
     }
     private var displayPrompt: DisplayPrompt {
         if let madeDisplayPrompt { return madeDisplayPrompt }
@@ -222,6 +222,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         madeMeetingCard = card
         return card
+    }
+    /// The meeting recorder: made the first time it is used (its card,
+    /// menu bar and engine are not kept idle).
+    private var madeRecorderCenter: RecorderCenter?
+    private var recorderCenter: RecorderCenter {
+        if let madeRecorderCenter { return madeRecorderCenter }
+        let center = RecorderCenter(recordings: Recordings(root: recordingsFolder), preferences: preferences, deletes: deletes)
+        center.notify = { [weak self] message in self?.aiActions.notify(message, caller: "Recorder", run: nil, seconds: 6) }
+        center.openPrivacy = { [weak self] permission in self?.permissions.grant(permission) }
+        madeRecorderCenter = center
+        return center
+    }
+    /// Where recordings are kept; the self-test keeps its own.
+    private var recordingsFolder: URL {
+        if case .selftest = mode {
+            return FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/Recordings", isDirectory: true)
+        }
+        return Recordings.standard
     }
     /// Settings → Windows → Quit apps you stopped using.
     private lazy var autoQuitter: AutoQuitter = {
@@ -350,6 +368,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await self?.aiActions.doItHere(goal, pid: pid, caller: "skil.li Link", run: nil, saysStop: true).outcome == .done
         }
         runner.onAlwaysDo = { [toolSettings] goal, app in toolSettings.trustDoLink(goal: goal, app: app, title: "Do It Here") }
+        runner.openRecordCard = { [weak self] title in self?.recorderCenter.showCard(title: title) }
+        runner.recordingTitle = { [weak self] in
+            guard let recorder = self?.madeRecorderCenter?.recorder, recorder.isRecording else { return nil }
+            return recorder.title
+        }
+        runner.controlRecording = { [weak self] control in self?.madeRecorderCenter?.control(control) }
         if case .selftest = mode { runner.handsFocusBack = false }
         return runner
     }()
@@ -616,6 +640,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.onKeepAwake = { [weak self] request in self?.aiActions.keepAwake(request) }
         launcher.awakeState = { [weak self] in (self?.systemCommands.isKeepingAwake ?? false, self?.systemCommands.awakeUntil) }
         launcher.onCancelTimer = { [timers] timer in timers.cancel(timer.id) }
+        // "rec Weekly sync", and the recording on now (read from memory:
+        // nothing made on a key).
+        launcher.onRecord = { [weak self] name in self?.recorderCenter.showCard(title: name) }
+        launcher.recordingState = { [weak self] in self?.madeRecorderCenter?.launcherRow }
+        launcher.onRecordingControl = { [weak self] control in self?.madeRecorderCenter?.control(control) }
+        launcher.onShowRecordingFolder = { [weak self] in self?.madeRecorderCenter?.showFolder() }
+        toolServer.tools.recorder = { [weak self] in self?.recorderCenter }
         aiActions.startTimer = { [weak self] request in self?.startTimer(request) ?? UUID() }
         aiActions.cancelTimer = { [timers] id in timers.cancel(id) }
         timers.onDone = { [weak self] timer in
@@ -1045,6 +1076,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if case .normal = mode {
                 systemCommands.restoreAwake()
                 autoQuitter.start()
+                // A recording never stopped (skil.li quit, the Mac lost
+                // power): offered once launched; the recorder made only for
+                // one.
+                if FileManager.default.fileExists(atPath: recordingsFolder.path) {
+                    let root = recordingsFolder
+                    Task { [weak self] in
+                        try? await Task.sleep(for: .seconds(4))
+                        let found = await RecorderCenter.unfinished(in: root)
+                        guard !found.isEmpty else { return }
+                        self?.recorderCenter.offer(found)
+                    }
+                }
             }
             refreshRadios()
         }
@@ -1531,6 +1574,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .copyAvailability:
             // From a shortcut: the launcher's row shows it itself.
             aiActions.showAgenda(.availability)
+        case .recordMeeting:
+            recorderCenter.showCard(title: nil)
         case .killProcess, .clipboardHistory, .searchSnippets, .emoji, .searchGIFs, .switchWindow, .searchMenus, .searchTabs, .searchFiles, .searchProjects, .searchHistory,
              .homebrew, .searchContacts, .agenda, .reminders, .github, .catalog:
             // Handled in the launcher: it turns into that mode.
@@ -1749,7 +1794,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 welcome: { [weak self] step in
                     self?.showWelcome(at: step)
                     return self?.setup
-                }
+                },
+                recorder: { [weak self] in self?.recorderCenter }
             ))
             SelfTest.emit(await test.run(scope: scope), to: outputPath)
             NSApp.terminate(nil)

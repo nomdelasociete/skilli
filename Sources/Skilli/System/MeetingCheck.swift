@@ -236,7 +236,7 @@ final class MeetingCheckView: NSView {
 
 /// The microphone's level: a short capsule filled in the accent color as
 /// sound comes in.
-private final class LevelMeter: NSView {
+final class LevelMeter: NSView {
     var level: Double = 0 {
         didSet {
             // Eased, so speech reads as a level, not a flicker.
