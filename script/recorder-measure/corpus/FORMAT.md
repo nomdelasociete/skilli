@@ -81,7 +81,7 @@ Run, for each file:
 ```sh
 python3 -c 'import json,sys,re
 for p in sys.argv[1:]:
-    d=json.load(open(p)); t=" ".join(x["text"] for x in d["turns"])
+    d=json.load(open(p,encoding="utf-8")); t=" ".join(x["text"] for x in d["turns"])
     assert d["turns"][0].get("overlap") is not True
     assert not re.search(r"[0-9%€$&/@\[\]()*_#]", t), re.findall(r".{20}[0-9%€$&/@\[\]()*_#].{20}", t)[:5]
     ids={a["id"] for a in d["attendees"]}; assert all(x["speaker"] in ids for x in d["turns"])

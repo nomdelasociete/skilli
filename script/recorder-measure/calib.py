@@ -27,14 +27,16 @@ voices += [("fr", f"say:{v}") for v in say_fr + say_fr_en_accent]
 voices += [("fr", "piper:fr_FR-siwis-medium"), ("fr", "piper:fr_FR-upmc-medium:0"), ("fr", "piper:fr_FR-upmc-medium:1"), ("fr", "piper:fr_FR-tom-medium")]
 # Measured and left out: fr_FR-mls-medium (its 125 voices babble for
 # seconds on short sentences, so engines "miss" words never spoken).
-out = Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
+# Absolute: Piper moves the working folder to work/ on its first voice.
+out = Path(sys.argv[1]).resolve(); out.mkdir(parents=True, exist_ok=True)
 manifest = []
 for i, (lang, v) in enumerate(voices):
     audio = synth(v, EN if lang == "en" else FR)
-    # 16 kHz mono for the engines, half a second of silence each side.
+    # 48 kHz mono (the engines read any rate: whisper-cli and SpeechAnalyzer
+    # convert to their own), half a second of silence each side.
     pad = np.zeros(RATE // 2, dtype=np.float32)
     name = f"cal{i:03d}"
     sf.write(out / f"{name}.wav", np.concatenate([pad, audio, pad]), RATE, subtype="PCM_16")
     manifest.append(dict(id=name, lang=lang, voice=v, seconds=len(audio) / RATE))
     print(name, lang, v, round(len(audio) / RATE, 1), flush=True)
-json.dump(manifest, open(out / "manifest.json", "w"), indent=1, ensure_ascii=False)
+json.dump(manifest, open(out / "manifest.json", "w", encoding="utf-8"), indent=1, ensure_ascii=False)

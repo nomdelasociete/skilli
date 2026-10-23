@@ -18,8 +18,8 @@ def pct(g, a, b):
 
 
 def main():
-    short = json.load(open(sys.argv[1]))
-    hour = json.load(open(sys.argv[2])) if len(sys.argv) > 2 else {}
+    short = json.load(open(sys.argv[1], encoding="utf-8"))
+    hour = json.load(open(sys.argv[2], encoding="utf-8")) if len(sys.argv) > 2 else {}
     order = [v for v in NAMES if v in short]
     print("| Engine | EN me | EN them | FR me | FR them | All | Clean | Crosstalk | Strong accent | Bad line | Names right | × real time | Peak memory |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")

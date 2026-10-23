@@ -20,7 +20,7 @@ def timed_words(path: Path, lang):
     """(word, time) of a transcript: Apple's words carry their times;
     whisper's segments do (its token times are off with VAD), so words
     are spread over their segment."""
-    d = json.load(open(path))
+    d = json.load(open(path, encoding="utf-8"))
     out = []
     if "transcription" in d:
         for seg in d["transcription"]:
@@ -83,7 +83,7 @@ def main():
                 p = Path(a.runs) / engine / d.name
                 if not (p / f"echo-{level}.json").exists() or not (p / "them.json").exists() or not (p / "me.json").exists():
                     continue
-                truth = json.load(open(d / "truth.json"))
+                truth = json.load(open(d / "truth.json", encoding="utf-8"))
                 lang = truth["language"]
                 me_ref, _ = ref_words(truth, "me")
                 all_ref, all_meta = ref_words(truth, "mix")
@@ -113,7 +113,7 @@ def main():
                   f"other side's words in the user's transcript: {100 * g['raw_them_heard'] / g['them_ref']:4.1f}% → {100 * g['dedup_them_heard'] / g['them_ref']:4.1f}%  |  "
                   f"user's words kept: {g['raw_me_heard']:.0f} → {g['dedup_me_heard']:.0f} (clean {g['clean_me_heard']:.0f})  [{int(g['calls'])} calls]")
     if a.json:
-        json.dump(results, open(a.json, "w"), indent=1)
+        json.dump(results, open(a.json, "w", encoding="utf-8"), indent=1)
 
 
 if __name__ == "__main__":

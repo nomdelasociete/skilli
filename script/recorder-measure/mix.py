@@ -112,7 +112,7 @@ def to16k(a):
 
 def build(call_ids, name):
     rng = np.random.default_rng(sum(map(ord, name)))
-    scripts = [json.load(open(SCRIPTS / f"{c}.json")) for c in call_ids]
+    scripts = [json.load(open(SCRIPTS / f"{c}.json", encoding="utf-8")) for c in call_ids]
     lang = scripts[0]["language"]
     turns, t = [], 0.5
     for si, script in enumerate(scripts):
@@ -191,7 +191,7 @@ def build(call_ids, name):
     attendees = list(dict.fromkeys(a["name"] for s in scripts for a in s["attendees"]))
     truth = dict(name=name, calls=call_ids, language=lang, seconds=total / SR, attendees=attendees, names=names,
                  turns=[{k: v for k, v in x.items() if k != "audio"} for x in turns])
-    json.dump(truth, open(out / "truth.json", "w"), indent=1, ensure_ascii=False)
+    json.dump(truth, open(out / "truth.json", "w", encoding="utf-8"), indent=1, ensure_ascii=False)
     print(name, lang, round(total / SR / 60, 1), "min", len(turns), "turns", flush=True)
 
 
@@ -199,7 +199,7 @@ def vocabulary():
     """The contacts: everyone named anywhere in the corpus, plus others."""
     names = []
     for p in sorted(SCRIPTS.glob("*.json")):
-        s = json.load(open(p))
+        s = json.load(open(p, encoding="utf-8"))
         names += [a["name"] for a in s["attendees"]] + s["mentioned"]
     return list(dict.fromkeys(names + EXTRA_CONTACTS))
 
@@ -208,4 +208,4 @@ if __name__ == "__main__":
     which = sys.argv[1:] or [p.stem for p in sorted(SCRIPTS.glob("*.json"))] + ["fr-hour"]
     for w in which:
         build([f"fr0{i}" for i in range(1, 9)] if w == "fr-hour" else [w], w)
-    json.dump(vocabulary(), open(OUT / "contacts.json", "w"), indent=1, ensure_ascii=False)
+    json.dump(vocabulary(), open(OUT / "contacts.json", "w", encoding="utf-8"), indent=1, ensure_ascii=False)

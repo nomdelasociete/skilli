@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 H=${SKILLI_REMOTE:-skilli-mini}
-ssh "$H" 'mkdir -p ~/recorder-measure/bin ~/recorder-measure/models ~/recorder-measure/audio ~/recorder-measure/out ~/recorder-measure/probe'
+ssh "$H" 'mkdir -p ~/recorder-measure/bin ~/recorder-measure/models ~/recorder-measure/audio ~/recorder-measure/out/probe ~/recorder-measure/probe'
 rsync -a work/bin/ run_engines.sh diar_run.sh batch.sh sherpa_diar.py windows.js winrun.sh tabrun.sh "$H:recorder-measure/bin/"
 rsync -a work/models/whisper/ "$H:recorder-measure/models/"
 rsync -a work/models/sherpa "$H:recorder-measure/models/"

@@ -79,8 +79,8 @@ def main():
                 p = Path(a.runs) / tool / d.name / f"{track}.json"
                 if not (d / "truth.json").exists() or not p.exists():
                     continue
-                truth = json.load(open(d / "truth.json"))
-                run = json.load(open(p))
+                truth = json.load(open(d / "truth.json", encoding="utf-8"))
+                run = json.load(open(p, encoding="utf-8"))
                 hyp = [(s["speaker"], s["start"], s["end"]) for s in run["segments"]]
                 r = der(reference(truth, track), hyp, truth["seconds"])
                 for k in ("miss", "fa", "conf"):
@@ -103,7 +103,7 @@ def main():
                   f"count right {res['count_right']}/{res['files']}  x{res['rt']:.0f} RT  {res['mb']:.0f} MB")
             print("    ", " ".join(f"{n}:{d}({r}/{h})" for n, d, r, h in rows))
     if a.json:
-        json.dump(out, open(a.json, "w"), indent=1)
+        json.dump(out, open(a.json, "w", encoding="utf-8"), indent=1)
 
 
 if __name__ == "__main__":

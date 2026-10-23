@@ -6,11 +6,12 @@ from pathlib import Path
 import numpy as np
 from synth import synth
 from mix import to16k, SR
-for d in sorted(Path(sys.argv[1]).iterdir()):
+# Absolute: Piper moves the working folder to work/ on its first voice.
+for d in sorted(Path(sys.argv[1]).resolve().iterdir()):
     p = d / "truth.json"
     if not p.exists():
         continue
-    t = json.load(open(p))
+    t = json.load(open(p, encoding="utf-8"))
     for turn in t["turns"]:
         rate = 0 if turn["voice"].startswith("piper") else 172
         a = to16k(synth(turn["voice"], turn["text"], rate))
@@ -32,5 +33,5 @@ for d in sorted(Path(sys.argv[1]).iterdir()):
             else:
                 merged.append(s)
         turn["speech"] = [[round(turn["start"] + s, 3), round(turn["start"] + e, 3)] for s, e in merged if e - s >= 0.1]
-    json.dump(t, open(p, "w"), indent=1, ensure_ascii=False)
+    json.dump(t, open(p, "w", encoding="utf-8"), indent=1, ensure_ascii=False)
     print(d.name, sum(len(x["speech"]) for x in t["turns"]), "speech spans")

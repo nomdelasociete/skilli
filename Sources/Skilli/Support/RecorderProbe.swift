@@ -51,10 +51,15 @@ enum RecorderProbe {
                 report["error"] = "\(error)"
             }
             let out = URL(fileURLWithPath: args[0] == "sync" ? args[1] + "/sync.json" : args[1])
-            if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
-                try? data.write(to: out)
+            // A report that cannot be written is a failed run, whatever the probe found.
+            var written = false
+            do {
+                try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]).write(to: out)
+                written = true
+            } catch {
+                FileHandle.standardError.write(Data("recorderprobe: report not written to \(out.path): \(error)\n".utf8))
             }
-            exit(report["error"] == nil ? 0 : 1)
+            exit(written && report["error"] == nil ? 0 : 1)
         }
         app.run()
         return 0

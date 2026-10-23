@@ -2,7 +2,7 @@
 // SpeechTranscriber or DictationTranscriber and writes the words with
 // their times as JSON.
 //
-//   speechprobe --engine st|dt --locale fr_FR --file call.wav --out out.json [--words names.txt] [--install]
+//   speechprobe --engine st|dt --locale fr_FR --file call.wav --out out.json [--words names.txt] [--install|--install-only]
 import AVFoundation
 import Foundation
 import Speech
@@ -45,7 +45,7 @@ enum Probe {
         let engine = arg("--engine") ?? "st"
         let localeID = arg("--locale") ?? "en_US"
         guard let path = arg("--file"), let out = arg("--out") else {
-            FileHandle.standardError.write(Data("usage: speechprobe --engine st|dt --locale fr_FR --file in.wav --out out.json [--words names.txt]\n".utf8))
+            FileHandle.standardError.write(Data("usage: speechprobe --engine st|dt --locale fr_FR --file in.wav --out out.json [--words names.txt] [--install|--install-only]\n".utf8))
             exit(2)
         }
         let words: [String] = try arg("--words").map {
@@ -71,7 +71,7 @@ enum Probe {
 
         let status = await AssetInventory.status(forModules: [module])
         if status != .installed {
-            guard CommandLine.arguments.contains("--install") else {
+            guard CommandLine.arguments.contains("--install") || CommandLine.arguments.contains("--install-only") else {
                 throw NSError(domain: "model not installed (\(status)); run with --install", code: 3)
             }
             if let request = try await AssetInventory.assetInstallationRequest(supporting: [module]) {

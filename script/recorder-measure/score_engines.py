@@ -25,7 +25,7 @@ def hyp_text(path: Path, attendees=None) -> str | None:
     and an attendee's name written as a speaker label ("Camille Kerjean :")."""
     if not path.exists():
         return None
-    d = json.load(open(path))
+    d = json.load(open(path, encoding="utf-8"))
     if "transcription" in d:  # whisper.cpp -ojf
         segs = [seg["text"] for seg in d["transcription"]]
         if attendees is not None:
@@ -37,7 +37,7 @@ def hyp_text(path: Path, attendees=None) -> str | None:
 
 
 def cost(log: Path, audio_s: float):
-    t = log.read_text() if log.exists() else ""
+    t = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
     wall = re.search(r"^wall ([\d.]+)", t, re.M)
     total = re.search(r"total time =\s+([\d.]+) ms", t)
     load = re.search(r"load time =\s+([\d.]+) ms", t)
@@ -119,7 +119,7 @@ def main():
     for variant in a.variants:
         agg = defaultdict(lambda: defaultdict(float))
         for d in dirs:
-            truth = json.load(open(d / "truth.json"))
+            truth = json.load(open(d / "truth.json", encoding="utf-8"))
             lang = truth["language"]
             for track in a.tracks.split(","):
                 hyp = hyp_text(Path(a.out) / variant / d.name / f"{track}.json", truth["attendees"] if a.tidy else None)
@@ -158,7 +158,7 @@ def main():
                   f"names {pct('name_ok', 'name_n')}% (accents aside {pct('name_fok', 'name_n')})  attendees {pct('attendee_ok', 'attendee_n')}%  "
                   f"x{g['audio'] / g['secs']:.0f} RT  {int(g['mb'])} MB  [{int(g['ref'])} words, {int(g['name_n'])} names, {int(g['files'])} files]")
     if a.json:
-        json.dump(results, open(a.json, "w"), indent=1)
+        json.dump(results, open(a.json, "w", encoding="utf-8"), indent=1)
 
 
 if __name__ == "__main__":

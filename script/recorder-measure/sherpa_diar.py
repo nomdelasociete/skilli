@@ -33,6 +33,6 @@ wall = time.time() - t1
 segments = [dict(speaker=str(r.speaker), start=r.start, end=r.end) for r in result]
 rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1048576
 json.dump(dict(tool="sherpa", file=path, speakersGiven=None if speakers < 0 else speakers, audioSeconds=len(audio) / sr,
-               loadSeconds=load, wallSeconds=wall, maxRSSMB=rss, segments=segments), open(out, "w"), indent=1)
+               loadSeconds=load, wallSeconds=wall, maxRSSMB=rss, segments=segments), open(out, "w", encoding="utf-8"), indent=1)
 print(f"sherpa {len(audio)/sr:.0f}s audio in {wall:.1f}s (x{len(audio)/sr/wall:.0f}), {len(segments)} segments, "
       f"{len({s['speaker'] for s in segments})} speakers, rss {rss:.0f} MB")

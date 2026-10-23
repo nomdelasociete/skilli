@@ -3,8 +3,8 @@
 # it is brought forward (as BrowserTabReuse scripts it). What the capture
 # shows before and after.
 cd ~/recorder-measure
-# With LOCK_DIR: only while this run holds it (LOCK_TAG in its owner file).
-[ -z "${LOCK_DIR:-}" ] || grep -q "${LOCK_TAG:-recorder-measure}" "$LOCK_DIR/owner" 2>/dev/null || { echo "the lock is not ours: nothing run"; exit 3; }
+# With LOCK_DIR: only while this run holds it (LOCK_TAG, required then, in its owner file).
+[ -z "${LOCK_DIR:-}" ] || { [ -n "${LOCK_TAG:-}" ] && grep -qF "$LOCK_TAG" "$LOCK_DIR/owner" 2>/dev/null; } || { echo "the lock is not ours (or LOCK_TAG unset): nothing run"; exit 3; }
 P=file://$HOME/recorder-measure/probe/pages
 for run in ${RUNS:-behind:tab covered:tab behind:tabfront covered:tabfront}; do
   mode=${run%%:*}; act=${run#*:}
@@ -12,7 +12,7 @@ for run in ${RUNS:-behind:tab covered:tab behind:tabfront covered:tabfront}; do
   sleep 2
   pm=$mode; [ $pm = behind ] && pm=asis
   out=$HOME/recorder-measure/out/probe/tab-$mode-$act.json; rm -f $out.go $out
-  open -n probe/W/SkilliRecorderProbe.app --args recorderprobe window $out com.google.Chrome 16 $pm ext:meeting.html
+  open -n probe/${PROBE:-A}/SkilliRecorderProbe.app --args recorderprobe window $out com.google.Chrome 16 $pm ext:meeting.html
   # The probe asks halfway: the tab forward, as BrowserTabReuse does (tabfront: the window and Chrome too).
   for i in $(seq 1 600); do [ -f $out.go ] && break; sleep 0.05; done
   front=""; [ $act = tabfront ] && front='-e "set index of w to 1" -e activate'
