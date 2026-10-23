@@ -102,8 +102,16 @@ On this Mac, at Stop, with progress in the menu bar.
   Several voices on the other side, and an imported file (one track), are
   told apart by an on-device speaker-separation model, picked the same way:
   candidates measured on the same calls.
+- A language this Mac cannot transcribe: the Record card checks it before
+  ↩ (`SpeechTranscriber.supportedLocales`, then `DictationTranscriber`'s).
+  The first engine that has the language is used; when neither has it,
+  the card says so ("Italian can't be transcribed on this Mac yet") and
+  ↩ still records: the recording is kept, its transcript pending, made
+  from the done window once a language or engine that works is picked.
+  `meeting.json`'s `engine` is the engine that made the transcript, after
+  a fallback too.
 - Transcribe again in another language, or with the other engine, from the
-  done card.
+  done window.
 
 ## Done
 
@@ -133,6 +141,12 @@ The recording's window (a window, not a card: it is read and edited):
 (times, speakers, chapters), `transcript.json` (words with times),
 `slides.json` (text read on screen, with times), `summary.md` when asked.
 
+- The folder's name is the date and the title. In the title, `/` and `:`
+  become `-`, control characters and a leading dot go, and it is cut at 80
+  characters; an empty one is "Meeting". A folder of that name already
+  there: " 2", " 3"… is added; nothing is ever written into another
+  recording's folder. A title renamed later renames the folder by the same
+  rules.
 - The launcher finds recordings by title, date, attendees and words said
   (plain text search; by meaning only behind ⇥, as the clipboard).
 - Settings → Recorder (its own pane): where to keep them, delete after N
@@ -149,7 +163,11 @@ The recording's window (a window, not a card: it is read and edited):
 ## Privacy and consent
 
 - Audio, video and screen never leave the Mac. A transcript leaves it only
-  by an explicit action of the user, each time, and only as text:
+  by an explicit action of the user, each time, and only as text, with one
+  exception: a skillie the user marked to run on its own when a transcript
+  is done. Marking it says, in its row, that it will get every recording
+  from now on (Undo ⌘Z for 10 s); the done window shows that it ran and
+  when; unmarking stops it.
 
   | Flow | Goes to | What is sent | Consent |
   |---|---|---|---|
@@ -158,14 +176,19 @@ The recording's window (a window, not a card: it is read and edited):
   | Recap Mail | the attendees, by the user's mail app | the recap the user reads first | Send, in the mail app |
   | `get_transcript` | the agent that calls it (Claude Code, Codex…), then its provider | that recording's transcript | asked every time in the card, naming the recording (`ToolPolicy` `everyTime`: no Always Allow) |
   | `list_recordings` | the agent | titles, dates, lengths, no words | the tool rights of a read |
+  | A skillie marked to run when a transcript is done | wherever that skillie sends it (the user's own script) | the recording folder's path, so everything in it | marked once, by the user, in the skillie's row: the one exception to "each time" below |
 
 - Never a hidden recording: the red dot stays while recording, and the
   first time, a card says that the others in the call must agree (in many
   countries, France included, recording a private conversation without
   consent is an offense), for the webcam and the screen as for the sound.
   No auto-record on meeting start.
-- Nothing recorded when a permission is missing (microphone, camera, screen
-  and system audio): the card says which one, ↩ opens it.
+- Only the sources turned on need their permission. A source whose
+  permission is missing shows off in the Record card, with that permission
+  named, and ⌘↩ opens it; ↩ records the others. With neither the
+  microphone nor the Mac's sound allowed, there is nothing to record and
+  the card says so. A missing camera or screen permission never blocks a
+  recording with those sources off.
 
 ## Phases
 
@@ -181,7 +204,10 @@ The recording's window (a window, not a card: it is read and edited):
 
 Each phase checked on the mini with a played-back call (audio and video
 files standing in for the microphone, the other side and the camera),
-transcript compared with the script read.
+transcript compared with the script read. From phase 3, a test window
+shows slides with known text at known times: `slides.json` must hold
+that text at those times (within a second), and `screen.mp4` must stay in
+step with the sound.
 
 ## To check before building
 
