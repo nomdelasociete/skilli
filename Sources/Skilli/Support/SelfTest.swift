@@ -12,6 +12,7 @@ import Carbon.HIToolbox
 import ImageIO
 import SkilliCore
 import SwiftUI
+import Synchronization
 import UniformTypeIdentifiers
 
 /// `--selftest`: drives the real app end to end.
@@ -106,6 +107,9 @@ final class SelfTest {
         /// The app's own welcome, shown on a step: the keys and the
         /// launcher report to it as they do for the person.
         var welcome: @MainActor (WelcomeModel.Step) -> SetupWindowController? = { _ in nil }
+        /// Where the report goes (standard output when nil): the watchdog
+        /// writes it there if the run never ends.
+        var reportPath: String?
     }
 
     enum Scope: String, Sendable {
@@ -285,10 +289,16 @@ final class SelfTest {
     static let ownTriggerKeyCode = CGKeyCode(kVK_F19)
 
     private let context: Context
-    private var checks: [Check] = []
+    private var checks: [Check] = [] {
+        didSet { watchdog.recorded(checks) }
+    }
     /// Set when focus is not where a test expects it. Every later test is
     /// skipped: synthetic keys must never land in the user's own apps.
-    private var aborted = false
+    private var aborted = false {
+        didSet { if aborted { watchdog.focusLost() } }
+    }
+    /// Ends the run if it stops moving on, main thread held or not.
+    private let watchdog: SelfTestWatchdog
     private let window: NSWindow
     /// Big enough that the AI card, its glass margin and the capture's
     /// padding stay over this window: captures never show the user's own
@@ -307,6 +317,7 @@ final class SelfTest {
 
     init(context: Context) {
         self.context = context
+        watchdog = SelfTestWatchdog(reportPath: context.reportPath)
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 660),
             styleMask: [.titled],
@@ -336,6 +347,9 @@ final class SelfTest {
         window.contentView?.addSubview(colorSwatch)
     }
 
+    /// A check, or a few, run as one step of a scope.
+    typealias Step = @MainActor () async -> Void
+
     func run(scope: Scope = .all) async -> Report {
         let clipboard = PasteboardSnapshot(NSPasteboard.general)
         defer { clipboard.restore(to: NSPasteboard.general) }
@@ -345,425 +359,395 @@ final class SelfTest {
         context.aiActions.unpromptedGrace = .zero
 
         if scope == .ai {
-            await aiChecks()
-            return finish()
+            return await finish(after: [aiChecks])
         }
         if scope == .models {
-            await writerChecks()
-            return finish()
+            return await finish(after: [writerChecks])
         }
         if scope == .setup {
-            await drawWelcome()
-            setupAsksOnlyForTwo()
-            await welcomeLiveSteps()
-            await settingsGuideFollowsTheWindow()
-            await reopenAfterSystemSettings()
-            return finish()
+            return await finish(after: [
+                drawWelcome,
+                setupAsksOnlyForTwo,
+                welcomeLiveSteps,
+                settingsGuideFollowsTheWindow,
+                reopenAfterSystemSettings
+            ])
         }
         if scope == .browser {
             window.center()
-            guard await focusTestWindow() else { return finish() }
-            await browserTabsAreFound()
-            return finish()
+            return await finish(after: [takeFocus, browserTabsAreFound])
         }
         if scope == .mcpauth {
-            toolSettingsSurviveRelaunches()
-            await mcpServerSignIn()
-            return finish()
+            return await finish(after: [toolSettingsSurviveRelaunches, mcpServerSignIn])
         }
         if scope == .github {
             window.center()
-            await githubInbox()
-            await relayTokenRemovalUndoes()
-            return finish()
+            return await finish(after: [githubInbox, relayTokenRemovalUndoes])
         }
         if scope == .toolrights {
-            toolSettingsSurviveRelaunches()
-            await serversImportedFromOtherApps()
-            await serverToolsListed()
-            await toolRightsDecide()
-            await approvalRulesDecide()
-            await rightsToolsForYourAI()
-            await rightsSessionLaunches()
-            await rightsHelperChoice()
-            await toolsPaneSnapshot()
-            await serverRemovalUndoes()
-            await ruleRemovalUndoes()
-            return finish()
+            return await finish(after: [
+                toolSettingsSurviveRelaunches,
+                serversImportedFromOtherApps,
+                serverToolsListed,
+                toolRightsDecide,
+                approvalRulesDecide,
+                rightsToolsForYourAI,
+                rightsSessionLaunches,
+                rightsHelperChoice,
+                toolsPaneSnapshot,
+                serverRemovalUndoes,
+                ruleRemovalUndoes
+            ])
         }
         if scope == .handoff {
             window.center()
-            await handoffFromCard()
-            await handoffLaunchesTerminal()
-            return finish()
+            return await finish(after: [handoffFromCard, handoffLaunchesTerminal])
         }
         if scope == .calc {
             window.center()
-            await macCommandsUseRealAPIs()
-            await keepAwakeHoldsTheMac()
-            await keepAwakeForAWhile()
-            await keepAwakeSeenInTheLauncher()
-            await keepAwakeSurvivesARestart()
-            await killProcessByNameAndPort()
-            await timersCountDown()
-            await appsQuitHideAndMicrophone()
-            await wifiBluetoothAndVolumeLevel()
-            await autoQuitKeepsWhatIsInUse()
-            await launcherKeysOverCard()
-            for _ in 0..<3 {
-                await macControlsWork()
-                await launcherCalculates()
-            }
-            return finish()
+            let calculations: [Step] = [macControlsWork, launcherCalculates]
+            return await finish(after: [
+                macCommandsUseRealAPIs,
+                keepAwakeHoldsTheMac,
+                keepAwakeForAWhile,
+                keepAwakeSeenInTheLauncher,
+                keepAwakeSurvivesARestart,
+                killProcessByNameAndPort,
+                timersCountDown,
+                appsQuitHideAndMicrophone,
+                wifiBluetoothAndVolumeLevel,
+                autoQuitKeepsWhatIsInUse,
+                launcherKeysOverCard
+            ] + calculations + calculations + calculations)
         }
         if scope == .speed {
             window.center()
-            await launcherTypesFast()
-            await launcherTypesFast(off: ["catalog.calculator", "catalog.soundOutput", "catalog.settingsPanes", "cmd:searchContacts",
-                                          "cmd:killProcess", "system:lockScreen", "system:window.leftHalf", "catalog.timer",
-                                          "cmd:searchProjects", "si:ask"])
-            await cardTypesFast()
-            return finish()
+            return await finish(after: [
+                { await self.launcherTypesFast() },
+                {
+                    await self.launcherTypesFast(off: ["catalog.calculator", "catalog.soundOutput", "catalog.settingsPanes", "cmd:searchContacts",
+                                                       "cmd:killProcess", "system:lockScreen", "system:window.leftHalf", "catalog.timer",
+                                                       "cmd:searchProjects", "si:ask"])
+                },
+                cardTypesFast
+            ])
         }
         if scope == .control {
             window.center()
-            await askUnsureCommandOffersChoices()
-            await aliasesOpenWhatTheyName()
-            await askQuitsWhatItNames()
-            await uninstallMovesAppAndLeftovers()
-            await controlDoesItInAnotherApp()
-            await controlSeesWhatOnlyThePictureTells()
-            await controlSeesAWebPage()
-            await controlExportsFromWord()
-            await formDetailsUndo()
-            return finish()
+            return await finish(after: [
+                askUnsureCommandOffersChoices,
+                aliasesOpenWhatTheyName,
+                askQuitsWhatItNames,
+                uninstallMovesAppAndLeftovers,
+                controlDoesItInAnotherApp,
+                controlSeesWhatOnlyThePictureTells,
+                controlSeesAWebPage,
+                controlExportsFromWord,
+                formDetailsUndo
+            ])
         }
         if scope == .chess {
-            await chessChecks()
-            return finish()
+            return await finish(after: [chessChecks])
         }
         if scope == .defaultbrowser {
             window.center()
-            await askChangesTheDefaultBrowser()
-            return finish()
+            return await finish(after: [askChangesTheDefaultBrowser])
         }
         if scope == .doit {
             window.center()
-            await doLinksAskTrustAndChain()
-            await doLinksChainTwoApps()
-            await doInAppForAgents()
-            await skilliesWaitForTheirStep()
-            await skillieStopsWithItsStep()
-            return finish()
+            return await finish(after: [
+                doLinksAskTrustAndChain,
+                doLinksChainTwoApps,
+                doInAppForAgents,
+                skilliesWaitForTheirStep,
+                skillieStopsWithItsStep
+            ])
         }
         if scope == .sight {
             window.center()
-            await controlSeesWhatOnlyThePictureTells()
-            await controlSeesAWebPage()
-            return finish()
+            return await finish(after: [controlSeesWhatOnlyThePictureTells, controlSeesAWebPage])
         }
         if scope == .windows {
             window.center()
-            await windowsPlaceTheFrontWindow()
-            await windowLayoutsAndSwitching()
-            await layoutOpensAFileAndALink()
-            await layoutDeleteUndoes()
-            return finish()
+            return await finish(after: [
+                windowsPlaceTheFrontWindow,
+                windowLayoutsAndSwitching,
+                layoutOpensAFileAndALink,
+                layoutDeleteUndoes
+            ])
         }
         if scope == .card {
             window.center()
-            await cardTakesLauncherPlace()
-            await cardsLeaveTheAppItsKeys()
-            await cardBesideAFieldNotADocument()
-            await askFollowsUpInTheCard()
-            await rewriteFollowsUp()
-            await askOffersANamedService()
-            await askSendsMediaKeys()
-            await askShowsMarkdown()
-            await askAsksForWhatIsMissing()
-            await askFoundCardChooses()
-            await contactsFoundAndWritten()
-            await contactCardActs()
-            await actionsForTheSelectedRow()
-            await appRowQuitsARunningApp()
-            await askFindsContacts()
-            await agendaFoundAndJoined()
-            await agendaEventsAdded()
-            await meetingInMenuBarAndOffered()
-            await meetingBarStates()
-            await meetingAlertsBefore()
-            await meetingAlertsNotWhenJoined()
-            await meetingCardChecksCameraAndMic()
-            await remindersSaidAndDone()
-            await remindersInMenuBarPlacesAndMail()
-            await reminderDeleteUndoes()
-            await eventDeleteUndoes()
-            await placeForgetUndoes()
-            calendarReadsThisMac()
-            await eventKitAnswersOffTheMainActor()
-            await microphoneHeardForReal()
-            return finish()
+            return await finish(after: [
+                cardTakesLauncherPlace,
+                cardsLeaveTheAppItsKeys,
+                cardBesideAFieldNotADocument,
+                askFollowsUpInTheCard,
+                rewriteFollowsUp,
+                askOffersANamedService,
+                askSendsMediaKeys,
+                askShowsMarkdown,
+                askAsksForWhatIsMissing,
+                askFoundCardChooses,
+                contactsFoundAndWritten,
+                contactCardActs,
+                actionsForTheSelectedRow,
+                appRowQuitsARunningApp,
+                askFindsContacts,
+                agendaFoundAndJoined,
+                agendaEventsAdded,
+                meetingInMenuBarAndOffered,
+                meetingBarStates,
+                meetingAlertsBefore,
+                meetingAlertsNotWhenJoined,
+                meetingCardChecksCameraAndMic,
+                remindersSaidAndDone,
+                remindersInMenuBarPlacesAndMail,
+                reminderDeleteUndoes,
+                eventDeleteUndoes,
+                placeForgetUndoes,
+                calendarReadsThisMac,
+                eventKitAnswersOffTheMainActor,
+                microphoneHeardForReal
+            ])
         }
         if scope == .roundtrip {
-            await textEditRoundTrip()
-            await safariTextareaRoundTrip()
-            return finish()
+            return await finish(after: [textEditRoundTrip, safariTextareaRoundTrip])
         }
         if scope == .imports {
-            await raycastExportsImport()
-            return finish()
+            return await finish(after: [raycastExportsImport])
         }
         if scope == .vision {
-            await jevSeesImages()
-            await imagesTaggedAndFound()
-            return finish()
+            return await finish(after: [jevSeesImages, imagesTaggedAndFound])
         }
         if scope == .backup {
-            await backupGoesAndComesBack()
-            return finish()
+            return await finish(after: [backupGoesAndComesBack])
         }
         if scope == .brew {
             window.center()
-            await homebrewSearchAndInstall()
-            return finish()
+            return await finish(after: [homebrewSearchAndInstall])
         }
         if scope == .history {
             window.center()
-            await historyPickedByMeaning()
-            await browserHistorySearch()
-            return finish()
+            return await finish(after: [historyPickedByMeaning, browserHistorySearch])
         }
         if scope == .scripts {
             window.center()
-            await askRunsScripts()
-            await scriptCommandsRun()
-            await agentCreatesSkillie()
-            return finish()
+            return await finish(after: [askRunsScripts, scriptCommandsRun, agentCreatesSkillie])
         }
         if scope == .keyboard {
             window.center()
-            await cleanKeyboardBlocksKeys()
-            await showDesktopMovesWindowsAside()
-            await unboundHyperPassesThrough()
-            await hyperReleasedAfterSecureInput()
-            return finish()
+            return await finish(after: [
+                cleanKeyboardBlocksKeys,
+                showDesktopMovesWindowsAside,
+                unboundHyperPassesThrough,
+                hyperReleasedAfterSecureInput
+            ])
         }
         if scope == .projects {
             window.center()
-            await askOpensProjects()
-            await editorProjectsFound()
-            return finish()
+            return await finish(after: [askOpensProjects, editorProjectsFound])
         }
         if scope == .apps {
             window.center()
-            guard await focusTestWindow() else { return finish() }
-            await cleanShotRouting()
-            if !aborted { await cleanShotFromLauncher() }
-            if !aborted { await cleanShotFromSkillies() }
-            if !aborted { await cleanShotOpensFiles() }
-            if !aborted { await appFilesFromFiles() }
-            if !aborted { await appsPaneShown() }
-            if !aborted { await appleShortcutsRun() }
-            return finish()
+            return await finish(after: [
+                takeFocus,
+                cleanShotRouting,
+                cleanShotFromLauncher,
+                cleanShotFromSkillies,
+                cleanShotOpensFiles,
+                appFilesFromFiles,
+                appsPaneShown,
+                appleShortcutsRun
+            ])
         }
 
         if scope == .rootsearch {
             window.center()
-            guard await focusTestWindow() else { return finish() }
-            await recentSearchesComeBack()
-            await pinsComeFirst()
-            await startsAgainAfterAWhile()
-            await opensOnTheChosenScreen()
-            await launcherSettingsShown()
-            await controlKeysMoveLikeArrows()
-            await caretKeysEditEverywhere()
-            await quicklinkTakesTheSelection()
-            await typesInEnglishWhileOpen()
-            return finish()
+            return await finish(after: [
+                takeFocus,
+                recentSearchesComeBack,
+                pinsComeFirst,
+                startsAgainAfterAWhile,
+                opensOnTheChosenScreen,
+                launcherSettingsShown,
+                controlKeysMoveLikeArrows,
+                caretKeysEditEverywhere,
+                quicklinkTakesTheSelection,
+                typesInEnglishWhileOpen
+            ])
         }
         if scope == .catalog {
             window.center()
-            await catalogListsWhatSkilliDoes()
-            await catalogShortcutsReachEverything()
-            await catalogOffLeavesResults()
-            guard await focusTestWindow() else { return finish() }
-            await linksRunWhatTheyName()
-            await linksTrustedPerEntry()
-            await quicklinksSectionShown()
-            await newFromLauncherOpensEditors()
-            await quicklinkDeleteUndoes()
-            await aliasRemovalUndoes()
-            return finish()
+            return await finish(after: [
+                catalogListsWhatSkilliDoes,
+                catalogShortcutsReachEverything,
+                catalogOffLeavesResults,
+                takeFocus,
+                linksRunWhatTheyName,
+                linksTrustedPerEntry,
+                quicklinksSectionShown,
+                newFromLauncherOpensEditors,
+                quicklinkDeleteUndoes,
+                aliasRemovalUndoes
+            ])
         }
         if scope == .settingtools {
             window.center()
-            await settingToolsChecks()
-            return finish()
+            return await finish(after: [settingToolsChecks])
         }
         if scope == .snippets {
             window.center()
-            guard await focusTestWindow() else { return finish() }
-            await snippetsExpandAndInsert()
-            await snippetsExpandInSafari()
-            await snippetsWaitForADelimiter()
-            await snippetsFoundByMeaning()
-            await snippetsMaybeRow()
-            await snippetDeleteUndoes()
-            await clipboardPastesFromLauncher()
-            await clipboardForgetUndoes()
-            await pasteInSequenceWithKeys()
-            await pasteLatestScreenshot()
-            await snippetsAndClipboardPanes()
-            await clipboardRetentionWaitsForTheHour()
-            return finish()
+            return await finish(after: [
+                takeFocus,
+                snippetsExpandAndInsert,
+                snippetsExpandInSafari,
+                snippetsWaitForADelimiter,
+                snippetsFoundByMeaning,
+                snippetsMaybeRow,
+                snippetDeleteUndoes,
+                clipboardPastesFromLauncher,
+                clipboardForgetUndoes,
+                pasteInSequenceWithKeys,
+                pasteLatestScreenshot,
+                snippetsAndClipboardPanes,
+                clipboardRetentionWaitsForTheHour
+            ])
         }
         if scope == .schedule {
             window.center()
-            await scheduleSaidInAskIsKept()
-            await scheduledAskFiresAndShowsItsCard()
-            await missedScheduledAskRunsOnceAtWake()
-            await scheduledAsksThroughTools()
-            await scheduledAsksInSettings()
-            await scheduledAskDeleteUndoes()
-            await agentUsesTheUsersSkills()
-            return finish()
+            return await finish(after: [
+                scheduleSaidInAskIsKept,
+                scheduledAskFiresAndShowsItsCard,
+                missedScheduledAskRunsOnceAtWake,
+                scheduledAsksThroughTools,
+                scheduledAsksInSettings,
+                scheduledAskDeleteUndoes,
+                agentUsesTheUsersSkills
+            ])
         }
         if scope == .dictation {
             window.center()
-            await voiceTranscribesSpeech()
-            await voiceAsksByVoice()
-            await dictationKnowsYourContacts()
-            await dictationTypesIntoTextEdit()
-            await dictationShortcutAgainTypesIt()
-            await dictationNeverInPasswordFields()
-            await dictationFromTheCatalog()
-            return finish()
+            return await finish(after: [
+                voiceTranscribesSpeech,
+                voiceAsksByVoice,
+                dictationKnowsYourContacts,
+                dictationTypesIntoTextEdit,
+                dictationShortcutAgainTypesIt,
+                dictationNeverInPasswordFields,
+                dictationFromTheCatalog
+            ])
         }
         if scope == .panes {
             window.center()
-            systemSettingsPanesRead()
-            await launcherOpensSettingsPanes()
-            await shortcutOpensSettingsPane()
-            await askOpensSystemSettings()
-            await askRunsMacCommands()
-            await askSwitchesSound()
-            return finish()
+            return await finish(after: [
+                systemSettingsPanesRead,
+                launcherOpensSettingsPanes,
+                shortcutOpensSettingsPane,
+                askOpensSystemSettings,
+                askRunsMacCommands,
+                askSwitchesSound
+            ])
         }
         if scope == .sound {
             window.center()
-            await askSetsTheVolume()
-            await askSwitchesSound()
-            await privateAggregatesLeftOut()
-            await soundDevicesSwitch()
-            return finish()
+            return await finish(after: [askSetsTheVolume, askSwitchesSound, privateAggregatesLeftOut, soundDevicesSwitch])
         }
         if scope == .files {
             window.center()
-            await filesGatheredBySpotlight()
-            await filesPickedByMeaning()
-            await launcherFindsFiles()
-            await trashUndoes()
-            return finish()
+            return await finish(after: [filesGatheredBySpotlight, filesPickedByMeaning, launcherFindsFiles, trashUndoes])
         }
         if scope == .menus {
-            await menuSearchChoosesInTextEdit()
-            return finish()
+            return await finish(after: [menuSearchChoosesInTextEdit])
         }
         if scope == .undo {
             window.center()
-            await undoChecks()
-            return finish()
+            return await finish(after: [undoChecks])
         }
         if scope == .emoji {
             window.center()
-            guard await focusTestWindow() else { return finish() }
-            await launcherPicksEmoji()
-            if !aborted { await emojiGridBrowsesAndMoves() }
-            if !aborted { await emojiPickerFindsSymbols() }
-            if !aborted { await emojiToneAndSaidWords() }
-            if !aborted { await emojiWordsForgetUndoes() }
-            return finish()
+            return await finish(after: [
+                takeFocus,
+                launcherPicksEmoji,
+                emojiGridBrowsesAndMoves,
+                emojiPickerFindsSymbols,
+                emojiToneAndSaidWords,
+                emojiWordsForgetUndoes
+            ])
         }
         if scope == .gifs {
             window.center()
-            guard await focusTestWindow() else { return finish() }
-            await gifsSearchPasteAndRecents()
-            if !aborted { await gifsPaneShown() }
-            return finish()
+            return await finish(after: [takeFocus, gifsSearchPasteAndRecents, gifsPaneShown])
         }
         if scope == .gifslive {
             window.center()
-            guard await focusTestWindow() else { return finish() }
-            await gifsOnRealKlipy()
-            return finish()
+            return await finish(after: [takeFocus, gifsOnRealKlipy])
         }
         if scope == .previews {
             window.center()
-            guard await focusTestWindow() else { return finish() }
-            await clipboardPreviewsShowEachKind()
-            await clipboardPreviewAndMeaning()
-            return finish()
+            return await finish(after: [takeFocus, clipboardPreviewsShowEachKind, clipboardPreviewAndMeaning])
         }
         if scope == .clipboard {
-            await clipboardKeepsAndFinds()
-            await clipboardStoreMigrates()
-            await screenshotsJoinTheHistory()
-            pasteSequenceGoesOlder()
-            await clipboardFindsByMeaning()
-            return finish()
+            return await finish(after: [
+                clipboardKeepsAndFinds,
+                clipboardStoreMigrates,
+                screenshotsJoinTheHistory,
+                pasteSequenceGoesOlder,
+                clipboardFindsByMeaning
+            ])
         }
         if scope == .routes {
-            await askRoutesOnVolume()
-            return finish()
+            return await finish(after: [askRoutesOnVolume])
         }
         if scope == .decide {
-            await askRoutesOnVolume()
-            await filesPickedByMeaning()
-            await emojiByFeelingLive()
-            await clipboardFindsByMeaning()
-            await askRoutesLive()
-            await approvalRulesJudgedLive()
-            await askFindsFinderMenus()
-            await askOpensApps()
-            await askRunsMacCommands()
-            await askRunsNewMacCommands()
-            await askReadsValues()
-            await askReadsAnswersInTheCard()
-            await askReadsPlans()
-            await askReadsContacts()
-            await askReadsSchedulesAndApps()
-            await askOpensSystemSettings()
-            await askSwitchesSound()
-            await askOpensProjects()
-            await askRunsScripts()
-            await askRunsShortcuts()
-            await historyPickedByMeaning()
-            await snippetsPickedByMeaning()
-            await snippetsMaybeByMeaning()
-            return finish()
+            return await finish(after: [
+                askRoutesOnVolume,
+                filesPickedByMeaning,
+                emojiByFeelingLive,
+                clipboardFindsByMeaning,
+                askRoutesLive,
+                approvalRulesJudgedLive,
+                askFindsFinderMenus,
+                askOpensApps,
+                askRunsMacCommands,
+                askRunsNewMacCommands,
+                askReadsValues,
+                askReadsAnswersInTheCard,
+                askReadsPlans,
+                askReadsContacts,
+                askReadsSchedulesAndApps,
+                askOpensSystemSettings,
+                askSwitchesSound,
+                askOpensProjects,
+                askRunsScripts,
+                askRunsShortcuts,
+                historyPickedByMeaning,
+                snippetsPickedByMeaning,
+                snippetsMaybeByMeaning
+            ])
         }
 
         if scope == .glass {
-            await appIconsFillTheirSize()
-            await glassAsSeen()
-            return finish()
+            return await finish(after: [appIconsFillTheirSize, glassAsSeen])
         }
 
         window.center()
-        guard await focusTestWindow() else { return finish() }
 
         if scope == .shortcuts {
             // The chain rule moved into the engine: chains typed as people
             // type them (Hyper held) still run, cancel and time out.
-            await transformInTestWindow(
-                name: "Hyper held through ✦K → U (Accessibility read)",
-                original: "hello liquid glass",
-                expected: "HELLO LIQUID GLASS",
-                keys: ["k", "u"],
-                expectedSource: .accessibility,
-                checkUndo: false
-            )
-            let steps: [@MainActor () async -> Void] = [
+            return await finish(after: [
+                takeFocus,
+                {
+                    await self.transformInTestWindow(
+                        name: "Hyper held through ✦K → U (Accessibility read)",
+                        original: "hello liquid glass",
+                        expected: "HELLO LIQUID GLASS",
+                        keys: ["k", "u"],
+                        expectedSource: .accessibility,
+                        checkUndo: false
+                    )
+                },
                 sequenceCancelSwallowsKey,
                 sequenceTimesOut,
                 recordLauncherShortcut,
@@ -778,29 +762,26 @@ final class SelfTest {
                 launcherKeysRefused,
                 launcherNotBuried,
                 shortcutRemovalUndoes
-            ]
-            for step in steps where !aborted {
-                await step()
-            }
-            return finish()
+            ])
         }
 
         if scope == .meetingbar {
-            await meetingBarStates()
-            if !aborted { await meetingInMenuBarAndOffered() }
-            if !aborted { await meetingAlertsNotWhenJoined() }
-            if !aborted { await meetingBarPreviewInSettings() }
-            return finish()
+            return await finish(after: [
+                takeFocus,
+                meetingBarStates,
+                meetingInMenuBarAndOffered,
+                meetingAlertsNotWhenJoined,
+                meetingBarPreviewInSettings
+            ])
         }
 
         if scope == .settingsearch {
-            await settingsSearchFindsAndOpens()
-            if !aborted { await settingsSearchReachesEverySetting() }
-            return finish()
+            return await finish(after: [takeFocus, settingsSearchFindsAndOpens, settingsSearchReachesEverySetting])
         }
 
         if scope == .settings {
-            let steps: [@MainActor () async -> Void] = [
+            return await finish(after: [
+                takeFocus,
                 recordLauncherShortcut,
                 recordingRejectsConflicts,
                 recordSequenceAndRemove,
@@ -825,55 +806,59 @@ final class SelfTest {
                 generalMarkFollowsPointer,
                 tapEscapePreference,
                 settingsSearchFindsAndOpens,
-                settingsSearchReachesEverySetting
-            ]
-            for step in steps where !aborted {
-                await step()
-            }
-            window.orderOut(nil)
-            if !aborted { await settingsComeToFrontOverAnotherApp() }
-            if !aborted { await setupComesToFrontFromLauncher() }
-            if !aborted { await setupClosedMeansLater() }
-            return finish()
+                settingsSearchReachesEverySetting,
+                { self.window.orderOut(nil) },
+                settingsComeToFrontOverAnotherApp,
+                setupComesToFrontFromLauncher,
+                setupClosedMeansLater
+            ])
         }
 
-        await transformInTestWindow(
-            name: "Hyper held through ✦K → U (Accessibility read)",
-            original: "hello liquid glass",
-            expected: "HELLO LIQUID GLASS",
-            keys: ["k", "u"],
-            expectedSource: .accessibility,
-            checkUndo: true
-        )
-        await transformInTestWindow(
-            name: "Direct chord ✦U, skil.li's own Hyper (F19)",
-            original: "second line",
-            expected: "SECOND LINE",
-            keys: ["u"],
-            trigger: Self.ownTriggerKeyCode,
-            expectedSource: .accessibility,
-            checkUndo: false
-        )
-        context.selection.accessibilityReadEnabled = false
-        await transformInTestWindow(
-            name: "✦K → L via ⌘C fallback",
-            original: "MiXeD Case",
-            expected: "mixed case",
-            keys: ["k", "l"],
-            expectedSource: .clipboard,
-            checkUndo: true
-        )
-        context.selection.accessibilityReadEnabled = true
-        await transformInTestWindow(
-            name: "✦K → T title case",
-            original: "ski li launcher",
-            expected: "Ski Li Launcher",
-            keys: ["k", "t"],
-            expectedSource: .accessibility,
-            checkUndo: false
-        )
-
-        let steps: [@MainActor () async -> Void] = [
+        return await finish(after: [
+            takeFocus,
+            {
+                await self.transformInTestWindow(
+                    name: "Hyper held through ✦K → U (Accessibility read)",
+                    original: "hello liquid glass",
+                    expected: "HELLO LIQUID GLASS",
+                    keys: ["k", "u"],
+                    expectedSource: .accessibility,
+                    checkUndo: true
+                )
+            },
+            {
+                await self.transformInTestWindow(
+                    name: "Direct chord ✦U, skil.li's own Hyper (F19)",
+                    original: "second line",
+                    expected: "SECOND LINE",
+                    keys: ["u"],
+                    trigger: Self.ownTriggerKeyCode,
+                    expectedSource: .accessibility,
+                    checkUndo: false
+                )
+            },
+            {
+                self.context.selection.accessibilityReadEnabled = false
+                await self.transformInTestWindow(
+                    name: "✦K → L via ⌘C fallback",
+                    original: "MiXeD Case",
+                    expected: "mixed case",
+                    keys: ["k", "l"],
+                    expectedSource: .clipboard,
+                    checkUndo: true
+                )
+                self.context.selection.accessibilityReadEnabled = true
+            },
+            {
+                await self.transformInTestWindow(
+                    name: "✦K → T title case",
+                    original: "ski li launcher",
+                    expected: "Ski Li Launcher",
+                    keys: ["k", "t"],
+                    expectedSource: .accessibility,
+                    checkUndo: false
+                )
+            },
             realTriggerPath,
             tapSendsEscape,
             unboundHyperPassesThrough,
@@ -904,31 +889,43 @@ final class SelfTest {
             settingsFromStatusMenu,
             glassPreferenceAppliesLive,
             glassShadowFitsWindows,
-            tapEscapePreference
-        ]
-        for step in steps where !aborted {
-            await step()
-        }
+            tapEscapePreference,
+            { self.window.orderOut(nil) },
+            settingsComeToFrontOverAnotherApp,
+            setupComesToFrontFromLauncher,
+            setupClosedMeansLater,
+            textEditRoundTrip,
+            safariTextareaRoundTrip,
+            aiChecks,
+            appIconsFillTheirSize,
+            glassAsSeen
+        ])
+    }
 
-        window.orderOut(nil)
-        if !aborted { await settingsComeToFrontOverAnotherApp() }
-        if !aborted { await setupComesToFrontFromLauncher() }
-        if !aborted { await setupClosedMeansLater() }
-        if !aborted { await textEditRoundTrip() }
-        if !aborted { await safariTextareaRoundTrip() }
-        if !aborted {
-            await aiChecks()
-            await appIconsFillTheirSize()
-            await glassAsSeen()
+    /// Runs `steps` in turn. Once one finds the focus lost (`aborted`), the
+    /// rest never run, so no key or click lands in another app: the report
+    /// says how many were left.
+    private func finish(after steps: [Step]) async -> Report {
+        for (done, step) in steps.enumerated() {
+            if aborted {
+                checks.append(Check(name: "Steps after the focus was lost", passed: true, skipped: true,
+                                    detail: "\(steps.count - done) of \(steps.count) not run", latencyMs: nil))
+                break
+            }
+            await step()
         }
         return finish()
     }
 
     private func finish() -> Report {
         window.orderOut(nil)
-        let skipped = checks.filter(\.skipped).count
-        let passed = checks.filter { $0.passed && !$0.skipped }.count
-        return Report(passed: passed, failed: checks.count - passed - skipped, skipped: skipped, checks: checks)
+        // Ended by the watchdog already: its report, the one written.
+        return watchdog.stop() ?? Report(checks: checks)
+    }
+
+    /// A step: the test window to front, or the run stops there.
+    private func takeFocus() async {
+        _ = await focusTestWindow()
     }
 
     /// Brings the test window to front and confirms it, or aborts the run.
@@ -5435,10 +5432,8 @@ final class SelfTest {
     /// Presses the last enabled button with this accessibility label in
     /// skil.li's own windows, as a click would.
     private static func pressLastButton(labelled label: String) -> Bool {
-        let app = AXUIElementCreateApplication(getpid())
         var found: [AXUIElement] = []
-        func visit(_ element: AXUIElement, depth: Int) {
-            guard depth < 40 else { return }
+        walkAX(from: AXUIElementCreateApplication(getpid())) { element in
             var role: CFTypeRef?
             var description: CFTypeRef?
             var enabled: CFTypeRef?
@@ -5448,12 +5443,8 @@ final class SelfTest {
             if role as? String == kAXButtonRole, description as? String == label, enabled as? Bool != false {
                 found.append(element)
             }
-            var children: CFTypeRef?
-            guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children) == .success,
-                  let list = children as? [AXUIElement] else { return }
-            for child in list { visit(child, depth: depth + 1) }
+            return true
         }
-        visit(app, depth: 0)
         guard let target = found.last else { return false }
         return AXUIElementPerformAction(target, kAXPressAction as CFString) == .success
     }
@@ -5487,17 +5478,12 @@ final class SelfTest {
     /// skil.li's elements with `role`, named or not (a sheet, a stepper).
     private static func axElements(role: String, under root: AXUIElement? = nil) -> [AXUIElement] {
         var found: [AXUIElement] = []
-        func visit(_ element: AXUIElement, depth: Int) {
-            guard depth < 40 else { return }
+        walkAX(from: root ?? AXUIElementCreateApplication(getpid())) { element in
             var value: CFTypeRef?
             AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &value)
             if value as? String == role { found.append(element) }
-            var children: CFTypeRef?
-            guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children) == .success,
-                  let list = children as? [AXUIElement] else { return }
-            for child in list { visit(child, depth: depth + 1) }
+            return true
         }
-        visit(root ?? AXUIElementCreateApplication(getpid()), depth: 0)
         return found
     }
 
@@ -13846,21 +13832,16 @@ final class SelfTest {
     }
 
     private static func accessibilityButton(labelled label: String) -> AXUIElement? {
-        let app = AXUIElementCreateApplication(getpid())
-        func visit(_ element: AXUIElement, depth: Int) -> AXUIElement? {
-            guard depth < 30 else { return nil }
+        var found: AXUIElement?
+        walkAX(from: AXUIElementCreateApplication(getpid()), depth: 30) { element in
             var role: CFTypeRef?
             var description: CFTypeRef?
             AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
             AXUIElementCopyAttributeValue(element, kAXDescriptionAttribute as CFString, &description)
-            if role as? String == kAXButtonRole, description as? String == label { return element }
-            var children: CFTypeRef?
-            guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children) == .success,
-                  let list = children as? [AXUIElement] else { return nil }
-            for child in list { if let found = visit(child, depth: depth + 1) { return found } }
-            return nil
+            if role as? String == kAXButtonRole, description as? String == label { found = element }
+            return found == nil
         }
-        return visit(app, depth: 0)
+        return found
     }
 
     /// The launcher says what Tab will work on: the selection, read through
@@ -21095,20 +21076,42 @@ final class SelfTest {
     /// description passes `matches`, under `root` (the app by default).
     private static func axElements(roles: [String], under root: AXUIElement? = nil, where matches: (String) -> Bool) -> [AXUIElement] {
         var found: [AXUIElement] = []
-        func visit(_ element: AXUIElement, depth: Int) {
-            guard depth < 40 else { return }
+        walkAX(from: root ?? AXUIElementCreateApplication(getpid())) { element in
             var role: CFTypeRef?
             AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
             if let role = role as? String, roles.contains(role), let title = axTitle(element), matches(title) {
                 found.append(element)
             }
+            return true
+        }
+        return found
+    }
+
+    /// `visit` on `root` and every element under it, depth first, each one
+    /// once, `depth` levels down at most; `visit` says false to stop.
+    /// Once: while skil.li is not the active app (measured with the login
+    /// window in front), its application lists itself twice among its own
+    /// children, and a walk that went in again went down every level twice
+    /// over (2026-10-22: 2^40 elements, the main thread held for 9 hours;
+    /// 129 when each is walked once).
+    private static func walkAX(from root: AXUIElement, depth limit: Int = 40, _ visit: (AXUIElement) -> Bool) {
+        var seen: [CFHashCode: [AXUIElement]] = [:]
+        var stopped = false
+        func walk(_ element: AXUIElement, depth: Int) {
+            guard !stopped, depth < limit else { return }
+            let hash = CFHash(element)
+            guard seen[hash]?.contains(where: { CFEqual($0, element) }) != true else { return }
+            seen[hash, default: []].append(element)
+            guard visit(element) else {
+                stopped = true
+                return
+            }
             var children: CFTypeRef?
             guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children) == .success,
                   let list = children as? [AXUIElement] else { return }
-            for child in list { visit(child, depth: depth + 1) }
+            for child in list { walk(child, depth: depth + 1) }
         }
-        visit(root ?? AXUIElementCreateApplication(getpid()), depth: 0)
-        return found
+        walk(root, depth: 0)
     }
 
     private static func axTitle(_ element: AXUIElement) -> String? {
@@ -22486,8 +22489,7 @@ final class SelfTest {
     /// The values of the switches and checkboxes under `root`, in order.
     private static func axSwitchValues(under root: AXUIElement) -> [Int] {
         var values: [Int] = []
-        func visit(_ element: AXUIElement, depth: Int) {
-            guard depth < 40 else { return }
+        walkAX(from: root) { element in
             var role: CFTypeRef?
             var subrole: CFTypeRef?
             AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
@@ -22497,12 +22499,8 @@ final class SelfTest {
                 AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value)
                 if let number = value as? NSNumber { values.append(number.intValue) }
             }
-            var children: CFTypeRef?
-            guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children) == .success,
-                  let list = children as? [AXUIElement] else { return }
-            for child in list { visit(child, depth: depth + 1) }
+            return true
         }
-        visit(root, depth: 0)
         return values
     }
 
@@ -22886,7 +22884,7 @@ final class SelfTest {
         }
     }
 
-    static func emit(_ report: Report, to path: String?) {
+    nonisolated static func emit(_ report: Report, to path: String?) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(report) else { return }
@@ -23361,6 +23359,123 @@ final class ScreenRecorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegat
     nonisolated func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: any Error) {
         let message = error.localizedDescription
         Task { @MainActor in self.failure = message }
+    }
+}
+
+/// Ends a self-test that stops moving on, even with the main thread held:
+/// 2026-10-22, a walk of skil.li's Accessibility tree started after the
+/// focus was lost kept the main thread for 9 hours, and every other run
+/// waited behind it. From its own queue it writes what was recorded, with
+/// its own failure, then ends skil.li.
+final class SelfTestWatchdog: Sendable {
+    /// After the focus is lost the rest is skipped: the run ends at once.
+    static let afterFocusLost: Duration = .seconds(60)
+    /// The main run loop answers within this whatever a step waits for:
+    /// the main actor's awaits leave the main thread free.
+    static let mainThreadHeld: Duration = .seconds(60)
+    /// Longer than any check takes (Chess's records once, its games played).
+    static let withoutACheck: Duration = .seconds(1_800)
+
+    private struct State {
+        var checks: [SelfTest.Check] = []
+        var lastCheck = ContinuousClock.now
+        var lastAnswer = ContinuousClock.now
+        var asked = false
+        var focusLost: ContinuousClock.Instant?
+        var over = false
+        var report: SelfTest.Report?
+    }
+
+    private let state = Mutex(State())
+    private let timer: DispatchSourceTimer
+
+    init(reportPath: String?) {
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "com.nomdelasociete.Skilli.selftest-watchdog"))
+        self.timer = timer
+        timer.schedule(deadline: .now() + 5, repeating: 5)
+        timer.setEventHandler { [weak self] in self?.look(reportPath: reportPath) }
+        timer.resume()
+    }
+
+    func recorded(_ checks: [SelfTest.Check]) {
+        state.withLock {
+            $0.checks = checks
+            $0.lastCheck = .now
+        }
+    }
+
+    func focusLost() {
+        state.withLock { $0.focusLost = $0.focusLost ?? .now }
+    }
+
+    /// The run is over: nothing more to watch. The report written, if the
+    /// watchdog ended it first.
+    func stop() -> SelfTest.Report? {
+        timer.cancel()
+        return state.withLock {
+            $0.over = true
+            return $0.report
+        }
+    }
+
+    private func look(reportPath: String?) {
+        // The main run loop is asked to answer. Its own blocks run in a
+        // menu's or a modal session's loop too: only a main thread held in
+        // code that does not return leaves it unanswered.
+        let ask = state.withLock {
+            defer { $0.asked = true }
+            return !$0.asked
+        }
+        if ask {
+            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue) { [weak self] in
+                self?.state.withLock {
+                    $0.lastAnswer = .now
+                    $0.asked = false
+                }
+            }
+            CFRunLoopWakeUp(CFRunLoopGetMain())
+        }
+        let report: SelfTest.Report? = state.withLock {
+            guard !$0.over else { return nil }
+            let now = ContinuousClock.now
+            let why: String
+            if let lost = $0.focusLost, now - lost > Self.afterFocusLost {
+                why = "the run went on \(Self.seconds(now - lost)) s after the focus was lost"
+            } else if now - $0.lastAnswer > Self.mainThreadHeld {
+                why = "the main thread did not answer for \(Self.seconds(now - $0.lastAnswer)) s"
+            } else if now - $0.lastCheck > Self.withoutACheck {
+                why = "no check finished for \(Self.seconds(now - $0.lastCheck)) s"
+            } else {
+                return nil
+            }
+            // The main run loop's mode: a menu's or a modal session's loop
+            // shows there; code that does not return, the mode it was called in.
+            let mode = CFRunLoopCopyCurrentMode(CFRunLoopGetMain()).map { $0.rawValue as String } ?? "none"
+            $0.over = true
+            $0.report = SelfTest.Report(checks: $0.checks + [SelfTest.Check(
+                name: "Watchdog", passed: false,
+                detail: "\(why), after “\($0.checks.last?.name ?? "the start")”; the main thread last answered \(Self.seconds(now - $0.lastAnswer)) s ago, its run loop in \(mode); ended",
+                latencyMs: nil
+            )])
+            return $0.report
+        }
+        guard let report else { return }
+        timer.cancel()
+        Log.actions.error("SELFTEST FAIL Watchdog — \(report.checks.last?.detail ?? "", privacy: .public)")
+        SelfTest.emit(report, to: reportPath)
+        AppDelegate.terminateFromAnyThread(grace: .seconds(10)) { exit(EXIT_FAILURE) }
+    }
+
+    private static func seconds(_ duration: Duration) -> Int {
+        Int(duration.components.seconds)
+    }
+}
+
+extension SelfTest.Report {
+    init(checks: [SelfTest.Check]) {
+        let skipped = checks.filter(\.skipped).count
+        let passed = checks.filter { $0.passed && !$0.skipped }.count
+        self.init(passed: passed, failed: checks.count - passed - skipped, skipped: skipped, checks: checks)
     }
 }
 #endif
