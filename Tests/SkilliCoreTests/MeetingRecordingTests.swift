@@ -237,6 +237,19 @@ final class TrackTimelineTests: XCTestCase {
         XCTAssertNil(timeline.tail())
     }
 
+    func testATrackPastTheStopIsCutThere() {
+        var timeline = TrackTimeline(rate: 100, start: 10)
+        // Its clock ran ahead: in a row by the sample time, 30 frames more
+        // than the host's half second.
+        _ = timeline.place(sampleTime: 0, hostTime: 10, frames: 40)
+        _ = timeline.place(sampleTime: 40, hostTime: 10.38, frames: 40)
+        timeline.finish(at: 10.5)
+        XCTAssertEqual(timeline.overshoot(), 30)
+        XCTAssertEqual(timeline.written, 50)
+        XCTAssertNil(timeline.tail())
+        XCTAssertEqual(timeline.overshoot(), 0)
+    }
+
     func testAnHourOfBuffersStaysOnTheDevicesClock() {
         // 48 kHz, 512-frame cycles, one missed every 1000.
         var timeline = TrackTimeline(rate: 48000, start: 0)

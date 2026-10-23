@@ -427,7 +427,8 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        let width = tableView.bounds.width
+        // The column's width, set at each layout (the table's own may lag).
+        let width = max(tableView.tableColumns.first?.width ?? 0, 320)
         if width != heightsWidth {
             heights = [:]
             heightsWidth = width

@@ -267,6 +267,17 @@ public struct TrackTimeline: Sendable {
 
     public var isPaused: Bool { pauses.last.map { $0.to == nil } ?? false }
 
+    /// Once finished, how many frames the track holds past the stop (a
+    /// device whose clock ran ahead, buffers stamped late): taken off its
+    /// end, so every track ends at the same moment.
+    public mutating func overshoot() -> Int {
+        guard let stop else { return 0 }
+        let end = Int((fileTime(of: stop) * rate).rounded())
+        guard written > end else { return 0 }
+        defer { written = end }
+        return written - end
+    }
+
     /// Once finished, the silence that brings the track to the stop when
     /// its device gave less (it went away, or its last buffers never
     /// came): every track ends at the same moment.

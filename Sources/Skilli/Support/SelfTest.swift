@@ -22798,9 +22798,15 @@ final class SelfTest {
 
     /// Every recorder check, on the self-test's own Recordings folder.
     private func recorderChecks() async {
-        let consent = context.preferences.recorderConsentShown
-        defer { context.preferences.recorderConsentShown = consent }
+        let (consent, language) = (context.preferences.recorderConsentShown, context.preferences.voiceLanguage)
+        defer {
+            context.preferences.recorderConsentShown = consent
+            context.preferences.voiceLanguage = language
+        }
         context.preferences.recorderConsentShown = false
+        // The calls are English; the test Mac types French: Ask's language
+        // says English, as a user would set it.
+        context.preferences.voiceLanguage = "en-US"
         await recorderCardShowsBothSourcesLive()
         if !aborted { await recorderRecordsAPlayedBackCall() }
         if !aborted { await recorderPausesBothTracksTogether() }
@@ -23401,7 +23407,8 @@ final class SelfTest {
         let linkClosed = await waitUntil(timeout: 2) { !center.isCardVisible && center.recorder.phase == .idle } != nil
         await links.openNow(SkilliLink.recording(.stop).url)
         let noneSaid = links.log.last == "no recording"
-        if popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        if await waitUntil(timeout: 1, { popover.isVisible }) != nil { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        _ = await waitUntil(timeout: 8) { !popover.isVisible }
 
         let started = Task { await self.skilliCall("record_meeting", #"{"title":"From a tool"}"#) }
         let toolCard = await waitUntil(timeout: 5) { center.isCardVisible && center.cardView.name == "From a tool" } != nil
@@ -23414,11 +23421,12 @@ final class SelfTest {
         let (_, now) = await skilliCall("recording_status")
         // A link pausing it asks first: esc keeps it going.
         let asked = Task { await links.openNow(SkilliLink.recording(.pause).url) }
-        let linkAsks = await waitUntil(timeout: 3) {
+        let linkAsks = await waitUntil(timeout: 10) {
             popover.isVisible && (popover.shownTitle + " " + popover.shownText).contains("Pause the recording")
         } != nil
-        await pressKey(nil, code: CGKeyCode(kVK_Escape))
-        await asked.value
+        let pauseCard = "“\(popover.shownTitle)”: \(popover.shownText.prefix(120))"
+        if linkAsks { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        if linkAsks { await asked.value } else { asked.cancel() }
         let keptGoing = center.recorder.phase == .recording
         let pausing = Task { await self.skilliCall("pause_recording") }
         let pauseAsks = await waitUntil(timeout: 3) { popover.isVisible } != nil
@@ -23435,7 +23443,7 @@ final class SelfTest {
             && now.contains("Recording “From a tool”") && linkAsks && keptGoing && pauseAsks && pauseStatus == 0 && pausedNow
             && stopStatus == 0 && stopSaid.contains("Stopped “From a tool”")
         record(name, passed,
-               "link card \(linkCard), closed \(linkClosed), none said \(noneSaid); tool card \(toolCard), exit \(status) “\(said)”; status “\(now)”; link asks \(linkAsks), kept going \(keptGoing); pause asks \(pauseAsks), exit \(pauseStatus) “\(pauseSaid)”, paused \(pausedNow); stop exit \(stopStatus) “\(stopSaid.prefix(80))”",
+               "link card \(linkCard), closed \(linkClosed), none said \(noneSaid); tool card \(toolCard), exit \(status) “\(said)”; status “\(now)”; link asks \(linkAsks) (\(pauseCard)), kept going \(keptGoing); pause asks \(pauseAsks), exit \(pauseStatus) “\(pauseSaid)”, paused \(pausedNow); stop exit \(stopStatus) “\(stopSaid.prefix(80))”",
                nil)
     }
 

@@ -14,6 +14,7 @@ enum HostClock {
     }()
 
     static func seconds(_ ticks: UInt64) -> Double { Double(ticks) * secondsPerTick }
+    static func ticks(_ seconds: Double) -> UInt64 { UInt64(max(0, seconds) / secondsPerTick) }
     static var now: Double { seconds(mach_absolute_time()) }
 }
 

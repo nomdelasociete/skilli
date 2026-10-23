@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Synchronization
 
 /// The microphone, the user's side: macOS's default input through
 /// `AVAudioEngine`. A change of the audio setup (a device plugged, the
@@ -105,7 +106,7 @@ final class MicrophoneTrack {
                 engine.mainMixerNode.outputVolume = 0
                 self.player = player
             }
-            player.installTap(onBus: 0, bufferSize: 1024, format: file.processingFormat, block: Self.tap(inbox))
+            player.installTap(onBus: 0, bufferSize: 1024, format: file.processingFormat, block: Self.standInTap(inbox, player: player))
             return
         }
         #endif
@@ -155,6 +156,7 @@ final class MicrophoneTrack {
         let file = try AVAudioFile(forReading: standIn)
         player.stop()
         player.scheduleFile(file, at: nil)
+        StandInClock.started.withLock { $0 = hostTicks }
         player.play(at: AVAudioTime(hostTime: hostTicks))
         standInPlaying = true
     }
@@ -162,6 +164,22 @@ final class MicrophoneTrack {
     /// Self-test: the engine as a change of the audio setup leaves it.
     func simulateConfigurationChange() {
         startAgain()
+    }
+    #endif
+
+    #if SKILLI_SELFTEST
+    /// The stand-in's buffers, timed as a microphone's are: when they were
+    /// heard, from the player's own timeline (a player node's tap says when
+    /// they will come out of the speakers). Nothing before it plays.
+    private nonisolated static func standInTap(_ inbox: AudioInbox, player: AVAudioPlayerNode) -> AVAudioNodeTapBlock {
+        nonisolated(unsafe) let player = player
+        return { buffer, time in
+            guard let played = player.playerTime(forNodeTime: time), played.isSampleTimeValid, let started = StandInClock.started.withLock({ $0 })
+            else { return }
+            let host = started + HostClock.ticks(Double(played.sampleTime) / played.sampleRate)
+            inbox.put(buffer.audioBufferList, channels: Int(buffer.format.channelCount), frames: Int(buffer.frameLength),
+                      sampleTime: Double(played.sampleTime), hostTime: host, rate: buffer.format.sampleRate)
+        }
     }
     #endif
 
@@ -176,3 +194,10 @@ final class MicrophoneTrack {
         }
     }
 }
+
+#if SKILLI_SELFTEST
+/// When the self-test's stand-in started playing (host ticks).
+enum StandInClock {
+    static let started = Mutex<UInt64?>(nil)
+}
+#endif

@@ -6,7 +6,8 @@ import SkilliCore
 /// One track's file (`me.m4a`, `them.m4a`), written as it comes: AAC,
 /// one channel at 48 kHz, in fragments of a second, so a crash, a logout
 /// or a power cut leaves a file that plays up to its last second (an MP4
-/// written whole at the end does not open at all then). Every 100 ms on its
+/// written whole at the end does not open at all then; the last half
+/// second waits in memory, to be cut at the stop). Every 100 ms on its
 /// own queue it takes what its source handed over and places it by the
 /// track's own clock (`TrackTimeline`); a source at another rate (a
 /// Bluetooth microphone at 16 kHz) is resampled first.
@@ -14,6 +15,9 @@ final class TrackWriter: @unchecked Sendable {
     static let rate = 48000.0
     /// What goes to the encoder at a time: 100 ms.
     private static let piece = 4800
+    /// Kept back from the encoder while recording: what may still be cut
+    /// off at the stop (`TrackTimeline.overshoot`).
+    private static let heldBack = 24000
 
     let url: URL
     private let inbox: AudioInbox
@@ -109,6 +113,8 @@ final class TrackWriter: @unchecked Sendable {
                 self.timer?.cancel()
                 self.timer = nil
                 self.drain()
+                let over = self.timeline.overshoot()
+                if over > 0 { self.pending.removeLast(min(over, self.pending.count)) }
                 if let tail = self.timeline.tail() { self.apply([tail], from: []) }
                 self.flush(all: true)
                 self.input.markAsFinished()
@@ -178,7 +184,7 @@ final class TrackWriter: @unchecked Sendable {
         var start = 0
         // What went is taken off once, after (a long silence is many pieces).
         defer { pending.removeFirst(start) }
-        while pending.count - start >= Self.piece || (all && start < pending.count) {
+        while pending.count - start >= Self.piece + (all ? 0 : Self.heldBack) || (all && start < pending.count) {
             guard writer.status == .writing else { return fail() }
             guard input.isReadyForMoreMediaData else {
                 // The encoder is behind: kept for the next turn, never lost
