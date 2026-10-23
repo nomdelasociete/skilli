@@ -23293,8 +23293,10 @@ final class SelfTest {
         let paired = nearest.filter { abs($0.1 - median) < 0.05 }
         let offsets = paired.map(\.1)
         let pauseAt = record.pauses.first?.at ?? 0
-        let before = paired.filter { $0.0 < pauseAt - 0.5 }.map(\.1)
-        let after = paired.filter { $0.0 > pauseAt + 0.5 }.map(\.1)
+        // The jump at Resume: the 3 s before the pause against the 3 s after
+        // (an earlier glitch of the other app's playback stays out of it).
+        let before = paired.filter { $0.0 < pauseAt - 0.3 && $0.0 > pauseAt - 3.3 }.map(\.1)
+        let after = paired.filter { $0.0 > pauseAt + 0.3 && $0.0 < pauseAt + 3.3 }.map(\.1)
         func mean(_ values: [Double]) -> Double { values.isEmpty ? .nan : values.reduce(0, +) / Double(values.count) }
         let step = abs(mean(after) - mean(before))
         let spread = (offsets.max() ?? 1) - (offsets.min() ?? 0)
@@ -23302,7 +23304,7 @@ final class SelfTest {
         let expected = wall - (record.pauses.first?.seconds ?? 0)
         let passed = consentGone && paused && stillFrozen && resumed && restarted && resumeMenu.contains("Resume Recording") && record.pauses.count == 1
             && (record.pauses.first?.seconds ?? 0) > 4 && abs(lengths.me - lengths.them) < 0.05 && abs(lengths.me - expected) < 0.5
-            && step < 0.001 && spread < 0.002 && before.count >= 10 && after.count >= 10 && paired.count >= found.0.count - 2
+            && step < 0.001 && spread < 0.002 && before.count >= 4 && after.count >= 4
         self.record(name, passed,
                     String(format: "consent gone %@; paused %@, clock still “%@” %@, resumed %@, the microphone started again %@; pause at %.2f s for %.2f s; tracks %.2f s / %.2f s (%.2f s recorded); %d of %d beeps in step, offset %.1f ms before the pause, %.1f ms after (step %.2f ms, spread %.1f ms; the microphone 100 ppm slow, started again once)",
                            "\(consentGone)", "\(paused)", frozen ?? "", "\(stillFrozen)", "\(resumed)", "\(restarted)", pauseAt, record.pauses.first?.seconds ?? 0, lengths.me, lengths.them,

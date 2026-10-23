@@ -288,16 +288,16 @@ final class TrackTimelineTests: XCTestCase {
 
     func testAFastMicrophoneStaysWithTheHostClock() {
         let run = drifting(ppm: 100)
-        XCTAssertLessThanOrEqual(run.worst, 48, "never more than a millisecond off: \(run.worst) frames")
-        XCTAssertLessThanOrEqual(run.worstJump, 48, "a pause's re-placement under a millisecond: \(run.worstJump) frames")
-        XCTAssertLessThanOrEqual(abs(run.end - run.frames), 48, "the hour ends where it should")
+        XCTAssertLessThanOrEqual(run.worst, 24, "never more than half a millisecond off: \(run.worst) frames")
+        XCTAssertLessThanOrEqual(run.worstJump, 24, "a pause's re-placement under half a millisecond: \(run.worstJump) frames")
+        XCTAssertLessThanOrEqual(abs(run.end - run.frames), 24, "the hour ends where it should")
     }
 
     func testASlowMicrophoneStaysWithTheHostClock() {
         let run = drifting(ppm: -100)
-        XCTAssertLessThanOrEqual(run.worst, 48, "never more than a millisecond off: \(run.worst) frames")
-        XCTAssertLessThanOrEqual(run.worstJump, 48, "a pause's re-placement under a millisecond: \(run.worstJump) frames")
-        XCTAssertLessThanOrEqual(abs(run.end - run.frames), 48, "the hour ends where it should")
+        XCTAssertLessThanOrEqual(run.worst, 24, "never more than half a millisecond off: \(run.worst) frames")
+        XCTAssertLessThanOrEqual(run.worstJump, 24, "a pause's re-placement under half a millisecond: \(run.worstJump) frames")
+        XCTAssertLessThanOrEqual(abs(run.end - run.frames), 24, "the hour ends where it should")
     }
 
     func testAFrameIsLeftOutOrPlayedTwiceAtMost() {

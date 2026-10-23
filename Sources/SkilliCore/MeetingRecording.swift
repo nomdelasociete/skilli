@@ -224,10 +224,10 @@ public enum Speaker: String, Codable, Sendable, CaseIterable {
 /// pause is cut from all of them at the same moment, to the sample. A
 /// device whose clock runs fast or slow against the host's (a USB or
 /// Bluetooth microphone: tens to hundreds of ppm) would slide away from the
-/// other tracks over a run: past half a millisecond off (smoothed over two
-/// seconds, so one late buffer moves nothing), one frame is left out or
-/// played twice per buffer until it is back, and a run started again after
-/// a pause jumps by less than a millisecond.
+/// other tracks over a run: past a quarter of a millisecond off (smoothed
+/// over a second, so one late buffer moves nothing), one frame is left out
+/// or played twice per buffer until it is back, and a run started again
+/// after a pause jumps by less than half a millisecond.
 public struct TrackTimeline: Sendable {
     /// What to write next: silence of that many frames, or that part of the
     /// buffer.
@@ -253,8 +253,8 @@ public struct TrackTimeline: Sendable {
     private static let longestGap = 5.0
     /// How far a run may be from the host clock (seconds), and over how
     /// long that is smoothed, before a frame is left out or played twice.
-    private static let driftTolerance = 0.0005
-    private static let driftWindow = 2.0
+    private static let driftTolerance = 0.00025
+    private static let driftWindow = 1.0
     /// Frames the run is ahead of the host clock (behind: below zero),
     /// smoothed.
     private var drift = 0.0
