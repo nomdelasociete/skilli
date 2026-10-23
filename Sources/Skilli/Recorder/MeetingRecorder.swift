@@ -56,6 +56,9 @@ final class MeetingRecorder {
     private var pausedAt: Double?
     private var pausedTotal = 0.0
     private var activity: NSObjectProtocol?
+    /// The last recording's runs after each pause: how far each track
+    /// moved to its place (seconds), its own slip from the host clock.
+    private(set) var resumeJumps: [Speaker: [Double]] = [:]
     /// Transcripts wait their turn: one at a time.
     private var queue: [(URL, MeetingRecord)] = []
 
@@ -201,9 +204,13 @@ final class MeetingRecorder {
         if let pausedAt, let last = record.pauses.indices.last { record.pauses[last].seconds = now - pausedAt }
         phase = .stopping
         var lengths: [Double] = []
+        var jumps: [Speaker: [Double]] = [:]
         for speaker in Speaker.allCases {
-            if let writer = writers[speaker] { lengths.append(await writer.finish(at: now)) }
+            guard let writer = writers[speaker] else { continue }
+            lengths.append(await writer.finish(at: now))
+            jumps[speaker] = writer.resumeJumps
         }
+        resumeJumps = jumps
         writers = [:]
         stopSources()
         if let activity { ProcessInfo.processInfo.endActivity(activity) }

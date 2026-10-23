@@ -41,6 +41,9 @@ final class TrackWriter: @unchecked Sendable {
     /// The host time the newest buffer taken ends at.
     private var newest = 0.0
     private var failed = false
+    /// How far each run after a pause moved to its place (seconds; the
+    /// track's own slip), once finished.
+    private(set) var resumeJumps: [Double] = []
     /// The file could not be written (the disk full): on the writer's
     /// queue, once.
     var onFailure: (@Sendable (Error) -> Void)?
@@ -122,6 +125,7 @@ final class TrackWriter: @unchecked Sendable {
                 if let tail = self.timeline.tail() { self.apply([tail], from: []) }
                 self.flush(all: true)
                 self.input.markAsFinished()
+                self.resumeJumps = self.timeline.resumeJumps.map { Double($0) / Self.rate }
                 let seconds = Double(self.appended) / Self.rate
                 self.writer.finishWriting {
                     done.resume(returning: seconds)

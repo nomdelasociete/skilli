@@ -258,6 +258,10 @@ public struct TrackTimeline: Sendable {
     /// Frames the run is ahead of the host clock (behind: below zero),
     /// smoothed.
     private var drift = 0.0
+    /// How far each run after a pause was moved to its place by the host
+    /// clock (frames: silence added, or frames left out): the track's own
+    /// slip over the run before.
+    public private(set) var resumeJumps: [Int] = []
 
     public init(rate: Double, start: Double) {
         self.rate = rate
@@ -359,6 +363,7 @@ public struct TrackTimeline: Sendable {
                 keep = drift > limit && to - from > 2 ? -1 : drift < -limit && to > from ? 1 : 0
             } else {
                 let target = Int((fileTime(of: hostTime + Double(from) / rate) * rate).rounded())
+                if next != nil, self.part >= 0, part != self.part { resumeJumps.append(target - written) }
                 if target > written {
                     pieces.append(.silence(target - written))
                     written = target

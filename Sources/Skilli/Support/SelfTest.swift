@@ -23271,6 +23271,7 @@ final class SelfTest {
         // The audio setup changes (a device plugged): the microphone's
         // engine starts again, its track keeps its time.
         let restartsBefore = center.recorder.microphone.restarts
+        let restartAt = center.recorder.elapsed
         center.recorder.microphone.simulateConfigurationChange()
         let restarted = center.recorder.microphone.restarts == restartsBefore + 1
         await pause(4000)
@@ -23293,22 +23294,35 @@ final class SelfTest {
         let paired = nearest.filter { abs($0.1 - median) < 0.05 }
         let offsets = paired.map(\.1)
         let pauseAt = record.pauses.first?.at ?? 0
-        // The jump at Resume: the 3 s before the pause against the 3 s after
-        // (an earlier glitch of the other app's playback stays out of it).
-        let before = paired.filter { $0.0 < pauseAt - 0.3 && $0.0 > pauseAt - 3.3 }.map(\.1)
-        let after = paired.filter { $0.0 > pauseAt + 0.3 && $0.0 < pauseAt + 3.3 }.map(\.1)
+        // The two tracks against each other around the pause and around the
+        // engine started again, 3 s each side (a glitch of the other app's
+        // playback elsewhere stays out of it).
+        func around(_ moment: Double) -> (before: [Double], after: [Double]) {
+            (paired.filter { $0.0 < moment - 0.3 && $0.0 > moment - 3.3 }.map(\.1),
+             paired.filter { $0.0 > moment + 0.3 && $0.0 < moment + 3.3 }.map(\.1))
+        }
         func mean(_ values: [Double]) -> Double { values.isEmpty ? .nan : values.reduce(0, +) / Double(values.count) }
+        let (before, after) = around(pauseAt)
         let step = abs(mean(after) - mean(before))
-        let spread = (offsets.max() ?? 1) - (offsets.min() ?? 0)
+        let spread = ((before + after).max() ?? 1) - ((before + after).min() ?? 0)
+        let atRestart = around(restartAt)
+        let restartStep = abs(mean(atRestart.after) - mean(atRestart.before))
+        // Each track's own slip, as the recorder moved it back at Resume.
+        let jumps = center.recorder.resumeJumps
+        let worstJump = jumps.values.flatMap { $0 }.map(abs).max() ?? .nan
+        let jumpLine = Speaker.allCases.map { speaker in
+            "\(speaker.rawValue) " + (jumps[speaker] ?? []).map { String(format: "%+.2f ms", $0 * 1000) }.joined(separator: ", ")
+        }.joined(separator: "; ")
         // Recorded: from ↩ to Stop, the pause taken out.
         let expected = wall - (record.pauses.first?.seconds ?? 0)
         let passed = consentGone && paused && stillFrozen && resumed && restarted && resumeMenu.contains("Resume Recording") && record.pauses.count == 1
             && (record.pauses.first?.seconds ?? 0) > 4 && abs(lengths.me - lengths.them) < 0.05 && abs(lengths.me - expected) < 0.5
-            && step < 0.001 && spread < 0.002 && before.count >= 4 && after.count >= 4
+            && worstJump < 0.001 && step < 0.002 && spread < 0.002 && restartStep < 0.002 && before.count >= 4 && after.count >= 4
         self.record(name, passed,
-                    String(format: "consent gone %@; paused %@, clock still “%@” %@, resumed %@, the microphone started again %@; pause at %.2f s for %.2f s; tracks %.2f s / %.2f s (%.2f s recorded); %d of %d beeps in step, offset %.1f ms before the pause, %.1f ms after (step %.2f ms, spread %.1f ms; the microphone 100 ppm slow, started again once)",
+                    String(format: "consent gone %@; paused %@, clock still “%@” %@, resumed %@, the microphone started again %@; pause at %.2f s for %.2f s; tracks %.2f s / %.2f s (%.2f s recorded); %d of %d beeps in step, offset %.1f ms before the pause, %.1f ms after (step %.2f ms, spread %.1f ms), at the engine started again a step of %.2f ms; each track moved back at Resume by %@ (the microphone 100 ppm slow)",
                            "\(consentGone)", "\(paused)", frozen ?? "", "\(stillFrozen)", "\(resumed)", "\(restarted)", pauseAt, record.pauses.first?.seconds ?? 0, lengths.me, lengths.them,
-                           expected, offsets.count, found.0.count, mean(before) * 1000, mean(after) * 1000, step * 1000, spread * 1000),
+                           expected, offsets.count, found.0.count, mean(before) * 1000, mean(after) * 1000, step * 1000, spread * 1000,
+                           restartStep * 1000, jumpLine),
                     nil)
     }
 

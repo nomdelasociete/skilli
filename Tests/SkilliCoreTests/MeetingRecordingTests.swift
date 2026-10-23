@@ -185,6 +185,17 @@ final class TrackTimelineTests: XCTestCase {
         XCTAssertEqual(mac.fileTime(of: 11.0), 0.505, accuracy: 1e-9, "inside the pause: where it was cut")
     }
 
+    func testEachResumeSaysHowFarTheRunMoved() {
+        var timeline = TrackTimeline(rate: 100, start: 10)
+        timeline.pause(at: 10.2)
+        timeline.resume(at: 11)
+        _ = timeline.place(sampleTime: 0, hostTime: 10, frames: 10)
+        // The device's clock ran fast: 12 frames by 10.1 s instead of 10.
+        _ = timeline.place(sampleTime: 10, hostTime: 10.08, frames: 12)
+        _ = timeline.place(sampleTime: 22, hostTime: 11, frames: 10)
+        XCTAssertEqual(timeline.resumeJumps, [-2], "two frames left out to be in place again")
+    }
+
     func testAPauseInsideABufferKeepsWhatCameBefore() {
         var timeline = TrackTimeline(rate: 100, start: 10)
         timeline.pause(at: 10.05)
