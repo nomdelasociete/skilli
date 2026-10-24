@@ -15,6 +15,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private let window: RecordingWindow
     private let view = RecordingView()
     private var player: AVPlayer?
+    /// Loading it: once, however often the window is shown meanwhile.
+    private var loadingPlayer = false
     private var observer: Any?
     var onClose: ((RecordingWindowController) -> Void)?
     var onDelete: ((URL, MeetingRecord) -> Void)?
@@ -66,7 +68,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         } else {
             view.showPending(language: record.language)
         }
-        if player == nil { loadPlayer() }
+        if player == nil, !loadingPlayer { loadPlayer() }
     }
 
     func present() {
@@ -80,6 +82,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     // MARK: - Playing
 
     private func loadPlayer() {
+        loadingPlayer = true
         let urls = Speaker.allCases.map { folder.appendingPathComponent($0.file) }
         let composition = AVMutableComposition()
         Task { [weak self] in

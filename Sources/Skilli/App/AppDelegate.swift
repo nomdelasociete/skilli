@@ -368,7 +368,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await self?.aiActions.doItHere(goal, pid: pid, caller: "skil.li Link", run: nil, saysStop: true).outcome == .done
         }
         runner.onAlwaysDo = { [toolSettings] goal, app in toolSettings.trustDoLink(goal: goal, app: app, title: "Do It Here") }
-        runner.openRecordCard = { [weak self] title in self?.recorderCenter.showCard(title: title) }
+        runner.openRecordCard = { [weak self] title in self?.recorderCenter.showCard(title: title, fromOutside: true) }
         runner.recordingTitle = { [weak self] in
             guard let recorder = self?.madeRecorderCenter?.recorder, recorder.isRecording else { return nil }
             return recorder.title

@@ -124,9 +124,12 @@ final class TrackWriter: @unchecked Sendable {
                 if over > 0 { self.pending.removeLast(min(over, self.pending.count)) }
                 if let tail = self.timeline.tail() { self.apply([tail], from: []) }
                 self.flush(all: true)
-                self.input.markAsFinished()
                 self.resumeJumps = self.timeline.resumeJumps.map { Double($0) / Self.rate }
                 let seconds = Double(self.appended) / Self.rate
+                // A writer that failed (the disk full) is not finished: its
+                // file plays up to its last fragment as it is.
+                guard !self.failed, self.writer.status == .writing else { return done.resume(returning: seconds) }
+                self.input.markAsFinished()
                 self.writer.finishWriting {
                     done.resume(returning: seconds)
                 }

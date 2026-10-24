@@ -15,7 +15,10 @@ nothing is recorded before ↩.
 
 One glass card in the middle of the screen the pointer is on, the
 meeting card's width (520 pt), its type and its keys. It takes the
-keyboard: the user opened it to name the recording.
+keyboard: the user opened it to name the recording. Opened by a link or
+a tool while the user types in another app, it leaves the keyboard
+alone (as the meeting card does), so a Return on its way there records
+nothing; a click gives it the keys.
 
 ```
 ┌──────────────────────────────────────────────────────────┐

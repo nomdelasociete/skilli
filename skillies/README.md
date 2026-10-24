@@ -138,10 +138,15 @@ own):
 
 ```bash
 said=$("$SKILLI_CLI" call record_meeting title="Weekly sync")  # waits for ↩ or esc in the card
+open "skilli://record?title=Weekly%20sync"  # the card, without waiting
+```
+
+Later, while it records (another skillie, or a later step of this one):
+
+```bash
 "$SKILLI_CLI" call recording_status      # Recording “Weekly sync” · 12:04, and its folder
 "$SKILLI_CLI" call pause_recording       # nothing written until resume_recording
 "$SKILLI_CLI" call stop_recording        # stops; the transcript is made on this Mac, its window opens
-open "skilli://record?title=Weekly%20sync"  # the card, without waiting
 open "skilli://record/stop"              # pause, resume, stop: asked in the card every time
 ```
 

@@ -23203,7 +23203,13 @@ final class SelfTest {
         if controller.shownLines.count > 3, let frame = controller.screenFrame(ofLine: 2) {
             // A real click on the third line, its window in front.
             controller.present()
-            _ = await waitUntil(timeout: 2) { controller.nsWindow.isKeyWindow }
+            guard await waitUntil(timeout: 2, { controller.nsWindow.isKeyWindow && NSApp.isActive }) != nil else {
+                aborted = true
+                controller.close()
+                let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
+                self.record(name, false, "the recording window did not take the keyboard (front: \(front)): stopped so no click or key lands elsewhere", nil)
+                return
+            }
             let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
             let point = CGPoint(x: frame.midX, y: screenHeight - frame.midY)
             let source = CGEventSource(stateID: .hidSystemState)
@@ -23370,10 +23376,20 @@ final class SelfTest {
             guard (try? child.run()) != nil else { return nil }
             let play = playElsewhere(them)
             defer { play?.terminate() }
+            // Its first line, 20 s at most: a child silent that long is
+            // stopped, which closes its output and ends the read.
+            let deadline = DispatchWorkItem { if child.isRunning { child.terminate() } }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 20, execute: deadline)
             let line = await Task.detached { () -> String in
-                let data = output.fileHandleForReading.availableData
-                return String(decoding: data, as: UTF8.self)
+                var data = Data()
+                while !data.contains(UInt8(ascii: "\n")) {
+                    let chunk = output.fileHandleForReading.availableData
+                    if chunk.isEmpty { break }
+                    data.append(chunk)
+                }
+                return (String(data: data, encoding: .utf8) ?? "").split(separator: "\n").first.map(String.init) ?? ""
             }.value
+            deadline.cancel()
             guard line.hasPrefix("recording ") else {
                 child.terminate()
                 return nil
@@ -23440,7 +23456,7 @@ final class SelfTest {
     /// `recording_status` says it, a link's pause asks first (esc keeps it
     /// going), `pause_recording` and `stop_recording` ask in the card.
     private func recorderFromLinksAndTools() async {
-        let name = "Recorder from skillies: skilli://record?title= opens the card named so, record/stop with none says so, record_meeting waits for ↩, recording_status, a link's pause asks first, pause_recording and stop_recording ask in the card"
+        let name = "Recorder from skillies: skilli://record?title= opens the card named so (mid-typing, without taking the keys), record/stop with none says so, record_meeting waits for ↩, recording_status, a link's pause asks first, pause_recording and stop_recording ask in the card"
         guard let center = context.recorder(), let links = context.links else {
             record(name, false, "no recorder", nil)
             return
@@ -23453,16 +23469,28 @@ final class SelfTest {
         defer { settings.mode = mode }
         let train = recorderScratch.appendingPathComponent("train.wav")
         center.recorder.standIn(microphone: train, alsoLeaveOut: [])
+        // No key for a second: the card from a link takes the keyboard.
+        await pause(1100)
         await links.openNow(SkilliLink.record(title: "From a link").url)
         let linkCard = await waitUntil(timeout: 3) { center.isCardVisible && center.cardView.name == "From a link" } != nil
         guard await recordCardHasKeys(center, name) else { return }
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         let linkClosed = await waitUntil(timeout: 2) { !center.isCardVisible && center.recorder.phase == .idle } != nil
+        // A link opening it just after a key (the user typing elsewhere):
+        // shown, the keyboard left alone, so a Return on its way records nothing.
+        await links.openNow(SkilliLink.record(title: "Typed over").url)
+        let typedOverShown = await waitUntil(timeout: 3) { center.isCardVisible && center.cardView.name == "Typed over" } != nil
+        await pause(400)
+        let typedOverLeftKeys = typedOverShown && center.cardWindow?.isKeyWindow != true
+        center.closeCardWithoutKeys()
+        let typedOverClosed = await waitUntil(timeout: 3) { !center.isCardVisible && center.recorder.phase == .idle } != nil
         await links.openNow(SkilliLink.recording(.stop).url)
         let noneSaid = links.log.last == "no recording"
         if await waitUntil(timeout: 1, { popover.isVisible }) != nil { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
         _ = await waitUntil(timeout: 8) { !popover.isVisible }
 
+        // No key for a second: the card from a tool takes the keyboard.
+        await pause(1100)
         let started = Task { await self.skilliCall("record_meeting", #"{"title":"From a tool"}"#) }
         let toolCard = await waitUntil(timeout: 5) { center.isCardVisible && center.cardView.name == "From a tool" } != nil
         guard await recordCardHasKeys(center, name) else {
@@ -23492,11 +23520,11 @@ final class SelfTest {
         let (stopStatus, stopSaid) = await stopping.value
         _ = await waitUntil(timeout: 60) { center.recorder.transcribing == nil && !center.openWindows.isEmpty }
         center.openWindows.forEach { $0.close() }
-        let passed = linkCard && linkClosed && noneSaid && toolCard && status == 0 && said.contains("Recording “From a tool” started")
+        let passed = linkCard && linkClosed && typedOverLeftKeys && typedOverClosed && noneSaid && toolCard && status == 0 && said.contains("Recording “From a tool” started")
             && now.contains("Recording “From a tool”") && linkAsks && keptGoing && pauseAsks && pauseStatus == 0 && pausedNow
             && stopStatus == 0 && stopSaid.contains("Stopped “From a tool”")
         record(name, passed,
-               "link card \(linkCard), closed \(linkClosed), none said \(noneSaid); tool card \(toolCard), exit \(status) “\(said)”; status “\(now)”; link asks \(linkAsks) (\(pauseCard)), kept going \(keptGoing); pause asks \(pauseAsks), exit \(pauseStatus) “\(pauseSaid)”, paused \(pausedNow); stop exit \(stopStatus) “\(stopSaid.prefix(80))”",
+               "link card \(linkCard), closed \(linkClosed); opened mid-typing: keys left alone \(typedOverLeftKeys), closed \(typedOverClosed); none said \(noneSaid); tool card \(toolCard), exit \(status) “\(said)”; status “\(now)”; link asks \(linkAsks) (\(pauseCard)), kept going \(keptGoing); pause asks \(pauseAsks), exit \(pauseStatus) “\(pauseSaid)”, paused \(pausedNow); stop exit \(stopStatus) “\(stopSaid.prefix(80))”",
                nil)
     }
 

@@ -83,14 +83,15 @@ final class RecorderCenter {
 
     /// The Record card (the launcher's Record Meeting, `rec …`, a key, a
     /// link). One recording at a time: while one records, the card is not
-    /// shown, one line says so.
-    func showCard(title: String?) {
+    /// shown, one line says so. `fromOutside` (a link, a tool): opened
+    /// while the user types elsewhere, it leaves the keyboard alone.
+    func showCard(title: String?, fromOutside: Bool = false) {
         guard !recorder.isRecording else {
             notify("Already recording “\(recorder.title)” (\(MeetingTranscript.clock(recorder.elapsed))): stop it from the menu bar first.")
             return
         }
         guard recorder.phase == .idle else { return }
-        card.showRecord(title: title, askedLanguage: preferences.voiceLanguage, consent: !preferences.recorderConsentShown)
+        card.showRecord(title: title, askedLanguage: preferences.voiceLanguage, consent: !preferences.recorderConsentShown, fromOutside: fromOutside)
     }
 
     /// A tool or a skillie (`record_meeting`): the card, then what the user
@@ -100,7 +101,7 @@ final class RecorderCenter {
         waiting?.resume(returning: nil)
         return await withCheckedContinuation { continuation in
             waiting = continuation
-            showCard(title: title)
+            showCard(title: title, fromOutside: true)
             if !card.isVisible {
                 waiting = nil
                 continuation.resume(returning: nil)
@@ -237,6 +238,11 @@ final class RecorderCenter {
     }
 
     #if SKILLI_SELFTEST
+    /// Self-test: the card closed as esc would, without a key.
+    func closeCardWithoutKeys() {
+        card.closeWithoutKeys()
+    }
+
     /// Self-test: the found ones offered now, without the wait.
     func offerUnfinishedNow() -> Int {
         unfinished = recordings.unfinished().map { ($0.folder, MeetingRecorder.measured($0.folder, record: $0.record)) }

@@ -39,7 +39,11 @@ final class RecordCard {
         self.recorder = recorder
         view.onPrimary = { [weak self] in self?.primary() }
         view.onLanguage = { [weak self] id in self?.picked(language: id) }
-        view.onReturnInName = { [weak self] in self?.primary() }
+        view.onReturnInName = { [weak self] in
+            // The field's own Return obeys the grace too.
+            guard let self, self.keysFrom.map({ ContinuousClock.now >= $0 }) ?? true else { return }
+            self.primary()
+        }
         view.onEscapeInName = { [weak self] in self?.cancel() }
     }
 
@@ -48,13 +52,17 @@ final class RecordCard {
 
     /// The card before a recording: `title` in its field (else "Meeting
     /// 14:30"), the sources started for their meters; `consent` adds the
-    /// paragraph shown the first time.
-    func showRecord(title: String?, askedLanguage: String, consent: Bool) {
+    /// paragraph shown the first time. `fromOutside` (a link, a tool): it
+    /// never takes keys from the app the user is typing in, so a Return on
+    /// its way there cannot start a recording; a click gives it the keys.
+    func showRecord(title: String?, askedLanguage: String, consent: Bool, fromOutside: Bool) {
         content = .record
         let name = title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? RecordingFolder.defaultTitle(at: .now)
         view.showRecord(name: name, consent: consent)
-        show(takingKeys: true)
-        view.focusName(in: panel)
+        let typing = fromOutside && CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < 1
+        keysFrom = typing ? .now + MeetingCard.typingGrace : nil
+        show(takingKeys: !typing)
+        if !typing { view.focusName(in: panel) }
         let asksMicrophone = AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined
         Task {
             language = await MeetingTranscriber.defaultLanguage(asked: askedLanguage)
@@ -117,7 +125,7 @@ final class RecordCard {
         // Only digital silence for 3 s while an app plays: macOS gives the
         // tap nothing (its permission off), every call succeeding.
         let blocked = recorder.macSoundFailure == nil && silent > 3 ? playingApp() : nil
-        view.setMacSound(failure: recorder.macSoundFailure, blockedWhile: blocked, level: levels.mac)
+        view.setMacSound(failure: recorder.macSoundFailure, blockedWhile: blocked, level: levels.mac, starting: !recorder.sourcesStarted)
         if view.needsRelayout { relayout() }
     }
 
@@ -197,6 +205,13 @@ final class RecordCard {
     fileprivate func closed() {
         cancel()
     }
+
+    #if SKILLI_SELFTEST
+    /// Self-test: closed as esc would, without a key (a card that has none).
+    func closeWithoutKeys() {
+        cancel()
+    }
+    #endif
 
     // MARK: - Drawing
 
@@ -490,10 +505,15 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         if before != (microphoneRow.line, missingPermission) { needsRelayout = true }
     }
 
-    /// `blockedWhile`: the app playing while the tap hears only silence.
-    func setMacSound(failure: String?, blockedWhile app: String?, level: Double) {
+    /// `blockedWhile`: the app playing while the tap hears only silence;
+    /// `starting`: the tap not started yet (it does not count for Record).
+    func setMacSound(failure: String?, blockedWhile app: String?, level: Double, starting: Bool = false) {
         let before = (macRow.line, permissionNote)
-        if let failure {
+        if starting {
+            macOn = false
+            macRow.setState("Starting…", level: nil)
+            permissionNote = nil
+        } else if let failure {
             macOn = false
             macRow.setState("Not available", level: nil, warns: true)
             permissionNote = failure
@@ -509,7 +529,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     }
 
     private func updateMissing() {
-        if isRecordCard, !microphoneOn, !macOn, microphoneRow.line != "Starting…" {
+        if isRecordCard, !microphoneOn, !macOn, microphoneRow.line != "Starting…", macRow.line != "Starting…" {
             permissionNoteBlocking = "Nothing to record: allow the microphone or the Mac's sound."
         } else {
             permissionNoteBlocking = nil

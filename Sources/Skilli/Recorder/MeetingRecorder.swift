@@ -48,6 +48,9 @@ final class MeetingRecorder {
     private(set) lazy var macSound = MacSoundTap(inbox: macInbox)
     /// The Mac's sound could not be tapped at all, and why.
     private(set) var macSoundFailure: String?
+    /// Both sources started (or failed to) since the card opened: until
+    /// then the Mac's sound does not count for Record.
+    private(set) var sourcesStarted = false
     private var writers: [Speaker: TrackWriter] = [:]
     private(set) var folder: URL?
     private(set) var record: MeetingRecord?
@@ -91,6 +94,7 @@ final class MeetingRecorder {
     func listen() async {
         guard phase == .idle else { return }
         phase = .listening
+        sourcesStarted = false
         for inbox in [micInbox, macInbox] {
             inbox.keeping = false
             inbox.resetMeters()
@@ -105,6 +109,7 @@ final class MeetingRecorder {
             macSoundFailure = error.localizedDescription
             Log.actions.error("Recorder: \(error.localizedDescription, privacy: .public)")
         }
+        sourcesStarted = true
         // Closed while macOS asked.
         if phase != .listening, !isRecording { stopSources() }
     }
@@ -117,6 +122,7 @@ final class MeetingRecorder {
     }
 
     private func stopSources() {
+        sourcesStarted = false
         microphone.stop()
         macSound.stop()
         micInbox.keeping = false
