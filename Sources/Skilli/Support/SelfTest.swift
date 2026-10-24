@@ -22177,7 +22177,8 @@ final class SelfTest {
             case .list(_, let adds):
                 if binding.remove == nil || (adds && binding.add == nil) { unbound.append(entry.key) }
             default:
-                if binding.set == nil { unbound.append(entry.key) }
+                // A change that takes time sets through `setAsync`.
+                if binding.set == nil && binding.setAsync == nil { unbound.append(entry.key) }
             }
         }
         var refused: [String] = []
