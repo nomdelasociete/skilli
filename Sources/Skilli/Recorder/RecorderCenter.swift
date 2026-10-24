@@ -28,6 +28,21 @@ final class RecorderCenter {
     var appJoining: (AgendaEvent) -> (bundleID: String, name: String)? = { _ in nil }
     /// Joins a meeting's call (the calendar's Join).
     var join: (AgendaEvent) -> Void = { _ in }
+    /// The recordings moving to another folder now (Settings → Recorder),
+    /// how far: no recording starts meanwhile (its folder would be left
+    /// behind).
+    var recordingsMoving: () -> (done: Int, of: Int)? = { nil }
+
+    /// Why a recording cannot start now, said: nil when it can.
+    private var notNow: String? {
+        if recorder.isRecording {
+            return "Already recording “\(recorder.title)” (\(MeetingTranscript.clock(recorder.elapsed))): stop it from the menu bar first."
+        }
+        if let moving = recordingsMoving() {
+            return "Your recordings are moving to another folder (\(moving.done) of \(moving.of)): record once they have moved."
+        }
+        return nil
+    }
     /// Who runs the microphone, followed by Core Audio's changes once a
     /// recording started (its listeners cost nothing until a device or a
     /// process changes).
@@ -132,8 +147,8 @@ final class RecorderCenter {
     /// that meeting's: its title unless one was given, its attendees, its
     /// case's sources.
     func showCard(title: String?, fromOutside: Bool = false) {
-        guard !recorder.isRecording else {
-            notify("Already recording “\(recorder.title)” (\(MeetingTranscript.clock(recorder.elapsed))): stop it from the menu bar first.")
+        if let notNow {
+            notify(notNow)
             return
         }
         // The last one still closing its files: the card once they are.
@@ -183,8 +198,8 @@ final class RecorderCenter {
     /// must agree, opens the Record card instead (`consentSaid`: the
     /// meeting card's line has just said it).
     func recordMeeting(_ event: AgendaEvent, joining: Bool, consentSaid: Bool = false) {
-        guard !recorder.isRecording else {
-            notify("Already recording “\(recorder.title)” (\(MeetingTranscript.clock(recorder.elapsed))): stop it from the menu bar first.")
+        if let notNow {
+            notify(notNow)
             return
         }
         // The last one still closing its files (a second or so): this one
@@ -334,6 +349,7 @@ final class RecorderCenter {
     /// did with it. Nil: closed without recording.
     func showCardAndWait(title: String?) async -> String? {
         if recorder.isRecording { return "Already recording “\(recorder.title)” (\(MeetingTranscript.clock(recorder.elapsed)))." }
+        if let notNow { return notNow }
         // The last one still closing its files: the card once they are.
         if recorder.phase == .stopping {
             await withCheckedContinuation { (closed: CheckedContinuation<Void, Never>) in whenClosed { closed.resume() } }

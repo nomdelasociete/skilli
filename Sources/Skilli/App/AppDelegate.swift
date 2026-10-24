@@ -245,6 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         center.appJoining = { [weak self] event in self?.calendarBook.appJoining(event) }
         center.join = { [weak self] event in self?.calendarBook.join(event) }
+        center.recordingsMoving = { [weak self] in self?.recordingLibrary.moving }
         madeRecorderCenter = center
         return center
     }
@@ -326,27 +327,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Settings → Recorder → Keep recordings in: the recordings moved
     /// there, then the folder kept; refused while one is recorded or
-    /// transcribed. One that cannot move puts back those moved before it:
-    /// they all stay in the folder they were in, and the pane says why.
-    private func moveRecordings(to folder: URL) -> String? {
+    /// transcribed (and no recording starts while they move). One that
+    /// cannot move puts back those moved before it: they all stay in the
+    /// folder they were in. Nil once moved, else why not.
+    private func moveRecordings(to folder: URL) async -> String? {
         if let recorder = madeRecorderCenter?.recorder, recorder.isRecording || recorder.phase == .stopping || recorder.transcribing != nil {
             return "A recording is being made or transcribed: stop it first."
         }
-        Task {
-            guard await recordingLibrary.move(to: folder) else { return }
-            let standard = folder.standardizedFileURL == Recordings.standard.standardizedFileURL
-            preferences.recorderFolderPath = standard ? "" : folder.path
-            madeRecorderCenter?.recordings.root = folder
+        guard recordingLibrary.moving == nil else { return "The recordings are moving already." }
+        guard await recordingLibrary.move(to: folder) else {
+            return recordingLibrary.moveFailures.first ?? "The recordings could not move."
         }
+        let standard = folder.standardizedFileURL == Recordings.standard.standardizedFileURL
+        preferences.recorderFolderPath = standard ? "" : folder.path
+        madeRecorderCenter?.recordings.root = folder
         return nil
     }
 
     /// Record ⌘R on a meeting's card: its label for the case, the line
     /// said the first time; nil when a recording is on, Settings →
-    /// Recorder turned it off, or it is Settings' Try (a sample: nothing
-    /// to record, and the line kept for a real card).
+    /// Recorder turned it off, it is Settings' Try (a sample: nothing to
+    /// record, and the line kept for a real card), or the meeting is more
+    /// than 10 minutes away (an alert an hour before records nothing).
     private func recordOffer(for event: AgendaEvent) -> MeetingCard.RecordOffer? {
-        guard preferences.recorderMeetingCard, madeRecorderCenter?.recorder.isRecording != true, event.id != MeetingCardView.sampleID
+        guard preferences.recorderMeetingCard, madeRecorderCenter?.recorder.isRecording != true, event.id != MeetingCardView.sampleID,
+              MeetingMoment.isRecordable(event, now: .now)
         else { return nil }
         let reading = recorderCenter.moment(for: event)
         guard !preferences.recorderCardHintShown else { return MeetingCard.RecordOffer(label: reading.recordLabel, line: nil) }
@@ -438,7 +443,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tools.aiCommands = aiCommands
         tools.github = githubBook
         tools.gifs = gifLibrary
-        tools.moveRecordings = { [weak self] folder in self?.moveRecordings(to: folder) }
+        tools.moveRecordings = { [weak self] folder in await self?.moveRecordings(to: folder) }
         tools.permissions = permissions
         tools.clipboard = clipboard
         tools.calendarAccounts = { [calendarBook] in calendarBook.calendarAccounts() }
@@ -1838,7 +1843,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.recorderCenter.open(self.recordingLibrary.folder(name))
         }
-        context.moveRecordings = { [weak self] folder in self?.moveRecordings(to: folder) }
+        context.moveRecordings = { [weak self] folder in await self?.moveRecordings(to: folder) }
         context.deleteRecording = { [weak self] summary in self?.deleteRecording(summary) }
         context.hasImageKey = { [ai] in ai.decisionKey(for: .typeSafe) != nil }
         context.reopen = { [weak self] in
@@ -1971,7 +1976,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 reportPath: outputPath,
                 recorder: { [weak self] in self?.recorderCenter },
                 recordings: { [weak self] in self?.recordingLibrary },
-                moveRecordings: { [weak self] folder in self?.moveRecordings(to: folder) }
+                moveRecordings: { [weak self] folder in await self?.moveRecordings(to: folder) }
             ))
             SelfTest.emit(await test.run(scope: scope), to: outputPath)
             NSApp.terminate(nil)

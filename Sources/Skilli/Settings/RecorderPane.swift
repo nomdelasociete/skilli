@@ -223,7 +223,12 @@ struct RecorderPane: View {
         panel.message = "Recordings are kept in this folder: the ones made move there, one by one."
         panel.directoryURL = preferences.recordingsFolder
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        moveRefused = context.moveRecordings(url)
+        moveRefused = nil
+        Task {
+            let said = await context.moveRecordings(url)
+            // A move that failed says so in its own lines.
+            moveRefused = context.recordings?.moveFailures.isEmpty == false ? nil : said
+        }
     }
 }
 

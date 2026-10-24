@@ -60,6 +60,9 @@ final class SettingTools {
     struct Binding {
         var get: @MainActor () -> SettingValue
         var set: (@MainActor (SettingValue) throws -> Void)?
+        /// A change that takes time (the recordings moved): "Done" only
+        /// once it is.
+        var setAsync: (@MainActor (SettingValue) async throws -> Void)?
         /// The choices this Mac has (`choiceOnThisMac`).
         var options: (@MainActor () async -> [SettingOption])?
         /// Checked before the card (a writer that cannot write now).
@@ -205,7 +208,7 @@ final class SettingTools {
     var windowLayouts: () -> [String] = { [] }
     /// Settings → Recorder → Keep recordings in: the recordings moved
     /// there (nil), or why not (one is being recorded).
-    var moveRecordings: @MainActor (URL) -> String? = { _ in nil }
+    var moveRecordings: @MainActor (URL) async -> String? = { _ in nil }
     var skillies: () -> [ScriptCommand] = { [] }
     var aliasTargets: () -> [AliasTarget] = { [] }
     /// Everything the Catalog lists (Settings → Catalog, the launcher's "?").
@@ -389,8 +392,12 @@ final class SettingTools {
         let summary = SettingsTable.change(entry, paneTitle: pane, to: shown)
         // What the user wrote before is theirs: in the card, not for the agent.
         return Plan(summary: summary + "\nNow: \(was)", said: entry.personal ? "\(label) changes" : summary) {
-            guard let set = binding.set else { throw Failure("No tool changes \(label) yet.") }
-            try set(value)
+            if let setAsync = binding.setAsync {
+                try await setAsync(value)
+            } else {
+                guard let set = binding.set else { throw Failure("No tool changes \(label) yet.") }
+                try set(value)
+            }
             return entry.personal ? "Done: \(label) changed." : "Done: \(summary) (it was \(was))."
         }
     }
@@ -1018,13 +1025,14 @@ final class SettingTools {
         bindings["recorderLanguage"] = string(\.recorderLanguage) {
             [SettingOption("", "As Ask")] + (await MeetingTranscriber.languages()).map { SettingOption($0.id, $0.name) }
         }
-        bindings["recorderFolderPath"] = Binding(get: { [unowned self] in .text(self.preferences.recorderFolderPath) },
-                                                 set: { [unowned self] value in
-                                                     guard case .text(let path) = value else { return }
-                                                     // As the pane does: the recordings move there.
-                                                     let folder = path.isEmpty ? Recordings.standard : URL(fileURLWithPath: path, isDirectory: true)
-                                                     if let refused = self.moveRecordings(folder) { throw Failure(refused) }
-                                                 })
+        var recordingsFolder = Binding(get: { [unowned self] in .text(self.preferences.recorderFolderPath) })
+        recordingsFolder.setAsync = { [unowned self] value in
+            guard case .text(let path) = value else { return }
+            // As the pane does: the recordings move there; "Done" once they did.
+            let folder = path.isEmpty ? Recordings.standard : URL(fileURLWithPath: path, isDirectory: true)
+            if let refused = await self.moveRecordings(folder) { throw Failure(refused) }
+        }
+        bindings["recorderFolderPath"] = recordingsFolder
         bindings["recorderRetention"] = Binding(get: { [unowned self] in .text(self.preferences.recorderRetention.rawValue) },
                                                 set: { [unowned self] value in
                                                     guard case .text(let raw) = value else { return }

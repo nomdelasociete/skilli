@@ -112,6 +112,9 @@ final class RecordingLibrary {
         var moved: [(from: String, to: String)] = []
         var failure: String?
         for (name, title) in names {
+            #if SKILLI_SELFTEST
+            if moveStepDelay > .zero { try? await Task.sleep(for: moveStepDelay) }
+            #endif
             let result = await Task.detached(priority: .utility) { () -> Result<String, Error> in
                 let manager = FileManager.default
                 do {
@@ -156,6 +159,12 @@ final class RecordingLibrary {
         root = newRoot
         reload()
     }
+
+    #if SKILLI_SELFTEST
+    /// Self-test: each recording takes this long to move (a recording asked
+    /// for meanwhile).
+    @ObservationIgnored var moveStepDelay: Duration = .zero
+    #endif
 }
 
 /// The words said in each recording, for the launcher's search: one SQLite

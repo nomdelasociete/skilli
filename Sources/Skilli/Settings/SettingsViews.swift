@@ -81,7 +81,7 @@ struct SettingsContext {
     /// moved (nil, or why it was refused), one to the Trash (⌘Z).
     var recordings: RecordingLibrary?
     var openRecording: @MainActor (String) -> Void = { _ in }
-    var moveRecordings: @MainActor (URL) -> String? = { _ in nil }
+    var moveRecordings: @MainActor (URL) async -> String? = { _ in nil }
     var deleteRecording: @MainActor (RecordingSummary) -> Void = { _ in }
 }
 

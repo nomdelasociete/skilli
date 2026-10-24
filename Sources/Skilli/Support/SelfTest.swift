@@ -115,7 +115,7 @@ final class SelfTest {
         /// The recordings as the launcher and Settings → Recorder list them;
         /// Keep recordings in's move (nil, or why it was refused).
         var recordings: @MainActor () -> RecordingLibrary? = { nil }
-        var moveRecordings: @MainActor (URL) -> String? = { _ in nil }
+        var moveRecordings: @MainActor (URL) async -> String? = { _ in nil }
     }
 
     enum Scope: String, Sendable {
@@ -24260,7 +24260,7 @@ final class SelfTest {
     /// ones that are done. Keep recordings in: the recordings move there,
     /// refused while one records.
     private func momentRetentionAndFolder(_ center: RecorderCenter) async {
-        let name = "Recorder's moment: Delete after removes nothing as set, says what goes, the pass moves only expired finished ones to the Trash; Keep recordings in moves them, puts them all back when one cannot move, refused while recording"
+        let name = "Recorder's moment: Delete after removes nothing as set, says what goes, the pass moves only expired finished ones to the Trash; Keep recordings in moves them, puts them all back when one cannot move, refused while recording; no recording starts while they move"
         guard let library = context.recordings() else {
             record(name, false, "no recordings list", nil)
             return
@@ -24296,12 +24296,21 @@ final class SelfTest {
         library.reload()
         _ = await waitUntil(timeout: 3) { !library.recordings.contains { $0.record.title == "Old planning" } }
         let names = Set(library.recordings.map(\.folder))
-        let refusedNone = context.moveRecordings(elsewhere)
-        _ = await waitUntil(timeout: 20) { library.moving == nil && library.root == elsewhere && center.recordings.root == elsewhere }
+        // Slowed, to ask for a recording while they move: said, not started.
+        let notify = center.notify
+        var said: [String] = []
+        center.notify = { said.append($0) }
+        library.moveStepDelay = .milliseconds(300)
+        let moving = Task { await context.moveRecordings(elsewhere) }
+        _ = await waitUntil(timeout: 3) { library.moving != nil }
+        center.showCard(title: "During the move")
+        let blocked = !center.isCardVisible && said.last?.hasPrefix("Your recordings are moving to another folder") == true
+        let refusedNone = await moving.value
+        library.moveStepDelay = .zero
+        center.notify = notify
         let there = Set((try? FileManager.default.contentsOfDirectory(atPath: elsewhere.path)) ?? [])
         let moved = !names.isEmpty && names.isSubset(of: there) && center.recordings.root == elsewhere
-        _ = context.moveRecordings(root)
-        _ = await waitUntil(timeout: 20) { library.moving == nil && library.root == root && center.recordings.root == root }
+        _ = await context.moveRecordings(root)
         let back = names.isSubset(of: Set((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []))
         // One that cannot move (made immutable, the oldest: moved last):
         // those moved before it come back, the folder stays the same.
@@ -24310,9 +24319,8 @@ final class SelfTest {
         library.reload()
         _ = await waitUntil(timeout: 3) { library.recordings.contains { $0.record.title == "Stuck" } }
         let all = Set(library.recordings.map(\.folder))
-        _ = context.moveRecordings(elsewhere)
-        _ = await waitUntil(timeout: 20) { library.moving == nil && !library.moveFailures.isEmpty }
-        let rolledBack = all.isSubset(of: Set((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? [])) && library.root == root
+        let stuckSaid = await context.moveRecordings(elsewhere)
+        let rolledBack = stuckSaid?.contains("could not move") == true && all.isSubset(of: Set((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? [])) && library.root == root
             && center.recordings.root == root && library.moveFailures.first?.contains("could not move") == true
         let failureSaid = library.moveFailures.first ?? ""
         if let stuck {
@@ -24329,13 +24337,13 @@ final class SelfTest {
         if await recordCardHasKeys(center, name) {
             await pressKey(nil, code: CGKeyCode(kVK_Return))
             _ = await waitUntil(timeout: 3) { center.recorder.isRecording }
-            refused = context.moveRecordings(elsewhere)
+            refused = await context.moveRecordings(elsewhere)
             await momentStop(center)
             center.openWindows.forEach { $0.close() }
         }
         record(name, line.hasPrefix("2 recordings are older than a month") && keptAsSet && pruned == 2 && gone && neverStoppedKept && refusedNone == nil
-               && moved && back && rolledBack && refused != nil,
-               "line “\(line)”; kept as set \(keptAsSet); pass moved \(pruned) to the Trash, gone \(gone), never stopped kept \(neverStoppedKept); moved \(names.count) there \(moved), back \(back); one stuck: all put back \(rolledBack) “\(failureSaid)”; while recording: “\(refused ?? "not refused")”",
+               && blocked && moved && back && rolledBack && refused != nil,
+               "line “\(line)”; kept as set \(keptAsSet); pass moved \(pruned) to the Trash, gone \(gone), never stopped kept \(neverStoppedKept); the card asked while moving: said, not shown \(blocked) “\(said.last ?? "")”; moved \(names.count) there \(moved), back \(back); one stuck: all put back \(rolledBack) “\(failureSaid)”; while recording: “\(refused ?? "not refused")”",
                nil)
     }
 
