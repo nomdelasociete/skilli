@@ -297,6 +297,10 @@ final class MeetingRecorder {
         let now = HostClock.now
         if let pausedAt, let last = record.pauses.indices.last { record.pauses[last].seconds = now - pausedAt }
         phase = .stopping
+        #if SKILLI_SELFTEST
+        // Self-test: its files take that long to close.
+        if closingDelay > .zero { try? await Task.sleep(for: closingDelay) }
+        #endif
         var lengths: [Double] = []
         var jumps: [Speaker: [Double]] = [:]
         for speaker in Speaker.allCases {
@@ -401,6 +405,10 @@ final class MeetingRecorder {
     }
 
     #if SKILLI_SELFTEST
+    /// Self-test: Stop takes this long to close the files (⌘R pressed
+    /// meanwhile).
+    var closingDelay: Duration = .zero
+
     /// Self-test: the Mac's sound leaves these processes out too, and a
     /// file stands in for the microphone (the test Mac has none).
     func standIn(microphone file: URL?, alsoLeaveOut pids: [pid_t]) {

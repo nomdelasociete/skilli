@@ -46,6 +46,14 @@ final class RecorderCenter {
     private(set) var callWindow: CGWindowID?
     /// Self-test: the call's end comes sooner.
     var watchTimings = (appGrace: 5.0, quietFor: 60.0)
+    /// What was asked while the last recording still closed its files (⌘R,
+    /// the Record card): done once they are closed, never dropped.
+    private var afterClosing: [() -> Void] = []
+    /// ⌘R's recording is being started (its language read, its sources
+    /// started): another ⌘R meanwhile asks the same.
+    private var starting = false {
+        didSet { holdMenuBar() }
+    }
     private lazy var card: RecordCard = {
         let card = RecordCard(recorder: recorder)
         card.onRecord = { [weak self] title, language, meeting in self?.begin(title: title, language: language, meeting: meeting) }
@@ -130,7 +138,12 @@ final class RecorderCenter {
             notify("Already recording “\(recorder.title)” (\(MeetingTranscript.clock(recorder.elapsed))): stop it from the menu bar first.")
             return
         }
-        guard recorder.phase == .idle else { return }
+        // The last one still closing its files: the card once they are.
+        if recorder.phase == .stopping {
+            whenClosed { [weak self] in self?.showCard(title: title, fromOutside: fromOutside) }
+            return
+        }
+        guard recorder.phase == .idle, !starting else { return }
         let reading = moment(for: currentMeeting())
         showCard(reading: reading, title: title, joining: false, fromOutside: fromOutside)
     }
@@ -176,13 +189,27 @@ final class RecorderCenter {
             notify("Already recording “\(recorder.title)” (\(MeetingTranscript.clock(recorder.elapsed))): stop it from the menu bar first.")
             return
         }
-        guard recorder.phase == .idle else { return }
+        // The last one still closing its files (a second or so): this one
+        // records once they are closed, the dot staying meanwhile.
+        if recorder.phase == .stopping {
+            Log.trace("Recorder: ⌘R while the last recording closes: recorded once it is closed")
+            whenClosed { [weak self] in self?.recordMeeting(event, joining: joining, consentSaid: consentSaid) }
+            return
+        }
+        // The Record card open: ⌘R on the meeting is that recording.
+        if recorder.phase == .listening, card.content == .record {
+            card.dismiss()
+            cancelled()
+        }
+        // Pressed twice: the first is being started.
+        guard recorder.phase == .idle, !starting else { return }
         let reading = moment(for: event)
         guard consentSaid || preferences.recorderConsentShown else {
             showCard(reading: reading, title: nil, joining: joining, fromOutside: false)
             return
         }
         Log.trace("Recorder: ⌘R on a meeting (\(reading.kind.rawValue))\(joining ? ", joining its call" : "")")
+        starting = true
         Task { [weak self] in
             guard let self else { return }
             let language = await MeetingTranscriber.defaultLanguage(asked: self.askedLanguage)
@@ -197,9 +224,11 @@ final class RecorderCenter {
             do {
                 try await self.recorder.record(start)
             } catch {
+                self.starting = false
                 self.notify("The recording could not start: \(error.localizedDescription)")
                 return
             }
+            self.starting = false
             self.preferences.recorderConsentShown = true
             self.began(reading)
             if joining, let event = reading.event { self.join(event) }
@@ -284,6 +313,19 @@ final class RecorderCenter {
         card.showCallEnded(title: recorder.title, elapsed: recorder.elapsed, line: CallEndWatch.line(reason), reason: reason)
     }
 
+    /// `run` once the last recording's files are closed.
+    private func whenClosed(_ run: @escaping () -> Void) {
+        afterClosing.append(run)
+        holdMenuBar()
+    }
+
+    /// The menu bar keeps its dot between a recording closing and the one
+    /// asked for meanwhile starting.
+    private func holdMenuBar() {
+        indicator.holding = starting || !afterClosing.isEmpty
+        indicator.update()
+    }
+
     /// A source on or off, in the card or the red dot's menu.
     private func toggle(_ speaker: Speaker) {
         let on = speaker == .me ? recorder.sources.microphone : recorder.sources.macSound
@@ -294,6 +336,10 @@ final class RecorderCenter {
     /// did with it. Nil: closed without recording.
     func showCardAndWait(title: String?) async -> String? {
         if recorder.isRecording { return "Already recording “\(recorder.title)” (\(MeetingTranscript.clock(recorder.elapsed)))." }
+        // The last one still closing its files: the card once they are.
+        if recorder.phase == .stopping {
+            await withCheckedContinuation { (closed: CheckedContinuation<Void, Never>) in whenClosed { closed.resume() } }
+        }
         waiting?.resume(returning: nil)
         return await withCheckedContinuation { continuation in
             waiting = continuation
@@ -367,6 +413,13 @@ final class RecorderCenter {
         if !recorder.isRecording {
             stopWatching()
             if case .callEnded? = card.content { card.dismiss() }
+        }
+        // Closed: what was asked meanwhile, in order.
+        if recorder.phase == .idle, !afterClosing.isEmpty {
+            let asked = afterClosing
+            afterClosing = []
+            asked.forEach { $0() }
+            holdMenuBar()
         }
         onChange?()
         // The window open while its transcript is made follows it.

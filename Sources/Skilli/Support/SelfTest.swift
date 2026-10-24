@@ -23597,6 +23597,7 @@ final class SelfTest {
         if !aborted { await momentCardKeyIsTheUsersOnly(center, book) }
         if !aborted { await momentInPersonRecordsTheRoom(center, book) }
         if !aborted { await momentLauncherRowRecords(center, book) }
+        if !aborted { await momentRecordDuringClosing(center, book) }
         if !aborted { await momentMenuBarRecords(center, book) }
         if !aborted { await momentRedDotSwitchesSources(center, book) }
         if !aborted { await momentCallEndOffersStop(center, book) }
@@ -23632,6 +23633,15 @@ final class SelfTest {
         _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil && center.window(for: folder) != nil }
         let record = center.recordings.read(folder)
         return record.map { (folder, $0) }
+    }
+
+    /// A recording stopped some other way (the call's end card): settled
+    /// once its transcript's window opened, then closed (else it opens
+    /// later, over the next check's keys).
+    private func momentSettled(_ center: RecorderCenter, _ folder: URL?) async {
+        guard let folder else { return }
+        _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.window(for: folder) != nil }
+        center.openWindows.forEach { $0.close() }
     }
 
     /// The meeting card, shown and given a second (⌘R is the user's then),
@@ -23884,6 +23894,64 @@ final class SelfTest {
                nil)
     }
 
+    /// ⌘R pressed while the last recording still closes its files (here 2
+    /// s, the self-test's own delay): never dropped, it records once they
+    /// are closed; the menu bar's dot never goes; both recordings whole.
+    private func momentRecordDuringClosing(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: ⌘R pressed while the last recording closes its files records once they are closed (never dropped), the menu bar's dot stays throughout, both recordings whole"
+        let event = momentEvent("st-moment-closing", "Weekly design review", in: 30, link: true)
+        book.testEvents = [event]
+        center.standInMicrophone(.none)
+        context.preferences.recorderConsentShown = true
+        _ = await focusTestWindow()
+        guard await openLauncher() else {
+            record(name, false, "the launcher did not open", nil)
+            return
+        }
+        await pressKey("r", flags: .maskCommand)
+        guard await waitUntil(timeout: 4, { center.recorder.isRecording }) != nil, let first = center.recorder.folder else {
+            record(name, false, "the first recording did not start", nil)
+            return
+        }
+        await pause(2500)
+        center.recorder.closingDelay = .seconds(2)
+        defer { center.recorder.closingDelay = .zero }
+        _ = await focusTestWindow()
+        guard await openLauncher() else {
+            record(name, false, "the launcher did not open again", nil)
+            return
+        }
+        center.control(.stop)
+        let closing = await waitUntil(timeout: 1) { center.recorder.phase == .stopping } != nil
+        await pressKey("r", flags: .maskCommand)
+        let pressedWhileClosing = center.recorder.phase == .stopping
+        var dotGone = false
+        let second = await waitUntil(timeout: 8) {
+            if center.menuBar.shown == nil { dotGone = true }
+            return center.recorder.isRecording && center.recorder.folder != first
+        } != nil
+        let next = center.recorder.folder
+        let titleAfter = center.recorder.title
+        center.recorder.closingDelay = .zero
+        await pause(2500)
+        await momentStop(center)
+        _ = await waitUntil(timeout: 60) { center.recorder.transcribing == nil }
+        center.openWindows.forEach { $0.close() }
+        // Whole: transcribed, both tracks as long as it was recorded.
+        func whole(_ folder: URL?) -> (Bool, String) {
+            guard let folder, let made = center.recordings.read(folder) else { return (false, "missing") }
+            let me = trackLength(folder.appendingPathComponent(Speaker.me.file))
+            let them = trackLength(folder.appendingPathComponent(Speaker.them.file))
+            let ok = made.state == .done && made.seconds > 1.5 && abs(me - them) < 0.2 && abs(me - made.seconds) < 0.3
+            return (ok, "\(made.state.rawValue), \(String(format: "%.2f", made.seconds)) s, me \(String(format: "%.2f", me)), them \(String(format: "%.2f", them))")
+        }
+        let (firstWhole, firstSaid) = whole(first)
+        let (nextWhole, nextSaid) = whole(next)
+        record(name, closing && pressedWhileClosing && second && next != first && !dotGone && firstWhole && nextWhole && titleAfter == "Weekly design review",
+               "closing \(closing), ⌘R while closing \(pressedWhileClosing); the second recorded \(second) “\(titleAfter)”; dot gone meanwhile: \(dotGone); first: \(firstSaid); second: \(nextSaid)",
+               nil)
+    }
+
     /// The menu bar's meeting, once in its call: Record “…” ⌘R in its
     /// menu, gone while recording.
     private func momentMenuBarRecords(_ center: RecorderCenter, _ book: CalendarBook) async {
@@ -23971,6 +24039,7 @@ final class SelfTest {
             return
         }
         let named = center.recorder.title.hasPrefix("Discord call ")
+        let discordFolder = center.recorder.folder
         await pause(1500)
         // Discord leaves the call.
         center.standInMicrophone(.none)
@@ -23985,9 +24054,7 @@ final class SelfTest {
         guard await recordCardHasKeys(center, name) else { return }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         let stoppedByCard = await waitUntil(timeout: 4) { !center.recorder.isRecording } != nil
-        // Its files closed, then its transcript: the recorder is free again.
-        _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil }
-        center.openWindows.forEach { $0.close() }
+        await momentSettled(center, discordFolder)
 
         // A meeting over two seconds from now, nothing heard: quiet.
         let short = momentEvent("st-moment-quiet", "Short sync", in: -60, link: false, location: "Online", minutes: 62.0 / 60)
@@ -24080,14 +24147,14 @@ final class SelfTest {
         book.testEvents = [meeting]
         center.recordMeeting(meeting, joining: false)
         _ = await waitUntil(timeout: 4) { center.recorder.isRecording }
+        let chromeFolder = center.recorder.folder
         let watched = center.callApp?.pid == pid && center.callWindow == window
         await pause(2000)
         chrome?.terminate()
         let ended = await waitUntil(timeout: 15) { if case .callEnded? = center.cardContent { true } else { false } } != nil
         let line = center.cardView.detailText
         if ended, await recordCardHasKeys(center, name) { await pressKey(nil, code: CGKeyCode(kVK_Return)) }
-        _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil }
-        center.openWindows.forEach { $0.close() }
+        await momentSettled(center, chromeFolder)
         let others = holders.apps.filter { $0.pid != pid }.map(\.bundleID)
         record(name, mapped && fresh && window != nil && windowOwner == pid && inApp.kind == .inApp && inApp.app?.pid == pid && noEvent.kind == .nothing
                && watched && ended && line == "Google Chrome left the call.",

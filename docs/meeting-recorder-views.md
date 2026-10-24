@@ -287,6 +287,23 @@ on now):
   one says "Nothing on ⌘R here" in the list, as any key with no action.
 - The footer stays as it is (↩, ⇥, ⌘K): ⌘R is taught by the card.
 
+## ⌘R at any moment
+
+One key, one meaning: ⌘R on a meeting records it, never silently
+nothing.
+
+- **The last recording still closing its files** (a second or so after
+  Stop): ⌘R is kept and records once they are closed; the menu bar's
+  dot stays meanwhile, showing the new one at 0:00 until its first
+  second. The Record card asked for then (`rec`, a link, a tool) opens
+  once they are closed. Both recordings are whole.
+- **Pressed twice** before the recording started: one recording.
+- **The Record card open**: ⌘R on a meeting closes it and records that
+  meeting.
+- **A recording on**: no Record is offered (one at a time); a key or a
+  tool asking anyway says "Already recording “…”: stop it from the menu
+  bar first."
+
 ## The menu bar's meeting
 
 Once in a call (`MeetingBar.joined`: joined from skil.li, or a call
@@ -362,8 +379,9 @@ Show in Finder                                 ──────
 - **A source** is turned off or on from its item, for the rest of the
   recording: a track turned off writes silence for that time (both
   tracks keep their time), the microphone is released (macOS's orange
-  dot goes), the Mac's sound's tap stopped. The levels move while the
-  menu is open.
+  dot goes), the Mac's sound's tap stopped. The levels, four bars after
+  the words, move while the menu is open (a menu item's picture does
+  not show in menus on macOS 27).
 - **The call**: the app watched for the call's end, the apps on the
   microphone to pick from (two apps on it: the one picked is kept). "The
   Call" shows once there is one, or an app on the microphone.

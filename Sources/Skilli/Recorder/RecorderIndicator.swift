@@ -40,10 +40,14 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     private(set) var said = ""
     var button: NSStatusBarButton? { item?.button }
 
+    /// A recording asked for while the last one closed its files: the
+    /// dot shown stays, as it was, until it starts (never one made empty).
+    var holding = false
+
     /// Shown, changed or gone as the recorder is now.
     func update() {
         let live = recorder.isRecording || recorder.phase == .stopping
-        guard live || recorder.transcribing != nil else {
+        guard live || recorder.transcribing != nil || (holding && item != nil) else {
             ticker?.invalidate()
             ticker = nil
             if let item { NSStatusBar.system.removeStatusItem(item) }
@@ -83,6 +87,13 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
             button.setAccessibilityLabel(paused ? "Recording paused, \(said)" : "Recording, \(said)")
             button.toolTip = paused ? "“\(recorder.title)” paused" : "Recording “\(recorder.title)”"
             if menuOpen { updateSourceItems() }
+        } else if holding {
+            // The next one, asked for while the last closed: its dot at
+            // once, before its first second.
+            said = MeetingTranscript.clock(0)
+            button.image = Self.recording(time: said, paused: false, mic: [Double](repeating: 0, count: mic.count),
+                                          mac: [Double](repeating: 0, count: mac.count))
+            button.setAccessibilityLabel("Recording, \(said)")
         } else if let transcribing = recorder.transcribing {
             switch transcribing.step {
             case .downloading(let language):
