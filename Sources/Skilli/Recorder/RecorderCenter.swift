@@ -51,6 +51,7 @@ final class RecorderCenter {
         card.onRecord = { [weak self] title, language, meeting in self?.begin(title: title, language: language, meeting: meeting) }
         card.onCancel = { [weak self] in self?.cancelled() }
         card.onStopCall = { [weak self] in self?.control(.stop) }
+        card.onKeepRecording = { [weak self] reason in self?.watch.kept(reason) }
         card.onToggleSource = { [weak self] speaker in self?.toggle(speaker) }
         // An unfinished one answered (Save, Later, Discard): the next.
         card.onSave = { [weak self] folder, record in
@@ -160,8 +161,7 @@ final class RecorderCenter {
                                   defaults: MeetingMoment.Sources(microphone: preferences.recorderMicrophone, macSound: preferences.recorderMacSound))
     }
 
-    /// Who runs the microphone now: as Core Audio last said while
-    /// followed, else read at once.
+    /// Who runs the microphone now, read at once.
     func microphoneHolders() -> MicrophoneHolders {
         microphoneUse.holders
     }
@@ -245,7 +245,7 @@ final class RecorderCenter {
     /// then the call's end.
     private func tickWatch() {
         guard recorder.isRecording, let reading else { return }
-        let holders = microphoneHolders()
+        let holders = microphoneUse.lastHolders
         // No app known yet (joining, or nothing to go on): the first on the
         // microphone is the call; the one the link opens in, once it runs.
         if reading.kind != .inPerson, callApp == nil || callApp?.pid == 0 {

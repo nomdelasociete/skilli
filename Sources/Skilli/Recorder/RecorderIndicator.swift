@@ -175,8 +175,8 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     /// The apps the call's submenu offers, in its order.
     private var pickable: [MicrophoneApp] = []
 
-    /// "Microphone · NDI Audio", checked while on, its level as a small
-    /// meter.
+    /// "Microphone · NDI Audio", checked while on, its level after it as
+    /// four bars (a menu item's image does not show in menus on macOS 27).
     private func updateSourceItems() {
         let levels = recorder.levels
         let sources = recorder.sources
@@ -191,24 +191,23 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
             let title = "\(speaker == .me ? "Microphone" : "The Mac's Sound") · \(on ? device : "Off")"
             if item.title != title { item.title = title }
             item.state = on ? .on : .off
-            item.image = Self.meter(on ? (speaker == .me ? levels.mic : levels.mac) : 0, on: on)
+            item.attributedTitle = on ? Self.withMeter(title, level: speaker == .me ? levels.mic : levels.mac) : nil
         }
     }
 
-    /// A small level meter for a menu item: four bars.
-    static func meter(_ level: Double, on: Bool) -> NSImage {
-        let image = NSImage(size: NSSize(width: 22, height: 12), flipped: false) { _ in
-            let lit = on ? Int((level.squareRoot() * 4).rounded(.up)) : 0
-            for index in 0..<4 {
-                let height = CGFloat(3 + index * 2)
-                let bar = NSRect(x: CGFloat(index) * 5 + 1, y: (12 - height) / 2, width: 3, height: height)
-                (index < lit ? NSColor.labelColor : NSColor.labelColor.withAlphaComponent(0.2)).setFill()
-                NSBezierPath(roundedRect: bar, xRadius: 1, yRadius: 1).fill()
-            }
-            return true
+    /// The item's words, then its level as four bars rising, the lit ones
+    /// in the label color (quiet speech still shows: square root).
+    static func withMeter(_ title: String, level: Double) -> NSAttributedString {
+        let font = NSFont.menuFont(ofSize: 0)
+        let text = NSMutableAttributedString(string: title + "   ", attributes: [.font: font])
+        let lit = Int((min(1, max(0, level)).squareRoot() * 4).rounded(.up))
+        for (index, bar) in ["▂", "▄", "▆", "█"].enumerated() {
+            text.append(NSAttributedString(string: bar, attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: font.pointSize - 2, weight: .regular),
+                .foregroundColor: index < lit ? NSColor.labelColor : NSColor.tertiaryLabelColor
+            ]))
         }
-        image.isTemplate = false
-        return image
+        return text
     }
 
     @objc private func toggleSource(_ item: NSMenuItem) {

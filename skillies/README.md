@@ -152,7 +152,19 @@ open "skilli://record/stop"              # pause, resume, stop: asked in the car
 
 `record_meeting` exits 0 once the user pressed ↩ ("Recording “Weekly
 sync” started."), 1 when the card was closed. Pausing and stopping ask
-in the skillie's card unless the user's tool rights allow them.
+in the skillie's card unless the user's tool rights allow them. While a
+meeting is on, the card is that meeting's (its title unless one is
+given, its attendees, in person the microphone only).
+
+The recordings made, and the recorder's settings (Settings → Recorder,
+each asked in the card):
+
+```bash
+open "skilli://run/cmd:searchRecordings"   # the launcher, on Search Recordings
+"$SKILLI_CLI" call set_setting pane=recorder setting=recorderRetention value=month        # Delete after: 1 month
+"$SKILLI_CLI" call set_setting pane=recorder setting=recorderMeetingCard value=false      # no Record ⌘R on the meeting card
+"$SKILLI_CLI" call set_setting pane=recorder setting=recorderFolderPath value=~/Documents/Meetings  # moves them there
+```
 
 ## Add an app's links
 

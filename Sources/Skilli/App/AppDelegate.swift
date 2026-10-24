@@ -775,7 +775,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Recordings made: from memory for any search, the words said off
         // the main thread (Search Recordings).
         launcher.recordingSummaries = { [weak self] in
-            guard let library = self?.recordingLibrary, library.isLoaded else { return [] }
+            guard let library = self?.recordingLibrary else { return [] }
+            // Never read yet (no folder at launch): read now, shown next time.
+            guard library.isLoaded else {
+                library.reload()
+                return []
+            }
             return library.summaries
         }
         launcher.searchRecordingWords = { [weak self] text in await self?.recordingLibrary.searchWords(text) ?? [] }
@@ -1960,7 +1965,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return self?.setup
                 },
                 reportPath: outputPath,
-                recorder: { [weak self] in self?.recorderCenter }
+                recorder: { [weak self] in self?.recorderCenter },
+                recordings: { [weak self] in self?.recordingLibrary },
+                moveRecordings: { [weak self] folder in self?.moveRecordings(to: folder) }
             ))
             SelfTest.emit(await test.run(scope: scope), to: outputPath)
             NSApp.terminate(nil)

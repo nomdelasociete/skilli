@@ -50,11 +50,17 @@ final class MicrophoneUse {
         didSet { if standInHolders != oldValue { onChange?() } }
     }
 
-    /// The apps running the microphone's input now, as last read (read
-    /// once at once when not started).
+    /// The apps running the microphone's input now, read at once (a key
+    /// pressed, a card shown: Core Audio's last change may have come a
+    /// moment before the process said it runs the input).
     var holders: MicrophoneHolders {
-        if let standInHolders { return standInHolders }
-        return isStarted ? reading.holders : Self.read().holders
+        standInHolders ?? Self.read().holders
+    }
+
+    /// As last read on Core Audio's changes (once a second while
+    /// recording, from memory).
+    var lastHolders: MicrophoneHolders {
+        standInHolders ?? reading.holders
     }
 
     /// Reads once, then follows CoreAudio's changes. Once; the listeners
@@ -191,8 +197,16 @@ final class MicrophoneListener: Sendable {
         for device in AudioDevices.devices(output: false) where watched.withLock({ $0.insert(device.id).inserted }) {
             var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
                                                      mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-            AudioObjectAddPropertyListenerBlock(device.id, &address, queue) { [self] _, _ in deliver(MicrophoneUse.read()) }
+            AudioObjectAddPropertyListenerBlock(device.id, &address, queue) { [self] _, _ in readTwice() }
         }
+        readTwice()
+    }
+
+    /// Read now, and again half a second later: a device says it runs a
+    /// moment before its process does, and an app just launched is named
+    /// only once it finished launching (seen on the test Mac).
+    private func readTwice() {
         deliver(MicrophoneUse.read())
+        queue.asyncAfter(deadline: .now() + 0.5) { [self] in deliver(MicrophoneUse.read()) }
     }
 }

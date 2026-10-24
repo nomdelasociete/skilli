@@ -28,8 +28,9 @@ final class RecordCard {
     var onRecord: ((_ title: String, _ language: String, _ meeting: Meeting?) -> Void)?
     /// esc, or closed: nothing recorded.
     var onCancel: (() -> Void)?
-    /// Stop ↩ as the call ended.
+    /// Stop ↩ as the call ended; Keep Recording esc.
     var onStopCall: (() -> Void)?
+    var onKeepRecording: ((CallEndWatch.Reason) -> Void)?
     /// A source's row clicked: on or off.
     var onToggleSource: ((Speaker) -> Void)?
     var onSave: ((URL, MeetingRecord) -> Void)?
@@ -213,9 +214,10 @@ final class RecordCard {
         case .unfinished(let folder, let record):
             dismiss()
             onLater?(folder, record)
-        case .callEnded:
+        case .callEnded(let reason):
             // Keep Recording: nothing asked again for the same reason.
             dismiss()
+            onKeepRecording?(reason)
         case nil:
             break
         }

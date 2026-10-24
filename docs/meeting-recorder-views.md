@@ -216,9 +216,10 @@ say, read when a Record key is offered and again when it is pressed
 - **A place**: a location that holds no web address, no phone number,
   names no call app (Gather, Discord, Zoom, Teams…) and is not a word
   for "online" ("online", "remote", "visio", "en ligne", "TBD"…).
-- **Known call apps**, by bundle identifier: Zoom, Teams (both apps),
-  FaceTime, Discord, Slack, Webex, Skype, WhatsApp, Signal, Telegram,
-  Tuple. A browser is not one: a browser on the microphone with no
+- **Known call apps**: by bundle identifier, as each app's Info.plist
+  has it (Zoom, Teams, FaceTime, Discord, Slack, WhatsApp, Signal: read
+  on the test Mac), else by name (Webex, Skype, Telegram, Tuple,
+  Gather…). A browser is not one: a browser on the microphone with no
   meeting on is "Nothing to go on".
 - The case is read again at the key: a card shown before the meeting
   started may have had nobody on the microphone yet.
@@ -377,8 +378,8 @@ at the event's end):
 - **The call's app leaves its call**: it no longer runs the microphone
   for 5 s (a reconnect is not an end).
 - **Or the meeting is over and the sound is quiet**: past the event's
-  end, every source on has stayed under -50 dBFS for a minute (the
-  Mac's sound for a call; the microphone in person).
+  end, the other side has stayed under -50 dBFS for a minute (the Mac's
+  sound; in person, the microphone).
 
 Then a card offers Stop, once for each of these:
 
@@ -398,7 +399,7 @@ Then a card offers Stop, once for each of these:
 - Stop ↩ stops and transcribes, as Stop in the menu bar. Keep Recording
   esc: the recording goes on, nothing asked again for the same reason.
 - The call's app back on the microphone before an answer: the card goes
-  by itself (a reconnect).
+  by itself (a reconnect), and the call's next end is offered again.
 
 ## The recording's window
 

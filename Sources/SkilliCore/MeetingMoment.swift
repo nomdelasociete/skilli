@@ -234,8 +234,9 @@ public enum MeetingMoment {
 /// When a call being recorded ends (docs/meeting-recorder-views.md, "The
 /// call ends: Stop"): its app leaves the call (it no longer runs the
 /// microphone, for 5 s: a reconnect is not an end), or the meeting is over
-/// and every source on has been quiet for a minute. Each reason is
-/// offered once. Fed once a second while recording, from memory.
+/// and the sound has been quiet for a minute. An offer the call's return
+/// withdrew comes again at the next end; Keep Recording (`kept`) ends that
+/// reason's offers. Fed once a second while recording, from memory.
 public struct CallEndWatch: Equatable, Sendable {
     public enum Reason: Equatable, Sendable {
         /// The call's app left the call (its name).
@@ -254,6 +255,8 @@ public struct CallEndWatch: Equatable, Sendable {
     private var quietSince: Date?
     private var offeredAppLeft = false
     private var offeredQuiet = false
+    /// Keep Recording answered: that reason is not offered again.
+    private var keptAppLeft = false
 
     /// 5 s and a minute; the self-test waits less.
     public init(appGrace: TimeInterval = 5, quietFor: TimeInterval = 60) {
@@ -270,6 +273,8 @@ public struct CallEndWatch: Equatable, Sendable {
             if app.onMicrophone {
                 appSeen = true
                 appOffSince = nil
+                // Back in the call: a later end is offered again.
+                if !keptAppLeft { offeredAppLeft = false }
             } else if appSeen {
                 let since = appOffSince ?? now
                 appOffSince = since
@@ -295,6 +300,12 @@ public struct CallEndWatch: Equatable, Sendable {
         appSeen = false
         appOffSince = nil
         offeredAppLeft = false
+        keptAppLeft = false
+    }
+
+    /// Keep Recording answered to `reason`: not offered again.
+    public mutating func kept(_ reason: Reason) {
+        if case .appLeft = reason { keptAppLeft = true }
     }
 
     /// Whether an offer for `reason` still stands: the app back on the

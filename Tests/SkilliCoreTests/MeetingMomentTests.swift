@@ -155,6 +155,21 @@ final class MeetingMomentTests: XCTestCase {
         XCTAssertNil(watch.update(now: now.addingTimeInterval(40), app: (app, false), quiet: false, eventEnd: nil), "once")
         _ = watch.update(now: now.addingTimeInterval(41), app: (app, true), quiet: false, eventEnd: nil)
         XCTAssertFalse(watch.stillTrue(.appLeft(app)), "back on the microphone: the offer goes")
+        _ = watch.update(now: now.addingTimeInterval(50), app: (app, false), quiet: false, eventEnd: nil)
+        XCTAssertEqual(watch.update(now: now.addingTimeInterval(55), app: (app, false), quiet: false, eventEnd: nil), .appLeft(app),
+                       "after a reconnect, the next end is offered again")
+    }
+
+    func testKeepRecordingEndsThatReasonsOffers() {
+        var watch = CallEndWatch()
+        let app = "Discord"
+        _ = watch.update(now: now, app: (app, true), quiet: false, eventEnd: nil)
+        _ = watch.update(now: now.addingTimeInterval(1), app: (app, false), quiet: false, eventEnd: nil)
+        XCTAssertEqual(watch.update(now: now.addingTimeInterval(6), app: (app, false), quiet: false, eventEnd: nil), .appLeft(app))
+        watch.kept(.appLeft(app))
+        _ = watch.update(now: now.addingTimeInterval(7), app: (app, true), quiet: false, eventEnd: nil)
+        _ = watch.update(now: now.addingTimeInterval(8), app: (app, false), quiet: false, eventEnd: nil)
+        XCTAssertNil(watch.update(now: now.addingTimeInterval(20), app: (app, false), quiet: false, eventEnd: nil))
     }
 
     func testTheMeetingEndsWhenItIsOverAndQuietForAMinute() {

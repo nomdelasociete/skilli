@@ -405,6 +405,7 @@ final class LauncherController: NSObject {
     private var fileMeaningOn = false
     private var fileIcons: [String: NSImage] = [:]
     var isInFiles: Bool { mode == .files }
+    var isInRecordings: Bool { mode == .recordings }
     var isShowingFileMeaning: Bool { fileMeaning?.query == searchField.stringValue }
     private var appIconsByPath: [String: NSImage] = [:]
     var isInWindows: Bool { mode == .windows }
@@ -4414,7 +4415,7 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
                            icon: CommandIcon.image(for: "record.circle.fill", tint: .systemRed))
         case .recorded(let found):
             cell.configure(title: item.title,
-                           accessory: found.said.map { "…\($0)…" } ?? RecordingSearch.detail(found.summary, length: MeetingTranscriber.length(found.summary.seconds)),
+                           accessory: found.said ?? RecordingSearch.detail(found.summary, length: MeetingTranscriber.length(found.summary.seconds)),
                            icon: CommandIcon.image(for: "waveform"))
         case .layout(let layout):
             cell.configure(title: layout.name, accessory: "Layout · \(layout.summary)", icon: CommandIcon.image(for: "rectangle.3.group"))
