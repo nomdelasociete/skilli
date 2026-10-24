@@ -24196,21 +24196,21 @@ final class SelfTest {
             return
         }
         let launcher = context.launcher
-        momentSeed(center, "Budget review", daysAgo: 2, attendees: ["Margot Martin", "Camille"],
+        momentSeed(center, "Quarterly budget", daysAgo: 2, attendees: ["Ysaline Vandevelde", "Camille"],
                    said: ["Let's start with the numbers.", "The budget for the third quarter is on track.", "Good, then the hiring plan."])
         momentSeed(center, "Weekly design review", daysAgo: 1, attendees: ["Jean-François Martaing"],
                    said: ["The new icons are ready.", "We ship them on Thursday."])
         momentSeed(center, "Standup", daysAgo: 0.5, attendees: [], said: ["Nothing blocking today."])
         library.reload()
-        _ = await waitUntil(timeout: 3) { library.isLoaded && library.recordings.count >= 3 }
+        _ = await waitUntil(timeout: 3) { library.recordings.contains { $0.record.title == "Quarterly budget" } }
         let count = library.recordings.count
         // Any search: by its title.
         _ = await focusTestWindow()
-        guard await typeInLauncher("budget rev") else {
-            record(name, false, "the launcher did not take “budget rev”", nil)
+        guard await typeInLauncher("quarterly bud") else {
+            record(name, false, "the launcher did not take “quarterly bud”", nil)
             return
         }
-        let anySearch = launcher.results.contains { if case .recorded(let found) = $0 { found.summary.title == "Budget review" } else { false } }
+        let anySearch = launcher.results.contains { if case .recorded(let found) = $0 { found.summary.title == "Quarterly budget" } else { false } }
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         _ = await focusTestWindow()
@@ -24222,23 +24222,23 @@ final class SelfTest {
         for character in "recs " { _ = await typeCharacter(character) }
         let mode = await waitUntil(timeout: 1) { launcher.isInRecordings } != nil
         let listed = launcher.results.count
-        for character in "margot" { _ = await typeCharacter(character) }
-        _ = await waitUntil(timeout: 1) { launcher.query.hasSuffix("margot") }
+        for character in "ysaline" { _ = await typeCharacter(character) }
+        _ = await waitUntil(timeout: 1) { launcher.query.hasSuffix("ysaline") }
         let byPerson = launcher.results.first?.title
-        for _ in 0..<6 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+        for _ in 0..<7 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
         for character in "third quar" { _ = await typeCharacter(character) }
         var said: String?
         let byWords = await waitUntil(timeout: 3) {
             guard case .recorded(let found)? = launcher.results.first else { return false }
             said = found.said
-            return found.summary.title == "Budget review" && found.said?.contains("third quarter") == true
+            return found.summary.title == "Quarterly budget" && found.said?.contains("third quarter") == true
         } != nil
         await captureLauncherBothWays(as: "recorder-search")
         await pressKey(nil, code: CGKeyCode(kVK_Return))
-        let opened = await waitUntil(timeout: 3) { center.openWindows.contains { $0.isVisible && $0.nsWindow.title == "Budget review" } } != nil
+        let opened = await waitUntil(timeout: 3) { center.openWindows.contains { $0.isVisible && $0.nsWindow.title == "Quarterly budget" } } != nil
         center.openWindows.forEach { $0.close() }
-        record(name, count >= 3 && anySearch && mode && listed >= 3 && byPerson == "Budget review" && byWords && opened,
-               "\(count) recordings; any search: “Budget review” \(anySearch); recs: mode \(mode), \(listed) rows; “margot” → “\(byPerson ?? "none")”; “third quar” → words \(byWords) “\(said ?? "")”; ↩ opened \(opened)",
+        record(name, count >= 3 && anySearch && mode && listed >= 3 && byPerson == "Quarterly budget" && byWords && opened,
+               "\(count) recordings; any search “quarterly bud”: “Quarterly budget” \(anySearch); recs: mode \(mode), \(listed) rows; “ysaline” → “\(byPerson ?? "none")”; “third quar” → words \(byWords) “\(said ?? "")”; ↩ opened \(opened)",
                nil)
     }
 

@@ -1368,11 +1368,12 @@ final class LauncherController: NSObject {
             }
             scored += projectRows.sorted { $0.score > $1.score }.prefix(4)
             laps.lap("projects")
-            // The recordings whose title or attendees the words start: the
-            // two that fit best, from three letters (from memory).
+            // The recordings whose title or attendees the words start, in
+            // order: the two that fit best, from three letters (from memory).
             if text.count >= 3 {
                 let recordingRows = catalog.recordings.compactMap { recording -> (item: LauncherItem, score: Int)? in
-                    guard FuzzyMatcher.names(query, recording.candidate), let score = FuzzyMatcher.score(query, recording.candidate) else { return nil }
+                    guard FuzzyMatcher.matchesWordStarts(query, recording.candidate), let score = FuzzyMatcher.score(query, recording.candidate)
+                    else { return nil }
                     return (recording.item, score + learning.boost(query: text, item: recording.item.learningID))
                 }
                 scored += recordingRows.sorted { $0.score > $1.score }.prefix(2)
