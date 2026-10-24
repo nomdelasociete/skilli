@@ -203,14 +203,14 @@ final class RecordingIndex: @unchecked Sendable {
     }
 
     /// The folders whose words hold every word of `text` (prefixes), best
-    /// first, with the words around the match ("…the budget for the third
-    /// quarter…").
+    /// first, with six words around the match ("…for the third quarter is
+    /// on…": a row's second line shows the match, not what led to it).
     func search(_ text: String, limit: Int = 30) -> [(folder: String, snippet: String)] {
         lock.lock()
         defer { lock.unlock() }
         guard open(), let match = ClipboardSearch.ftsQuery(text) else { return [] }
         var found: [(String, String)] = []
-        query("SELECT folder, snippet(words, 1, '', '', '…', 10) FROM words WHERE words MATCH ? ORDER BY rank LIMIT \(limit)", [match]) { statement in
+        query("SELECT folder, snippet(words, 1, '', '', '…', 6) FROM words WHERE words MATCH ? ORDER BY rank LIMIT \(limit)", [match]) { statement in
             guard let folder = sqlite3_column_text(statement, 0) else { return }
             let snippet = sqlite3_column_text(statement, 1).map { String(cString: $0) } ?? ""
             found.append((String(cString: folder), snippet.replacingOccurrences(of: "\n", with: " ")))
