@@ -24301,6 +24301,11 @@ final class SelfTest {
         if let unlisted = momentSeed(center, "Not listed yet", daysAgo: 3, attendees: [], said: ["Moved all the same."]) {
             names.insert(unlisted.lastPathComponent)
         }
+        // One whose meeting.json cannot be decoded: it moves too.
+        if let broken = momentSeed(center, "Broken record", daysAgo: 4, attendees: [], said: []) {
+            try? Data("{".utf8).write(to: broken.appendingPathComponent(Recordings.record))
+            names.insert(broken.lastPathComponent)
+        }
         let listedBefore = library.recordings.count
         // Slowed, to ask for a recording while they move: said, not started.
         let notify = center.notify
@@ -24315,7 +24320,7 @@ final class SelfTest {
         library.moveStepDelay = .zero
         center.notify = notify
         let there = Set((try? FileManager.default.contentsOfDirectory(atPath: elsewhere.path)) ?? [])
-        let moved = !names.isEmpty && names.isSubset(of: there) && center.recordings.root == elsewhere && names.count == listedBefore + 1
+        let moved = !names.isEmpty && names.isSubset(of: there) && center.recordings.root == elsewhere && names.count == listedBefore + 2
         _ = await context.moveRecordings(root)
         let back = names.isSubset(of: Set((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []))
         // One that cannot move (made immutable, the oldest: moved last):
@@ -24332,6 +24337,15 @@ final class SelfTest {
         if let stuck {
             try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: stuck.path)
             try? FileManager.default.removeItem(at: stuck)
+        }
+        // A row older than a move naming another recording's folder: its
+        // delete trashes nothing.
+        var staleKept = false
+        if let target = library.recordings.first(where: { $0.record.title == "Not listed yet" }) {
+            var stale = RecordingSummary(folder: target.folder, record: target.record)
+            stale.started = target.record.started.addingTimeInterval(-86_400)
+            context.launcher.onDeleteRecording?(stale)
+            staleKept = FileManager.default.fileExists(atPath: library.folder(target.folder).path)
         }
         // A folder that cannot be read: nothing moved, never "done" with none.
         try? FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: root.path)
@@ -24353,8 +24367,8 @@ final class SelfTest {
             center.openWindows.forEach { $0.close() }
         }
         record(name, line.hasPrefix("2 recordings are older than a month") && keptAsSet && pruned == 2 && gone && neverStoppedKept && refusedNone == nil
-               && blocked && moved && back && rolledBack && unreadableKept && refused != nil,
-               "line “\(line)”; kept as set \(keptAsSet); pass moved \(pruned) to the Trash, gone \(gone), never stopped kept \(neverStoppedKept); the card asked while moving: said, not shown \(blocked) “\(said.last ?? "")”; moved \(names.count) there \(moved), back \(back); one stuck: all put back \(rolledBack) “\(failureSaid)”; an unreadable folder: kept \(unreadableKept) “\(unreadableSaid ?? "moved")”; while recording: “\(refused ?? "not refused")”",
+               && blocked && moved && back && rolledBack && unreadableKept && staleKept && refused != nil,
+               "line “\(line)”; kept as set \(keptAsSet); pass moved \(pruned) to the Trash, gone \(gone), never stopped kept \(neverStoppedKept); the card asked while moving: said, not shown \(blocked) “\(said.last ?? "")”; moved \(names.count) there \(moved), back \(back); one stuck: all put back \(rolledBack) “\(failureSaid)”; an unreadable folder: kept \(unreadableKept) “\(unreadableSaid ?? "moved")”; a stale row's delete kept it \(staleKept); while recording: “\(refused ?? "not refused")”",
                nil)
     }
 

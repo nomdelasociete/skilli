@@ -56,12 +56,18 @@ final class RecordingLibrary {
 
     /// Every recording in `root` by its folder's name and title, for a
     /// move: none when the folder was never made; a folder that cannot be
-    /// listed throws (never read as empty).
+    /// listed throws (never read as empty). A recording is a folder with a
+    /// `meeting.json`; one that cannot be read or decoded still moves with
+    /// the others (named by its folder), never left behind.
     nonisolated private static func inventory(_ root: URL) throws -> [(String, String)] {
         guard FileManager.default.fileExists(atPath: root.path) else { return [] }
         let folders = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
         let recordings = Recordings(root: root)
-        return folders.compactMap { folder in recordings.read(folder).map { (folder.lastPathComponent, $0.title) } }
+        return folders.compactMap { folder in
+            if let record = recordings.read(folder) { return (folder.lastPathComponent, record.title) }
+            let made = FileManager.default.fileExists(atPath: folder.appendingPathComponent(Recordings.record).path)
+            return made ? (folder.lastPathComponent, folder.lastPathComponent) : nil
+        }
     }
 
     nonisolated private static func read(_ root: URL) -> [(folder: String, record: MeetingRecord)] {

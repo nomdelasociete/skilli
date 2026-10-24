@@ -309,9 +309,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// A recording to the Trash, ⌘Z bringing it back (`UndoableDeletes`);
-    /// never one being made or transcribed.
+    /// never one being made or transcribed, and only the one the row shows
+    /// (a row older than a move may name another recording's folder).
     private func deleteRecording(_ summary: RecordingSummary) {
         let folder = recordingLibrary.folder(summary.folder)
+        guard let current = Recordings(root: recordingLibrary.root).read(folder), current.started == summary.started, current.title == summary.title else {
+            aiActions.notify("“\(summary.title)” is no longer where this list saw it: open the list again.", caller: "Recorder", run: nil, seconds: 5)
+            recordingLibrary.reload()
+            return
+        }
         if let recorder = madeRecorderCenter?.recorder,
            recorder.folder?.standardizedFileURL == folder.standardizedFileURL || recorder.transcribing?.folder.standardizedFileURL == folder.standardizedFileURL {
             aiActions.notify("“\(summary.title)” is being recorded or transcribed: stop it first.", caller: "Recorder", run: nil, seconds: 5)
