@@ -54,6 +54,16 @@ final class RecordingLibrary {
         }
     }
 
+    /// Every recording in `root` by its folder's name and title, for a
+    /// move: none when the folder was never made; a folder that cannot be
+    /// listed throws (never read as empty).
+    nonisolated private static func inventory(_ root: URL) throws -> [(String, String)] {
+        guard FileManager.default.fileExists(atPath: root.path) else { return [] }
+        let folders = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+        let recordings = Recordings(root: root)
+        return folders.compactMap { folder in recordings.read(folder).map { (folder.lastPathComponent, $0.title) } }
+    }
+
     nonisolated private static func read(_ root: URL) -> [(folder: String, record: MeetingRecord)] {
         let folders = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
         let recordings = Recordings(root: root)
@@ -110,8 +120,17 @@ final class RecordingLibrary {
         moving = (0, 0)
         onChange?()
         // What the folder holds now, read from it: the list in memory may not
-        // be read yet, or be older than a recording made since.
-        let names = await Task.detached(priority: .utility) { Self.read(oldRoot).map { ($0.folder, $0.record.title) } }.value
+        // be read yet, or be older than a recording made since. A folder that
+        // cannot be read stops it (nothing moved, nothing hidden).
+        let inventory = await Task.detached(priority: .utility) { Result { try Self.inventory(oldRoot) } }.value
+        guard case .success(let names) = inventory else {
+            if case .failure(let error) = inventory {
+                moveFailures = ["The recordings' folder could not be read: \(error.localizedDescription) They stay where they were."]
+            }
+            moving = nil
+            onChange?()
+            return false
+        }
         moving = (0, names.count)
         onChange?()
         var moved: [(from: String, to: String)] = []

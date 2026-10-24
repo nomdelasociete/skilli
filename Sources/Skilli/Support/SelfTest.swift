@@ -24333,6 +24333,11 @@ final class SelfTest {
             try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: stuck.path)
             try? FileManager.default.removeItem(at: stuck)
         }
+        // A folder that cannot be read: nothing moved, never "done" with none.
+        try? FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: root.path)
+        let unreadableSaid = await context.moveRecordings(elsewhere)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+        let unreadableKept = unreadableSaid?.contains("could not be read") == true && library.root == root && center.recordings.root == root
         try? FileManager.default.removeItem(at: elsewhere)
         preferences.recorderFolderPath = ""
         // While recording: refused.
@@ -24348,8 +24353,8 @@ final class SelfTest {
             center.openWindows.forEach { $0.close() }
         }
         record(name, line.hasPrefix("2 recordings are older than a month") && keptAsSet && pruned == 2 && gone && neverStoppedKept && refusedNone == nil
-               && blocked && moved && back && rolledBack && refused != nil,
-               "line “\(line)”; kept as set \(keptAsSet); pass moved \(pruned) to the Trash, gone \(gone), never stopped kept \(neverStoppedKept); the card asked while moving: said, not shown \(blocked) “\(said.last ?? "")”; moved \(names.count) there \(moved), back \(back); one stuck: all put back \(rolledBack) “\(failureSaid)”; while recording: “\(refused ?? "not refused")”",
+               && blocked && moved && back && rolledBack && unreadableKept && refused != nil,
+               "line “\(line)”; kept as set \(keptAsSet); pass moved \(pruned) to the Trash, gone \(gone), never stopped kept \(neverStoppedKept); the card asked while moving: said, not shown \(blocked) “\(said.last ?? "")”; moved \(names.count) there \(moved), back \(back); one stuck: all put back \(rolledBack) “\(failureSaid)”; an unreadable folder: kept \(unreadableKept) “\(unreadableSaid ?? "moved")”; while recording: “\(refused ?? "not refused")”",
                nil)
     }
 
