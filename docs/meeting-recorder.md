@@ -92,8 +92,10 @@ Privacy and consent's table).
 guess records nothing. ⌘R from the meeting card starts at once with the
 sources found; the menu bar names each with its level, and a wrong one
 (two apps on the microphone, "in person" misread) is changed from the red
-dot's menu, kept from then on. A keycap not wanted costs nothing: it is
-not pressed.
+dot's menu, kept from then on. A recording started wrong is thrown away
+after Stop: ⌘⌫ in its window deletes it, to the Trash, with ⌘Z for 10 s
+(`UndoableDeletes`). A keycap not wanted costs nothing: it is not
+pressed.
 
 ## What skil.li already has
 
@@ -267,7 +269,7 @@ The recording's window (a window, not a card: it is read and edited):
   | Flow | Goes to | What is sent | Consent |
   |---|---|---|---|
   | Record, transcribe, play, search, read slides | nowhere | nothing | — |
-  | "Summary by Claude", chapters, Ask about a meeting | the user's own AI (its provider) | the transcript's text | the button or the request, which names where it goes |
+  | "Summary by Claude", chapters, Ask about a meeting, names put on voices | the user's own AI (its provider) | the transcript's text with its speaker labels and times, the event's title, and for names on voices the attendees' names | the button or the request, which names where it goes |
   | Recap Mail | the attendees, by the user's mail app | the recap the user reads first | Send, in the mail app |
   | `get_transcript` | the agent that calls it (Claude Code, Codex…), then its provider | that recording's transcript | asked every time in the card, naming the recording (`ToolPolicy` `everyTime`: no Always Allow) |
   | `list_recordings` | the agent | titles, dates, lengths, no words | the tool rights of a read |
