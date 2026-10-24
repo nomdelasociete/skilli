@@ -110,6 +110,8 @@ final class SelfTest {
         /// Where the report goes (standard output when nil): the watchdog
         /// writes it there if the run never ends.
         var reportPath: String?
+        /// The meeting recorder, made when first asked for.
+        var recorder: @MainActor () -> RecorderCenter? = { nil }
     }
 
     enum Scope: String, Sendable {
@@ -281,6 +283,12 @@ final class SelfTest {
         /// Every delete of the user's data and its undo card: gone at once,
         /// Undo ⌘Z, ↩ to the app, ⌘Z puts it back (scratch stores; keys).
         case undo
+        /// Only the meeting recorder (docs/meeting-recorder.md, phase 1): a
+        /// scripted call played back (another app plays the other side, a
+        /// file stands in for the microphone), its transcript against the
+        /// script, the tracks in step across a pause, a recording never
+        /// stopped (another skil.li killed), links and tools (keys, sound).
+        case recorder
     }
 
     /// Extra trigger only the self-test registers. No Hyper tool listens to
@@ -663,6 +671,10 @@ final class SelfTest {
         if scope == .undo {
             window.center()
             return await finish(after: [undoChecks])
+        }
+        if scope == .recorder {
+            window.center()
+            return await finish(after: [recorderChecks])
         }
         if scope == .emoji {
             window.center()
@@ -8985,7 +8997,14 @@ final class SelfTest {
     /// its own window alone over a light and a dark menu bar, its
     /// appearance set to each. Only skil.li's item.
     private func captureMeetingItem(_ file: String) async {
-        guard let directory = context.snapshotDirectory, let button = context.meetingWatch.itemButton, let window = button.window,
+        guard let button = context.meetingWatch.itemButton else { return }
+        await captureStatusItem(button, file)
+    }
+
+    /// A menu bar item as the menu bar shows it, then drawn alone over a
+    /// light and a dark menu bar.
+    private func captureStatusItem(_ button: NSStatusBarButton, _ file: String) async {
+        guard let directory = context.snapshotDirectory, let window = button.window,
               let screen = window.screen ?? NSScreen.main else { return }
         let scale = screen.backingScaleFactor
         func bar(_ name: String) async {
@@ -22777,6 +22796,736 @@ final class SelfTest {
             for app in apps { app.terminate() }
             _ = await waitUntil(timeout: 3) { apps.allSatisfy(\.isTerminated) }
         }
+    }
+
+    // MARK: - Meeting recorder (docs/meeting-recorder.md, phase 1)
+
+    /// Every recorder check, on the self-test's own Recordings folder.
+    private func recorderChecks() async {
+        let (consent, language) = (context.preferences.recorderConsentShown, context.preferences.voiceLanguage)
+        defer {
+            context.preferences.recorderConsentShown = consent
+            context.preferences.voiceLanguage = language
+        }
+        context.preferences.recorderConsentShown = false
+        // The calls are English; the test Mac types French: Ask's language
+        // says English, as a user would set it.
+        context.preferences.voiceLanguage = "en-US"
+        await recorderCardShowsBothSourcesLive()
+        if !aborted { await recorderRecordsAPlayedBackCall() }
+        if !aborted { await recorderPausesBothTracksTogether() }
+        if !aborted { await recorderOffersOneNeverStopped() }
+        if !aborted { await recorderFromLinksAndTools() }
+    }
+
+    /// The played-back calls (`script/recorder-measure`: `push.sh` puts them
+    /// on the test Mac): each call's two sides and its script.
+    private static var recorderCalls: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("recorder-measure/audio/calls", isDirectory: true)
+    }
+
+    /// One call's script, as `truth.json` has it: who says what, when.
+    private struct CallTruth: Decodable {
+        struct Turn: Decodable {
+            let me: Bool
+            let start: Double
+            let end: Double
+            let text: String
+        }
+
+        let language: String
+        let turns: [Turn]
+    }
+
+    /// The self-test's scratch audio.
+    private var recorderScratch: URL {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/recorder-audio", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
+
+    /// `source`'s first `seconds` (16 kHz WAV) with a 40 ms beep at each of
+    /// `beeps` (s), written to `name` in the scratch folder: the same beeps
+    /// in both sides tell where each landed in its track.
+    /// `ppm`: as a microphone whose clock runs that fast or slow hears it:
+    /// stretched (or squeezed) by as much, a frame of it a moment of the
+    /// call at that clock's rate.
+    nonisolated private static func clip(_ source: URL?, seconds: Double, beeps: [Double], ppm: Double = 0, to url: URL) -> Bool {
+        let rate = 16000.0
+        let factor = 1 + ppm * 1e-6
+        let frames = Int(seconds * rate * factor)
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frames)), let data = buffer.floatChannelData?[0]
+        else { return false }
+        buffer.frameLength = AVAudioFrameCount(frames)
+        data.update(repeating: 0, count: frames)
+        let wanted = Int(seconds * rate) + 2
+        if let source, let file = try? AVAudioFile(forReading: source), file.processingFormat.sampleRate == rate,
+           let read = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(wanted)),
+           (try? file.read(into: read, frameCount: AVAudioFrameCount(min(Int64(wanted), file.length)))) != nil, let samples = read.floatChannelData?[0] {
+            let count = Int(read.frameLength)
+            if ppm == 0 {
+                data.update(from: samples, count: min(count, frames))
+            } else {
+                for index in 0..<frames {
+                    let at = Double(index) / factor
+                    let low = Int(at), weight = Float(at - Double(low))
+                    guard low + 1 < count else { break }
+                    data[index] = samples[low] * (1 - weight) + samples[low + 1] * weight
+                }
+            }
+        }
+        for beep in beeps {
+            let start = Int((beep * rate * factor).rounded())
+            for index in start..<min(frames, start + Int(0.04 * rate)) {
+                data[index] = 0.6 * Float(sin(2 * Double.pi * 2000 * Double(index - start) / rate))
+            }
+        }
+        try? FileManager.default.removeItem(at: url)
+        guard let out = try? AVAudioFile(forWriting: url, settings: format.settings) else { return false }
+        return (try? out.write(from: buffer)) != nil
+    }
+
+    /// Where each beep (2 kHz, 40 ms) starts in a track, in seconds: the
+    /// 2 kHz power in 5 ms windows a quarter of a millisecond apart.
+    nonisolated private static func beeps(in url: URL) -> [Double] {
+        guard let file = try? AVAudioFile(forReading: url), file.length > 0,
+              let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
+              (try? file.read(into: buffer)) != nil, let data = buffer.floatChannelData?[0] else { return [] }
+        let rate = file.processingFormat.sampleRate
+        let window = Int(rate * 0.005), hop = max(1, Int(rate * 0.00025))
+        let k = Float(2 * cos(2 * Double.pi * 2000 / rate))
+        var powers: [Float] = []
+        var start = 0
+        while start + window < Int(buffer.frameLength) {
+            var s1: Float = 0, s2: Float = 0
+            for index in 0..<window {
+                let s0 = data[start + index] + k * s1 - s2
+                s2 = s1
+                s1 = s0
+            }
+            powers.append(s1 * s1 + s2 * s2 - k * s1 * s2)
+            start += hop
+        }
+        guard let loudest = powers.max(), loudest > 0 else { return [] }
+        var onsets: [Double] = []
+        var last = -1.0
+        for (index, power) in powers.enumerated() where power > loudest * 0.25 {
+            let time = Double(index * hop) / rate
+            if time - last > 0.3 { onsets.append(time) }
+            last = time
+        }
+        return onsets
+    }
+
+    /// Errors per hundred words of `reference` (substitutions, deletions,
+    /// insertions), case, accents, punctuation and how a number is written
+    /// left out, as the measurement scored them.
+    nonisolated private static func errorsPerHundred(_ reference: String, _ hypothesis: String) -> (errors: Double, words: Int) {
+        let numbers: Set<String> = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+                                    "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty", "thirty",
+                                    "forty", "fifty", "sixty", "seventy", "eighty", "ninety", "hundred", "thousand", "million", "percent",
+                                    "euro", "euros"]
+        func words(_ text: String) -> [String] {
+            let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            let spaced = String(folded.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) ? Character($0) : " " })
+            return spaced.split(separator: " ").map(String.init).filter { !numbers.contains($0) && !$0.allSatisfy(\.isNumber) }
+        }
+        let ref = words(reference), hyp = words(hypothesis)
+        guard !ref.isEmpty else { return (hyp.isEmpty ? 0 : 100, 0) }
+        var row = Array(0...hyp.count)
+        for (i, word) in ref.enumerated() {
+            var next = [i + 1] + [Int](repeating: 0, count: hyp.count)
+            for j in 0..<hyp.count {
+                next[j + 1] = min(row[j + 1] + 1, next[j] + 1, row[j] + (word == hyp[j] ? 0 : 1))
+            }
+            row = next
+        }
+        return (100 * Double(row[hyp.count]) / Double(ref.count), ref.count)
+    }
+
+    /// `afplay` playing `url` (another app playing the call's other side,
+    /// heard by the tap); killed with the check.
+    private func playElsewhere(_ url: URL) -> Process? {
+        let play = Process()
+        play.executableURL = URL(fileURLWithPath: "/usr/bin/afplay")
+        play.arguments = [url.path]
+        try? play.run()
+        return play
+    }
+
+    /// The newest recording folder in the self-test's Recordings.
+    private func newestRecording(in root: URL) -> URL? {
+        let folders = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.creationDateKey], options: [.skipsHiddenFiles])) ?? []
+        return folders.max { a, b in
+            ((try? a.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? .distantPast)
+                < ((try? b.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? .distantPast)
+        }
+    }
+
+    private func trackLength(_ url: URL) -> Double {
+        (try? AVAudioFile(forReading: url)).map { Double($0.length) / $0.processingFormat.sampleRate } ?? 0
+    }
+
+    /// The card over the test window, light and dark: the screen around it.
+    private func captureRecordCard(_ center: RecorderCenter, as name: String) async {
+        guard let directory = context.snapshotDirectory, let panel = center.cardWindow else { return }
+        let (panelAppearance, testAppearance) = (panel.appearance, window.appearance)
+        defer {
+            panel.appearance = panelAppearance
+            window.appearance = testAppearance
+        }
+        for (suffix, appearance) in GlassCheck.appearances {
+            panel.appearance = appearance
+            window.appearance = appearance
+            await pause(900)
+            if let image = await GlassCheck.screenshot(around: panel, padding: -Theme.glassMargin + 16),
+               let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+                try? png.write(to: directory.appendingPathComponent("\(name)-\(suffix).png"))
+            }
+        }
+    }
+
+    /// A recording's window, light and dark.
+    private func captureRecordingWindow(_ controller: RecordingWindowController, as name: String) async {
+        guard let directory = context.snapshotDirectory else { return }
+        let window = controller.nsWindow
+        let saved = window.appearance
+        defer { window.appearance = saved }
+        for (suffix, appearance) in GlassCheck.appearances {
+            window.appearance = appearance
+            await pause(500)
+            if let png = await WindowCapture.png(of: window) { try? png.write(to: directory.appendingPathComponent("\(name)-\(suffix).png")) }
+        }
+    }
+
+    /// Opens the recorder's menu in the menu bar with a real click, captures
+    /// it, then chooses `pick` (else esc). Its items.
+    private func openRecorderMenu(_ center: RecorderCenter, capture: String, pick: String? = nil, picked: () -> Void = {}) async -> [String] {
+        guard let button = center.menuBar.button, let frame = button.window?.frame else { return [] }
+        let source = CGEventSource(stateID: .hidSystemState)
+        let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        let point = CGPoint(x: frame.midX, y: screenHeight - frame.midY)
+        let guardTimer = DispatchWorkItem {
+            for down in [true, false] {
+                CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap)
+            }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 10, execute: guardTimer)
+        defer { guardTimer.cancel() }
+        for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
+            CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+            await pause(60)
+        }
+        await pause(700)
+        // The status items' menu bar only: the app's own menus are not this
+        // menu (and its Apple menu names the Mac's account).
+        var extras: CFTypeRef?
+        AXUIElementCopyAttributeValue(AXUIElementCreateApplication(getpid()), kAXExtrasMenuBarAttribute as CFString, &extras)
+        let items = extras.map { Self.axElements(roles: [kAXMenuItemRole], under: ($0 as! AXUIElement)) { _ in true } } ?? []
+        let titles = items.compactMap { Self.axTitle($0) }.filter { !$0.isEmpty }
+        if let directory = context.snapshotDirectory, let image = await WindowCapture.openMenuImage(),
+           let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+            try? png.write(to: directory.appendingPathComponent(capture))
+        }
+        if let pick, let item = items.first(where: { Self.axTitle($0) == pick }) {
+            picked()
+            AXUIElementPerformAction(item, kAXPressAction as CFString)
+        } else {
+            for down in [true, false] {
+                CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap)
+            }
+        }
+        await pause(300)
+        return titles
+    }
+
+    /// The Record card has the keyboard before a key is pressed into it;
+    /// else every later check is skipped: no key may land in another app.
+    private func recordCardHasKeys(_ center: RecorderCenter, _ name: String) async -> Bool {
+        if await waitUntil(timeout: 1.5, { center.cardWindow?.isKeyWindow == true }) != nil { return true }
+        aborted = true
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
+        // macOS's own question in front (a permission skil.li asked for):
+        // its owner answers it once on this Mac.
+        let why = front == "com.apple.UserNotificationCenter" ? "macOS asks a question in front (a permission: answer it on this Mac once)" : "front: \(front)"
+        let view = center.cardView
+        record(name, false, "the Record card did not take the keyboard (\(why)): stopped so no key lands elsewhere; the card said microphone “\(view.microphoneLine)”, the Mac's sound “\(view.macLine)”, language “\(view.languageShown)”, note “\(view.noteText)”", nil)
+        return false
+    }
+
+    /// Types `text` into the launcher, open from the test window.
+    private func typeInLauncher(_ text: String) async -> Bool {
+        guard await openLauncher() else { return false }
+        for character in text { _ = await typeCharacter(character) }
+        return await waitUntil(timeout: 1) { self.context.launcher.query == text } != nil
+    }
+
+    /// The Record card from the launcher ("rec weekly sync" ↩): its name in
+    /// the field, the first time the consent, both sources live (the
+    /// meters rise while the Mac plays and the stand-in microphone speaks:
+    /// they are the permission check), esc records nothing.
+    private func recorderCardShowsBothSourcesLive() async {
+        let name = "Recorder: “rec weekly sync” ↩ opens the Record card named so, the consent the first time, both meters live (the Mac's sound, the microphone), esc records nothing"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let train = recorderScratch.appendingPathComponent("train.wav")
+        _ = Self.clip(nil, seconds: 20, beeps: stride(from: 0.5, to: 20, by: 0.25).map { $0 }, to: train)
+        center.recorder.standIn(microphone: train, alsoLeaveOut: [])
+        let before = (try? FileManager.default.contentsOfDirectory(atPath: center.recordings.root.path))?.count ?? 0
+        guard await typeInLauncher("rec weekly sync") else {
+            record(name, false, "the launcher did not take “rec weekly sync”", nil)
+            return
+        }
+        let row = context.launcher.results.first?.title ?? ""
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let view = center.cardView
+        let shown = await waitUntil(timeout: 3) { center.isCardVisible && view.microphoneLine != "Starting…" && view.macLine != "Starting…" } != nil
+        let named = view.name == "weekly sync"
+        let consent = view.consentShown
+        // The Mac plays (another app) and the stand-in microphone speaks.
+        let play = playElsewhere(train)
+        try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
+        var levels = (mic: 0.0, mac: 0.0)
+        _ = await waitUntil(timeout: 4) {
+            let now = center.recorder.levels
+            levels = (max(levels.mic, now.mic), max(levels.mac, now.mac))
+            return levels.mic > 0.2 && levels.mac > 0.2
+        }
+        let lines = "microphone “\(view.microphoneLine)”, the Mac's sound “\(view.macLine)”, note “\(view.noteText)”, language \(view.languageShown)"
+        await captureRecordCard(center, as: "recorder-card")
+        play?.terminate()
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let gone = await waitUntil(timeout: 2) { !center.isCardVisible && center.recorder.phase == .idle } != nil
+        let after = (try? FileManager.default.contentsOfDirectory(atPath: center.recordings.root.path))?.count ?? 0
+        record(name, row == "Record “weekly sync”" && shown && named && consent && levels.mic > 0.2 && levels.mac > 0.2 && gone && after == before,
+               "row “\(row)”, card \(shown), named “\(view.name)”, consent \(consent), levels mic \(String(format: "%.2f", levels.mic)) mac \(String(format: "%.2f", levels.mac)); \(lines); closed \(gone), folders \(before) → \(after)",
+               nil)
+    }
+
+    /// The first 75 s of a scripted call (en01): the user's side stands in
+    /// for the microphone, the other side plays in another app (`afplay`,
+    /// heard by the tap). ↩ in the card records; stopped from the menu bar;
+    /// then the transcript: each side against the script, the two tracks
+    /// in step (a beep at each end of both sides), the window's lines.
+    private func recorderRecordsAPlayedBackCall() async {
+        let name = "Recorder: a played-back call (en01's first 75 s): two tracks in step, each side transcribed against the script, Me and Them by time, its window"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let call = Self.recorderCalls.appendingPathComponent("en01")
+        guard let data = try? Data(contentsOf: call.appendingPathComponent("truth.json")), let truth = try? JSONDecoder().decode(CallTruth.self, from: data)
+        else {
+            checks.append(Check(name: name, passed: true, skipped: true,
+                                detail: "no played-back calls on this Mac (script/recorder-measure/push.sh puts them in ~/recorder-measure)", latencyMs: nil))
+            return
+        }
+        // Cut where a turn ends, before 75 s; a beep at each end.
+        let cut = (truth.turns.map(\.end).filter { $0 <= 75 }.max() ?? 75) + 0.8
+        let turns = truth.turns.filter { $0.end <= cut - 0.5 }
+        let beeps = [0.3, cut - 0.4]
+        let me = recorderScratch.appendingPathComponent("en01-me.wav"), them = recorderScratch.appendingPathComponent("en01-them.wav")
+        // The microphone's clock 100 ppm fast, as a USB or Bluetooth one may
+        // run: 7 ms off the other side by the end, uncorrected.
+        guard Self.clip(call.appendingPathComponent("me.wav"), seconds: cut, beeps: beeps, ppm: 100, to: me),
+              Self.clip(call.appendingPathComponent("them.wav"), seconds: cut, beeps: beeps, to: them) else {
+            record(name, false, "the call could not be cut", nil)
+            return
+        }
+        center.recorder.standIn(microphone: me, alsoLeaveOut: [])
+        guard await typeInLauncher("rec played call") else {
+            record(name, false, "the launcher did not take “rec played call”", nil)
+            return
+        }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 3, { center.isCardVisible && center.cardView.microphoneLine != "Starting…" }) != nil else {
+            record(name, false, "no Record card", nil)
+            return
+        }
+        // Shown until a first recording starts.
+        let consentUntilFirst = center.cardView.consentShown
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 2, { center.recorder.phase == .recording }) != nil else {
+            record(name, false, "↩ did not start the recording (\(center.recorder.phase))", nil)
+            return
+        }
+        let consentKept = context.preferences.recorderConsentShown
+        let start = ContinuousClock.now
+        var wall = 0.0
+        try? center.recorder.microphone.playStandIn(at: mach_absolute_time(), ppm: 100)
+        let play = playElsewhere(them)
+        defer { play?.terminate() }
+        // While it records: the menu bar, the launcher's row.
+        await pause(4000)
+        let bar = center.menuBar.shown ?? ""
+        if let button = center.menuBar.button { await captureStatusItem(button, "recorder-menubar") }
+        let menu = await openRecorderMenu(center, capture: "recorder-menu.png")
+        _ = await typeInLauncher("rec")
+        let liveRow = context.launcher.results.first?.title ?? ""
+        await captureLauncherBothWays(as: "recorder-launcher-row")
+        await closeLauncher()
+        // To the end of the call, then Stop from the menu bar.
+        let left = cut + 0.6 - (ContinuousClock.now - start).milliseconds / 1000
+        if left > 0 { try? await Task.sleep(for: .seconds(left)) }
+        _ = await openRecorderMenu(center, capture: "recorder-menu-stop.png", pick: "Stop and Transcribe", picked: { wall = (ContinuousClock.now - start).milliseconds / 1000 })
+        let stopped = await waitUntil(timeout: 5) { center.recorder.phase == .idle } != nil
+        _ = await waitUntil(timeout: 3) { center.recorder.transcribing != nil }
+        if let button = center.menuBar.button, center.recorder.transcribing != nil { await captureStatusItem(button, "recorder-menubar-transcribing") }
+        let transcribed = await waitUntil(timeout: 120) { center.recorder.transcribing == nil && !center.openWindows.isEmpty } != nil
+        guard stopped, transcribed, let folder = newestRecording(in: center.recordings.root), let controller = center.window(for: folder),
+              let record = center.recordings.read(folder), let transcript = center.recordings.transcript(folder) else {
+            self.record(name, false, "stopped \(stopped), transcribed \(transcribed), bar “\(bar)”, menu \(menu)", nil)
+            return
+        }
+        // The two tracks: as long as the call was recorded, in step.
+        let lengths = (me: trackLength(folder.appendingPathComponent("me.m4a")), them: trackLength(folder.appendingPathComponent("them.m4a")))
+        let found = await Task.detached { (Self.beeps(in: folder.appendingPathComponent("me.m4a")), Self.beeps(in: folder.appendingPathComponent("them.m4a"))) }.value
+        let offsets = zip(found.0, found.1).map { $1 - $0 }
+        let drift = (offsets.max() ?? 0) - (offsets.min() ?? 0)
+        // Each side against the script.
+        let mine = Self.errorsPerHundred(turns.filter(\.me).map(\.text).joined(separator: " "),
+                                         transcript.lines.filter { $0.speaker == .me }.map(\.text).joined(separator: " "))
+        let theirs = Self.errorsPerHundred(turns.filter { !$0.me }.map(\.text).joined(separator: " "),
+                                           transcript.lines.filter { $0.speaker == .them }.map(\.text).joined(separator: " "))
+        // Me and Them by time: the script's turns and the lines alternate alike.
+        let speakers = transcript.lines.map(\.speaker)
+        let both = speakers.contains(.me) && speakers.contains(.them)
+        // The window: its lines; a click on the third plays from it.
+        let shownLines = controller.shownLines.count
+        await captureRecordingWindow(controller, as: "recorder-window")
+        var clickedPlays = false
+        var clickDetail = "fewer than four lines"
+        if controller.shownLines.count > 3, let frame = controller.screenFrame(ofLine: 2) {
+            // A real click on the third line, its window in front.
+            controller.present()
+            guard await waitUntil(timeout: 2, { controller.nsWindow.isKeyWindow && NSApp.isActive }) != nil else {
+                aborted = true
+                controller.close()
+                let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
+                self.record(name, false, "the recording window did not take the keyboard (front: \(front)): stopped so no click or key lands elsewhere", nil)
+                return
+            }
+            let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
+            let point = CGPoint(x: frame.midX, y: screenHeight - frame.midY)
+            let source = CGEventSource(stateID: .hidSystemState)
+            for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
+                CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+                await pause(60)
+            }
+            let third = controller.shownLines[2]
+            clickedPlays = await waitUntil(timeout: 3) { controller.playing && controller.litLine == 2 && controller.spaceHint == "Pause" } != nil
+            clickDetail = String(format: "playing %@ at %.2f s (the line starts at %.2f s), lit %@, space says “%@”", "\(controller.playing)", controller.currentTime,
+                                 third.start, controller.litLine.map(String.init) ?? "none", controller.spaceHint ?? "")
+            await captureRecordingWindow(controller, as: "recorder-window-playing")
+            // Space pauses it.
+            await pressKey(nil, code: CGKeyCode(kVK_Space))
+            let pausedAgain = await waitUntil(timeout: 2) { !controller.playing && controller.spaceHint == "Play" } != nil
+            clickedPlays = clickedPlays && pausedAgain
+            clickDetail += ", space pauses \(pausedAgain)"
+        }
+        controller.close()
+        let inStep = found.0.count == 2 && found.1.count == 2 && drift < 0.002 && abs(lengths.me - lengths.them) < 0.05
+        let passed = consentUntilFirst && consentKept && bar.contains(":") && menu.contains("Pause Recording") && menu.contains("Stop and Transcribe")
+            && liveRow.hasPrefix("Recording “played call”") && inStep && abs(lengths.me - wall) < 0.5
+            && mine.errors <= 35 && theirs.errors <= 25 && both && shownLines == transcript.lines.count && clickedPlays
+            && record.state == .done && record.engine == MeetingTranscriber.engine
+        self.record(name, passed,
+                    String(format: "tracks %.2f s / %.2f s (recorded %.2f s, the call %.1f s); beeps me %@ them %@, offsets %@ (drift %.1f ms, the microphone 100 ppm fast); errors per hundred words: me %.1f (%d words), them %.1f (%d words); %d lines (Me %d, Them %d); consent until the first recording %@; menu bar “%@”, menu %@; launcher row “%@”; a line clicked: %@; %@ in %@",
+                           lengths.me, lengths.them, wall, cut, found.0.map { String(format: "%.3f", $0) }.joined(separator: ","),
+                           found.1.map { String(format: "%.3f", $0) }.joined(separator: ","), offsets.map { String(format: "%.3f", $0) }.joined(separator: ","),
+                           drift * 1000, mine.errors, mine.words, theirs.errors, theirs.words, transcript.lines.count,
+                           speakers.filter { $0 == .me }.count, speakers.filter { $0 == .them }.count, "\(consentUntilFirst && consentKept)", bar, menu.joined(separator: " | "),
+                           liveRow, clickDetail, record.engine ?? "no engine", record.language),
+                    nil)
+    }
+
+    /// Pause from the menu bar: nothing written to either track until
+    /// Resume, the clock stopped, the dot hollow; the beeps (one every
+    /// half second, in both sides) keep the same offset before and after.
+    private func recorderPausesBothTracksTogether() async {
+        let name = "Recorder: Pause from the menu bar writes nothing to either track until Resume, the clock stops; both tracks keep their offset across it"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let train = recorderScratch.appendingPathComponent("pause-train.wav")
+        // The microphone's clock 100 ppm slow, as a USB or Bluetooth one may run.
+        _ = Self.clip(nil, seconds: 30, beeps: stride(from: 0.5, to: 30, by: 0.5).map { $0 }, ppm: -100, to: train)
+        center.recorder.standIn(microphone: train, alsoLeaveOut: [])
+        center.showCard(title: "Pause check")
+        guard await waitUntil(timeout: 3, { center.isCardVisible && center.cardView.microphoneLine != "Starting…" }) != nil else {
+            record(name, false, "no Record card", nil)
+            return
+        }
+        // Said once: not after a first recording.
+        let consentGone = !center.cardView.consentShown
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 2, { center.recorder.phase == .recording }) != nil else {
+            record(name, false, "not recording", nil)
+            return
+        }
+        let began = ContinuousClock.now
+        try? center.recorder.microphone.playStandIn(at: mach_absolute_time(), ppm: -100)
+        let play = playElsewhere(train)
+        defer { play?.terminate() }
+        await pause(8000)
+        _ = await openRecorderMenu(center, capture: "recorder-menu-pause.png", pick: "Pause Recording")
+        let paused = await waitUntil(timeout: 2) { center.recorder.phase == .paused } != nil
+        let frozen = center.menuBar.shown
+        if let button = center.menuBar.button { await captureStatusItem(button, "recorder-menubar-paused") }
+        await pause(4000)
+        let stillFrozen = center.menuBar.shown == frozen
+        let resumeMenu = await openRecorderMenu(center, capture: "recorder-menu-paused.png", pick: "Resume Recording")
+        let resumed = await waitUntil(timeout: 2) { center.recorder.phase == .recording } != nil
+        await pause(4000)
+        // The audio setup changes (a device plugged): the microphone's
+        // engine starts again, its track keeps its time.
+        let restartsBefore = center.recorder.microphone.restarts
+        let restartAt = center.recorder.elapsed
+        center.recorder.microphone.simulateConfigurationChange()
+        let restarted = center.recorder.microphone.restarts == restartsBefore + 1
+        await pause(4000)
+        let wall = (ContinuousClock.now - began).milliseconds / 1000
+        center.control(.stop)
+        let done = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil && !center.openWindows.isEmpty } != nil
+        guard done, let folder = newestRecording(in: center.recordings.root), let record = center.recordings.read(folder) else {
+            self.record(name, false, "paused \(paused), resumed \(resumed), never done", nil)
+            return
+        }
+        center.openWindows.forEach { $0.close() }
+        let lengths = (me: trackLength(folder.appendingPathComponent("me.m4a")), them: trackLength(folder.appendingPathComponent("them.m4a")))
+        let found = await Task.detached { (Self.beeps(in: folder.appendingPathComponent("me.m4a")), Self.beeps(in: folder.appendingPathComponent("them.m4a"))) }.value
+        // Each beep of one track with the other's beep at the same offset:
+        // the most common one (the other side plays a little later), within
+        // 50 ms of it; a beep half a second away is the next one.
+        let nearest = found.0.map { mine in (mine, found.1.min { abs($0 - mine) < abs($1 - mine) }.map { $0 - mine } ?? .nan) }
+        let sorted = nearest.map(\.1).filter { !$0.isNaN }.sorted()
+        let median = sorted.isEmpty ? 0 : sorted[sorted.count / 2]
+        let paired = nearest.filter { abs($0.1 - median) < 0.05 }
+        let offsets = paired.map(\.1)
+        let pauseAt = record.pauses.first?.at ?? 0
+        // The two tracks against each other around the pause and around the
+        // engine started again, 3 s each side (a glitch of the other app's
+        // playback elsewhere stays out of it).
+        func around(_ moment: Double) -> (before: [Double], after: [Double]) {
+            (paired.filter { $0.0 < moment - 0.3 && $0.0 > moment - 3.3 }.map(\.1),
+             paired.filter { $0.0 > moment + 0.3 && $0.0 < moment + 3.3 }.map(\.1))
+        }
+        func mean(_ values: [Double]) -> Double { values.isEmpty ? .nan : values.reduce(0, +) / Double(values.count) }
+        let (before, after) = around(pauseAt)
+        let step = abs(mean(after) - mean(before))
+        let spread = ((before + after).max() ?? 1) - ((before + after).min() ?? 0)
+        let atRestart = around(restartAt)
+        let restartStep = abs(mean(atRestart.after) - mean(atRestart.before))
+        // Each track's own slip, as the recorder moved it back at Resume.
+        let jumps = center.recorder.resumeJumps
+        let worstJump = jumps.values.flatMap { $0 }.map(abs).max() ?? .nan
+        let jumpLine = Speaker.allCases.map { speaker in
+            "\(speaker.rawValue) " + (jumps[speaker] ?? []).map { String(format: "%+.2f ms", $0 * 1000) }.joined(separator: ", ")
+        }.joined(separator: "; ")
+        // Recorded: from ↩ to Stop, the pause taken out.
+        let expected = wall - (record.pauses.first?.seconds ?? 0)
+        let conditions: [(String, Bool)] = [
+            ("consent gone", consentGone), ("paused", paused), ("clock still", stillFrozen), ("resumed", resumed), ("started again", restarted),
+            ("menu says Resume", resumeMenu.contains("Resume Recording")), ("one pause", record.pauses.count == 1),
+            ("pause long enough", (record.pauses.first?.seconds ?? 0) > 4), ("tracks alike", abs(lengths.me - lengths.them) < 0.05),
+            ("recorded as long", abs(lengths.me - expected) < 0.5), ("slip under 1 ms", !(worstJump >= 0.001)),
+            ("step under 2 ms", step < 0.002), ("spread under 2 ms", spread < 0.002), ("restart under 2 ms", restartStep < 0.002),
+            ("beeps around the pause", before.count >= 4 && after.count >= 4)
+        ]
+        let failed = conditions.filter { !$0.1 }.map(\.0)
+        let passed = failed.isEmpty
+        self.record(name, passed,
+                    (failed.isEmpty ? "" : "failed: \(failed.joined(separator: ", ")); ") + String(format: "consent gone %@; paused %@, clock still “%@” %@, resumed %@, the microphone started again %@; pause at %.2f s for %.2f s; tracks %.2f s / %.2f s (%.2f s recorded); %d of %d beeps in step, offset %.1f ms before the pause, %.1f ms after (step %.2f ms, spread %.1f ms), at the engine started again a step of %.2f ms; each track moved back at Resume by %@ (the microphone 100 ppm slow)",
+                           "\(consentGone)", "\(paused)", frozen ?? "", "\(stillFrozen)", "\(resumed)", "\(restarted)", pauseAt, record.pauses.first?.seconds ?? 0, lengths.me, lengths.them,
+                           expected, offsets.count, found.0.count, mean(before) * 1000, mean(after) * 1000, step * 1000, spread * 1000,
+                           restartStep * 1000, jumpLine),
+                    nil)
+    }
+
+    /// A recording skil.li never stopped: another skil.li records, killed
+    /// (SIGKILL, as a crash or a power cut); its files play up to their
+    /// last second, the card offers it, ↩ saves it (its transcript, its
+    /// window). Then one discarded with ⌘⌫: to the Trash, ⌘Z puts it back.
+    private func recorderOffersOneNeverStopped() async {
+        let name = "Recorder: a recording never stopped (another skil.li killed while recording) plays to its last second, is offered with Save ↩, saved and transcribed; one discarded with ⌘⌫ comes back with ⌘Z"
+        guard let center = context.recorder(), let executable = Bundle.main.executablePath else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let call = Self.recorderCalls.appendingPathComponent("en01")
+        let me = recorderScratch.appendingPathComponent("kill-me.wav"), them = recorderScratch.appendingPathComponent("kill-them.wav")
+        let haveCall = FileManager.default.fileExists(atPath: call.appendingPathComponent("me.wav").path)
+        _ = Self.clip(haveCall ? call.appendingPathComponent("me.wav") : nil, seconds: 40, beeps: haveCall ? [] : [1, 2, 3], to: me)
+        _ = Self.clip(haveCall ? call.appendingPathComponent("them.wav") : nil, seconds: 40, beeps: haveCall ? [] : [1.5, 2.5], to: them)
+        let root = center.recordings.root
+
+        /// Another skil.li records for `seconds`, then is killed; its folder.
+        func recordThenKill(seconds: Double) async -> URL? {
+            let child = Process()
+            child.executableURL = URL(fileURLWithPath: executable)
+            child.arguments = ["recorderchild", root.path, me.path]
+            let output = Pipe()
+            child.standardOutput = output
+            guard (try? child.run()) != nil else { return nil }
+            let play = playElsewhere(them)
+            defer { play?.terminate() }
+            // Its first line, 20 s at most: a child silent that long is
+            // stopped, which closes its output and ends the read.
+            let deadline = DispatchWorkItem { if child.isRunning { child.terminate() } }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 20, execute: deadline)
+            let line = await Task.detached { () -> String in
+                var data = Data()
+                while !data.contains(UInt8(ascii: "\n")) {
+                    let chunk = output.fileHandleForReading.availableData
+                    if chunk.isEmpty { break }
+                    data.append(chunk)
+                }
+                return (String(data: data, encoding: .utf8) ?? "").split(separator: "\n").first.map(String.init) ?? ""
+            }.value
+            deadline.cancel()
+            guard line.hasPrefix("recording ") else {
+                child.terminate()
+                return nil
+            }
+            let folder = URL(fileURLWithPath: String(line.dropFirst("recording ".count)).trimmingCharacters(in: .whitespacesAndNewlines))
+            try? await Task.sleep(for: .seconds(seconds))
+            kill(child.processIdentifier, SIGKILL)
+            child.waitUntilExit()
+            return folder
+        }
+
+        guard let folder = await recordThenKill(seconds: 12) else {
+            record(name, false, "the other skil.li did not record", nil)
+            return
+        }
+        let lengths = (me: trackLength(folder.appendingPathComponent("me.m4a")), them: trackLength(folder.appendingPathComponent("them.m4a")))
+        let left = center.recordings.read(folder)
+        // It takes the keyboard only after a second without a key.
+        await pause(1200)
+        let offered = center.offerUnfinishedNow()
+        let view = center.cardView
+        let shown = await waitUntil(timeout: 2) { center.isCardVisible && view.eyebrowText == "UNFINISHED RECORDING" } != nil
+        let detail = view.detailText
+        await captureRecordCard(center, as: "recorder-unfinished")
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let saved = await waitUntil(timeout: 60) { center.recorder.transcribing == nil && center.window(for: folder) != nil } != nil
+        let after = center.recordings.read(folder)
+        let lines = center.recordings.transcript(folder)?.lines.count ?? 0
+        center.openWindows.forEach { $0.close() }
+
+        // Discarded: to the Trash at once, ⌘Z brings it back.
+        var discarded = false, inTrash = false, undone = false
+        if let second = await recordThenKill(seconds: 5) {
+            await pause(1200)
+            _ = center.offerUnfinishedNow()
+            if await waitUntil(timeout: 2, { center.isCardVisible && view.eyebrowText == "UNFINISHED RECORDING" }) != nil {
+                guard await recordCardHasKeys(center, name) else { return }
+                await pressHolding(.maskCommand, keys: [CGKeyCode(kVK_Delete)])
+                discarded = await waitUntil(timeout: 3) { !FileManager.default.fileExists(atPath: second.path) } != nil
+                inTrash = await waitUntil(timeout: 2) { self.context.aiActions.popover.isVisible && self.context.aiActions.popover.shownTitle == "Recording Deleted" } != nil
+                // The layout's Z: kVK_ANSI_Z types W on AZERTY.
+                await pressHolding(.maskCommand, keys: [keyCode("z") ?? CGKeyCode(kVK_ANSI_Z)])
+                undone = await waitUntil(timeout: 3) { FileManager.default.fileExists(atPath: second.path) } != nil
+                // Not offered again in this run: put to rest.
+                if var record = center.recordings.read(second) {
+                    record.state = .pending
+                    try? center.recordings.write(record, to: second)
+                }
+            }
+        }
+        let passed = lengths.me > 9 && lengths.them > 9 && left?.state == .recording && offered >= 1 && shown && detail.contains("s, stopped")
+            && saved && after?.state == .done && lines > 0 && discarded && inTrash && undone
+        record(name, passed,
+               String(format: "killed after 12 s: tracks %.2f s / %.2f s, left “%@”; offered %d, card %@ “%@”; saved %@ (%@, %d lines); discarded %@, Recording Deleted card %@, ⌘Z back %@",
+                      lengths.me, lengths.them, left?.state.rawValue ?? "nothing", offered, "\(shown)", detail, "\(saved)", after?.state.rawValue ?? "?",
+                      lines, "\(discarded)", "\(inTrash)", "\(undone)"),
+               nil)
+    }
+
+    /// From a skillie or an agent: `skilli://record?title=` opens the card
+    /// with its name (esc records nothing); `record/stop` with nothing
+    /// recording says so; `record_meeting` waits for ↩ in the card,
+    /// `recording_status` says it, a link's pause asks first (esc keeps it
+    /// going), `pause_recording` and `stop_recording` ask in the card.
+    private func recorderFromLinksAndTools() async {
+        let name = "Recorder from skillies: skilli://record?title= opens the card named so (mid-typing, without taking the keys), record/stop with none says so, record_meeting waits for ↩, recording_status, a link's pause asks first, pause_recording and stop_recording ask in the card"
+        guard let center = context.recorder(), let links = context.links else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let popover = context.aiActions.popover
+        let settings = context.tools.settings
+        let mode = settings.mode
+        // Ask Before Changes: opening the card runs, pausing and stopping ask.
+        settings.mode = .auto
+        defer { settings.mode = mode }
+        let train = recorderScratch.appendingPathComponent("train.wav")
+        center.recorder.standIn(microphone: train, alsoLeaveOut: [])
+        // No key for a second: the card from a link takes the keyboard.
+        await pause(1100)
+        await links.openNow(SkilliLink.record(title: "From a link").url)
+        let linkCard = await waitUntil(timeout: 3) { center.isCardVisible && center.cardView.name == "From a link" } != nil
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let linkClosed = await waitUntil(timeout: 2) { !center.isCardVisible && center.recorder.phase == .idle } != nil
+        // A link opening it just after a key (the user typing elsewhere):
+        // shown, the keyboard left alone, so a Return on its way records nothing.
+        await links.openNow(SkilliLink.record(title: "Typed over").url)
+        let typedOverShown = await waitUntil(timeout: 3) { center.isCardVisible && center.cardView.name == "Typed over" } != nil
+        await pause(400)
+        let typedOverLeftKeys = typedOverShown && center.cardWindow?.isKeyWindow != true
+        center.closeCardWithoutKeys()
+        let typedOverClosed = await waitUntil(timeout: 3) { !center.isCardVisible && center.recorder.phase == .idle } != nil
+        await links.openNow(SkilliLink.recording(.stop).url)
+        let noneSaid = links.log.last == "no recording"
+        if await waitUntil(timeout: 1, { popover.isVisible }) != nil { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        _ = await waitUntil(timeout: 8) { !popover.isVisible }
+
+        // No key for a second: the card from a tool takes the keyboard.
+        await pause(1100)
+        let started = Task { await self.skilliCall("record_meeting", #"{"title":"From a tool"}"#) }
+        let toolCard = await waitUntil(timeout: 5) { center.isCardVisible && center.cardView.name == "From a tool" } != nil
+        guard await recordCardHasKeys(center, name) else {
+            started.cancel()
+            return
+        }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let (status, said) = await started.value
+        let (_, now) = await skilliCall("recording_status")
+        // A link pausing it asks first: esc keeps it going.
+        let asked = Task { await links.openNow(SkilliLink.recording(.pause).url) }
+        let linkAsks = await waitUntil(timeout: 10) {
+            popover.isVisible && (popover.shownTitle + " " + popover.shownText).contains("Pause the recording")
+        } != nil
+        let pauseCard = "“\(popover.shownTitle)”: \(popover.shownText.prefix(120))"
+        if linkAsks { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        if linkAsks { await asked.value } else { asked.cancel() }
+        let keptGoing = center.recorder.phase == .recording
+        let pausing = Task { await self.skilliCall("pause_recording") }
+        let pauseAsks = await waitUntil(timeout: 3) { popover.isVisible } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let (pauseStatus, pauseSaid) = await pausing.value
+        let pausedNow = center.recorder.phase == .paused
+        let stopping = Task { await self.skilliCall("stop_recording") }
+        _ = await waitUntil(timeout: 3) { popover.isVisible }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let (stopStatus, stopSaid) = await stopping.value
+        _ = await waitUntil(timeout: 60) { center.recorder.transcribing == nil && !center.openWindows.isEmpty }
+        center.openWindows.forEach { $0.close() }
+        let passed = linkCard && linkClosed && typedOverLeftKeys && typedOverClosed && noneSaid && toolCard && status == 0 && said.contains("Recording “From a tool” started")
+            && now.contains("Recording “From a tool”") && linkAsks && keptGoing && pauseAsks && pauseStatus == 0 && pausedNow
+            && stopStatus == 0 && stopSaid.contains("Stopped “From a tool”")
+        record(name, passed,
+               "link card \(linkCard), closed \(linkClosed); opened mid-typing: keys left alone \(typedOverLeftKeys), closed \(typedOverClosed); none said \(noneSaid); tool card \(toolCard), exit \(status) “\(said)”; status “\(now)”; link asks \(linkAsks) (\(pauseCard)), kept going \(keptGoing); pause asks \(pauseAsks), exit \(pauseStatus) “\(pauseSaid)”, paused \(pausedNow); stop exit \(stopStatus) “\(stopSaid.prefix(80))”",
+               nil)
     }
 
     // MARK: - Event helpers

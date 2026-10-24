@@ -261,7 +261,10 @@ public enum FeatureCatalog {
         ("contact:", false, "cmd:searchContacts"),
         ("project:", false, "cmd:searchProjects"),
         ("event", true, "cmd:agenda"),
-        ("save-layout", true, "cmd:newWindowLayout")
+        ("save-layout", true, "cmd:newWindowLayout"),
+        // "rec Weekly sync", and the recording on now.
+        ("record-named", true, "cmd:recordMeeting"),
+        ("recording", true, "cmd:recordMeeting")
     ]
 
     /// The entry a launcher row belongs to, by the row's `learningID`: its
@@ -421,6 +424,7 @@ public enum FeatureCatalog {
                          group: .stayOnTop, symbol: "calendar.badge.plus", prefix: EventRequest.word + " ",
                          run: .type(EventRequest.word + " ", hint: nil), keywords: ["calendar", "meeting", "rdv", "rendez-vous", "événement"]),
             command(.copyAvailability, .stayOnTop, "Copies your free time in the next five working days"),
+            command(.recordMeeting, .stayOnTop, "Records a call, then transcribes it on this Mac: “rec Weekly sync” names it"),
             command(.reminders, .stayOnTop, "Lists what you have to do, and checks it off"),
             CatalogEntry(id: "catalog.remind", title: "Remind Me", oneLine: "Adds a reminder said in one line: “remind me to call Paul at 9am”",
                          group: .stayOnTop, symbol: "checklist", prefix: ReminderRequest.word + " ", run: .type(ReminderRequest.word + " ", hint: nil),

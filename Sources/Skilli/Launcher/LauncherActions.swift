@@ -93,6 +93,8 @@ extension LauncherController {
              .brewUpgradeAll, .setup, .ask, .siCommand, .system:
             (Self.openTitle(item), "return")
         case .keptAwake: (AwakeStatus.turnOff, "power")
+        case .recordNamed: ("Open", "record.circle")
+        case .recording: ("Stop and Transcribe", "stop.circle")
         case .process: ("Quit", "xmark.circle")
         case .clip, .snippet, .emoji: ("Paste", "doc.on.clipboard")
         case .gif(let gif):
@@ -116,7 +118,7 @@ extension LauncherController {
     /// What ↩ does on a built-in command: a mode or a window opens, the
     /// rest runs (the Catalog's "?" says the same).
     static func returnTitle(_ id: LauncherCommand.ID) -> String {
-        mode(for: id) != nil || [.openSettings, .newWindowLayout, .newEmptyWindowLayout, .newSnippet, .newQuicklink, .newCommand].contains(id)
+        mode(for: id) != nil || [.openSettings, .newWindowLayout, .newEmptyWindowLayout, .newSnippet, .newQuicklink, .newCommand, .recordMeeting].contains(id)
             ? "Open" : "Run"
     }
 
@@ -254,8 +256,15 @@ extension LauncherController {
             list.append(act("Edit in Shortcuts", "square.and.pencil") { [weak self] in self?.onEditShortcut?(shortcut) })
             return list
         case .command, .saveLayout, .openWindow, .startTimer, .keepAwake, .runningTimer, .createEvent, .addReminder,
-             .brewUpgradeAll, .setup, .ask, .siCommand, .system, .scriptArgument, .scriptChoice:
+             .brewUpgradeAll, .setup, .ask, .siCommand, .system, .scriptArgument, .scriptChoice, .recordNamed:
             return [first]
+        // The recording on now: paused or resumed, its folder.
+        case .recording(let live):
+            return [first,
+                    act(live.paused ? "Resume Recording" : "Pause Recording", live.paused ? "record.circle" : "pause.circle") { [weak self] in
+                        self?.onRecordingControl?(live.paused ? .resume : .pause)
+                    },
+                    act("Show in Finder", "folder") { [weak self] in self?.onShowRecordingFolder?() }]
         // Kept awake: an hour more (timed), or an end in an hour (until
         // turned off).
         // The end read again as it runs: the row may be older than it.

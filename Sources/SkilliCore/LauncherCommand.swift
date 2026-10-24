@@ -51,6 +51,9 @@ public struct LauncherCommand: Sendable {
         case agenda
         /// Free time in the coming working days, in the card to copy.
         case copyAvailability
+        /// The Record card: a meeting recorded, the microphone and the
+        /// Mac's sound, transcribed on this Mac (docs/meeting-recorder.md).
+        case recordMeeting
         /// Turns the launcher into the reminders ("todo ").
         case reminders
         /// Turns the launcher into GitHub: pull requests and notifications
@@ -227,6 +230,13 @@ public struct LauncherCommand: Sendable {
             title: "Copy Availability",
             symbol: "calendar.badge.clock",
             keywords: ["availability", "free time", "disponibilités", "dispos", "créneaux", "libre", "free slots"]
+        ),
+        LauncherCommand(
+            id: .recordMeeting,
+            title: "Record Meeting",
+            symbol: "record.circle",
+            keywords: ["rec", "record", "recorder", "record call", "meeting recorder", "transcribe", "transcript", "enregistrer",
+                       "enregistrement", "enregistrer la réunion", "enregistreur", "transcription"]
         ),
         LauncherCommand(
             id: .reminders,

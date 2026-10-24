@@ -130,6 +130,30 @@ Lengths go up to a week. While it is kept awake, the cup shows in the menu
 bar and at the right of the launcher's empty field, with the time left (the
 cup alone when it has no end).
 
+## Record a meeting
+
+A skillie opens the Record card; the user starts the recording with ↩
+in it (recording someone needs their consent: nothing records on its
+own):
+
+```bash
+said=$("$SKILLI_CLI" call record_meeting title="Weekly sync")  # waits for ↩ or esc in the card
+open "skilli://record?title=Weekly%20sync"  # the card, without waiting
+```
+
+Later, while it records (another skillie, or a later step of this one):
+
+```bash
+"$SKILLI_CLI" call recording_status      # Recording “Weekly sync” · 12:04, and its folder
+"$SKILLI_CLI" call pause_recording       # nothing written until resume_recording
+"$SKILLI_CLI" call stop_recording        # stops; the transcript is made on this Mac, its window opens
+open "skilli://record/stop"              # pause, resume, stop: asked in the card every time
+```
+
+`record_meeting` exits 0 once the user pressed ↩ ("Recording “Weekly
+sync” started."), 1 when the card was closed. Pausing and stopping ask
+in the skillie's card unless the user's tool rights allow them.
+
 ## Add an app's links
 
 An app that documents its own links (its URL scheme) can be driven like

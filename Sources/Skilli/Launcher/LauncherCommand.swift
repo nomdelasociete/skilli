@@ -58,6 +58,10 @@ enum LauncherItem {
     /// The Mac kept awake now, until then (nil: until turned off): Return
     /// turns it off.
     case keptAwake(until: Date?)
+    /// "rec Weekly sync": Return opens the Record card with that name.
+    case recordNamed(String)
+    /// The recording on now: Return stops it, ⌘K pauses or resumes it.
+    case recording(LauncherRecording)
     /// "g skilli": Google's results for skilli. No query: the link itself.
     /// A browser tab open now (Search Tabs).
     case browserTab(BrowserTabs.Tab)
@@ -137,6 +141,8 @@ enum LauncherItem {
         case .runningTimer(let timer): timer.title
         case .keptAwake(let until):
             AwakeStatus.title(until: until) { DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .short) }
+        case .recordNamed(let name): "Record “\(name)”"
+        case .recording(let live): live.title
         case .browserTab(let tab): tab.title
         case .file(let file): file.name
         case .contact(let match): match.record.name
@@ -189,6 +195,8 @@ enum LauncherItem {
         case .keepAwake: "keep-awake-for"
         case .runningTimer(let timer): "timer:\(timer.id)"
         case .keptAwake: "kept-awake"
+        case .recordNamed: "record-named"
+        case .recording: "recording"
         case .browserTab(let tab): "tab:\(tab.title)"
         case .file(let file): "file:\(file.url.path)"
         case .contact(let match): "contact:\(match.record.id)"
@@ -210,6 +218,19 @@ enum LauncherItem {
         case .catalogHeader(let group): "catalog-group:\(group.rawValue)"
         case .menuItem(let entry, _): "menu:\(entry.place) › \(entry.title)"
         }
+    }
+}
+
+/// The recording on now, as its launcher row says it.
+struct LauncherRecording: Equatable {
+    let name: String
+    let elapsed: Double
+    let paused: Bool
+
+    /// "Recording “Weekly sync” · 12:04", "Paused “Weekly sync” · 12:04",
+    /// as the menu bar's menu says it.
+    var title: String {
+        (paused ? "Paused “\(name)”" : "Recording “\(name)”") + " · " + MeetingTranscript.clock(elapsed)
     }
 }
 

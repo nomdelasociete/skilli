@@ -9,6 +9,8 @@ import Foundation
 ///     skilli://layout/coding                  a window layout, by its id
 ///     skilli://skillie/tools/deploy.sh?arg=x  a skillie, by its place in the skillies folder
 ///     skilli://do?app=TextEdit&goal=…         "do it here" toward a goal, in that app (else the one in front)
+///     skilli://record?title=Weekly%20sync     the Record card, that name in it (nothing recorded before ↩)
+///     skilli://record/stop                    the recording on now: pause, resume or stop (asked first)
 ///
 /// `skilli://commands/import` stays `CommandLink`'s.
 public enum SkilliLink: Equatable, Sendable {
@@ -25,6 +27,25 @@ public enum SkilliLink: Equatable, Sendable {
     /// (docs/do-it-here-from-anywhere.md). An empty goal is still this
     /// link: the card says it has nothing to do.
     case doHere(goal: String, app: String?)
+    /// The Record card (docs/meeting-recorder.md), its name given or not:
+    /// what the launcher's Record Meeting opens. It records nothing before
+    /// ↩ in it.
+    case record(title: String?)
+    /// The recording on now, paused, resumed or stopped.
+    case recording(RecordingControl)
+
+    public enum RecordingControl: String, CaseIterable, Sendable {
+        case pause, resume, stop
+
+        /// "Pause the recording", as the card asks it.
+        public var title: String {
+            switch self {
+            case .pause: "Pause the recording"
+            case .resume: "Resume the recording"
+            case .stop: "Stop the recording"
+            }
+        }
+    }
 
     /// The longest goal a `do` link may carry: its card shows the goal
     /// whole before it runs, and a page could hide words past what fits.
@@ -55,6 +76,12 @@ public enum SkilliLink: Equatable, Sendable {
             components.host = "do"
             if let app, !app.isEmpty { items.append(URLQueryItem(name: "app", value: app)) }
             items.append(URLQueryItem(name: "goal", value: goal))
+        case .record(let title):
+            components.host = "record"
+            if let title, !title.isEmpty { items.append(URLQueryItem(name: "title", value: title)) }
+        case .recording(let control):
+            components.host = "record"
+            components.percentEncodedPath = "/" + control.rawValue
         }
         if !items.isEmpty {
             // `+`, `&`, `=` and `#` encoded too: pages read `+` as a space.
@@ -77,6 +104,13 @@ public enum SkilliLink: Equatable, Sendable {
         }
         let path = url.path(percentEncoded: false)
         let target = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        if host == "record" {
+            guard !target.isEmpty else {
+                let title = items.first { $0.name == "title" }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return .record(title: title.isEmpty ? nil : title)
+            }
+            return RecordingControl(rawValue: target.lowercased()).map(Self.recording)
+        }
         guard !target.isEmpty else { return nil }
         switch host {
         case "run":

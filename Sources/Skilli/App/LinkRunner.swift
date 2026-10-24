@@ -49,6 +49,12 @@ final class LinkRunner {
     /// Always was pressed on a `do` link: that goal in that app runs at once
     /// from its next link on.
     var onAlwaysDo: (_ goal: String, _ app: String?) -> Void = { _, _ in }
+    /// The Record card, its name given or not: nothing recorded before ↩
+    /// in it, so it opens at once.
+    var openRecordCard: (String?) -> Void = { _ in }
+    /// The recording on now, by its name (nil: none).
+    var recordingTitle: () -> String? = { nil }
+    var controlRecording: (SkilliLink.RecordingControl) -> Void = { _ in }
     /// macOS may bring skil.li forward to open a link: the app the user was
     /// in comes back first, so a window place or a snippet lands there. The
     /// self-test opens links itself, its own window in front: off.
@@ -122,7 +128,29 @@ final class LinkRunner {
             await run(command, arguments: arguments)
         case .doHere:
             break
+        case .record(let title):
+            log.append("record \(title ?? "")")
+            if !dryRun { openRecordCard(title) }
+        case .recording(let control):
+            await askThenControl(control)
         }
+    }
+
+    /// A link pausing, resuming or stopping the recording on now: asked
+    /// every time (a page could pause it unseen, or resume what the user
+    /// paused), never trusted.
+    private func askThenControl(_ control: SkilliLink.RecordingControl) async {
+        guard let title = recordingTitle() else {
+            say("no recording", "No recording is on: nothing to \(control.rawValue).")
+            return
+        }
+        log.append("asked record \(control.rawValue)")
+        guard await approve(control.title, "“\(title)”. \(Self.fromALink)", false) != .deny else {
+            log.append("declined record \(control.rawValue)")
+            return
+        }
+        log.append("did record \(control.rawValue)")
+        if !dryRun { controlRecording(control) }
     }
 
     /// `do` links run one at a time, in the order they came, so a skillie

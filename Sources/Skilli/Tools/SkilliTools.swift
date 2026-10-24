@@ -29,6 +29,8 @@ enum ToolGroup: String, CaseIterable, Identifiable, Sendable {
     case screen
     /// skil.li's own settings: read them, change one after the user's OK.
     case settings
+    /// The meeting recorder: the Record card, the recording on now.
+    case recorder
 
     var id: String { rawValue }
 
@@ -49,6 +51,7 @@ enum ToolGroup: String, CaseIterable, Identifiable, Sendable {
         case .personal: "Your Tools"
         case .screen: "Screen Controls"
         case .settings: "skil.li Settings"
+        case .recorder: "Meeting Recorder"
         }
     }
 
@@ -69,6 +72,7 @@ enum ToolGroup: String, CaseIterable, Identifiable, Sendable {
         case .personal: "Your webhooks, from Settings → Tools"
         case .screen: "Read the window in front, press its buttons, fill its fields, send keys"
         case .settings: "Read skil.li's settings; change one, an alias, a shortcut… each after your OK"
+        case .recorder: "Open the Record card (you start it); pause, resume or stop the recording on now"
         }
     }
 
@@ -89,6 +93,7 @@ enum ToolGroup: String, CaseIterable, Identifiable, Sendable {
         case .personal: "point.3.connected.trianglepath.dotted"
         case .screen: "cursorarrow.click.2"
         case .settings: "gearshape"
+        case .recorder: "record.circle"
         }
     }
 }
@@ -176,6 +181,8 @@ final class SkilliTools {
     /// Apps left out of every layout (Settings → Windows).
     var layoutIgnoredApps: () -> [String] = { [] }
     var timers: TimerCenter?
+    /// The meeting recorder, made when a tool first needs it.
+    var recorder: (() -> RecorderCenter?)?
     /// The editors' recent projects; the self-test records instead of opening.
     var projects: EditorProjects?
     var openProject: (EditorProject) -> Void = { EditorProjects.open($0, reveal: false) }
@@ -374,6 +381,22 @@ final class SkilliTools {
                        description: "Cancels a running timer by its label (or the only one).",
                        group: .actions, risk: .changes,
                        parameters: [.init(name: "label", description: "Its label, or empty for the only one.")]),
+        ToolDefinition(name: "record_meeting", title: "Record a meeting",
+                       description: "Opens skil.li's Record card: the user's microphone and the Mac's sound as two tracks, transcribed on this Mac at the end. Nothing is recorded until the user presses Return in the card; this waits for it and says whether the recording started. Recording others needs their consent: never start one the user did not ask for.",
+                       group: .recorder, risk: .harmless,
+                       parameters: [.init(name: "title", description: "The recording's name, as the user said it (“Weekly sync”); empty: “Meeting 14:30”.", isRequired: false)]),
+        ToolDefinition(name: "recording_status", title: "See the recording",
+                       description: "Whether a meeting is being recorded now (its name, how long, paused or not, its folder), or its transcript made.",
+                       group: .recorder, risk: .read, parameters: []),
+        ToolDefinition(name: "pause_recording", title: "Pause the recording",
+                       description: "Pauses the recording on now: nothing is written until it resumes.",
+                       group: .recorder, risk: .changes, parameters: []),
+        ToolDefinition(name: "resume_recording", title: "Resume the recording",
+                       description: "Resumes the recording paused now.",
+                       group: .recorder, risk: .changes, parameters: []),
+        ToolDefinition(name: "stop_recording", title: "Stop the recording",
+                       description: "Stops the recording on now; its transcript is then made on this Mac and its window opens. Says its folder (me.m4a, them.m4a, then transcript.md).",
+                       group: .recorder, risk: .changes, parameters: []),
         ToolDefinition(name: "list_tabs", title: "List browser tabs",
                        description: "The tabs open in Safari, Chrome, Arc, Brave, Edge and others: browser and title.",
                        group: .apps, risk: .read, parameters: []),
@@ -844,6 +867,37 @@ final class SkilliTools {
             }
             timers?.cancel(timer.id)
             return "Cancelled \(timer.title)."
+
+        case "record_meeting":
+            guard let center = recorder?() else { throw Failure(message: "The recorder is not available.") }
+            let title = (arguments["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let said = await center.showCardAndWait(title: title?.isEmpty == false ? title : nil) else {
+                throw Failure(message: "Not started: the Record card was closed without recording.")
+            }
+            return said
+
+        case "recording_status":
+            return recorder?()?.status ?? "Not recording."
+
+        case "pause_recording", "resume_recording", "stop_recording":
+            guard let center = recorder?(), center.recorder.isRecording else { throw Failure(message: "No recording is on.") }
+            let title = center.recorder.title
+            switch name {
+            case "pause_recording":
+                guard center.recorder.phase == .recording else { throw Failure(message: "“\(title)” is paused already.") }
+                center.control(.pause)
+                return "Paused “\(title)” at \(MeetingTranscript.clock(center.recorder.elapsed))."
+            case "resume_recording":
+                guard center.recorder.phase == .paused else { throw Failure(message: "“\(title)” is not paused.") }
+                center.control(.resume)
+                return "Resumed “\(title)”."
+            default:
+                let folder = center.recorder.folder
+                let length = MeetingTranscript.clock(center.recorder.elapsed)
+                center.control(.stop)
+                return "Stopped “\(title)” (\(length)): its transcript is being made on this Mac."
+                    + (folder.map { "\nFolder: \($0.path)" } ?? "")
+            }
 
         case "list_tabs":
             let tabs = BrowserTabs.all()
