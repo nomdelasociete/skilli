@@ -104,9 +104,14 @@ final class RecordingLibrary {
     /// in the lists; `moveFailures` says why. Whether they all moved.
     @discardableResult
     func move(to newRoot: URL) async -> Bool {
-        let (oldRoot, names) = (root, recordings.map { ($0.folder, $0.record.title) })
+        let oldRoot = root
         guard newRoot.standardizedFileURL != oldRoot.standardizedFileURL else { return true }
         moveFailures = []
+        moving = (0, 0)
+        onChange?()
+        // What the folder holds now, read from it: the list in memory may not
+        // be read yet, or be older than a recording made since.
+        let names = await Task.detached(priority: .utility) { Self.read(oldRoot).map { ($0.folder, $0.record.title) } }.value
         moving = (0, names.count)
         onChange?()
         var moved: [(from: String, to: String)] = []
