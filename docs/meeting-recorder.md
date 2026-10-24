@@ -77,7 +77,11 @@ the event (link, location), Core Audio (which app runs the microphone)
 and the window list. A model would add a delay, send window titles off
 the Mac and sometimes be wrong, for nothing gained. AI comes after the
 meeting and only on the user's action: the summary, action items, names
-put on voices from what is said, by the user's AI (Claude).
+put on voices from what is said, by the user's AI (Claude). What it is
+sent: the transcript's text with its speaker labels and times, the
+event's title, and for names on voices the attendees' names. Never the
+audio, the video or the screen, window titles or the contacts (as in
+Privacy and consent's table).
 
 **5. Wrong**: nothing is recorded before ↩, so a wrong guess records
 nothing. The Record card names each source with its live meter: a wrong
