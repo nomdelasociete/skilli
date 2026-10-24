@@ -24296,7 +24296,12 @@ final class SelfTest {
         let elsewhere = root.deletingLastPathComponent().appendingPathComponent("Recordings elsewhere", isDirectory: true)
         library.reload()
         _ = await waitUntil(timeout: 3) { !library.recordings.contains { $0.record.title == "Old planning" } }
-        let names = Set(library.recordings.map(\.folder))
+        var names = Set(library.recordings.map(\.folder))
+        // One the list has not read yet: it moves too (the folder is read).
+        if let unlisted = momentSeed(center, "Not listed yet", daysAgo: 3, attendees: [], said: ["Moved all the same."]) {
+            names.insert(unlisted.lastPathComponent)
+        }
+        let listedBefore = library.recordings.count
         // Slowed, to ask for a recording while they move: said, not started.
         let notify = center.notify
         var said: [String] = []
@@ -24310,7 +24315,7 @@ final class SelfTest {
         library.moveStepDelay = .zero
         center.notify = notify
         let there = Set((try? FileManager.default.contentsOfDirectory(atPath: elsewhere.path)) ?? [])
-        let moved = !names.isEmpty && names.isSubset(of: there) && center.recordings.root == elsewhere
+        let moved = !names.isEmpty && names.isSubset(of: there) && center.recordings.root == elsewhere && names.count == listedBefore + 1
         _ = await context.moveRecordings(root)
         let back = names.isSubset(of: Set((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []))
         // One that cannot move (made immutable, the oldest: moved last):
