@@ -1,7 +1,9 @@
 # Meeting recorder
 
 Status: 2026-10-23, spec agreed, target raised: on par with omarchy's
-recorder, then better where skil.li knows the Mac. Nothing built.
+recorder, then better where skil.li knows the Mac. 2026-10-23: phase 1
+built (PR #35). 2026-10-24: phase 2, the Moment below, being built; its
+views and states in `docs/meeting-recorder-views.md`.
 
 Asked for: a meeting recorder like omarchy-meeting-recorder (an
 open-source recorder for Omarchy Linux): your microphone and the
@@ -63,19 +65,29 @@ apart by what macOS and the calendar already say:
   Calendar ⌘↩, Join ↩; Got It ↩ without a call) gets **Record ⌘R**:
   with a call, it records and joins; without one, it records ("Record (in
   person)" for a place). ⌘R is free in skil.li and means record wherever
-  a meeting shows: ⌘↩ stays Calendar.
+  a meeting shows: ⌘↩ stays Calendar. Record sits next to the button;
+  Camera & Mic ⇥ moves up to the call's line (five keys do not fit on
+  one line of the card).
 - In a call not being recorded (the card has left, as it does once the
-  user is in the call): ⌘R on the launcher's meeting row, and Record in
-  the menu bar's meeting menu.
-- At any time: `rec` in the launcher, a key, a link, a skillie.
+  user is in the call): ⌘R on the launcher's meeting row (it joins too
+  when the call is not joined yet, as the card's), and Record ⌘R in the
+  menu bar's meeting menu.
+- At any time: `rec` in the launcher, a key, a link, a skillie. While a
+  meeting is on, the Record card is that meeting's: its title, its
+  attendees, its case's sources.
 
 **3. An action, never a push**: recording other people needs their
 agreement, so it is always the user's own key, and a card of its own on
 every call would be noise. Record is a keycap on the card that already
 shows at the moment it matters, next to Join. Taught once, then quiet
 (MANIFESTO 9): the first meeting card that offers it says in one line
-what ⌘R does; after that only the keycap, never a count or a badge.
-Never automatic.
+what ⌘R does and that the others must agree; after that only the
+keycap, never a count or a badge. The first recording from the
+launcher's row or the menu bar, before any card said it, opens the
+Record card with its consent instead. ⌘R on the card records only once
+the card has had the keyboard for a second (a browser's reload on its
+way as the card comes never records); mid-typing the card never takes
+the keyboard. Never automatic.
 
 **4. Deterministic, no Jev**: the case, the app and the window come from
 the event (link, location), Core Audio (which app runs the microphone)
