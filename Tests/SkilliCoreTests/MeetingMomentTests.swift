@@ -115,6 +115,8 @@ final class MeetingMomentTests: XCTestCase {
         XCTAssertEqual(MeetingMoment.place("12 rue de la Paix, Paris"), "12 rue de la Paix, Paris")
         XCTAssertEqual(MeetingMoment.place("Bât. B, salle 2.1"), "Bât. B, salle 2.1")
         XCTAssertEqual(MeetingMoment.place("  Horizon HQ  "), "Horizon HQ")
+        XCTAssertEqual(MeetingMoment.place("Meet in the lobby"), "Meet in the lobby", "a common word is not a call app")
+        XCTAssertEqual(MeetingMoment.place("Room 2, around the corner"), "Room 2, around the corner")
     }
 
     func testOnlineWordsAddressesAndPhonesAreNotPlaces() {

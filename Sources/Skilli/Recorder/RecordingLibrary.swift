@@ -98,36 +98,57 @@ final class RecordingLibrary {
 
     // MARK: - Keep recordings in
 
-    /// The recordings moved to `newRoot`, one by one, off the main thread;
-    /// one that cannot move stays where it was, said by its title. The
-    /// folder is the new one from then on.
-    func move(to newRoot: URL) async {
+    /// The recordings moved to `newRoot`, one by one, off the main thread,
+    /// then the folder is the new one. One that cannot move stops it: those
+    /// moved before it go back, so every recording stays in one folder and
+    /// in the lists; `moveFailures` says why. Whether they all moved.
+    @discardableResult
+    func move(to newRoot: URL) async -> Bool {
         let (oldRoot, names) = (root, recordings.map { ($0.folder, $0.record.title) })
-        guard newRoot.standardizedFileURL != oldRoot.standardizedFileURL else { return }
+        guard newRoot.standardizedFileURL != oldRoot.standardizedFileURL else { return true }
         moveFailures = []
         moving = (0, names.count)
         onChange?()
-        root = newRoot
-        var failures: [String] = []
-        for (offset, (name, title)) in names.enumerated() {
-            let failure = await Task.detached(priority: .utility) { () -> String? in
+        var moved: [(from: String, to: String)] = []
+        var failure: String?
+        for (name, title) in names {
+            let result = await Task.detached(priority: .utility) { () -> Result<String, Error> in
                 let manager = FileManager.default
                 do {
                     try manager.createDirectory(at: newRoot, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
                     let target = RecordingFolder.free(name) { manager.fileExists(atPath: newRoot.appendingPathComponent($0).path) }
                     try manager.moveItem(at: oldRoot.appendingPathComponent(name), to: newRoot.appendingPathComponent(target))
-                    return nil
+                    return .success(target)
                 } catch {
-                    return "“\(title)”: \(error.localizedDescription)"
+                    return .failure(error)
                 }
             }.value
-            if let failure { failures.append(failure) }
-            moving = (offset + 1, names.count)
+            switch result {
+            case .success(let target): moved.append((name, target))
+            case .failure(let error): failure = "“\(title)” could not move: \(error.localizedDescription)"
+            }
+            if failure != nil { break }
+            moving = (moved.count, names.count)
             onChange?()
         }
+        if let failure {
+            // Back where they were, last first.
+            let stranded = await Task.detached(priority: .utility) { () -> [String] in
+                moved.reversed().compactMap { pair in
+                    (try? FileManager.default.moveItem(at: newRoot.appendingPathComponent(pair.to), to: oldRoot.appendingPathComponent(pair.from))) == nil
+                        ? pair.to : nil
+                }
+            }.value
+            moveFailures = [failure + " The recordings stay where they were."]
+                + stranded.map { "“\($0)” is left in the new folder: move it back in Finder." }
+            moving = nil
+            reload()
+            return false
+        }
+        root = newRoot
         moving = nil
-        moveFailures = failures
         reload()
+        return true
     }
 
     /// The folder changed without a move (the self-test's own).

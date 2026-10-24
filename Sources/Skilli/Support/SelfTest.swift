@@ -24038,7 +24038,8 @@ final class SelfTest {
             record(name, false, "the recording did not start", nil)
             return
         }
-        let named = center.recorder.title.hasPrefix("Discord call ")
+        let title = center.recorder.title
+        let named = title.hasPrefix("Discord call ")
         let discordFolder = center.recorder.folder
         await pause(1500)
         // Discord leaves the call.
@@ -24070,7 +24071,7 @@ final class SelfTest {
         center.openWindows.forEach { $0.close() }
         record(name, named && offered && line == "Discord left the call." && withdrawn && again && stoppedByCard && quietOffered
                && quietLine.hasPrefix("The meeting ended at ") && kept,
-               "named “\(center.recordings.root.lastPathComponent)”: \(named); left: offered \(offered) “\(line)”, back: withdrawn \(withdrawn), left again: offered \(again), ↩ stopped \(stoppedByCard); over and quiet: offered \(quietOffered) “\(quietLine)”, esc kept recording \(kept)",
+               "named “\(title)”: \(named); left: offered \(offered) “\(line)”, back: withdrawn \(withdrawn), left again: offered \(again), ↩ stopped \(stoppedByCard); over and quiet: offered \(quietOffered) “\(quietLine)”, esc kept recording \(kept)",
                nil)
     }
 
@@ -24088,9 +24089,7 @@ final class SelfTest {
             return
         }
         center.standInMicrophone(nil)
-        let folder = recorderScratch.appendingPathComponent("micpage", isDirectory: true)
         let profile = recorderScratch.appendingPathComponent("chrome-profile", isDirectory: true)
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let page = """
             <!doctype html><meta charset="utf-8"><title>Lumière HQ</title>
             <body style="font:20px -apple-system;padding:40px"><h1>Lumière HQ</h1><div id="s">starting…</div>
@@ -24106,22 +24105,18 @@ final class SelfTest {
             }).catch(e => document.getElementById('s').textContent = 'error: ' + e);
             </script>
             """
-        try? page.write(to: folder.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
-        // getUserMedia needs a secure origin: localhost is one.
-        let server = Process()
-        server.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        server.arguments = ["-m", "http.server", "18767", "--bind", "127.0.0.1", "--directory", folder.path]
-        server.standardOutput = FileHandle.nullDevice
-        server.standardError = FileHandle.nullDevice
-        try? server.run()
-        defer { server.terminate() }
-        await pause(800)
+        // getUserMedia needs a secure origin: 127.0.0.1 is one.
+        guard let server = LoopbackServer(handler: { _ in .html(page) }), let port = await server.port() else {
+            record(name, false, "the call's page could not be served", nil)
+            return
+        }
+        defer { server.stop() }
         let before = Set(NSRunningApplication.runningApplications(withBundleIdentifier: "com.google.Chrome").map(\.processIdentifier))
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.createsNewApplicationInstance = true
         configuration.activates = false
         configuration.arguments = ["--user-data-dir=\(profile.path)", "--no-first-run", "--no-default-browser-check", "--use-fake-ui-for-media-stream",
-                                   "http://127.0.0.1:18767/"]
+                                   "http://127.0.0.1:\(port)/"]
         let chrome = try? await NSWorkspace.shared.openApplication(at: chromeURL, configuration: configuration)
         let pid = chrome?.processIdentifier ?? 0
         defer {
@@ -24265,7 +24260,7 @@ final class SelfTest {
     /// ones that are done. Keep recordings in: the recordings move there,
     /// refused while one records.
     private func momentRetentionAndFolder(_ center: RecorderCenter) async {
-        let name = "Recorder's moment: Delete after removes nothing as set, says what goes, the pass moves only expired finished ones to the Trash; Keep recordings in moves them, refused while recording"
+        let name = "Recorder's moment: Delete after removes nothing as set, says what goes, the pass moves only expired finished ones to the Trash; Keep recordings in moves them, puts them all back when one cannot move, refused while recording"
         guard let library = context.recordings() else {
             record(name, false, "no recordings list", nil)
             return
@@ -24302,12 +24297,29 @@ final class SelfTest {
         _ = await waitUntil(timeout: 3) { !library.recordings.contains { $0.record.title == "Old planning" } }
         let names = Set(library.recordings.map(\.folder))
         let refusedNone = context.moveRecordings(elsewhere)
-        _ = await waitUntil(timeout: 20) { library.moving == nil && library.root == elsewhere }
+        _ = await waitUntil(timeout: 20) { library.moving == nil && library.root == elsewhere && center.recordings.root == elsewhere }
         let there = Set((try? FileManager.default.contentsOfDirectory(atPath: elsewhere.path)) ?? [])
         let moved = !names.isEmpty && names.isSubset(of: there) && center.recordings.root == elsewhere
         _ = context.moveRecordings(root)
-        _ = await waitUntil(timeout: 20) { library.moving == nil && library.root == root }
+        _ = await waitUntil(timeout: 20) { library.moving == nil && library.root == root && center.recordings.root == root }
         let back = names.isSubset(of: Set((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []))
+        // One that cannot move (made immutable, the oldest: moved last):
+        // those moved before it come back, the folder stays the same.
+        let stuck = momentSeed(center, "Stuck", daysAgo: 20, attendees: [], said: ["Kept."])
+        if let stuck { try? FileManager.default.setAttributes([.immutable: true], ofItemAtPath: stuck.path) }
+        library.reload()
+        _ = await waitUntil(timeout: 3) { library.recordings.contains { $0.record.title == "Stuck" } }
+        let all = Set(library.recordings.map(\.folder))
+        _ = context.moveRecordings(elsewhere)
+        _ = await waitUntil(timeout: 20) { library.moving == nil && !library.moveFailures.isEmpty }
+        let rolledBack = all.isSubset(of: Set((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? [])) && library.root == root
+            && center.recordings.root == root && library.moveFailures.first?.contains("could not move") == true
+        let failureSaid = library.moveFailures.first ?? ""
+        if let stuck {
+            try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: stuck.path)
+            try? FileManager.default.removeItem(at: stuck)
+        }
+        try? FileManager.default.removeItem(at: elsewhere)
         preferences.recorderFolderPath = ""
         // While recording: refused.
         center.standInMicrophone(.none)
@@ -24322,8 +24334,8 @@ final class SelfTest {
             center.openWindows.forEach { $0.close() }
         }
         record(name, line.hasPrefix("2 recordings are older than a month") && keptAsSet && pruned == 2 && gone && neverStoppedKept && refusedNone == nil
-               && moved && back && refused != nil,
-               "line “\(line)”; kept as set \(keptAsSet); pass moved \(pruned) to the Trash, gone \(gone), never stopped kept \(neverStoppedKept); moved \(names.count) there \(moved), back \(back); while recording: “\(refused ?? "not refused")”",
+               && moved && back && rolledBack && refused != nil,
+               "line “\(line)”; kept as set \(keptAsSet); pass moved \(pruned) to the Trash, gone \(gone), never stopped kept \(neverStoppedKept); moved \(names.count) there \(moved), back \(back); one stuck: all put back \(rolledBack) “\(failureSaid)”; while recording: “\(refused ?? "not refused")”",
                nil)
     }
 

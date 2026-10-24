@@ -584,11 +584,15 @@ final class MeetingCardView: NSView {
 
 
 extension MeetingCardView {
+    /// The sample meeting's id: never recorded (Settings' Try offers no
+    /// Record).
+    static let sampleID = "sample-meeting"
+
     /// A meeting to show the card on: Settings' Try and preview.
     static func sample(startingIn seconds: TimeInterval) -> AgendaEvent {
         let start = Date.now.addingTimeInterval(seconds)
         let people = ["Paul Martin", "Anna Lefèvre", "Claire Dubois", "Marc Petit", "Sophie Bernard", "Louis Moreau"]
-        return AgendaEvent(id: "sample-meeting", title: "Weekly design review", start: start, end: start.addingTimeInterval(30 * 60),
+        return AgendaEvent(id: sampleID, title: "Weekly design review", start: start, end: start.addingTimeInterval(30 * 60),
                            calendar: "Work", notes: "https://meet.google.com/abc-defg-hij",
                            attendees: people.map { AgendaEvent.Attendee(name: $0, email: nil) })
     }

@@ -483,8 +483,10 @@ Recordings
   of the languages this Mac transcribes.
 - **Keep recordings in**: a folder; changing it moves the recordings
   there (off the main thread, one by one; refused while one records or
-  is transcribed); a move that fails leaves that one where it was and
-  says so under the row.
+  is transcribed). One that cannot move stops it: those moved before it
+  go back, the folder stays the one it was, and a line under the row
+  says which and why (every recording stays in one folder, listed and
+  found).
 - **Delete after**: Never, 1 week, 1 month, 3 months, 1 year, Custom
   (days). As the clipboard's: pruned at launch and then each hour, never
   as the setting changes; the line under it says what the next pass

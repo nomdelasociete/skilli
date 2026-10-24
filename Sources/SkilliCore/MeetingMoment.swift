@@ -150,10 +150,11 @@ public enum MeetingMoment {
 
     /// Call apps and services by the names people write and apps carry,
     /// lowercased: an app named so is a call app, a location naming one is
-    /// not a place.
+    /// not a place. Never a common word ("meet in the lobby", "around the
+    /// corner" are places).
     public static let callNames: [String] = [
         "zoom", "zoom.us", "teams", "microsoft teams", "facetime", "discord", "slack", "huddle", "webex", "skype", "whatsapp", "signal",
-        "telegram", "tuple", "gather", "around", "whereby", "jitsi", "meet", "google meet", "chime", "bluejeans"
+        "telegram", "tuple", "gather", "whereby", "jitsi", "google meet", "chime", "bluejeans"
     ]
 
     /// A known call app (by its bundle identifier, else its name). A

@@ -2280,7 +2280,9 @@ re-investigating.
   attendees in any search (fuzzy, prepared once per show). Settings →
   Recorder (`RecorderPane`): the card's Record, default sources,
   language, Keep recordings in (`RecordingLibrary.move`, refused while
-  recording), Delete after (`RecordingRetention`: at launch then hourly,
+  recording; one that cannot move puts back those moved before it, the
+  folder unchanged; never in a backup: `Preferences.machineKeys`),
+  Delete after (`RecordingRetention`: at launch then hourly,
   never as set, to the Trash, done or pending only), the recordings by
   month last. `remote moment` (Mac mini): every case and entry point on
   stand-in events and apps, ⌘R never recorded while the card is not the

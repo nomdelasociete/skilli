@@ -732,7 +732,8 @@ final class Preferences {
     /// Keys a backup leaves out: this Mac's own state (setup done with its
     /// permissions, its screens, where the launcher sits on them, where
     /// backups go).
-    static let machineKeys: Set<String> = [Key.didCompleteSetup, Key.ignoredMonitors, Key.launcherPlace, Key.backupFolder, Key.imageTagsFolderPath]
+    static let machineKeys: Set<String> = [Key.didCompleteSetup, Key.ignoredMonitors, Key.launcherPlace, Key.backupFolder, Key.imageTagsFolderPath,
+                                           Key.recorderFolderPath]
 
     private func save(_ value: Any, _ key: String) {
         defaults.set(value, forKey: key)

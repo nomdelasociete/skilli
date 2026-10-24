@@ -326,23 +326,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Settings → Recorder → Keep recordings in: the recordings moved
     /// there, then the folder kept; refused while one is recorded or
-    /// transcribed.
+    /// transcribed. One that cannot move puts back those moved before it:
+    /// they all stay in the folder they were in, and the pane says why.
     private func moveRecordings(to folder: URL) -> String? {
         if let recorder = madeRecorderCenter?.recorder, recorder.isRecording || recorder.phase == .stopping || recorder.transcribing != nil {
             return "A recording is being made or transcribed: stop it first."
         }
-        let standard = folder.standardizedFileURL == Recordings.standard.standardizedFileURL
-        preferences.recorderFolderPath = standard ? "" : folder.path
-        madeRecorderCenter?.recordings.root = folder
-        Task { await recordingLibrary.move(to: folder) }
+        Task {
+            guard await recordingLibrary.move(to: folder) else { return }
+            let standard = folder.standardizedFileURL == Recordings.standard.standardizedFileURL
+            preferences.recorderFolderPath = standard ? "" : folder.path
+            madeRecorderCenter?.recordings.root = folder
+        }
         return nil
     }
 
     /// Record ⌘R on a meeting's card: its label for the case, the line
-    /// said the first time; nil when a recording is on or Settings →
-    /// Recorder turned it off.
+    /// said the first time; nil when a recording is on, Settings →
+    /// Recorder turned it off, or it is Settings' Try (a sample: nothing
+    /// to record, and the line kept for a real card).
     private func recordOffer(for event: AgendaEvent) -> MeetingCard.RecordOffer? {
-        guard preferences.recorderMeetingCard, madeRecorderCenter?.recorder.isRecording != true else { return nil }
+        guard preferences.recorderMeetingCard, madeRecorderCenter?.recorder.isRecording != true, event.id != MeetingCardView.sampleID
+        else { return nil }
         let reading = recorderCenter.moment(for: event)
         guard !preferences.recorderCardHintShown else { return MeetingCard.RecordOffer(label: reading.recordLabel, line: nil) }
         let line = switch reading.kind {
