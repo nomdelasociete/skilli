@@ -80,7 +80,8 @@ struct AgendaPane: View {
                     preferences.agendaAlerts.append(MeetingAlert(minutes: minutes, style: .card))
                 }
                 if let first = preferences.agendaAlerts.first {
-                    MeetingCardPreview(dark: preferences.agendaAlerts.contains { $0.style == .dark }, minutes: first.minutes)
+                    MeetingCardPreview(dark: preferences.agendaAlerts.contains { $0.style == .dark }, minutes: first.minutes,
+                                       record: preferences.recorderMeetingCard)
                 }
             } header: {
                 Text("Alerts")

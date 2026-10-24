@@ -5,7 +5,7 @@ final class SettingsTableTests: XCTestCase {
     /// `SettingsPane.title`, as the app names its panes.
     private let titles = ["general": "General", "keys": "Keys", "privacy": "Privacy", "backup": "Backup", "launcher": "Launcher",
                           "clipboard": "Clipboard", "snippets": "Snippets", "emoji": "Emoji", "gifs": "GIFs", "windows": "Windows", "calendar": "Calendar",
-                          "reminders": "Reminders", "github": "GitHub", "apps": "Apps", "yourDetails": "Your Details", "ask": "Ask",
+                          "recorder": "Recorder", "reminders": "Reminders", "github": "GitHub", "apps": "Apps", "yourDetails": "Your Details", "ask": "Ask",
                           "commands": "Commands", "tools": "Tools", "skillies": "Skillies", "aiAccounts": "SI Accounts", "catalog": "Catalog",
                           "about": "About"]
     private func title(_ pane: String) -> String { titles[pane] ?? pane }

@@ -253,6 +253,7 @@
 		BC4302FC81D030B094F7F945 /* FinderSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7771A4932899B9EBA4EF5B1 /* FinderSelection.swift */; };
 		BD5D6D778E80BA248688348F /* ScheduledAsk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E6D581AD87DE821705933C4 /* ScheduledAsk.swift */; };
 		BE00AA1480A38B5D4C5B3161 /* PrivacyPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4304EA5425019877798D98D /* PrivacyPane.swift */; };
+		BF3E48D2E22DE3E01FA4572D /* MeetingMoment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115A6B490420DDF7ECF9B5E5 /* MeetingMoment.swift */; };
 		C0CD4B2798F9A8E42D71FE8C /* ComputerControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C78CF07B6DB33CAAA10BC7 /* ComputerControl.swift */; };
 		C234C6B7E32F368735B62F47 /* ImageTags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B4C6157780BFC4A9800FE7 /* ImageTags.swift */; };
 		C2AA678DFBF20650F948A4D4 /* SymbolTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C9CA103DE65AAADAFA3C65 /* SymbolTable.swift */; };
@@ -390,6 +391,7 @@
 		107A0B51CA2C5E76D2F16B57 /* SettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViews.swift; sourceTree = "<group>"; };
 		108883AE84E069EF2CE13F10 /* LauncherController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherController.swift; sourceTree = "<group>"; };
 		1095237A6638FB322B4FDD66 /* PaneReach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneReach.swift; sourceTree = "<group>"; };
+		115A6B490420DDF7ECF9B5E5 /* MeetingMoment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingMoment.swift; sourceTree = "<group>"; };
 		123B7393DA95B2953C8D4021 /* AIPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIPopover.swift; sourceTree = "<group>"; };
 		126B66C597E40BC762F52717 /* SettingsGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsGuide.swift; sourceTree = "<group>"; };
 		129AC6FF0B9DD24F42BC4D14 /* WindowPicture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowPicture.swift; sourceTree = "<group>"; };
@@ -792,6 +794,7 @@
 				F27A226061344551B2C0E8BB /* MCPToolList.swift */,
 				F6BF0BBE7DD28A30361C6987 /* MeetingAlert.swift */,
 				D91CD308B15A5E0DC4E6BC74 /* MeetingBar.swift */,
+				115A6B490420DDF7ECF9B5E5 /* MeetingMoment.swift */,
 				5FB001360B30A9859D5118CF /* MeetingRecording.swift */,
 				506E98CDC50CF560F465E919 /* MeetingTranscript.swift */,
 				44BF9CC155EF52D390E81F02 /* MenuCandidates.swift */,
@@ -1454,6 +1457,7 @@
 				664D720DE4E16FB9C3456BAA /* MarkdownBlocks.swift in Sources */,
 				F3F28EC722CF8EF122FB6E18 /* MeetingAlert.swift in Sources */,
 				C93CD3DF22722B8F18A5AF75 /* MeetingBar.swift in Sources */,
+				BF3E48D2E22DE3E01FA4572D /* MeetingMoment.swift in Sources */,
 				2761257AF0CC9E9615FED396 /* MeetingRecording.swift in Sources */,
 				DFD2536B4774A289DFC1F990 /* MeetingTranscript.swift in Sources */,
 				9C5E99D37E67250A6780A81C /* MenuCandidates.swift in Sources */,

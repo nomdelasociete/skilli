@@ -134,12 +134,14 @@ public enum SettingsTable {
 
     /// The panes, by id, in the sidebar's order (`SettingsPane`).
     public static let panes = ["general", "keys", "privacy", "backup", "launcher", "clipboard", "snippets", "emoji", "gifs", "windows", "calendar",
-                               "reminders", "github", "apps", "yourDetails", "ask", "commands", "tools", "skillies", "aiAccounts", "catalog", "about"]
+                               "recorder", "reminders", "github", "apps", "yourDetails", "ask", "commands", "tools", "skillies", "aiAccounts", "catalog",
+                               "about"]
 
     /// `Preferences` properties no pane shows, and why.
     public static let notInPanes: [String: String] = [
         "didCompleteSetup": "The setup window's own state: closed once (Done, Later or ✕), it no longer opens by itself.",
         "recorderConsentShown": "The Record card's own state: it said once that the others in a call must agree to be recorded.",
+        "recorderCardHintShown": "The meeting card's own state: its first Record ⌘R said once what it does (taught once, then quiet).",
         "launcherPins": "Pinned in the launcher itself (⌘K → Pin, Unpin), not in a pane; the user's own list: no tool reads or changes it."
     ]
 
@@ -307,6 +309,22 @@ public enum SettingsTable {
         setting("calendar", "agendaMeetBrowser", "Google Meet opens in", .choiceOnThisMac, note: "Under Advanced."),
         setting("calendar", "agendaHiddenCalendars", "Calendars turned off", .list(item: "a calendar, by its name (and account)", adds: true),
                 note: "The pane shows every calendar with a switch; one turned off stays out of the agenda, the next meeting and Ask. Remove one to turn it on again."),
+
+        // Recorder
+        setting("recorder", "recorderMeetingCard", "Record ⌘R on the meeting card", .toggle,
+                note: "As a meeting starts, its card offers to record it; ⌘R records (and joins its call). Never on its own."),
+        setting("recorder", "recorderMicrophone", "Microphone", .toggle,
+                note: "On by default when the meeting says nothing else (in person: the microphone only)."),
+        setting("recorder", "recorderMacSound", "The Mac's sound", .toggle,
+                note: "On by default when the meeting says nothing else; off in person."),
+        setting("recorder", "recorderLanguage", "Language", .choiceOnThisMac,
+                note: "A language this Mac transcribes (“en-US”), or “” to follow Ask's (else the keyboard's)."),
+        setting("recorder", "recorderFolderPath", "Keep recordings in", .folder(empty: "Application Support's skil.li/Recordings"),
+                note: "Changing it moves the recordings there, one by one; refused while one is recorded or transcribed. “default” for the standard folder."),
+        setting("recorder", "recorderRetention", "Delete after",
+                .choiceOrNumber([SettingOption("never", "Never"), SettingOption("week", "1 week"), SettingOption("month", "1 month"),
+                                 SettingOption("quarter", "3 months"), SettingOption("year", "1 year")], 1...3650, unit: "days"),
+                note: "Or a number of days (Custom). Changing it removes nothing at once: expired recordings go to the Trash on the next hourly pass, and the pane says how many first."),
 
         // Reminders
         setting("reminders", "remindersDefaultList", "Said reminders go to", .choiceOnThisMac),

@@ -5,19 +5,33 @@ import SkilliCore
 
 /// The Record card (docs/meeting-recorder-views.md): the recording's name,
 /// the two sources with their meters live, the language, and ↩. Nothing is
-/// recorded before ↩. The same card, at launch, offers a recording never
-/// stopped: Save ↩, Later esc, Discard ⌘⌫.
+/// recorded before ↩. While a meeting is on, the card is that meeting's
+/// (its attendees, its case's sources). The same card, at launch, offers a
+/// recording never stopped: Save ↩, Later esc, Discard ⌘⌫; and when the
+/// call being recorded ends: Stop ↩, Keep Recording esc.
 @MainActor
 final class RecordCard {
     enum Content: Equatable {
         case record
         case unfinished(URL, MeetingRecord)
+        case callEnded(CallEndWatch.Reason)
     }
 
-    /// ↩: the name and the language picked.
-    var onRecord: ((_ title: String, _ language: String) -> Void)?
+    /// The meeting the card records: its case, and whether ↩ joins its
+    /// call too (a call not joined yet).
+    struct Meeting {
+        var reading: MeetingMoment.Reading
+        var joins: Bool
+    }
+
+    /// ↩: the name and the language picked, the meeting it is for.
+    var onRecord: ((_ title: String, _ language: String, _ meeting: Meeting?) -> Void)?
     /// esc, or closed: nothing recorded.
     var onCancel: (() -> Void)?
+    /// Stop ↩ as the call ended.
+    var onStopCall: (() -> Void)?
+    /// A source's row clicked: on or off.
+    var onToggleSource: ((Speaker) -> Void)?
     var onSave: ((URL, MeetingRecord) -> Void)?
     var onLater: ((URL, MeetingRecord) -> Void)?
     var onDiscard: ((URL, MeetingRecord) -> Void)?
@@ -34,10 +48,15 @@ final class RecordCard {
     /// Languages this Mac transcribes, read once.
     private var languages: [(id: String, name: String)] = []
     private var language = ""
+    private var meeting: Meeting?
 
     init(recorder: MeetingRecorder) {
         self.recorder = recorder
         view.onPrimary = { [weak self] in self?.primary() }
+        view.onToggleSource = { [weak self] speaker in
+            guard self?.content == .record else { return }
+            self?.onToggleSource?(speaker)
+        }
         view.onLanguage = { [weak self] id in self?.picked(language: id) }
         view.onReturnInName = { [weak self] in
             // The field's own Return obeys the grace too.
@@ -55,10 +74,12 @@ final class RecordCard {
     /// paragraph shown the first time. `fromOutside` (a link, a tool): it
     /// never takes keys from the app the user is typing in, so a Return on
     /// its way there cannot start a recording; a click gives it the keys.
-    func showRecord(title: String?, askedLanguage: String, consent: Bool, fromOutside: Bool) {
+    func showRecord(title: String?, askedLanguage: String, consent: Bool, fromOutside: Bool, meeting: Meeting? = nil) {
         content = .record
+        self.meeting = meeting
         let name = title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? RecordingFolder.defaultTitle(at: .now)
-        view.showRecord(name: name, consent: consent)
+        view.showRecord(name: name, consent: consent, attendees: meeting?.reading.attendees ?? [],
+                        inPerson: meeting?.reading.kind == .inPerson, joins: meeting?.joins == true)
         let typing = fromOutside && CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < 1
         keysFrom = typing ? .now + MeetingCard.typingGrace : nil
         show(takingKeys: !typing)
@@ -75,12 +96,22 @@ final class RecordCard {
         Task {
             // macOS's question must not be under the card.
             if asksMicrophone { stepDown() }
-            await recorder.listen()
+            await recorder.listen(sources: meeting?.reading.sources ?? .both)
             if asksMicrophone { stepUp() }
             guard content == .record else { return recorder.stopListening() }
             tick()
         }
         startTicking()
+    }
+
+    /// The call being recorded ended: Stop ↩, Keep Recording esc. It
+    /// never takes keys from the app the user is typing in.
+    func showCallEnded(title: String, elapsed: Double, line: String, reason: CallEndWatch.Reason) {
+        content = .callEnded(reason)
+        view.showCallEnded(title: title, elapsed: MeetingTranscript.clock(elapsed), line: line)
+        let typing = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < 1
+        show(takingKeys: !typing)
+        keysFrom = typing ? .now + MeetingCard.typingGrace : nil
     }
 
     /// A recording never stopped, found at launch.
@@ -98,6 +129,7 @@ final class RecordCard {
         ticker = nil
         panel?.orderOut(nil)
         content = nil
+        meeting = nil
     }
 
     private func show(takingKeys: Bool) {
@@ -120,12 +152,14 @@ final class RecordCard {
     private func tick() {
         guard content == .record else { return }
         let levels = recorder.levels
-        view.setMicrophone(recorder.microphone.state, level: levels.mic)
+        let sources = recorder.sources
+        view.setMicrophone(sources.microphone ? recorder.microphone.state : nil, level: levels.mic)
         let silent = recorder.macSilentFor ?? 0
         // Only digital silence for 3 s while an app plays: macOS gives the
         // tap nothing (its permission off), every call succeeding.
-        let blocked = recorder.macSoundFailure == nil && silent > 3 ? playingApp() : nil
-        view.setMacSound(failure: recorder.macSoundFailure, blockedWhile: blocked, level: levels.mac, starting: !recorder.sourcesStarted)
+        let blocked = sources.macSound && recorder.macSoundFailure == nil && silent > 3 ? playingApp() : nil
+        view.setMacSound(failure: recorder.macSoundFailure, blockedWhile: blocked, level: levels.mac, starting: !recorder.sourcesStarted,
+                         off: !sources.macSound, inPerson: meeting?.reading.kind == .inPerson)
         if view.needsRelayout { relayout() }
     }
 
@@ -157,12 +191,15 @@ final class RecordCard {
         switch content {
         case .record:
             guard view.canRecord else { return }
-            let name = view.name
+            let (name, meeting) = (view.name, meeting)
             dismiss()
-            onRecord?(name, language)
+            onRecord?(name, language, meeting)
         case .unfinished(let folder, let record):
             dismiss()
             onSave?(folder, record)
+        case .callEnded:
+            dismiss()
+            onStopCall?()
         case nil:
             break
         }
@@ -176,6 +213,9 @@ final class RecordCard {
         case .unfinished(let folder, let record):
             dismiss()
             onLater?(folder, record)
+        case .callEnded:
+            // Keep Recording: nothing asked again for the same reason.
+            dismiss()
         case nil:
             break
         }
@@ -311,20 +351,25 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     var onLanguage: ((String) -> Void)?
     var onReturnInName: (() -> Void)?
     var onEscapeInName: (() -> Void)?
+    /// A source's row clicked.
+    var onToggleSource: ((Speaker) -> Void)?
 
     private let dot = DotView()
     private let eyebrow = NSTextField(labelWithString: "")
+    /// The call's time, on the right of the eyebrow (the call ended).
+    private let clock = NSTextField(labelWithString: "")
     private let languageMenu = LanguageButton()
     private let nameField = NSTextField(string: "")
     private let detail = NSTextField(labelWithString: "")
     private let microphoneRow = SourceRow(symbol: "mic.fill", title: "Microphone")
     private let macRow = SourceRow(symbol: "speaker.wave.2.fill", title: "The Mac's sound")
-    private let note = NoteView()
-    private let consent = NoteView()
+    private let note = CardNoteView()
+    private let consent = CardNoteView()
     private let hairline = NSView()
     private let leftHints = HintBar()
     private let button = PrimaryButton()
     private var isRecordCard = true
+    private var inPersonNote: String?
     private var languageIDs: [String] = []
     /// What ⌘↩ opens: the permission a row says is missing.
     private(set) var missingPermission: Permission?
@@ -343,8 +388,9 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     var macLine: String { macRow.line }
     var noteText: String { note.isHidden ? "" : note.text }
     var consentShown: Bool { !consent.isHidden }
-    var detailText: String { detail.stringValue }
+    var detailText: String { detail.isHidden ? "" : detail.stringValue }
     var languageShown: String { languageMenu.shown }
+    var clockText: String { clock.isHidden ? "" : clock.stringValue }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -363,13 +409,19 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         detail.font = .systemFont(ofSize: 14)
         detail.textColor = .secondaryLabelColor
         detail.lineBreakMode = .byTruncatingTail
+        clock.font = .monospacedDigitSystemFont(ofSize: 14, weight: .medium)
+        clock.textColor = .secondaryLabelColor
+        clock.alignment = .right
+        clock.isHidden = true
+        microphoneRow.onClick = { [weak self] in self?.onToggleSource?(.me) }
+        macRow.onClick = { [weak self] in self?.onToggleSource?(.them) }
         languageMenu.onPick = { [weak self] index in self?.languagePicked(index) }
         hairline.wantsLayer = true
         button.target = self
         button.action = #selector(primaryPressed)
         consent.symbol = "info.circle"
         consent.text = "The others in the call must agree to be recorded: in many countries, France included, recording a private conversation without consent is an offense."
-        for subview in [dot, eyebrow, languageMenu, nameField, detail, microphoneRow, macRow, note, consent, hairline, leftHints, button] as [NSView] {
+        for subview in [dot, eyebrow, clock, languageMenu, nameField, detail, microphoneRow, macRow, note, consent, hairline, leftHints, button] as [NSView] {
             addSubview(subview)
         }
     }
@@ -401,24 +453,57 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
 
     // MARK: - Content
 
-    func showRecord(name: String, consent shown: Bool) {
+    /// The card before a recording; for a meeting, its attendees under the
+    /// name, the in-person line, "Record and Join" when ↩ joins its call.
+    func showRecord(name: String, consent shown: Bool, attendees: [String] = [], inPerson: Bool = false, joins: Bool = false) {
         isRecordCard = true
-        setEyebrow("RECORD A MEETING", dot: .systemRed)
+        setEyebrow("RECORD A MEETING", dot: .systemRed, hollow: false)
+        clock.isHidden = true
         nameField.stringValue = name
         nameField.isHidden = false
         nameField.isSelectable = true
         nameField.isEditable = true
-        detail.isHidden = true
+        let people = MeetingPeople.sentence(attendees)
+        detail.isHidden = people.isEmpty
+        detail.stringValue = people.isEmpty ? "" : "With \(people)"
         languageMenu.isHidden = languageIDs.isEmpty
         microphoneRow.isHidden = false
         macRow.isHidden = false
+        microphoneRow.clickable = true
+        macRow.clickable = true
         microphoneRow.setState("Starting…", level: nil)
         macRow.setState("Starting…", level: nil)
         consent.isHidden = !shown
-        note.isHidden = true
-        button.title = "Record"
+        inPersonNote = inPerson ? "In person: set the Mac in the middle of the table." : nil
+        updateNote()
+        button.title = joins ? "Record and Join" : "Record"
         button.alphaValue = 1
         leftHints.setHints([("Cancel", "esc")])
+        layoutContent()
+    }
+
+    /// The call being recorded ended: its name, why, Stop ↩.
+    func showCallEnded(title: String, elapsed: String, line: String) {
+        isRecordCard = false
+        window?.makeFirstResponder(nil)
+        setEyebrow("THE CALL ENDED", dot: .systemRed, hollow: true)
+        clock.stringValue = elapsed
+        clock.isHidden = false
+        nameField.stringValue = title
+        nameField.isSelectable = false
+        nameField.isEditable = false
+        languageMenu.isHidden = true
+        detail.isHidden = false
+        detail.stringValue = line
+        microphoneRow.isHidden = true
+        macRow.isHidden = true
+        consent.isHidden = true
+        inPersonNote = nil
+        note.isHidden = true
+        missingPermission = nil
+        button.title = "Stop"
+        button.alphaValue = 1
+        leftHints.setHints([("Keep Recording", "esc")])
         layoutContent()
     }
 
@@ -427,7 +512,9 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         // Read, not edited: no caret, nothing selected from the card before.
         window?.makeFirstResponder(nil)
         nameField.isSelectable = false
-        setEyebrow("UNFINISHED RECORDING", dot: .systemOrange)
+        setEyebrow("UNFINISHED RECORDING", dot: .systemOrange, hollow: false)
+        clock.isHidden = true
+        inPersonNote = nil
         nameField.stringValue = record.title
         nameField.isEditable = false
         languageMenu.isHidden = true
@@ -484,32 +571,41 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     private var languageNote: String?
     private var permissionNote: String?
 
-    func setMicrophone(_ state: MicrophoneTrack.State, level: Double) {
+    /// The microphone's row; nil: turned off (a click turns it on).
+    func setMicrophone(_ state: MicrophoneTrack.State?, level: Double) {
         let before = (microphoneRow.line, missingPermission)
         switch state {
-        case .on(let device):
+        case nil:
+            microphoneOn = false
+            microphoneRow.setState("Off", level: nil)
+        case .on(let device)?:
             microphoneOn = true
             microphoneRow.setState(device, level: level)
-        case .denied:
+        case .denied?:
             microphoneOn = false
             microphoneRow.setState("Not allowed · ⌘↩ opens Privacy", level: nil, warns: true)
-        case .none:
+        case .some(.none):
             microphoneOn = false
             microphoneRow.setState("No microphone", level: nil)
-        case .off:
+        case .off?:
             microphoneOn = false
             microphoneRow.setState("Starting…", level: nil)
         }
-        if case .denied = state { missingPermission = .microphone } else if missingPermission == .microphone { missingPermission = nil }
+        if case .denied? = state { missingPermission = .microphone } else if missingPermission == .microphone { missingPermission = nil }
         updateMissing()
         if before != (microphoneRow.line, missingPermission) { needsRelayout = true }
     }
 
     /// `blockedWhile`: the app playing while the tap hears only silence;
-    /// `starting`: the tap not started yet (it does not count for Record).
-    func setMacSound(failure: String?, blockedWhile app: String?, level: Double, starting: Bool = false) {
+    /// `starting`: the tap not started yet (it does not count for Record);
+    /// `off`: turned off (in person, or a click).
+    func setMacSound(failure: String?, blockedWhile app: String?, level: Double, starting: Bool = false, off: Bool = false, inPerson: Bool = false) {
         let before = (macRow.line, permissionNote)
-        if starting {
+        if off {
+            macOn = false
+            macRow.setState(inPerson ? "Off · in person" : "Off", level: nil)
+            permissionNote = nil
+        } else if starting {
             macOn = false
             macRow.setState("Starting…", level: nil)
             permissionNote = nil
@@ -529,7 +625,10 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     }
 
     private func updateMissing() {
-        if isRecordCard, !microphoneOn, !macOn, microphoneRow.line != "Starting…", macRow.line != "Starting…" {
+        // Both off by a click: nothing to record, nothing to allow.
+        if isRecordCard, !microphoneOn, !macOn, microphoneRow.line == "Off", macRow.line.hasPrefix("Off") {
+            permissionNoteBlocking = "Nothing to record: turn a source on."
+        } else if isRecordCard, !microphoneOn, !macOn, microphoneRow.line != "Starting…", macRow.line != "Starting…" {
             permissionNoteBlocking = "Nothing to record: allow the microphone or the Mac's sound."
         } else {
             permissionNoteBlocking = nil
@@ -541,18 +640,20 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     private var permissionNoteBlocking: String?
 
     private func updateNote() {
-        let lines = [permissionNoteBlocking, permissionNote, languageNote].compactMap { $0 }
+        let lines = [permissionNoteBlocking, permissionNote, languageNote, inPersonNote].compactMap { $0 }
         note.isHidden = lines.isEmpty || !isRecordCard
         note.text = lines.joined(separator: "\n")
-        note.symbol = permissionNoteBlocking != nil || permissionNote != nil ? "exclamationmark.triangle" : "character.bubble"
+        note.symbol = permissionNoteBlocking != nil || permissionNote != nil ? "exclamationmark.triangle"
+            : languageNote != nil ? "character.bubble" : "person.2"
     }
 
-    private func setEyebrow(_ text: String, dot color: NSColor) {
+    private func setEyebrow(_ text: String, dot color: NSColor, hollow: Bool) {
         eyebrow.attributedStringValue = NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 12, weight: .semibold), .kern: 0.9, .foregroundColor: NSColor.secondaryLabelColor,
         ])
         eyebrow.sizeToFit()
         dot.color = color
+        dot.isHollow = hollow
     }
 
     // MARK: - Layout
@@ -576,8 +677,11 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
 
         var y: CGFloat = 26
         dot.frame = NSRect(x: inset, y: y + 4, width: 9, height: 9)
-        let menuWidth = languageMenu.isHidden ? 0 : min(languageMenu.fittingWidth, inner / 2)
-        languageMenu.frame = NSRect(x: width - inset - menuWidth, y: y - 2, width: menuWidth, height: 20)
+        clock.sizeToFit()
+        let clockWidth = clock.isHidden ? 0 : clock.frame.width
+        clock.frame = NSRect(x: width - inset - clockWidth, y: y, width: clockWidth, height: 18)
+        let menuWidth = languageMenu.isHidden ? clockWidth : min(languageMenu.fittingWidth, inner / 2)
+        languageMenu.frame = NSRect(x: width - inset - menuWidth, y: y - 2, width: languageMenu.isHidden ? 0 : menuWidth, height: 20)
         eyebrow.frame = NSRect(x: inset + 17, y: y + 1, width: max(0, inner - 17 - menuWidth - 12), height: 16)
         y += 32
 
@@ -587,7 +691,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
 
         if !detail.isHidden {
             detail.frame = NSRect(x: inset, y: y, width: inner, height: 20)
-            y += 28
+            y += isRecordCard ? 22 : 28
         }
 
         if !microphoneRow.isHidden {
@@ -715,6 +819,11 @@ private final class SourceRow: NSView {
     private let meter = LevelMeter()
 
     var line: String { device.stringValue }
+    /// A click turns the source on or off (the Record card).
+    var onClick: (() -> Void)?
+    var clickable = false {
+        didSet { window?.invalidateCursorRects(for: self) }
+    }
 
     init(symbol: String, title text: String) {
         title = NSTextField(labelWithString: text)
@@ -733,6 +842,14 @@ private final class SourceRow: NSView {
     required init?(coder: NSCoder) { nil }
 
     override var isFlipped: Bool { true }
+
+    override func resetCursorRects() {
+        if clickable { addCursorRect(bounds, cursor: .pointingHand) }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if clickable { onClick?() } else { super.mouseDown(with: event) }
+    }
 
     /// The device (or why it is off) and its level; nil: no meter.
     func setState(_ text: String, level: Double?, warns: Bool = false) {
@@ -759,8 +876,9 @@ private final class SourceRow: NSView {
 }
 
 /// A paragraph in the secondary color with its symbol: the consent, what a
-/// source lacks, a language this Mac cannot transcribe.
-private final class NoteView: NSView {
+/// source lacks, a language this Mac cannot transcribe; the meeting card's
+/// line about ⌘R, the first time.
+final class CardNoteView: NSView {
     private let icon = NSImageView()
     private let label = NSTextField(wrappingLabelWithString: "")
 

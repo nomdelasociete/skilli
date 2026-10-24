@@ -69,11 +69,16 @@ enum MeetingTranscriber {
         }
         try await install(locale, step: step)
         let me = folder.appendingPathComponent(Speaker.me.file), them = folder.appendingPathComponent(Speaker.them.file)
-        let lengths = [me, them].map { (try? AVAudioFile(forReading: $0)).map { Double($0.length) / $0.processingFormat.sampleRate } ?? 0 }
+        // A track never on (in person, the Mac's sound) is silence: left out.
+        let unused = Set(record.unused ?? [])
+        let lengths = [(Speaker.me, me), (.them, them)].map { speaker, url in
+            unused.contains(speaker) ? 0 : (try? AVAudioFile(forReading: url)).map { Double($0.length) / $0.processingFormat.sampleRate } ?? 0
+        }
         let total = max(1, lengths.reduce(0, +))
         step(.transcribing(0))
-        let mine = try await phrases(of: me, locale: locale) { done in step(.transcribing(done * lengths[0] / total)) }
-        let theirs = try await phrases(of: them, locale: locale) { done in step(.transcribing((lengths[0] + done * lengths[1]) / total)) }
+        let mine = unused.contains(.me) ? [] : try await phrases(of: me, locale: locale) { done in step(.transcribing(done * lengths[0] / total)) }
+        let theirs = unused.contains(.them) ? []
+            : try await phrases(of: them, locale: locale) { done in step(.transcribing((lengths[0] + done * lengths[1]) / total)) }
         let (kept, dropped) = MeetingTranscript.droppingEcho(mine, heard: theirs.flatMap { $0 })
         let lines = MeetingTranscript.lines(me: kept, them: theirs)
         var done = record

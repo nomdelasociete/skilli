@@ -245,9 +245,9 @@ public struct CallEndWatch: Equatable, Sendable {
     }
 
     /// The app no longer on the microphone this long: its call ended.
-    public static let appGrace: TimeInterval = 5
+    public let appGrace: TimeInterval
     /// Quiet this long past the meeting's end: it is over.
-    public static let quietFor: TimeInterval = 60
+    public let quietFor: TimeInterval
 
     private var appSeen = false
     private var appOffSince: Date?
@@ -255,7 +255,11 @@ public struct CallEndWatch: Equatable, Sendable {
     private var offeredAppLeft = false
     private var offeredQuiet = false
 
-    public init() {}
+    /// 5 s and a minute; the self-test waits less.
+    public init(appGrace: TimeInterval = 5, quietFor: TimeInterval = 60) {
+        self.appGrace = appGrace
+        self.quietFor = quietFor
+    }
 
     /// `app`: the call's app and whether it runs the microphone now (nil:
     /// no call app watched). `quiet`: every source on is under the
@@ -269,7 +273,7 @@ public struct CallEndWatch: Equatable, Sendable {
             } else if appSeen {
                 let since = appOffSince ?? now
                 appOffSince = since
-                if !offeredAppLeft, now.timeIntervalSince(since) >= Self.appGrace {
+                if !offeredAppLeft, now.timeIntervalSince(since) >= appGrace {
                     offeredAppLeft = true
                     return .appLeft(app.name)
                 }
@@ -278,7 +282,7 @@ public struct CallEndWatch: Equatable, Sendable {
             appOffSince = nil
         }
         quietSince = quiet ? (quietSince ?? now) : nil
-        if !offeredQuiet, let eventEnd, now >= eventEnd, let quietSince, now.timeIntervalSince(max(quietSince, eventEnd)) >= Self.quietFor {
+        if !offeredQuiet, let eventEnd, now >= eventEnd, let quietSince, now.timeIntervalSince(max(quietSince, eventEnd)) >= quietFor {
             offeredQuiet = true
             return .quietAfterEnd(eventEnd)
         }

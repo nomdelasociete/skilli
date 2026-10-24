@@ -423,6 +423,11 @@ final class LauncherController: NSObject {
     /// Its row's ↩ and ⌘K: stop, pause, resume; its folder.
     var onRecordingControl: ((SkilliLink.RecordingControl) -> Void)?
     var onShowRecordingFolder: (() -> Void)?
+    /// ⌘R on a meeting's row (on now or starting soon): its label ("Record",
+    /// "Record (in person)"), nil when not offered (a recording on); and
+    /// what it does (records, and joins its call when not joined yet).
+    var recordLabel: (AgendaEvent) -> String? = { _ in nil }
+    var onRecordMeeting: ((AgendaEvent) -> Void)?
     /// Quicklinks: "g skilli" opens Google's results.
     var quicklinks: (() -> [Quicklink])?
     var onOpenURL: ((URL) -> Void)?
@@ -963,6 +968,10 @@ final class LauncherController: NSObject {
         // ⌘⌫ in a mode removes the selected row (the card asks first where
         // it cannot be undone). Outside the modes it edits the field.
         if mode != nil, LauncherAction.Key(keyEvent) == .delete, runSelectedAction(.delete) {
+            return true
+        }
+        // ⌘R records the selected meeting (on now or starting soon).
+        if LauncherAction.Key(keyEvent) == .record, runSelectedAction(.record) {
             return true
         }
         // ⌘Z just after Tomorrow or Next Week puts the reminder back.

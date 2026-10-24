@@ -133,6 +133,29 @@ final class CalendarBook {
         Agenda.next(soonEvents(now: now), now: now)
     }
 
+    /// The meeting a Record key is for now: the one on now (the latest
+    /// started), else the next starting within 10 minutes
+    /// (`MeetingMoment.isRecordable`).
+    func recordableMeeting(now: Date = .now) -> AgendaEvent? {
+        let recordable = soonEvents(now: now).filter { MeetingMoment.isRecordable($0, now: now) }
+        return recordable.filter { $0.start <= now }.max { $0.start < $1.start } ?? recordable.min { $0.start < $1.start }
+    }
+
+    /// The app `event`'s call opens in when joined from skil.li (`join`):
+    /// its service's app, else the browser set for Meet, else the default
+    /// browser. Nil without a call.
+    func appJoining(_ event: AgendaEvent) -> (bundleID: String, name: String)? {
+        guard let meeting = event.meeting else { return nil }
+        let workspace = NSWorkspace.shared
+        let url = meeting.appURL.flatMap { workspace.urlForApplication(toOpen: $0) }
+            ?? (meeting.service == "Google Meet" && !meetBrowser.isEmpty ? workspace.urlForApplication(withBundleIdentifier: meetBrowser) : nil)
+            ?? workspace.urlForApplication(toOpen: meeting.url)
+        guard let url, let bundle = Bundle(url: url) else { return nil }
+        let name = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
+            ?? url.deletingPathExtension().lastPathComponent
+        return (bundle.bundleIdentifier ?? "", name)
+    }
+
     /// The next meeting when it is about to start or just started: what the
     /// launcher shows before anything is typed.
     func meetingNow(now: Date = .now) -> AgendaEvent? {

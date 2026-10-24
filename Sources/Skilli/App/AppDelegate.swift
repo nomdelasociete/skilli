@@ -216,6 +216,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let card = MeetingCard()
         card.onJoin = { [weak self] event in self?.calendarBook.join(event) }
         card.onShowInCalendar = { [weak self] event in self?.calendarBook.openInCalendar(event) }
+        // Record ⌘R (docs/meeting-recorder-views.md): the case read as the
+        // card shows; recorded, then its call joined.
+        card.recordOffer = { [weak self] event in self?.recordOffer(for: event) }
+        card.onRecordLineShown = { [weak self] in self?.preferences.recorderCardHintShown = true }
+        card.onRecord = { [weak self] event, said in
+            guard let self else { return }
+            self.recorderCenter.recordMeeting(event, joining: event.meeting != nil && !self.meetingWatch.isInCall(event), consentSaid: said)
+        }
         card.onOpenPrivacy = { [weak self] in
             self?.meetingCard.dismiss()
             self?.settings.show(pane: .privacy)
@@ -231,15 +239,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let center = RecorderCenter(recordings: Recordings(root: recordingsFolder), preferences: preferences, deletes: deletes)
         center.notify = { [weak self] message in self?.aiActions.notify(message, caller: "Recorder", run: nil, seconds: 6) }
         center.openPrivacy = { [weak self] permission in self?.permissions.grant(permission) }
+        center.currentMeeting = { [weak self] in
+            guard let self, self.calendarBook.isAllowed else { return nil }
+            return self.calendarBook.recordableMeeting()
+        }
+        center.appJoining = { [weak self] event in self?.calendarBook.appJoining(event) }
+        center.join = { [weak self] event in self?.calendarBook.join(event) }
+        center.inCall = { [weak self] event in self?.meetingWatch.isInCall(event) ?? false }
         madeRecorderCenter = center
         return center
     }
-    /// Where recordings are kept; the self-test keeps its own.
+    /// Where recordings are kept (Settings → Recorder); the self-test keeps
+    /// its own.
     private var recordingsFolder: URL {
         if case .selftest = mode {
             return FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/Recordings", isDirectory: true)
         }
-        return Recordings.standard
+        return preferences.recordingsFolder
+    }
+
+    /// Record ⌘R on a meeting's card: its label for the case, the line
+    /// said the first time; nil when a recording is on or Settings →
+    /// Recorder turned it off.
+    private func recordOffer(for event: AgendaEvent) -> MeetingCard.RecordOffer? {
+        guard preferences.recorderMeetingCard, madeRecorderCenter?.recorder.isRecording != true else { return nil }
+        let reading = recorderCenter.moment(for: event)
+        guard !preferences.recorderCardHintShown else { return MeetingCard.RecordOffer(label: reading.recordLabel, line: nil) }
+        let line = switch reading.kind {
+        case .inPerson:
+            "⌘R records this meeting with this Mac's microphone: set it in the middle of the table. Everyone in it must agree to be recorded."
+        case .callLink:
+            "⌘R records this call as you join it: your microphone and the Mac's sound, on this Mac. Everyone in it must agree to be recorded."
+        default:
+            "⌘R records this meeting on this Mac: your microphone and the Mac's sound. Everyone in it must agree to be recorded."
+        }
+        return MeetingCard.RecordOffer(label: reading.recordLabel, line: line)
     }
     /// Settings → Windows → Quit apps you stopped using.
     private lazy var autoQuitter: AutoQuitter = {
@@ -646,6 +680,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.recordingState = { [weak self] in self?.madeRecorderCenter?.launcherRow }
         launcher.onRecordingControl = { [weak self] control in self?.madeRecorderCenter?.control(control) }
         launcher.onShowRecordingFolder = { [weak self] in self?.madeRecorderCenter?.showFolder() }
+        // ⌘R on the meeting's row: read from memory (the place, the link);
+        // the microphone is read when pressed.
+        launcher.recordLabel = { [weak self] event in
+            guard let self, MeetingMoment.isRecordable(event, now: .now), self.madeRecorderCenter?.recorder.isRecording != true else { return nil }
+            return event.meeting == nil && MeetingMoment.place(event.location) != nil ? "Record (in person)" : "Record"
+        }
+        launcher.onRecordMeeting = { [weak self] event in
+            guard let self else { return }
+            self.recorderCenter.recordMeeting(event, joining: event.meeting != nil && !self.meetingWatch.isInCall(event))
+        }
         toolServer.tools.recorder = { [weak self] in self?.recorderCenter }
         aiActions.startTimer = { [weak self] request in self?.startTimer(request) ?? UUID() }
         aiActions.cancelTimer = { [timers] id in timers.cancel(id) }
@@ -876,6 +920,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         calendarBook.onJoin = { [weak self] in self?.meetingWatch.refresh() }
         permissions.onCalendarGranted = { [weak self] in self?.meetingWatch.refresh() }
         meetingWatch.onOpenAgenda = { [weak self] in self?.launcher.openAgenda() }
+        // Record in the meeting's menu, once in its call.
+        meetingWatch.canRecord = { [weak self] in self?.madeRecorderCenter?.recorder.isRecording != true }
+        meetingWatch.onRecord = { [weak self] event in self?.recorderCenter.recordMeeting(event, joining: false) }
         meetingWatch.onAlert = { [weak self] event, alert in self?.meetingCard.show(event, dark: alert.style == .dark) }
         // In the call already (Join from the menu bar, the launcher or Ask,
         // or a call on the microphone): its alert goes, the screens come back.

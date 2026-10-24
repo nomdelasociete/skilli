@@ -118,6 +118,13 @@ final class Preferences {
         static let askUsesClaudeCodeSkills = "Preferences.askUsesClaudeCodeSkills"
         static let didCompleteSetup = "Preferences.didCompleteSetup"
         static let recorderConsentShown = "Preferences.recorderConsentShown"
+        static let recorderCardHintShown = "Preferences.recorderCardHintShown"
+        static let recorderMeetingCard = "Preferences.recorderMeetingCard"
+        static let recorderMicrophone = "Preferences.recorderMicrophone"
+        static let recorderMacSound = "Preferences.recorderMacSound"
+        static let recorderLanguage = "Preferences.recorderLanguage"
+        static let recorderFolderPath = "Preferences.recorderFolderPath"
+        static let recorderRetention = "Preferences.recorderRetention"
         static let clipboardHistory = "Preferences.clipboardHistory"
         static let clipboardRetention = "Preferences.clipboardRetention"
         static let clipboardOCR = "Preferences.clipboardOCR"
@@ -245,6 +252,55 @@ final class Preferences {
     var recorderConsentShown: Bool {
         didSet { save(recorderConsentShown, Key.recorderConsentShown) }
     }
+
+    /// The first meeting card that offered Record ⌘R said what it does: no
+    /// card says it again (taught once, then quiet).
+    var recorderCardHintShown: Bool {
+        didSet { save(recorderCardHintShown, Key.recorderCardHintShown) }
+    }
+
+    /// Record ⌘R on the meeting card (Settings → Recorder).
+    var recorderMeetingCard: Bool {
+        didSet { save(recorderMeetingCard, Key.recorderMeetingCard) }
+    }
+
+    /// The sources on when the meeting says nothing else (Settings →
+    /// Recorder; in person: the microphone only).
+    var recorderMicrophone: Bool {
+        didSet { save(recorderMicrophone, Key.recorderMicrophone) }
+    }
+
+    var recorderMacSound: Bool {
+        didSet { save(recorderMacSound, Key.recorderMacSound) }
+    }
+
+    /// The language recordings are transcribed in; empty: as Ask (Ask's,
+    /// else the keyboard's).
+    var recorderLanguage: String {
+        didSet { save(recorderLanguage, Key.recorderLanguage) }
+    }
+
+    /// Where recordings are kept; empty: Application Support's
+    /// skil.li/Recordings.
+    var recorderFolderPath: String {
+        didSet { save(recorderFolderPath, Key.recorderFolderPath) }
+    }
+
+    /// The folder recordings are kept in.
+    var recordingsFolder: URL {
+        recorderFolderPath.isEmpty ? Recordings.standard : URL(fileURLWithPath: recorderFolderPath, isDirectory: true)
+    }
+
+    /// Delete after (Settings → Recorder): pruned at launch, then each
+    /// hour; expired ones go to the Trash.
+    var recorderRetention: RecordingRetention {
+        didSet {
+            save(recorderRetention.rawValue, Key.recorderRetention)
+            onRecorderRetentionChange?()
+        }
+    }
+    /// Delete after changed: the hourly pass is set (nothing removed now).
+    @ObservationIgnored var onRecorderRetentionChange: (() -> Void)?
 
     /// Keep what is copied (Settings → Clipboard).
     var clipboardHistory: Bool {
@@ -594,6 +650,13 @@ final class Preferences {
         askUsesClaudeCodeSkills = defaults.bool(forKey: Key.askUsesClaudeCodeSkills)
         didCompleteSetup = defaults.bool(forKey: Key.didCompleteSetup)
         recorderConsentShown = defaults.bool(forKey: Key.recorderConsentShown)
+        recorderCardHintShown = defaults.bool(forKey: Key.recorderCardHintShown)
+        recorderMeetingCard = defaults.object(forKey: Key.recorderMeetingCard) as? Bool ?? true
+        recorderMicrophone = defaults.object(forKey: Key.recorderMicrophone) as? Bool ?? true
+        recorderMacSound = defaults.object(forKey: Key.recorderMacSound) as? Bool ?? true
+        recorderLanguage = defaults.string(forKey: Key.recorderLanguage) ?? ""
+        recorderFolderPath = defaults.string(forKey: Key.recorderFolderPath) ?? ""
+        recorderRetention = RecordingRetention(rawValue: defaults.string(forKey: Key.recorderRetention) ?? "never")
         clipboardHistory = defaults.object(forKey: Key.clipboardHistory) as? Bool ?? true
         clipboardRetention = defaults.string(forKey: Key.clipboardRetention).map(ClipboardRetention.init(rawValue:)) ?? .month
         clipboardOCR = defaults.object(forKey: Key.clipboardOCR) as? Bool ?? true

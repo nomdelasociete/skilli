@@ -344,6 +344,13 @@ extension LauncherController {
                                        act: act, open: { title, symbol, url, _ in open(title, symbol, url) }, copy: copy)
         case .event(let event):
             var list = event.meeting != nil ? [first, key("Open in Calendar", "calendar", .openSecond)] : [first]
+            // On now or starting soon: Record ⌘R, as on its card.
+            if let label = recordLabel(event) {
+                list.insert(LauncherAction(title: label, symbol: "record.circle", key: .record) { [weak self] in
+                    self?.hide()
+                    self?.onRecordMeeting?(event)
+                }, at: 1)
+            }
             if event.attendees.contains(where: { $0.email != nil }) { list.append(key("Email Invitees", "envelope", .openThird)) }
             list.append(act("Show Details", "info.circle") { [weak self] in self?.onShowEvent?(event) })
             list.append(copy("Copy Details", Self.plain(Agenda.details(event, now: .now)), .copy))

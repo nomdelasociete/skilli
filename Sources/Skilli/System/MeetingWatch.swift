@@ -12,7 +12,7 @@ import SkilliCore
 /// changes, a call is joined from skil.li or another app takes the
 /// microphone.
 @MainActor
-final class MeetingWatch: NSObject {
+final class MeetingWatch: NSObject, NSMenuDelegate {
     private let calendar: CalendarBook
     private let preferences: Preferences
     /// Whether a call is on on this Mac (another app on the microphone).
@@ -28,6 +28,10 @@ final class MeetingWatch: NSObject {
     /// The calls the user is in already (`MeetingBar.key`), told at each
     /// refresh: an alert still up for one of them goes.
     var onInCall: ((Set<String>) -> Void)?
+    /// Record in the meeting's menu, once in its call: whether it is
+    /// offered now (no recording on), and what it does.
+    var canRecord: () -> Bool = { false }
+    var onRecord: ((AgendaEvent) -> Void)?
     private var item: NSStatusItem?
     private var shown: AgendaEvent?
     /// The next one, beside the meeting on now.
@@ -45,7 +49,11 @@ final class MeetingWatch: NSObject {
     var shownTitle: String? { item?.button?.title }
     var shownHelp: String? { item?.button?.toolTip }
     var shownUrgent: Bool { item?.button?.image?.isTemplate == false }
-    var shownMenu: [String] { item?.menu?.items.map { $0.isSeparatorItem ? "—" : $0.title } ?? [] }
+    var shownMenu: [String] {
+        guard let menu = item?.menu else { return [] }
+        menuNeedsUpdate(menu)
+        return menu.items.filter { !$0.isHidden }.map { $0.isSeparatorItem ? "—" : $0.title }
+    }
     var itemButton: NSStatusBarButton? { item?.button }
     var itemMenu: NSMenu? { item?.menu }
     var nextChange: Date? { timer?.fireDate }
@@ -222,10 +230,28 @@ final class MeetingWatch: NSObject {
         }
     }
 
+    /// Whether the user is in `event`'s call already, as the menu bar tells
+    /// it (`MeetingBar.inCall`).
+    func isInCall(_ event: AgendaEvent, now: Date = .now) -> Bool {
+        let presence = MeetingBar.Presence(joined: calendar.joined.union(seenInCall), microphone: microphone.microphone)
+        return MeetingBar.inCall(event, presence, among: calendar.soonEvents(now: now))
+    }
+
     private func menu(for event: AgendaEvent, next: AgendaEvent?) -> NSMenu {
         let menu = NSMenu()
         if let meeting = event.meeting {
             menu.addItem(item("Join \(meeting.service)", #selector(join)))
+        }
+        // In its call and not recorded: Record, ⌘R as everywhere; told as
+        // the menu opens (`menuNeedsUpdate`).
+        if event.meeting != nil {
+            let record = item("Record “\(MeetingBar.short(event.title, 32))”", #selector(record))
+            record.keyEquivalent = "r"
+            record.keyEquivalentModifierMask = .command
+            record.tag = Self.recordTag
+            record.isHidden = !recordable(event)
+            menu.addItem(record)
+            menu.delegate = self
         }
         menu.addItem(item("Show in Calendar", #selector(showInCalendar)))
         if let next {
@@ -253,6 +279,17 @@ final class MeetingWatch: NSObject {
         if let shown { calendar.join(shown) }
     }
 
+    @objc private func record() {
+        if let shown { onRecord?(shown) }
+    }
+
+    private static let recordTag = 7_001
+
+    /// Record shows in `event`'s menu: in its call, no recording on.
+    private func recordable(_ event: AgendaEvent) -> Bool {
+        MeetingMoment.isRecordable(event, now: .now) && isInCall(event) && canRecord()
+    }
+
     @objc private func joinNext() {
         if let shownNext { calendar.join(shownNext) }
     }
@@ -268,6 +305,11 @@ final class MeetingWatch: NSObject {
     @objc private func dismiss() {
         if let shown { dismissed.insert(shown.id) }
         refresh()
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard let shown, let record = menu.item(withTag: Self.recordTag) else { return }
+        record.isHidden = !recordable(shown)
     }
 
     /// Self-test hook: forget what was dismissed, offered or joined.
