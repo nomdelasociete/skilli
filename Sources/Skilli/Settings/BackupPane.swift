@@ -58,7 +58,7 @@ struct BackupPane: View {
             } header: {
                 PaneHeader(pane: .backup)
             } footer: {
-                Text("Your settings, snippets, commands, quicklinks, skillies, window layouts, shortcuts and tools' rights, in a zip anyone can open. Never what you copied, nor API keys and sensitive fields: they stay on this Mac. In iCloud Drive, a backup also brings skil.li to a new Mac.")
+                Text("Your settings, snippets, commands, quicklinks, skillies, window layouts, shortcuts and tools' rights, in a zip anyone can open. Never what you copied or recorded, nor API keys and sensitive fields: they stay on this Mac (a backup made by an older version may still hold what you copied or recorded). In iCloud Drive, a backup also brings skil.li to a new Mac.")
             }
 
             if let line = PrivacyMap.line(for: SettingsPane.backup.rawValue, .current(preferences, context)) {

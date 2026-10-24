@@ -141,7 +141,7 @@ A copy of everything skil.li keeps, in a folder you choose.
 
 - **Back Up skil.li Now**: saves your settings and files (snippets,
   commands, layouts, skillies…) to the folder; never the clipboard
-  history. From the launcher or Settings.
+  history nor the meeting recordings. From the launcher or Settings.
 - **Scheduled backups** and **Restore** from a backup.
 
 Settings: Back up to · How often · Keep · Back Up Now · Backups.

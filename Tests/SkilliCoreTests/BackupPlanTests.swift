@@ -55,8 +55,16 @@ final class BackupPlanTests: XCTestCase {
                        ["31 settings", "2 snippets", "1 command", "3 quicklinks", "1 window layout", "your shortcuts"])
     }
 
-    func testTheClipboardHistoryIsNeverBackedUp() {
-        XCTAssertEqual(BackupPlan.neverCopied, ["mcp.sock", "Clipboard"])
+    func testTheClipboardHistoryAndRecordingsAreNeverBackedUp() {
+        XCTAssertEqual(BackupPlan.neverCopied, ["mcp.sock", "Clipboard", "Recordings"])
+    }
+
+    func testARestoreLeavesTheRecordingsAlone() {
+        // Recordings made after the backup stay; an older backup's are not brought back.
+        let plan = BackupPlan.restore(current: ["snippets", "Recordings", "tools.json"],
+                                      backup: ["snippets", "Recordings", "quicklinks.json"])
+        XCTAssertEqual(plan.remove, ["snippets", "tools.json"])
+        XCTAssertEqual(plan.copy, ["snippets", "quicklinks.json"])
     }
 
     func testARestoreLeavesTheClipboardHistoryAlone() {
