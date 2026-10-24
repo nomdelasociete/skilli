@@ -245,7 +245,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         center.appJoining = { [weak self] event in self?.calendarBook.appJoining(event) }
         center.join = { [weak self] event in self?.calendarBook.join(event) }
-        center.inCall = { [weak self] event in self?.meetingWatch.isInCall(event) ?? false }
         madeRecorderCenter = center
         return center
     }

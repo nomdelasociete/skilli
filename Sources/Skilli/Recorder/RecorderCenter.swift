@@ -28,8 +28,6 @@ final class RecorderCenter {
     var appJoining: (AgendaEvent) -> (bundleID: String, name: String)? = { _ in nil }
     /// Joins a meeting's call (the calendar's Join).
     var join: (AgendaEvent) -> Void = { _ in }
-    /// Whether the user is in that meeting's call already.
-    var inCall: (AgendaEvent) -> Bool = { _ in false }
     /// Who runs the microphone, followed by Core Audio's changes once a
     /// recording started (its listeners cost nothing until a device or a
     /// process changes).
