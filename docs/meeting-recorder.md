@@ -40,6 +40,51 @@ transcribed again in another language.
 
 **Left out**: themes, the transcribing animation.
 
+## Moment
+
+The rule (AGENTS.md → A feature's moment): when the recorder is reached
+for comes before how it records.
+
+**1. When**: a recording cannot be made afterwards, so the moment is the
+start of the meeting, as the user joins or sits down. Each case is told
+apart by what macOS and the calendar already say:
+
+| The meeting | How skil.li knows | What the Record card turns on |
+|---|---|---|
+| A call link (Meet, Zoom, Teams…) | the event's link → the app, or the browser tab | microphone + the Mac's sound; the screen, when on, is that window |
+| No link, in an app (Gather, Discord, a Slack huddle, Tuple…) | at the event's time, the app running the microphone's input (Core Audio's process objects: `kAudioProcessPropertyIsRunningInput`, `kAudioProcessPropertyBundleID`; a browser's helper counts as its browser); the event's location naming the app or its address confirms it | microphone + the Mac's sound; the screen, when on, is that app's window |
+| In person | the event's location is a place and no app runs the microphone | the microphone only, the Mac's sound and the screen off; voices told apart on that one track (SpeakerKit); the card says to set the Mac in the middle of the table |
+| A call with no event | a meeting app (one of the known call apps) runs the microphone's input | as for a call link, named after the app |
+| Nothing to go on | — | the sources as they are at ↩ |
+
+**2. The path**: one key from where the user already is.
+
+- The meeting card that already shows as the event starts:
+  **Join ↩ · Join & Record ⌘↩** with a link; **Record ⌘↩** without one;
+  "Record (in person) ⌘↩" for a place.
+- In a call not being recorded: the menu bar's meeting item and the
+  launcher's first row offer "Record ‹title›".
+- At any time: `rec` in the launcher, a key, a link, a skillie.
+
+**3. Hint, never push**: recording other people needs their agreement,
+so it is always the user's own key, and a card on every call would be
+noise. The hint sits at the moment it matters (the Join card). For a
+recurring meeting recorded the last times, the hint says so ("recorded
+the last 3 times"), counted on this Mac; ⌘↩ stays ⌘↩. Never automatic.
+
+**4. Deterministic, no Jev**: the case, the app and the window come from
+the event (link, location), Core Audio (which app runs the microphone)
+and the window list. A model would add a delay, send window titles off
+the Mac and sometimes be wrong, for nothing gained. AI comes after the
+meeting and only on the user's action: the summary, action items, names
+put on voices from what is said, by the user's AI (Claude).
+
+**5. Wrong**: nothing is recorded before ↩, so a wrong guess records
+nothing. The Record card names each source with its live meter: a wrong
+app (two apps on the microphone) or "in person" misread is seen and
+changed there before ↩. A hint never wanted is ignored and not shown
+again in that meeting.
+
 ## What skil.li already has
 
 - **Speech to text on this Mac**: `VoiceInput` (macOS 26 `SpeechAnalyzer`,
@@ -239,7 +284,9 @@ The recording's window (a window, not a card: it is read and edited):
 
 1. Record the two tracks, pause, stop, recovery, files, transcript with the
    player (macOS's engine, Me / Them).
-2. The Record card from the meeting, the event's title and attendees, stop
+2. The Moment: Join & Record ⌘↩ and Record ⌘↩ on the meeting card, the
+   menu bar's and the launcher's hints, the five cases (link, in an app,
+   in person, no event, nothing); the event's title and attendees, stop
    offered at the call's end, launcher search, Settings pane, retention.
 3. Webcam and screen (window, meeting browser window), slides read.
 4. Speakers told apart (SpeakerKit), import, edit lines, rename
@@ -260,6 +307,10 @@ step with the sound.
 Measured on 2026-10-23 on macOS 27.0.1 (the test Mac's), not on 26: see
 Measured below. Still open:
 
+- Which app runs the microphone's input during a real call in an app
+  with no link (Gather in Chrome, Discord, a Slack huddle):
+  `kAudioProcessPropertyIsRunningInput` is in the SDK, not yet run
+  against one.
 - The tap on a real Zoom, Teams and FaceTime call (no account and no
   second device on the test Mac); a WebRTC call in Chrome, Meet's way, was
   measured.
@@ -596,3 +647,9 @@ checked by its meter, the clock rules of During, the drop by word times.
 6. The measured picks are the spec: whisper large-v3-turbo as the
    optional download, `SpeechTranscriber` until then, SpeakerKit, one tap
    on every process but skil.li's, and the rules above.
+
+2026-10-24:
+
+7. The Moment above: hint, never push; Join & Record ⌘↩ on the meeting
+   card; the five cases told apart by the event, Core Audio and the
+   window list, no model; AI only after the meeting, on the user's action.

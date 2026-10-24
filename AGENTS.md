@@ -418,6 +418,36 @@ per-show work.
   stays in memory once asked (~0.5–1 MB each; Contacts' was the #73 step,
   +1.2 MB).
 
+### A feature's moment, before it is built
+
+Every feature's spec (`docs/<feature>.md`) has a **Moment** section,
+written and agreed before any code (2026-10-24: "we need to be way better
+and thoughtful regarding features"): how a feature records or computes
+comes second to when someone reaches for it. It answers, in this order:
+
+1. **When** it is needed, and what the user is doing at that moment (in a
+   call, typing in an app, at a meeting's start…), each case apart.
+2. **The path**: the one key from where the user already is (the card that
+   is already there, the menu bar item, the launcher's first row), not a
+   new window to find.
+3. **Hint or push**, and why. A push (a card, a sound) only for what is
+   lost if missed and due now; everything else is a hint where the user
+   already looks. Never automatic for what involves other people (a
+   recording, a message). Keys never change meaning to be helpful: a hint
+   gets more visible, the key stays the same.
+4. **Deterministic or AI**: what macOS, the calendar, the clipboard or
+   the user's history already answer is decided by code. Jev or
+   Decisions only where the answer is truly a judgment and the moment
+   feels magic (the product rule: Jev only where it is magic), said with
+   what it sends off the Mac. The user's AI (Claude) only on their
+   action.
+5. **Wrong**: what a wrong guess costs (a wrong window recorded, a
+   recording missed, a hint shown to no purpose), and how the user sees
+   and undoes it.
+
+A spec without its Moment is not ready to build; a brief to an agent
+starts from it.
+
 ### Design
 
 - Liquid Glass surfaces only through `Theme.glass(cornerRadius:content:)`.
