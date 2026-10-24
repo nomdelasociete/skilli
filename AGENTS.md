@@ -113,7 +113,7 @@ Mac mini, driven from here:
 |---|---|---|
 | This Mac, any time | Unit tests, builds | `./script/build_and_run.sh test` |
 | This Mac, any time (no keys, no windows; restarts skil.li ~2 s) | Clipboard store, search, OCR; setup drawn off screen; live decisions (Ask, emoji, clipboard and files by meaning, nothing written) | `./script/build_and_run.sh selftest clipboard` / `selftest setup` / `selftest decide` |
-| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote defaultbrowser` (changes the default browser and puts it back), `remote` (all) |
+| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote` (all) |
 
 Nothing else that opens skil.li runs on the developer's Mac: `selftest` refuses other
 scopes and `benchmark` refuses outright unless `SKILLI_LOCAL_UI=1` (a Mac
@@ -340,6 +340,7 @@ SkilliCore (framework + SwiftPM library, no AppKit)
 | `Sources/Skilli/Support/Benchmark.swift` | `--benchmark` report |
 | `Sources/Skilli/Support/SelfTest.swift` | `--selftest` end-to-end driver |
 | `Sources/Skilli/App/UndoableDeletes.swift` | Every delete of the user's data: at once, Undo ⌘Z for 10 s in the card (`offerUndo`) |
+| `Sources/Skilli/Recorder/*` | The meeting recorder: `MeetingRecorder` (the two tracks, pause, stop), `MacSoundTap` + `MicrophoneTrack` + `TrackWriter` (sources and files), `MeetingTranscriber`, `RecordCard`, `RecorderIndicator` (menu bar), `RecordingWindow`, `RecorderCenter` (what the rest of the app calls) |
 | `Sources/SkilliCore/*` | Pure logic, unit-tested |
 
 ## Invariants (do not break)
@@ -2134,6 +2135,76 @@ re-investigating.
   cannot answer an invitation or invite anyone (attendees and their status
   are read-only): those stay in Calendar. Reads stay on the Mac; today's
   and tomorrow's events are kept in memory until EKEventStoreChanged.
+- Meeting recorder (docs/meeting-recorder.md, its views
+  docs/meeting-recorder-views.md; phase 1, 2026-10-23): Record Meeting
+  in the launcher (`rec`, `rec Weekly sync` names it: `RecordRequest`),
+  a shortcut, `skilli://record?title=…` (`SkilliLink.record`), the tool
+  `record_meeting` (waits for ↩ in the card): the Record card
+  (`RecordCard`, the meeting card's frame), its name, the language
+  (Ask's, else the keyboard's, among `SpeechTranscriber`'s), both
+  sources running for their meters (nothing written: `AudioInbox.keeping`
+  off), the consent paragraph the first time
+  (`Preferences.recorderConsentShown`); ↩ records, never anything
+  automatic. The rules the measurements set (Measured) are the code's:
+  the Mac's sound is one Core Audio process tap on every process but
+  skil.li's (`MacSoundTap`, a private aggregate on the default output,
+  rebuilt when the output changes), its IO block on Core Audio's
+  real-time thread (no queue: on one, macOS let it fall behind with the
+  display off); `NSAudioCaptureUsageDescription` in Info.plist (without
+  it the tap records silence and says nothing; with it macOS asks once,
+  System Audio Recording, even with Screen Recording allowed); the microphone through
+  `AVAudioEngine` started again on `AVAudioEngineConfigurationChange`
+  (`MicrophoneTrack`); a recording holds `beginActivity` with
+  `.latencyCritical`, idle system and display sleep off. Each track
+  (`TrackWriter`) is placed by its own clock (`TrackTimeline` in
+  SkilliCore): inside a run by the device's sample time, a missed cycle
+  written as silence of its length; a run (the first buffer, after a
+  pause, after an engine started again) by the host clock; pauses, the
+  start and the stop are host moments, the same for both tracks, cut to
+  the sample (a frame counts by its middle); a track whose source went
+  away is padded to the stop, one past it cut there (the last half second
+  waits in memory for that). A device whose clock runs fast or slow (a
+  USB or Bluetooth microphone: 100 ppm is 345 ms an hour) is kept within
+  a quarter of a millisecond of the host clock, smoothed over a second:
+  one frame left out or played twice per buffer (`resumeJumps` says each
+  track's slip at a resume: under half a millisecond). A source at
+  another rate is resampled to 48 kHz, its run placed by when the
+  converter's output began (it holds part of each buffer), a fresh
+  converter after a restart. Files: AAC 48 kHz mono in fragments of a
+  second (`movieFragmentInterval`): a SIGKILL leaves a file that plays to
+  its last second (measured: a plain MP4 does not open at all). Never on
+  the real-time thread: anything but copying into `AudioInbox` (room
+  made once, an unfair lock held microseconds). Folders: `RecordingFolder`
+  (the date and the title, `/` `:` → `-`, control characters and a
+  leading dot out, 80 characters, " 2"…), `meeting.json` written at once
+  and at each change (`MeetingRecord`: state, the recorder's pid and
+  start). At launch (normal mode, 4 s in, off the main thread) a folder
+  still `recording`/`paused`/`transcribing` whose process is gone is
+  offered in the card (Save ↩, Later esc, Discard ⌘⌫); nothing is made
+  unless one is found. The menu bar while recording (`RecorderIndicator`):
+  a red dot, the time, both sides' waves (mic up, Mac down), hollow dot
+  and still clock when paused; its menu pauses, resumes, stops; after
+  Stop a ring fills while the transcript is made. Transcript
+  (`MeetingTranscriber`): `SpeechTranscriber` with no names, each track
+  alone with `.audioTimeRange`, then the other side's words the
+  microphone heard again dropped (`MeetingTranscript.droppingEcho`: the
+  same word from 0.5 s before to 2 s after, runs of two or more), then
+  Me and Them by time (`MeetingTranscript.lines`); a language no engine
+  has: kept `pending`, its window offers the languages that work. The
+  window (`RecordingWindowController`): both waveforms played in step
+  (one `AVMutableComposition`), the lines, a click plays from one, the
+  line playing lit and followed; space, ⌘C, ⌘↩ (Finder), ⌘⌫ (to the Trash
+  through `UndoableDeletes.recording`, ⌘Z moves it back). While
+  recording, "rec…" in the launcher shows it first (↩ Stop, ⌘K Pause or
+  Resume, Show in Finder). Links `skilli://record/pause|resume|stop` ask
+  every time (a page could pause it unseen), never trusted. Tools (group
+  `recorder`): `record_meeting`, `recording_status`, `pause_recording`,
+  `resume_recording`, `stop_recording`. `remote recorder` (the scripted
+  calls of `script/recorder-measure`, pushed to the test Mac: another app
+  plays the other side, a file stands in for the microphone through the
+  same engine): a call's transcript against its script, the tracks in
+  step across a pause, a recording never stopped (`Skilli
+  recorderchild`, SIGKILLed), links and tools; `recorder-*.png`.
 - Reminders (`ReminderItem`, `ReminderRequest`, `RemindersRequest`,
   `Reminders` in SkilliCore, `ReminderBook`; Permission `.reminders`):
   every list the Reminders app has, through EventKit, asked for at first

@@ -57,6 +57,25 @@ final class UndoableDeletes {
         }
     }
 
+    /// ⌘⌫ in a recording's window, Discard on one never stopped: its
+    /// folder (the tracks, the transcript) to the Trash at once; ⌘Z moves
+    /// it back where it was (under a free name if another took its place).
+    func recording(_ folder: URL, title: String) throws {
+        var trashed: NSURL?
+        try FileManager.default.trashItem(at: folder, resultingItemURL: &trashed)
+        guard let trashed = trashed as URL? else { return }
+        Log.trace("Recorder: “\(title)” moved to the Trash")
+        offer("Recording Deleted", UndoDelete.details(title, ": moved to the Trash.")) {
+            let manager = FileManager.default
+            guard manager.fileExists(atPath: trashed.path) else {
+                throw Failure(message: "“\(title)” is no longer in the Trash.")
+            }
+            let root = folder.deletingLastPathComponent()
+            let name = RecordingFolder.free(folder.lastPathComponent) { manager.fileExists(atPath: root.appendingPathComponent($0).path) }
+            try manager.moveItem(at: trashed, to: root.appendingPathComponent(name))
+        }
+    }
+
     /// ⌘K → Delete Layout and Settings → Windows: the layout and its
     /// shortcuts; ⌘Z puts both back.
     func layout(_ layout: SavedWindowLayout, in arranger: WindowArranger, shortcuts: ShortcutStore) {

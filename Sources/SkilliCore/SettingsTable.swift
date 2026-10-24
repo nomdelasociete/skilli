@@ -139,6 +139,7 @@ public enum SettingsTable {
     /// `Preferences` properties no pane shows, and why.
     public static let notInPanes: [String: String] = [
         "didCompleteSetup": "The setup window's own state: closed once (Done, Later or ✕), it no longer opens by itself.",
+        "recorderConsentShown": "The Record card's own state: it said once that the others in a call must agree to be recorded.",
         "launcherPins": "Pinned in the launcher itself (⌘K → Pin, Unpin), not in a pane; the user's own list: no tool reads or changes it."
     ]
 

@@ -25,6 +25,10 @@ enum SkilliMain {
         if let status = RecorderProbe.runIfRequested(ProcessInfo.processInfo.arguments) {
             exit(status)
         }
+        // `Skilli recorderchild …`: a recording the self-test kills.
+        if let status = RecorderChild.runIfRequested(ProcessInfo.processInfo.arguments) {
+            exit(status)
+        }
         #endif
         let app = NSApplication.shared
         let delegate = AppDelegate(mode: LaunchMode(arguments: ProcessInfo.processInfo.arguments))

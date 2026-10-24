@@ -117,6 +117,7 @@ final class Preferences {
         static let voiceLanguage = "Preferences.voiceLanguage"
         static let askUsesClaudeCodeSkills = "Preferences.askUsesClaudeCodeSkills"
         static let didCompleteSetup = "Preferences.didCompleteSetup"
+        static let recorderConsentShown = "Preferences.recorderConsentShown"
         static let clipboardHistory = "Preferences.clipboardHistory"
         static let clipboardRetention = "Preferences.clipboardRetention"
         static let clipboardOCR = "Preferences.clipboardOCR"
@@ -237,6 +238,12 @@ final class Preferences {
     /// opens by itself (D7), only from Set Up skil.li….
     var didCompleteSetup: Bool {
         didSet { save(didCompleteSetup, Key.didCompleteSetup) }
+    }
+
+    /// The Record card said once that the others in a call must agree to
+    /// be recorded: it no longer says it.
+    var recorderConsentShown: Bool {
+        didSet { save(recorderConsentShown, Key.recorderConsentShown) }
     }
 
     /// Keep what is copied (Settings → Clipboard).
@@ -586,6 +593,7 @@ final class Preferences {
         voiceLanguage = defaults.string(forKey: Key.voiceLanguage) ?? ""
         askUsesClaudeCodeSkills = defaults.bool(forKey: Key.askUsesClaudeCodeSkills)
         didCompleteSetup = defaults.bool(forKey: Key.didCompleteSetup)
+        recorderConsentShown = defaults.bool(forKey: Key.recorderConsentShown)
         clipboardHistory = defaults.object(forKey: Key.clipboardHistory) as? Bool ?? true
         clipboardRetention = defaults.string(forKey: Key.clipboardRetention).map(ClipboardRetention.init(rawValue:)) ?? .month
         clipboardOCR = defaults.object(forKey: Key.clipboardOCR) as? Bool ?? true

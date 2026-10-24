@@ -507,7 +507,7 @@ extension MeetingCardView {
 }
 
 /// A small round dot: mint before the meeting, red once it started.
-private final class DotView: NSView {
+final class DotView: NSView {
     var color: NSColor = .controlAccentColor {
         didSet { needsDisplay = true }
     }
@@ -613,7 +613,7 @@ private final class InitialsView: NSView {
 }
 
 /// Join ↩: the one filled control, in the accent color, its key inside.
-private final class PrimaryButton: NSButton {
+final class PrimaryButton: NSButton {
     static let height: CGFloat = 36
 
     override init(frame: NSRect) {

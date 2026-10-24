@@ -57,6 +57,20 @@ final class SkilliLinkTests: XCTestCase {
         XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://do"))), .doHere(goal: "", app: nil))
     }
 
+    /// The Record card from a link, its name given or not; the recording
+    /// on now paused, resumed or stopped.
+    func testRecordLinks() throws {
+        let links: [SkilliLink] = [.record(title: nil), .record(title: "Weekly sync & co"), .recording(.pause), .recording(.resume), .recording(.stop)]
+        for link in links {
+            XCTAssertEqual(SkilliLink.parse(link.url), link, link.url.absoluteString)
+        }
+        XCTAssertEqual(SkilliLink.record(title: "Weekly sync").url.absoluteString, "skilli://record?title=Weekly%20sync")
+        XCTAssertEqual(SkilliLink.recording(.stop).url.absoluteString, "skilli://record/stop")
+        XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "SKILLI://Record?title=%20"))), .record(title: nil), "an empty name: the card's own")
+        XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/STOP"))), .recording(.stop))
+        XCTAssertNil(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/delete"))))
+    }
+
     func testWhatIsNotALink() throws {
         for text in ["skilli://run", "skilli://run/", "skilli://nothing/here", "https://run/cmd:emoji", "skilli://commands/import?command=x",
                      "skilli://layout"] {
@@ -96,6 +110,8 @@ final class SkilliLinkTests: XCTestCase {
                 XCTAssertEqual(SkilliLink.skillie(at: path, among: [skillie.path], folders: folders), skillie.path)
             case .doHere:
                 XCTFail("no Catalog entry is a “do it here”: \(entry.id)")
+            case .record, .recording:
+                XCTFail("Record Meeting's link is its entry's: \(entry.id)")
             }
         }
         XCTAssertEqual(SkilliLink.link(for: FeatureCatalog.entries(input).first { $0.id == "quicklink:\(google.id.uuidString)" }!,

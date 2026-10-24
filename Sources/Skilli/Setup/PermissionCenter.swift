@@ -67,8 +67,8 @@ enum Permission: String, CaseIterable, Identifiable, Sendable {
     var turnsOn: String {
         switch self {
         case .accessibility: "The Hyper Key and every shortcut, reading and replacing the text you select, snippets as you type, moving windows, menus and doing it here."
-        case .screenRecording: "Doing it here reads the words a window shows when its app tells Accessibility little, and shows Jev one picture of that window when they say too little."
-        case .microphone: "Ask by Voice (✦V) and Dictate (✦D). What you say becomes text on this Mac."
+        case .screenRecording: "Doing it here reads the words a window shows when its app tells Accessibility little, and shows Jev one picture of that window when they say too little. A recorded meeting's other side, the Mac's sound, kept on this Mac."
+        case .microphone: "Ask by Voice (✦V), Dictate (✦D) and your side of a recorded meeting. What you say becomes text on this Mac."
         case .calendar: "Your next meeting and its alerts, the agenda, events said in one sentence."
         case .reminders: "“Remind me…”, your to-dos to check off, today's in the menu bar."
         case .contacts: "Finding people (@), mails to them, forms filled from your card, their names known to Dictate."
