@@ -52,25 +52,30 @@ apart by what macOS and the calendar already say:
 | The meeting | How skil.li knows | What the Record card turns on |
 |---|---|---|
 | A call link (Meet, Zoom, Teams…) | the event's link → the app, or the browser tab | microphone + the Mac's sound; the screen, when on, is that window |
-| No link, in an app (Gather, Discord, a Slack huddle, Tuple…) | at the event's time, the app running the microphone's input (Core Audio's process objects: `kAudioProcessPropertyIsRunningInput`, `kAudioProcessPropertyBundleID`; a browser's helper counts as its browser); the event's location naming the app or its address confirms it | microphone + the Mac's sound; the screen, when on, is that app's window |
+| No link, in an app (Gather, Discord, a Slack huddle, Tuple…) | at the event's time, the app running the microphone's input: `MicrophoneUse` already reads it for the meeting's "joined" (Core Audio's process objects, `kAudioProcessPropertyIsRunningInput` and the PID, no permission); a browser's helper counts as its browser; the event's location naming the app or its address confirms it | microphone + the Mac's sound; the screen, when on, is that app's window |
 | In person | the event's location is a place and no app runs the microphone | the microphone only, the Mac's sound and the screen off; voices told apart on that one track (SpeakerKit); the card says to set the Mac in the middle of the table |
 | A call with no event | a meeting app (one of the known call apps) runs the microphone's input | as for a call link, named after the app |
 | Nothing to go on | — | the sources as they are at ↩ |
 
 **2. The path**: one key from where the user already is.
 
-- The meeting card that already shows as the event starts:
-  **Join ↩ · Join & Record ⌘↩** with a link; **Record ⌘↩** without one;
-  "Record (in person) ⌘↩" for a place.
-- In a call not being recorded: the menu bar's meeting item and the
-  launcher's first row offer "Record ‹title›".
+- The meeting card that already shows as the event starts (Dismiss esc,
+  Calendar ⌘↩, Join ↩; Got It ↩ without a call) gets **Record ⌘R**:
+  with a call, it records and joins; without one, it records ("Record (in
+  person)" for a place). ⌘R is free in skil.li and means record wherever
+  a meeting shows: ⌘↩ stays Calendar.
+- In a call not being recorded (the card has left, as it does once the
+  user is in the call): ⌘R on the launcher's meeting row, and Record in
+  the menu bar's meeting menu.
 - At any time: `rec` in the launcher, a key, a link, a skillie.
 
-**3. Hint, never push**: recording other people needs their agreement,
-so it is always the user's own key, and a card on every call would be
-noise. The hint sits at the moment it matters (the Join card). For a
-recurring meeting recorded the last times, the hint says so ("recorded
-the last 3 times"), counted on this Mac; ⌘↩ stays ⌘↩. Never automatic.
+**3. An action, never a push**: recording other people needs their
+agreement, so it is always the user's own key, and a card of its own on
+every call would be noise. Record is a keycap on the card that already
+shows at the moment it matters, next to Join. Taught once, then quiet
+(MANIFESTO 9): the first meeting card that offers it says in one line
+what ⌘R does; after that only the keycap, never a count or a badge.
+Never automatic.
 
 **4. Deterministic, no Jev**: the case, the app and the window come from
 the event (link, location), Core Audio (which app runs the microphone)
@@ -83,11 +88,12 @@ event's title, and for names on voices the attendees' names. Never the
 audio, the video or the screen, window titles or the contacts (as in
 Privacy and consent's table).
 
-**5. Wrong**: nothing is recorded before ↩, so a wrong guess records
-nothing. The Record card names each source with its live meter: a wrong
-app (two apps on the microphone) or "in person" misread is seen and
-changed there before ↩. A hint never wanted is ignored and not shown
-again in that meeting.
+**5. Wrong**: nothing is recorded before the user's key, so a wrong
+guess records nothing. ⌘R from the meeting card starts at once with the
+sources found; the menu bar names each with its level, and a wrong one
+(two apps on the microphone, "in person" misread) is changed from the red
+dot's menu, kept from then on. A keycap not wanted costs nothing: it is
+not pressed.
 
 ## What skil.li already has
 
@@ -288,8 +294,8 @@ The recording's window (a window, not a card: it is read and edited):
 
 1. Record the two tracks, pause, stop, recovery, files, transcript with the
    player (macOS's engine, Me / Them).
-2. The Moment: Join & Record ⌘↩ and Record ⌘↩ on the meeting card, the
-   menu bar's and the launcher's hints, the five cases (link, in an app,
+2. The Moment: Record ⌘R on the meeting card, the launcher's meeting
+   row and the menu bar's meeting menu, the five cases (link, in an app,
    in person, no event, nothing); the event's title and attendees, stop
    offered at the call's end, launcher search, Settings pane, retention.
 3. Webcam and screen (window, meeting browser window), slides read.
@@ -312,9 +318,9 @@ Measured on 2026-10-23 on macOS 27.0.1 (the test Mac's), not on 26: see
 Measured below. Still open:
 
 - Which app runs the microphone's input during a real call in an app
-  with no link (Gather in Chrome, Discord, a Slack huddle):
-  `kAudioProcessPropertyIsRunningInput` is in the SDK, not yet run
-  against one.
+  with no link (Gather in Chrome, Discord, a Slack huddle): `MicrophoneUse`
+  reads that there is one; its PID mapped to the app and its window (a
+  browser helper to its browser) is not yet run against such a call.
 - The tap on a real Zoom, Teams and FaceTime call (no account and no
   second device on the test Mac); a WebRTC call in Chrome, Meet's way, was
   measured.
@@ -654,6 +660,7 @@ checked by its meter, the clock rules of During, the drop by word times.
 
 2026-10-24:
 
-7. The Moment above: hint, never push; Join & Record ⌘↩ on the meeting
-   card; the five cases told apart by the event, Core Audio and the
-   window list, no model; AI only after the meeting, on the user's action.
+7. The Moment above: an action, never a push; Record ⌘R on the meeting
+   card (⌘↩ stays Calendar), taught once, then quiet; the five cases told
+   apart by the event, Core Audio and the window list, no model; AI only
+   after the meeting, on the user's action.

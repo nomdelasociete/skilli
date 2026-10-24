@@ -423,7 +423,8 @@ per-show work.
 Every feature's spec (`docs/<feature>.md`) has a **Moment** section,
 written and agreed before any code (2026-10-24: "we need to be way better
 and thoughtful regarding features"): how a feature records or computes
-comes second to when someone reaches for it. It answers, in this order:
+comes second to when someone reaches for it. It applies
+`docs/MANIFESTO.md` to that feature and answers, in this order:
 
 1. **When** it is needed, and what the user is doing at that moment (in a
    call, typing in an app, at a meeting's start…), each case apart.
@@ -431,16 +432,19 @@ comes second to when someone reaches for it. It answers, in this order:
    is already there, the menu bar item, the launcher's first row), not a
    new window to find.
 3. **Hint or push**, and why. A push (a card, a sound) only for what is
-   lost if missed and due now; everything else is a hint where the user
-   already looks. Never automatic for what involves other people (a
-   recording, a message). Keys never change meaning to be helpful: a hint
-   gets more visible, the key stays the same.
+   lost if missed and due now; everything else is an action where the
+   user already looks (a keycap on a card that is already there, a menu
+   item, a launcher row). Taught once, then quiet (MANIFESTO 9): no
+   repeated hint, no badge, no hint that grows. Never automatic for what
+   involves other people (a recording, a message). One key, one meaning
+   (MANIFESTO 7): a new action takes a free key, never one a card already
+   gives another meaning.
 4. **Deterministic or AI**: what macOS, the calendar, the clipboard or
-   the user's history already answer is decided by code. Jev or
-   Decisions only where the answer is truly a judgment and the moment
-   feels magic (the product rule: Jev only where it is magic), said with
-   what it sends off the Mac. The user's AI (Claude) only on their
-   action.
+   the user's history already answer is decided by code (MANIFESTO 4: SI
+   only where it earns its place). Jev or Decisions only where the answer
+   is truly a judgment and the moment feels magic. The user's AI (Claude)
+   only on their action. Each says what it sends off the Mac
+   (MANIFESTO 11).
 5. **Wrong**: what a wrong guess costs (a wrong window recorded, a
    recording missed, a hint shown to no purpose), and how the user sees
    and undoes it.
