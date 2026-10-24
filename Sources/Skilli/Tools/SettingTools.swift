@@ -203,6 +203,9 @@ final class SettingTools {
     var calendarAccounts: () -> [CalendarAccount] = { [] }
     var reminderLists: () -> [String] = { [] }
     var windowLayouts: () -> [String] = { [] }
+    /// Settings → Recorder → Keep recordings in: the recordings moved
+    /// there (nil), or why not (one is being recorded).
+    var moveRecordings: @MainActor (URL) -> String? = { _ in nil }
     var skillies: () -> [ScriptCommand] = { [] }
     var aliasTargets: () -> [AliasTarget] = { [] }
     /// Everything the Catalog lists (Settings → Catalog, the launcher's "?").
@@ -1007,6 +1010,28 @@ final class SettingTools {
             [SettingOption("", "Default browser")] + AgendaPane.browsers().map { SettingOption($0.id, $0.name) }
         }
         bindings["agendaHiddenCalendars"] = hiddenCalendars()
+
+        // Recorder
+        bindings["recorderMeetingCard"] = toggle(\.recorderMeetingCard)
+        bindings["recorderMicrophone"] = toggle(\.recorderMicrophone)
+        bindings["recorderMacSound"] = toggle(\.recorderMacSound)
+        bindings["recorderLanguage"] = string(\.recorderLanguage) {
+            [SettingOption("", "As Ask")] + (await MeetingTranscriber.languages()).map { SettingOption($0.id, $0.name) }
+        }
+        bindings["recorderFolderPath"] = Binding(get: { [unowned self] in .text(self.preferences.recorderFolderPath) },
+                                                 set: { [unowned self] value in
+                                                     guard case .text(let path) = value else { return }
+                                                     // As the pane does: the recordings move there.
+                                                     let folder = path.isEmpty ? Recordings.standard : URL(fileURLWithPath: path, isDirectory: true)
+                                                     if let refused = self.moveRecordings(folder) { throw Failure(refused) }
+                                                 })
+        bindings["recorderRetention"] = Binding(get: { [unowned self] in .text(self.preferences.recorderRetention.rawValue) },
+                                                set: { [unowned self] value in
+                                                    guard case .text(let raw) = value else { return }
+                                                    // As the pane does: nothing goes now; expired
+                                                    // recordings go on the hourly pass.
+                                                    self.preferences.recorderRetention = RecordingRetention(rawValue: raw)
+                                                })
 
         // Reminders
         bindings["remindersDefaultList"] = string(\.remindersDefaultList) { [unowned self] in

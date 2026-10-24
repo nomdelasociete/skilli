@@ -249,6 +249,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         madeRecorderCenter = center
         return center
     }
+    /// The recordings as the launcher and Settings → Recorder list them;
+    /// read at launch (4 s in) when there is a Recordings folder, and again
+    /// when one changes.
+    private lazy var recordingLibrary: RecordingLibrary = {
+        let index: URL
+        if case .selftest = mode {
+            index = recordingsFolder.deletingLastPathComponent().appendingPathComponent("recordings-index.sqlite")
+        } else {
+            index = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("skil.li/recordings-index.sqlite")
+        }
+        return RecordingLibrary(root: recordingsFolder, index: index)
+    }()
+    /// Delete after (Settings → Recorder): each hour, as the clipboard's.
+    private var recordingPruneTimer: Timer?
+
+    /// The hourly pass of Delete after, set when it is on; nothing pruned
+    /// as it is set (the pane says first what the next pass removes).
+    private func scheduleRecordingPrune() {
+        guard preferences.recorderRetention != .never else {
+            recordingPruneTimer?.invalidate()
+            recordingPruneTimer = nil
+            return
+        }
+        guard recordingPruneTimer == nil else { return }
+        let timer = Timer(timeInterval: 3600, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pruneRecordings() }
+        }
+        timer.tolerance = 300
+        RunLoop.main.add(timer, forMode: .common)
+        recordingPruneTimer = timer
+    }
+
+    private func pruneRecordings() {
+        let retention = preferences.recorderRetention
+        guard retention != .never else { return }
+        Task { await recordingLibrary.prune(retention) }
+    }
+
     /// Where recordings are kept (Settings → Recorder); the self-test keeps
     /// its own.
     private var recordingsFolder: URL {
@@ -256,6 +295,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/Recordings", isDirectory: true)
         }
         return preferences.recordingsFolder
+    }
+
+    /// A recording's transcript on the clipboard, as `transcript.md` has it;
+    /// one still being made says so.
+    private func copyTranscript(of name: String) {
+        guard let text = try? String(contentsOf: recordingLibrary.folder(name).appendingPathComponent("transcript.md"), encoding: .utf8) else {
+            aiActions.notify("This recording has no transcript yet.", caller: "Recorder", run: nil, seconds: 4)
+            return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    /// A recording to the Trash, ⌘Z bringing it back (`UndoableDeletes`);
+    /// never one being made or transcribed.
+    private func deleteRecording(_ summary: RecordingSummary) {
+        let folder = recordingLibrary.folder(summary.folder)
+        if let recorder = madeRecorderCenter?.recorder,
+           recorder.folder?.standardizedFileURL == folder.standardizedFileURL || recorder.transcribing?.folder.standardizedFileURL == folder.standardizedFileURL {
+            aiActions.notify("“\(summary.title)” is being recorded or transcribed: stop it first.", caller: "Recorder", run: nil, seconds: 5)
+            return
+        }
+        madeRecorderCenter?.window(for: folder)?.close()
+        do {
+            try deletes.recording(folder, title: summary.title)
+        } catch {
+            aiActions.notify("“\(summary.title)” was not moved to the Trash: \(error.localizedDescription)", caller: "Recorder", run: nil, seconds: 6)
+        }
+    }
+
+    /// Settings → Recorder → Keep recordings in: the recordings moved
+    /// there, then the folder kept; refused while one is recorded or
+    /// transcribed.
+    private func moveRecordings(to folder: URL) -> String? {
+        if let recorder = madeRecorderCenter?.recorder, recorder.isRecording || recorder.phase == .stopping || recorder.transcribing != nil {
+            return "A recording is being made or transcribed: stop it first."
+        }
+        let standard = folder.standardizedFileURL == Recordings.standard.standardizedFileURL
+        preferences.recorderFolderPath = standard ? "" : folder.path
+        madeRecorderCenter?.recordings.root = folder
+        Task { await recordingLibrary.move(to: folder) }
+        return nil
     }
 
     /// Record ⌘R on a meeting's card: its label for the case, the line
@@ -353,6 +434,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tools.aiCommands = aiCommands
         tools.github = githubBook
         tools.gifs = gifLibrary
+        tools.moveRecordings = { [weak self] folder in self?.moveRecordings(to: folder) }
         tools.permissions = permissions
         tools.clipboard = clipboard
         tools.calendarAccounts = { [calendarBook] in calendarBook.calendarAccounts() }
@@ -690,6 +772,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.recorderCenter.recordMeeting(event, joining: event.meeting != nil && !self.meetingWatch.isInCall(event))
         }
+        // Recordings made: from memory for any search, the words said off
+        // the main thread (Search Recordings).
+        launcher.recordingSummaries = { [weak self] in
+            guard let library = self?.recordingLibrary, library.isLoaded else { return [] }
+            return library.summaries
+        }
+        launcher.searchRecordingWords = { [weak self] text in await self?.recordingLibrary.searchWords(text) ?? [] }
+        launcher.onRecordingsMode = { [weak self] in self?.recordingLibrary.reload() }
+        launcher.onOpenRecording = { [weak self] name in
+            guard let self else { return }
+            self.recorderCenter.open(self.recordingLibrary.folder(name))
+        }
+        launcher.onShowRecordingFolderNamed = { [weak self] name in
+            guard let self else { return }
+            NSWorkspace.shared.activateFileViewerSelecting([self.recordingLibrary.folder(name)])
+        }
+        launcher.onCopyRecordingTranscript = { [weak self] name in self?.copyTranscript(of: name) }
+        launcher.onDeleteRecording = { [weak self] summary in self?.deleteRecording(summary) }
         toolServer.tools.recorder = { [weak self] in self?.recorderCenter }
         aiActions.startTimer = { [weak self] request in self?.startTimer(request) ?? UUID() }
         aiActions.cancelTimer = { [timers] id in timers.cancel(id) }
@@ -1130,11 +1230,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let root = recordingsFolder
                     Task { [weak self] in
                         try? await Task.sleep(for: .seconds(4))
+                        // The list for the launcher and the pane, then Delete
+                        // after's first pass.
+                        self?.recordingLibrary.reload()
                         let found = await RecorderCenter.unfinished(in: root)
+                        guard let self else { return }
+                        if self.preferences.recorderRetention != .never {
+                            try? await Task.sleep(for: .seconds(2))
+                            self.pruneRecordings()
+                        }
+                        self.scheduleRecordingPrune()
                         guard !found.isEmpty else { return }
-                        self?.recorderCenter.offer(found)
+                        self.recorderCenter.offer(found)
                     }
                 }
+                preferences.onRecorderRetentionChange = { [weak self] in self?.scheduleRecordingPrune() }
             }
             refreshRadios()
         }
@@ -1623,7 +1733,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             aiActions.showAgenda(.availability)
         case .recordMeeting:
             recorderCenter.showCard(title: nil)
-        case .killProcess, .clipboardHistory, .searchSnippets, .emoji, .searchGIFs, .switchWindow, .searchMenus, .searchTabs, .searchFiles, .searchProjects, .searchHistory,
+        case .killProcess, .clipboardHistory, .searchSnippets, .emoji, .searchGIFs, .switchWindow, .searchMenus, .searchTabs, .searchFiles, .searchProjects, .searchHistory, .searchRecordings,
              .homebrew, .searchContacts, .agenda, .reminders, .github, .catalog:
             // Handled in the launcher: it turns into that mode.
             break
@@ -1714,6 +1824,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         context.backup = backup
         context.emoji = emojiLibrary
         context.gifs = gifLibrary
+        context.recordings = recordingLibrary
+        context.openRecording = { [weak self] name in
+            guard let self else { return }
+            self.recorderCenter.open(self.recordingLibrary.folder(name))
+        }
+        context.moveRecordings = { [weak self] folder in self?.moveRecordings(to: folder) }
+        context.deleteRecording = { [weak self] summary in self?.deleteRecording(summary) }
         context.hasImageKey = { [ai] in ai.decisionKey(for: .typeSafe) != nil }
         context.reopen = { [weak self] in
             guard case .normal = self?.mode else { return }

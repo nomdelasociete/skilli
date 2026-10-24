@@ -62,6 +62,9 @@ enum LauncherItem {
     case recordNamed(String)
     /// The recording on now: Return stops it, ⌘K pauses or resumes it.
     case recording(LauncherRecording)
+    /// A recording made (Search Recordings, or by its title in any
+    /// search): Return opens its window, ⌘Return shows it in Finder.
+    case recorded(LauncherRecorded)
     /// "g skilli": Google's results for skilli. No query: the link itself.
     /// A browser tab open now (Search Tabs).
     case browserTab(BrowserTabs.Tab)
@@ -143,6 +146,7 @@ enum LauncherItem {
             AwakeStatus.title(until: until) { DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .short) }
         case .recordNamed(let name): "Record “\(name)”"
         case .recording(let live): live.title
+        case .recorded(let found): found.summary.title
         case .browserTab(let tab): tab.title
         case .file(let file): file.name
         case .contact(let match): match.record.name
@@ -197,6 +201,7 @@ enum LauncherItem {
         case .keptAwake: "kept-awake"
         case .recordNamed: "record-named"
         case .recording: "recording"
+        case .recorded(let found): "recorded:\(found.summary.folder)"
         case .browserTab(let tab): "tab:\(tab.title)"
         case .file(let file): "file:\(file.url.path)"
         case .contact(let match): "contact:\(match.record.id)"
@@ -232,6 +237,13 @@ struct LauncherRecording: Equatable {
     var title: String {
         (paused ? "Paused “\(name)”" : "Recording “\(name)”") + " · " + MeetingTranscript.clock(elapsed)
     }
+}
+
+/// A recording found, and the words said around the match when it was
+/// found by them.
+struct LauncherRecorded: Equatable {
+    let summary: RecordingSummary
+    var said: String?
 }
 
 @MainActor

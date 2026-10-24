@@ -270,15 +270,6 @@ final class RecordingSearchTests: XCTestCase {
         XCTAssertNotNil(RecordingSearch.score("maelys", comite))
     }
 
-    func testRootSearchKeepsTheTwoBestByTitleOrPeople() {
-        let recordings = [summary("Budget review", daysAgo: 3), summary("Weekly design review", attendees: ["Margot Martin"], daysAgo: 1),
-                          summary("Review of the budget", daysAgo: 0), summary("Standup", attendees: ["Camille"])]
-        XCTAssertEqual(RecordingSearch.best("bu", in: recordings), [], "three letters at least")
-        XCTAssertEqual(RecordingSearch.best("budget", in: recordings).map(\.title), ["Review of the budget", "Budget review"], "newest first at the same score")
-        XCTAssertEqual(RecordingSearch.best("camille", in: recordings).map(\.title), ["Standup"])
-        XCTAssertEqual(RecordingSearch.best("october", in: recordings), [], "not by date alone")
-    }
-
     func testTheRowSaysWhenHowLongAndWho() {
         let line = RecordingSearch.detail(summary("Weekly sync", attendees: ["Margot Martin", "Camille", "Jean-François Martaing"]), length: "32 min")
         XCTAssertTrue(line.hasSuffix(" · 32 min · Margot, Camille and 1 other"), line)

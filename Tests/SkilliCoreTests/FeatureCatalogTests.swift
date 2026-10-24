@@ -116,7 +116,7 @@ final class FeatureCatalogTests: XCTestCase {
         let withPrefix = entries.filter { if case .command = $0.run { $0.prefix != nil } else { false } }.map(\.id)
         XCTAssertEqual(Set(withPrefix), ["cmd:killProcess", "cmd:homebrew", "cmd:searchHistory", "cmd:searchFiles", "cmd:searchContacts",
                                          "cmd:reminders", "cmd:github", "cmd:agenda", "cmd:searchTabs", "cmd:emoji", "cmd:clipboardHistory",
-                                         "cmd:searchSnippets", "cmd:catalog", "cmd:searchMenus", "cmd:searchGIFs"])
+                                         "cmd:searchSnippets", "cmd:catalog", "cmd:searchMenus", "cmd:searchGIFs", "cmd:searchRecordings"])
     }
 
     /// The launcher's own parsers read the same lists.

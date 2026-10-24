@@ -490,21 +490,6 @@ public enum RecordingSearch {
         return score
     }
 
-    /// Root search: the two that fit best by title or attendees (not the
-    /// date alone), from three letters typed.
-    public static func best(_ query: String, in recordings: [RecordingSummary], limit: Int = 2) -> [RecordingSummary] {
-        guard query.trimmingCharacters(in: .whitespaces).count >= 3 else { return [] }
-        let typed = words(query)
-        return recordings.compactMap { recording -> (RecordingSummary, Int)? in
-            let named = words(recording.title) + recording.attendees.flatMap(words)
-            guard typed.allSatisfy({ word in named.contains { $0.hasPrefix(word) } }), let score = score(query, recording) else { return nil }
-            return (recording, score)
-        }
-        .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.started > $1.0.started }
-        .prefix(limit)
-        .map(\.0)
-    }
-
     /// The row's second line: "Wed 22 Oct · 32 min · Paul, Anna and 2
     /// others".
     public static func detail(_ recording: RecordingSummary, length: String) -> String {

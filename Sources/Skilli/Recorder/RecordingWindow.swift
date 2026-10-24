@@ -52,6 +52,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var litLine: Int? { view.litLine }
     var shownState: String { view.stateText }
     var spaceHint: String? { view.spaceHint }
+    var shownLanes: [String] { view.shownLanes }
+    var shownAbout: String { view.aboutText }
     /// Where a line is on screen (AppKit's coordinates), to click it.
     func screenFrame(ofLine row: Int) -> NSRect? { view.screenFrame(ofLine: row) }
 
@@ -61,6 +63,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         self.record = record
         window.title = record.title
         view.header(title: record.title, about: MeetingTranscriber.about(record))
+        // In person, the microphone holds the room: one lane, its name.
+        view.setSpeakers(record.speakers, lanes: Speaker.allCases.filter { !(record.unused ?? []).contains($0) })
         if let transcribing {
             view.showTranscribing(transcribing)
         } else if let transcript {
@@ -235,6 +239,10 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     private let transcribeButton = NSButton(title: "Transcribe", target: nil, action: nil)
     private let hints = HintBar()
     private(set) var lines: [TranscriptLine] = []
+    private var speakerNames: [String: String] = [:]
+    /// Self-test hook: the lanes, by name.
+    var shownLanes: [String] { waveform.lanesShown.map { speakerNames[$0.rawValue] ?? $0.title } }
+    var aboutText: String { about.stringValue }
     private var languageIDs: [String] = []
     private(set) var litLine: Int?
     private var heights: [Int: CGFloat] = [:]
@@ -380,6 +388,16 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         waveform.them = them
     }
 
+    /// The speakers' names ("Me", "Them", "Room" in person) and the
+    /// tracks that have a lane.
+    func setSpeakers(_ names: [String: String], lanes: [Speaker]) {
+        guard names != speakerNames || lanes != waveform.lanesShown else { return }
+        speakerNames = names
+        waveform.names = names
+        waveform.lanesShown = lanes.isEmpty ? Speaker.allCases : lanes
+        table.reloadData()
+    }
+
     /// Where the player is: the time, the playhead, the line lit and kept
     /// in sight.
     func played(to seconds: Double, playing: Bool) {
@@ -428,7 +446,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let cell = tableView.makeView(withIdentifier: LineCell.identifier, owner: nil) as? LineCell ?? LineCell()
-        cell.show(lines[row])
+        cell.show(lines[row], name: speakerNames[lines[row].speaker.rawValue])
         return cell
     }
 
@@ -564,8 +582,8 @@ private final class LineCell: NSTableCellView {
 
     override var isFlipped: Bool { true }
 
-    func show(_ line: TranscriptLine) {
-        speaker.stringValue = line.speaker.title
+    func show(_ line: TranscriptLine, name: String? = nil) {
+        speaker.stringValue = name ?? line.speaker.title
         speaker.textColor = line.speaker == .me ? .controlAccentColor : .secondaryLabelColor
         time.stringValue = MeetingTranscript.clock(line.start)
         words.stringValue = line.text
@@ -589,11 +607,13 @@ private final class LineCell: NSTableCellView {
     }
 }
 
-/// Both sides' waveforms, Me above in the accent color, Them below; the
-/// playhead. A click or a drag seeks.
+/// Both sides' waveforms, Me above in the accent color, Them below (in
+/// person, the room's alone); the playhead. A click or a drag seeks.
 private final class WaveformView: NSView {
     var me: [Float] = [] { didSet { needsDisplay = true } }
     var them: [Float] = [] { didSet { needsDisplay = true } }
+    var names: [String: String] = [:] { didSet { needsDisplay = true } }
+    var lanesShown: [Speaker] = Speaker.allCases { didSet { needsDisplay = true } }
     var duration: Double = 0 { didSet { needsDisplay = true } }
     var position: Double = 0 { didSet { if position != oldValue { needsDisplay = true } } }
     var onSeek: ((Double, Bool) -> Void)?
@@ -607,10 +627,10 @@ private final class WaveformView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let lanes = self.lanes
-        let half = lanes.height / 2
-        for (index, speaker) in Speaker.allCases.enumerated() {
+        let half = lanes.height / CGFloat(max(1, lanesShown.count))
+        for (index, speaker) in lanesShown.enumerated() {
             let top = CGFloat(index) * half
-            let label = NSAttributedString(string: speaker.title, attributes: [
+            let label = NSAttributedString(string: names[speaker.rawValue] ?? speaker.title, attributes: [
                 .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
                 .foregroundColor: speaker == .me ? NSColor.controlAccentColor : NSColor.secondaryLabelColor,
             ])

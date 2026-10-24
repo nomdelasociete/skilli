@@ -1,15 +1,27 @@
 import Foundation
 import SkilliCore
+import Synchronization
 
 /// Where recordings are kept (docs/meeting-recorder.md, "Where it lives"):
 /// a folder each in `~/Library/Application Support/skil.li/Recordings`
-/// (0700, the user's alone), named by its date and title, never written
-/// into another's. The self-test keeps its own.
+/// (0700, the user's alone), or the folder Settings → Recorder names,
+/// each named by its date and title, never written into another's. The
+/// self-test keeps its own.
 final class Recordings: Sendable {
-    let root: URL
+    private let place: Mutex<URL>
+
+    /// The folder they are in: another once Settings → Recorder moved them.
+    var root: URL {
+        get { place.withLock { $0 } }
+        set { place.withLock { $0 = newValue } }
+    }
+
+    /// A recording made, transcribed, deleted or put back: the lists
+    /// (Settings → Recorder, the launcher) read again.
+    static let changed = Notification.Name("com.nomdelasociete.Skilli.recordingsChanged")
 
     init(root: URL = Recordings.standard) {
-        self.root = root
+        place = Mutex(root)
     }
 
     static var standard: URL {

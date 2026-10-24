@@ -95,6 +95,7 @@ extension LauncherController {
         case .keptAwake: (AwakeStatus.turnOff, "power")
         case .recordNamed: ("Open", "record.circle")
         case .recording: ("Stop and Transcribe", "stop.circle")
+        case .recorded: ("Open", "waveform")
         case .process: ("Quit", "xmark.circle")
         case .clip, .snippet, .emoji: ("Paste", "doc.on.clipboard")
         case .gif(let gif):
@@ -258,6 +259,17 @@ extension LauncherController {
         case .command, .saveLayout, .openWindow, .startTimer, .keepAwake, .runningTimer, .createEvent, .addReminder,
              .brewUpgradeAll, .setup, .ask, .siCommand, .system, .scriptArgument, .scriptChoice, .recordNamed:
             return [first]
+        // A recording made: its folder, its words, gone to the Trash.
+        case .recorded(let found):
+            return [first, key("Show in Finder", "folder", .openSecond),
+                    LauncherAction(title: "Copy Transcript", symbol: "doc.on.doc", key: .copy, group: .copy) { [weak self] in
+                        self?.hide()
+                        self?.onCopyRecordingTranscript?(found.summary.folder)
+                    },
+                    remove("Delete Recording") { [weak self] in
+                        self?.hide()
+                        self?.onDeleteRecording?(found.summary)
+                    }]
         // The recording on now: paused or resumed, its folder.
         case .recording(let live):
             return [first,

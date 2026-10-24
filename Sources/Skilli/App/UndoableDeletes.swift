@@ -65,6 +65,7 @@ final class UndoableDeletes {
         try FileManager.default.trashItem(at: folder, resultingItemURL: &trashed)
         guard let trashed = trashed as URL? else { return }
         Log.trace("Recorder: “\(title)” moved to the Trash")
+        NotificationCenter.default.post(name: Recordings.changed, object: nil)
         offer("Recording Deleted", UndoDelete.details(title, ": moved to the Trash.")) {
             let manager = FileManager.default
             guard manager.fileExists(atPath: trashed.path) else {
@@ -73,6 +74,7 @@ final class UndoableDeletes {
             let root = folder.deletingLastPathComponent()
             let name = RecordingFolder.free(folder.lastPathComponent) { manager.fileExists(atPath: root.appendingPathComponent($0).path) }
             try manager.moveItem(at: trashed, to: root.appendingPathComponent(name))
+            NotificationCenter.default.post(name: Recordings.changed, object: nil)
         }
     }
 

@@ -98,10 +98,12 @@ enum MeetingTranscriber {
         MeetingTranscript.markdown(title: record.title, about: about(record), lines: lines, names: record.speakers)
     }
 
-    /// "Wednesday 22 October 2026, 14:00 · 32 min · English".
+    /// "Wednesday 22 October 2026, 14:00 · 32 min · English · with Paul,
+    /// Anna and 2 others".
     static func about(_ record: MeetingRecord) -> String {
         let when = record.started.formatted(.dateTime.weekday(.wide).day().month(.wide).year().hour().minute())
-        return [when, length(record.seconds), shortName(of: record.language)].joined(separator: " · ")
+        let people = MeetingPeople.sentence(record.attendees)
+        return ([when, length(record.seconds), shortName(of: record.language)] + (people.isEmpty ? [] : ["with \(people)"])).joined(separator: " · ")
     }
 
     /// "45 s", "32 min", "1 h 05".

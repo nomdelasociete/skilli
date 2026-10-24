@@ -379,6 +379,7 @@ final class RecorderCenter {
 
     /// A transcript made (or kept waiting for a language): its window.
     private func finished(_ folder: URL) {
+        NotificationCenter.default.post(name: Recordings.changed, object: nil)
         open(folder)
     }
 
