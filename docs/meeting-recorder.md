@@ -24,9 +24,10 @@ transcribed again in another language.
 1. It knows the meeting: the event's title names the recording, its
    attendees name the speakers to pick from, and it offers to stop when the
    call ends.
-2. Names heard right: the attendees and the user's contacts go to the
-   engine that takes words to expect (see Transcription), as Dictate's
-   names do.
+2. Names heard right: with the "Better transcription" download, the
+   attendees and the user's contacts go to whisper as its prompt (two
+   names in three right, against two in five for macOS's engines, which
+   barely gain from names: see Measured).
 3. Found from the launcher: words said, by plain search; Ask "what did Paul
    say about the budget?" with the user's AI, on their action.
 4. Follow-ups in one key: action items become reminders, a recap mail goes
@@ -52,10 +53,12 @@ transcribed again in another language.
 - **Screen capture and reading**: ScreenCaptureKit (`WindowCapture`,
   `ScreenSight`) and Vision text recognition; Screen & System Audio Recording
   is already in setup.
-- **Browser tabs**: `BrowserTabReuse` finds a tab by its address and brings
-  it to the front in Safari and Chrome's family (Chrome, Brave, Edge,
-  Chromium, Vivaldi). Not Arc: its scripting says nothing reliable about
-  tabs.
+- **Browser tabs**: `BrowserTabReuse` finds a tab by its address in Safari
+  and Chrome's family (Chrome, Brave, Edge, Chromium, Vivaldi); not Arc,
+  whose scripting says nothing reliable about tabs. It loads the address
+  in that tab (`set URL of tab`), which for a meeting would reload the page
+  and leave the call: the recorder only selects the tab (`set active tab
+  index`), without bringing the browser forward.
 
 ## Before
 
@@ -74,8 +77,14 @@ skillie):
 
 **A browser tab**: macOS records a window, not a tab inside it. The
 meeting's window is recorded; when the recording starts skil.li brings the
-meeting's tab to the front in it (Safari, Chrome's family), and the card
-says that another tab picked during the call is recorded too. When it
+meeting's tab to the front in it (Safari, Chrome's family; the tab
+selected, never reloaded, the user's app keeping the keyboard), and the
+card says that another tab picked during the call is recorded too.
+Chrome's window records only while some of it is in sight (fully
+covered, the same picture again and again; Arc keeps painting), and no
+browser's records minimized or hidden: the card says "keep the meeting's
+window in sight", and the recording notices a window that stops giving
+pictures and says so in the menu bar. When it
 cannot (Arc, a browser it does not script, its Automation permission not
 given, no tab on the meeting's address, a script that fails), the card
 says so and asks the user to bring the meeting's tab forward; ↩ then
@@ -87,6 +96,12 @@ need a browser extension: not planned.
 - The menu bar: a red dot, the time, the two waves (mic above, Mac below).
   Its menu: Pause / Resume, Stop, the webcam and the screen on or off.
 - Pause writes nothing to any track until Resume; the clock stops.
+- Each track keeps its own clock (measured in step over an hour with
+  pauses, and failing without each of these): the tap's IO on Core Audio's
+  real-time thread under an activity that keeps macOS from napping it;
+  sound written by the device's sample time, a missed cycle written as
+  silence of its length; every `AVAudioEngine` started again after a
+  change of the audio setup; the display kept on while recording.
 - The call ends (the meeting app leaves its call, or the event is over and
   the Mac's sound has been silent for a minute): a card offers Stop ↩.
 - Written as it comes: a crash, a logout or a power cut keeps what was
@@ -96,21 +111,30 @@ need a browser extension: not planned.
 
 On this Mac, at Stop, with progress in the menu bar.
 
-- **Engine**: macOS's `SpeechTranscriber` first. It takes no words to
-  expect (`VoiceInput`: only `DictationTranscriber` reads
-  `AnalysisContext.contextualStrings`), so before building three are
-  measured on the same recorded calls (French and English, accents,
-  crosstalk, a one-hour call, attendees with uncommon names):
-  `SpeechTranscriber`; `DictationTranscriber` given the attendees' and
-  contacts' names; whisper.cpp (large-v3-turbo) given them as its initial
-  prompt. Errors per hundred words, names right, time, memory. The best
-  one is the default. If it is whisper, it is an optional download for the
-  recorder only ("Better transcription, 1.6 GB"), never for Ask or
-  Dictate; until then, the best of macOS's two.
+- **Engine** (measured, see Measured): whisper.cpp large-v3-turbo, the
+  full model, as the optional "Better transcription" download (1.6 GB,
+  for the recorder only, never Ask or Dictate): with its VAD, the
+  attendees' and contacts' names as its prompt carried to every window,
+  and two of its failures taken out after it (a segment repeated right
+  after itself; an attendee's name written as a speaker label). 40 %
+  fewer errors than macOS's best, two names in three right. Until it is
+  downloaded: `SpeechTranscriber`, given no names (it ignores them).
+  `DictationTranscriber` is not a choice of engine (more errors
+  everywhere, little gain on names); its one use is the language fallback
+  below, for a language `SpeechTranscriber` does not have.
 - **Who spoke**: the microphone is the user; the Mac's sound is the others.
   Several voices on the other side, and an imported file (one track), are
-  told apart by an on-device speaker-separation model, picked the same way:
-  candidates measured on the same calls.
+  told apart by SpeakerKit (MIT, pyannote on Core ML, 11 MB), the number
+  of speakers found by itself (measured: the fewest errors, the fastest).
+  Its mistake is an extra speaker with a few lines, which the user merges
+  by giving it a name already used.
+- **No headphones**: the microphone also hears the other side (78 to 88 %
+  of its words came back in the user's transcript). Those words are
+  dropped from Me by each word's time against Them. Measured: 3 % left
+  with `SpeechTranscriber`, which gives each word's time; 30 to 37 % with
+  whisper, whose times are per line and on the audio without its VAD's
+  silences. For whisper, the times are put back on the recording's clock
+  first (the VAD's cuts added back); that is not measured yet (To check).
 - A language this Mac cannot transcribe: the Record card checks it before
   ↩, the default engine first (whisper when it is the one downloaded and
   set), then the others (`SpeechTranscriber.supportedLocales`,
@@ -199,6 +223,11 @@ The recording's window (a window, not a card: it is read and edited):
   countries, France included, recording a private conversation without
   consent is an offense), for the webcam and the screen as for the sound.
   No auto-record on meeting start.
+- The Mac's sound has no error to show: without its permission the tap
+  records silence and every call succeeds. Screen Recording (which skil.li
+  asks for "do it here") covers it; with `NSAudioCaptureUsageDescription`
+  a Mac without it gets System Audio Recording Only at once. The Record
+  card's live meter is the check: silence while the call talks.
 - Only the sources turned on need their permission. A source whose
   permission is missing shows off in the Record card, with that permission
   named, and ⌘↩ opens it; ↩ records the others. With neither the
@@ -213,8 +242,9 @@ The recording's window (a window, not a card: it is read and edited):
 2. The Record card from the meeting, the event's title and attendees, stop
    offered at the call's end, launcher search, Settings pane, retention.
 3. Webcam and screen (window, meeting browser window), slides read.
-4. Speakers told apart, import, edit lines, rename speakers, transcribe
-   again; the measured engine choice (whisper as an option if it wins).
+4. Speakers told apart (SpeakerKit), import, edit lines, rename
+   speakers, transcribe again; the "Better transcription" download
+   (whisper).
 5. Chapters, summary, action items, recap mail, skillies on done, agent
    tools.
 
@@ -227,7 +257,8 @@ step with the sound.
 
 ## To check before building
 
-Measured on 2026-10-23: see Measured below. Still open:
+Measured on 2026-10-23 on macOS 27.0.1 (the test Mac's), not on 26: see
+Measured below. Still open:
 
 - The tap on a real Zoom, Teams and FaceTime call (no account and no
   second device on the test Mac); a WebRTC call in Chrome, Meet's way, was
@@ -237,6 +268,9 @@ Measured on 2026-10-23: see Measured below. Still open:
 - No headphones with real speakers and a real microphone (the test Mac
   has neither): macOS's own echo cancellation (`AVAudioEngine`'s voice
   processing) against the word-level drop measured below.
+- The drop with whisper once its word times are put back on the
+  recording's clock (measured without it: 30 to 37 % of the other side
+  left, against 3 % with `SpeechTranscriber`).
 
 ## Measured
 
@@ -532,58 +566,12 @@ them; whisper's have to be put back on the recording's clock first (the
 VAD's cuts added back), not measured here. macOS's own echo cancellation
 is still to measure on a Mac with speakers and a microphone (To check).
 
-### What the measurements change in this spec
+### What the measurements changed
 
-Not changed above: the maintainer decides. Each point names the passage.
-
-1. **Target → Better 2** ("the attendees and the user's contacts go to
-   the engine that takes words to expect, as Dictate's names do"): that
-   engine, `DictationTranscriber`, gets 3.7 more points of names right
-   and makes 30 % more errors. Names come out right two times in three
-   only through whisper's prompt. Better 2 holds with the download;
-   without it no engine of macOS's hears names better.
-2. **Transcription → Engine**: whisper won (above). "Until then, the best
-   of macOS's two" is `SpeechTranscriber`, given no names. whisper runs
-   with VAD and its prompt carried to every window, on the full model
-   (1.6 GB; the 0.6 GB q5_0 one loops more), and two of its failures are
-   taken out after it: a segment repeated right after itself, an
-   attendee's name written as a speaker label.
-3. **Transcription → Who spoke** ("an on-device speaker-separation
-   model, picked the same way"): SpeakerKit, the count found by itself
-   (above).
-4. **What skil.li already has → Browser tabs**: `BrowserTabReuse` does
-   more than bring a tab forward: it loads its address in it (`set URL of
-   tab`), which for a meeting reloads the page and leaves the call. The
-   recorder needs the tab selected only (`set active tab index`), without
-   `activate`.
-5. **Before → A browser tab** ("the meeting's window is recorded"):
-   Chrome's window records only while some of it is in sight: fully
-   covered, the same picture again and again; minimized or hidden, no
-   picture, in any browser (Arc keeps painting under other windows). The
-   card says so for Chrome ("keep the meeting's window in sight"), and the
-   recording notices a window that stops giving pictures.
-6. **Privacy and consent** ("a source whose permission is missing shows
-   off in the Record card, with that permission named"): for the Mac's
-   sound, macOS says nothing: without the permission (or without
-   `NSAudioCaptureUsageDescription`) the tap records silence, every call
-   succeeding. Screen Recording, which skil.li asks for "do it here",
-   covers it; with the usage string, a Mac without it granted System
-   Audio Recording Only at once. The Record card's live meter is the
-   check: silence while the call talks.
-7. **To check before building** ("which permission macOS 26 asks"):
-   measured on macOS 27.0.1 (the test Mac's), not on 26.
-8. **During** ("Pause writes nothing to any track until Resume"; "written
-   as it comes"): measured in step over an hour with five pauses, but
-   only with rules the spec does not have: the tap's IO on the
-   real-time thread under an activity, missed cycles written as silence
-   by the sample time, engines started again after a change of the
-   audio setup, the display kept on. Each was measured failing without
-   it.
-9. **To check before building → Headphones**: without them the user's
-   transcript holds the other side's words again (78 to 88 % of them
-   with the two engines picked); the drop works (3 % left) only on each
-   word's time, which whisper gives once put back on the recording's
-   clock.
+Applied to the spec above on 2026-10-23 (Decided 6): the engine and the
+speaker separation picked, Better 2 tied to the download, the tab
+selected without a reload, Chrome's window kept in sight, the Mac's sound
+checked by its meter, the clock rules of During, the drop by word times.
 
 ## Decided
 
@@ -602,3 +590,9 @@ Not changed above: the maintainer decides. Each point names the passage.
    browser window.
 5. macOS's speech engine first; a better one (whisper or other) is fine for
    the recorder only, if measured better.
+
+2026-10-23 (after Measured):
+
+6. The measured picks are the spec: whisper large-v3-turbo as the
+   optional download, `SpeechTranscriber` until then, SpeakerKit, one tap
+   on every process but skil.li's, and the rules above.
