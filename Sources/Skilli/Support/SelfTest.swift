@@ -17778,6 +17778,8 @@ final class SelfTest {
         let fileThere = await waitUntil(timeout: 6) { window(textEdit).map { WindowLayout.matches($0.frame, left) } ?? false } != nil
         let pageThere = await waitUntil(timeout: 8) { window(safari).map { WindowLayout.matches($0.frame, right) } ?? false } != nil
         let opened = (count(textEdit), count(safari))
+        // Not seen: what skil.li sees of Safari, while it is still there.
+        let unseen = pageThere ? "" : "; Safari as seen: \(Self.seen(bundleID: safari, name: "Safari", marker: marker))"
         // Applied again: they show already, nothing opens twice.
         _ = await arranger.apply(layout)
         await pause(800)
@@ -17795,8 +17797,37 @@ final class SelfTest {
         if !safariWasRunning { await cleanUp(bundleID: safari, wasRunning: false) }
         if !textEditWasRunning { await cleanUp(bundleID: textEdit, wasRunning: false) }
         record(name, empty && listed && fileThere && pageThere && once && report.placed == 2,
-               "editor: \(empty), file and link listed: \(listed), saved; applied: \(report.placed) of 2 placed, the file on the left: \(fileThere), the page on the right: \(pageThere) (windows: TextEdit \(opened.0), Safari \(opened.1)); applied again, nothing opened twice: \(once)",
+               "editor: \(empty), file and link listed: \(listed), saved; applied: \(report.placed) of 2 placed, the file on the left: \(fileThere), the page on the right: \(pageThere) (windows: TextEdit \(opened.0), Safari \(opened.1)); applied again, nothing opened twice: \(once)\(unseen)",
                nil)
+    }
+
+    /// An app's windows from three sides, to tell which one lost them:
+    /// NSWorkspace by bundle ID and by name, Accessibility per process,
+    /// and the window server. Titles only when they hold the test's
+    /// `marker`: the report is logged in clear, other pages stay out.
+    private static func seen(bundleID: String, name: String, marker: String) -> String {
+        func shown(_ title: String?) -> String { title.map { $0.contains(marker) ? "“\($0)”" : "other" } ?? "untitled" }
+        let byID = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        let byName = NSWorkspace.shared.runningApplications.filter { $0.localizedName == name }
+        var parts = ["by ID \(byID.map(\.processIdentifier)), by name \(byName.map { "\($0.processIdentifier) \($0.bundleIdentifier ?? "no ID") policy \($0.activationPolicy.rawValue)" })"]
+        for app in byName {
+            let element = AXUIElementCreateApplication(app.processIdentifier)
+            AXUIElementSetMessagingTimeout(element, 0.5)
+            var raw: CFTypeRef?
+            let error = AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &raw)
+            let windows = (raw as? [AXUIElement] ?? []).map { window -> String in
+                var subrole: CFTypeRef?, title: CFTypeRef?
+                AXUIElementCopyAttributeValue(window, kAXSubroleAttribute as CFString, &subrole)
+                AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &title)
+                return "\(subrole as? String ?? "?") \(shown(title as? String))"
+            }
+            parts.append("AX \(app.processIdentifier): error \(error.rawValue), \(windows)")
+        }
+        let server = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? [])
+            .filter { $0[kCGWindowOwnerName as String] as? String == name && $0[kCGWindowLayer as String] as? Int == 0 }
+            .map { "\($0[kCGWindowOwnerPID as String] ?? "?") \(shown($0[kCGWindowName as String] as? String))" }
+        parts.append("on screen \(server)")
+        return parts.joined(separator: "; ")
     }
 
     /// A display "plugged in" (offered as if it had just been): the layouts
