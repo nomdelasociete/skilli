@@ -43,6 +43,8 @@ def catalog(source):
             raise ValueError(f'{path}: unsupported schema or output mode')
         if metadata.get('needsConfirmation', 'false') not in ('true', 'false'):
             raise ValueError(f'{path}: needsConfirmation must be true or false')
+        if metadata.get('showsRunning', 'true') not in ('true', 'false'):
+            raise ValueError(f'{path}: showsRunning must be true or false')
         if 'MIT License' not in code or 'Permission is hereby granted' not in code or 'Copyright' not in code:
             raise ValueError(f'{path}: include the MIT license and copyright notice')
         arguments = []

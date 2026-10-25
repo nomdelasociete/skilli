@@ -3430,13 +3430,18 @@ extension AIActionController: ToolPresenter {
     /// in place, for `seconds` (and `perLine` more for each line past the
     /// first, to read a list, 20 s at most in all). Esc closes it early. `skillie`: the run
     /// `work` is, whose own tool calls borrow the card meanwhile.
+    /// `showsWorking` false: no card while it works (a skillie that says
+    /// `showsRunning false`), only what it returns; its tool calls then
+    /// take the card as any agent's do.
     func notify(caller: String, working: String, seconds: Double, perLine: Double = 0, skillie: String? = nil,
-                _ work: @escaping @MainActor () async throws -> String) {
+                showsWorking: Bool = true, _ work: @escaping @MainActor () async throws -> String) {
         Task {
-            await takeCardForOutsideAgent(caller)
-            noteText = working
-            popover.fail(working, status: caller, hints: [("Close", "esc")])
-            if let skillie { lentCard = LentCard(skillie: skillie, caller: caller, working: working) }
+            if showsWorking {
+                await takeCardForOutsideAgent(caller)
+                noteText = working
+                popover.fail(working, status: caller, hints: [("Close", "esc")])
+                if let skillie { lentCard = LentCard(skillie: skillie, caller: caller, working: working) }
+            }
             let message: String
             do {
                 message = try await work()
@@ -3463,11 +3468,17 @@ extension AIActionController: ToolPresenter {
                 }
                 lentCard = nil
             }
-            // Closed meanwhile, or nothing to say: done, the card is free.
-            guard popover.isVisible, popover.shownText == working, !message.isEmpty else {
-                if popover.shownText == working { popover.hide() }
-                releaseCardForOutsideAgent()
-                return
+            if showsWorking {
+                // Closed meanwhile, or nothing to say: done, the card is free.
+                guard popover.isVisible, popover.shownText == working, !message.isEmpty else {
+                    if popover.shownText == working { popover.hide() }
+                    releaseCardForOutsideAgent()
+                    return
+                }
+            } else {
+                // Nothing shown while it worked: the card only for its line.
+                guard !message.isEmpty else { return }
+                await takeCardForOutsideAgent(caller)
             }
             noteText = message
             popover.fail(message, status: caller, hints: [("Close", "esc")], color: .labelColor)

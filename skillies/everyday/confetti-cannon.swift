@@ -2,6 +2,7 @@
 // @skilli.schemaVersion 1
 // @skilli.title Confetti Cannon
 // @skilli.mode silent
+// @skilli.showsRunning false
 // @skilli.packageName Everyday
 // @skilli.icon 🎉
 // @skilli.description Fire confetti from the bottom corners of the screen the pointer is on. Clicks go through it; gone after five seconds. Give it a key in Settings → Keys → Add Shortcut, under Skillies. Needs Swift, which comes with Xcode or its Command Line Tools.

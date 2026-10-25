@@ -41,7 +41,8 @@ class CatalogTests(unittest.TestCase):
 
     def test_invalid_metadata_and_duplicate_ids_fail(self):
         original = self.path.read_text()
-        for old, new in [('@skilli.title', '@skilli.wrong'), ('@skilli.mode compact', '@skilli.mode unknown'), ('MIT License', 'No license')]:
+        for old, new in [('@skilli.title', '@skilli.wrong'), ('@skilli.mode compact', '@skilli.mode unknown'),
+                         ('@skilli.mode compact', '@skilli.mode compact\n# @skilli.showsRunning maybe'), ('MIT License', 'No license')]:
             with self.subTest(old=old):
                 self.path.write_text(original.replace(old, new))
                 with self.assertRaises(ValueError):

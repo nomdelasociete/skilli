@@ -19373,7 +19373,7 @@ final class SelfTest {
     /// without the executable bit runs through its shebang; a Raycast
     /// Script Command imported becomes one; agents list, create and run.
     private func scriptCommandsRun() async {
-        let name = "Skillies: listed, run from the launcher (last line, arguments with a dropdown, inline line), failures and shebang; Raycast import; agents create, list and run"
+        let name = "Skillies: listed, run from the launcher (last line, arguments with a dropdown, inline line), failures and shebang, the Running… card unless showsRunning false; Raycast import; agents create, list and run"
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/skillies", isDirectory: true)
         let raycast = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/raycast", isDirectory: true)
         for url in [folder, raycast] { try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true) }
@@ -19389,6 +19389,8 @@ final class SelfTest {
         write("clock.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Selftest Clock\n# @skilli.mode inline\n# @skilli.refreshTime 10s\necho tick-\(marker)\n")
         write("fail.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Failing Selftest\n# @skilli.mode compact\necho \"Something broke\"\nexit 3\n")
         write("plain.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Not Executable Selftest\n# @skilli.mode silent\necho shebang-\(marker)\n", executable: false)
+        write("slow.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Slow Selftest\n# @skilli.mode compact\nsleep 1.5\necho slow-\(marker)\n")
+        write("quiet.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Quiet Selftest\n# @skilli.mode compact\n# @skilli.showsRunning false\nsleep 1.5\necho quiet-\(marker)\n")
         write("notes.txt", "# @skilli.title Not a skillie without a mode\n")
         write("flush.sh", "#!/bin/bash\n# @raycast.schemaVersion 1\n# @raycast.title Imported From Raycast Selftest\n# @raycast.mode compact\necho imported-\(marker)\n", in: raycast)
         write("readme.md", "Not a command", in: raycast)
@@ -19399,7 +19401,7 @@ final class SelfTest {
             return
         }
         let titles = library.all().map(\.title)
-        let listed = titles == ["Failing Selftest", "Greet Someone Selftest", "Not Executable Selftest", "Say Hello Selftest", "Selftest Clock"]
+        let listed = titles == ["Failing Selftest", "Greet Someone Selftest", "Not Executable Selftest", "Quiet Selftest", "Say Hello Selftest", "Selftest Clock", "Slow Selftest"]
         let launcher = context.launcher
         let popover = context.aiActions.popover
         var details = ["listed: \(listed) (\(titles.joined(separator: ", ")))"]
@@ -19482,6 +19484,22 @@ final class SelfTest {
         let shebang = (try? await library.run(plain, arguments: []))?.output.contains("shebang-\(marker)") == true
         details.append("failure: \(failed), shebang: \(shebang)")
 
+        // The "Running…" card while one runs, then its line; one that says
+        // `showsRunning false` shows no card until its line.
+        var running: [Bool] = []
+        var said: [Bool] = []
+        for title in ["Slow Selftest", "Quiet Selftest"] {
+            guard let command = library.all().first(where: { $0.title == title }) else { continue }
+            context.aiActions.runScript?(command, false)
+            running.append(await waitUntil(timeout: 1) { popover.isVisible && popover.shownText == "Running “\(title)”…" } != nil)
+            let line = (title == "Slow Selftest" ? "slow-" : "quiet-") + marker
+            said.append(await waitUntil(timeout: 5) { popover.isVisible && popover.shownText == line } != nil)
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            _ = await waitUntil(timeout: 1) { !popover.isVisible }
+        }
+        let runningCard = running == [true, false] && said == [true, true]
+        details.append("Running… card shown \(running) (default, showsRunning false), line after \(said)")
+
         // Raycast's Script Command imported: renamed metadata, then it runs.
         let imported: (imported: [String], skipped: Int) = (try? library.importRaycast([raycast])) ?? ([], 0)
         let importedCommand = library.all().first { $0.title == "Imported From Raycast Selftest" }
@@ -19512,7 +19530,7 @@ final class SelfTest {
         }
         await closeSettings()
 
-        record(name, listed && hello && lastLine && asked && missingSaid && argumentFooter == ["Next ↩", "Actions ⌘K"] && tabActions && dropdown && greeted && inline && inlineRow && shownInMenuBar && switchOn && goneFromMenuBar && failed && shebang && importOK
+        record(name, listed && hello && lastLine && asked && missingSaid && argumentFooter == ["Next ↩", "Actions ⌘K"] && tabActions && dropdown && greeted && inline && inlineRow && shownInMenuBar && switchOn && goneFromMenuBar && failed && shebang && runningCard && importOK
                && created.hasPrefix("Created the skillie “Selftest Echo”") && duplicate && toolListed && toolRun == "Hi Max, you look calm"
                && echoed == "made-zebra" && missing, details.joined(separator: "; "), nil)
     }
