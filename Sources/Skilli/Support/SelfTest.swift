@@ -12679,7 +12679,7 @@ final class SelfTest {
     /// killed at its limit (2 s) and 3 s more. Nothing gets past the
     /// approval: no decision key needed, no app touched.
     private func skillieStopsWithItsStep() async {
-        let name = "A skillie stopped at its time limit stops its step: its `Skilli call` ends with it, the unanswered approval goes, the card says it failed"
+        let name = "A skillie stopped at its time limit stops its step: its `Skilli call` ends with it, the unanswered approval goes, the card says it failed (showsRunning false too)"
         guard let library = context.tools.tools.scripts else {
             record(name, false, "no skillies", nil)
             return
@@ -12735,6 +12735,26 @@ final class SelfTest {
         if popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
         _ = await waitUntil(timeout: 3) { !popover.isVisible }
 
+        // The same with `showsRunning false`: no card of its own, its call
+        // takes the card as an agent's; at the limit that approval goes all
+        // the same and the card says it failed.
+        let quietText = text.replacingOccurrences(of: "Wait Forever", with: "Wait Forever Quietly")
+            .replacingOccurrences(of: "# @skilli.mode compact", with: "# @skilli.mode compact\n# @skilli.showsRunning false")
+        let quietFile = folder.appendingPathComponent("wait-forever-quietly.sh")
+        try? quietText.write(to: quietFile, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: quietFile.path)
+        var quietAsked = false
+        var quietEnded = false
+        if let quiet = ScriptCommand.parse(quietText, path: quietFile.path), !quiet.showsRunning {
+            context.aiActions.runScript?(quiet, false)
+            quietAsked = await waitUntil(timeout: 10) { popover.isVisible && popover.phase == .approving } != nil
+            quietEnded = await waitUntil(timeout: 25) {
+                popover.isVisible && popover.phase != .approving && popover.shownText.hasPrefix("“Wait Forever Quietly” failed")
+            } != nil
+        }
+        if popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        _ = await waitUntil(timeout: 3) { !popover.isVisible }
+
         // A script that ended at once, leaving behind what holds its output
         // and ignores SIGTERM: stopped at the limit all the same, killed 3 s on.
         let stubborn = folder.appendingPathComponent("leave-behind.sh")
@@ -12759,8 +12779,9 @@ final class SelfTest {
             let leftover = (try? String(contentsOf: leftPID, encoding: .utf8)).flatMap { pid_t($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
             if let leftover { leftGone = await waitUntil(timeout: 3) { kill(leftover, 0) != 0 } != nil }
         }
-        record(name, asked && ended != nil && callGone && took < .seconds(15) && leftGone && leftTook < .seconds(10),
+        record(name, asked && ended != nil && callGone && took < .seconds(15) && quietAsked && quietEnded && leftGone && leftTook < .seconds(10),
                "asked: \(asked) “\(askedText)”; ended after \(Int(took.milliseconds)) ms (limit 6 s); call \(pid.map(String.init) ?? "none") gone: \(callGone); card \(card); "
+                   + "showsRunning false: asked \(quietAsked), approval gone and failure said \(quietEnded); "
                    + "left behind, ignoring SIGTERM: run returned after \(Int(leftTook.milliseconds)) ms (limit 2 s), gone: \(leftGone)",
                took.milliseconds)
     }
@@ -19491,7 +19512,10 @@ final class SelfTest {
         for title in ["Slow Selftest", "Quiet Selftest"] {
             guard let command = library.all().first(where: { $0.title == title }) else { continue }
             context.aiActions.runScript?(command, false)
-            running.append(await waitUntil(timeout: 1) { popover.isVisible && popover.shownText == "Running “\(title)”…" } != nil)
+            // The quiet one: no card at all before its line (it prints after 1.5 s).
+            running.append(await waitUntil(timeout: 1) {
+                popover.isVisible && (title == "Quiet Selftest" || popover.shownText == "Running “\(title)”…")
+            } != nil)
             let line = (title == "Slow Selftest" ? "slow-" : "quiet-") + marker
             said.append(await waitUntil(timeout: 5) { popover.isVisible && popover.shownText == line } != nil)
             await pressKey(nil, code: CGKeyCode(kVK_Escape))

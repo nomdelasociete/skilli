@@ -51,6 +51,9 @@ final class AIActionController {
     /// The card shows a question or approval for an agent outside a command:
     /// Esc answers it instead of cancelling a command.
     private var servesOutsideAgent = false
+    /// The skillie (`SkillieCall`) whose call took the card as an outside
+    /// agent's, nil for any other caller; read with `servesOutsideAgent`.
+    private var cardSkillie: String?
     /// A skillie's run holding the card with its working line: its own
     /// calls (`SkillieCall`) borrow it rather than wait for its end.
     private var lentCard: LentCard?
@@ -2888,6 +2891,7 @@ extension AIActionController: ToolPresenter {
             try? await Task.sleep(for: .milliseconds(200))
         }
         servesOutsideAgent = true
+        cardSkillie = SkillieCall.id
         // Next to the text being edited, like a command's card; the pointer
         // when there is none.
         popover.present(title: caller, at: nearSelection())
@@ -3467,6 +3471,19 @@ extension AIActionController: ToolPresenter {
                     }
                 }
                 lentCard = nil
+            }
+            if !showsWorking, let skillie, servesOutsideAgent, cardSkillie == skillie {
+                // One of its calls still holds the card (an approval, a
+                // question, a step): stopped as esc would, as a lent card's
+                // are. The card is that call's alone, so nothing else is.
+                outsideControl?.cancel()
+                outsideControl = nil
+                answerQuestion(nil)
+                answerApproval(.deny)
+                let deadline = ContinuousClock.now + .seconds(10)
+                while servesOutsideAgent, cardSkillie == skillie, ContinuousClock.now < deadline {
+                    try? await Task.sleep(for: .milliseconds(200))
+                }
             }
             if showsWorking {
                 // Closed meanwhile, or nothing to say: done, the card is free.
