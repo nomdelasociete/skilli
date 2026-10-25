@@ -2939,7 +2939,9 @@ re-investigating.
   by default (the user gives it one). `WindowLearner` reads an app's
   windows off the main thread when it comes to the front and when it
   leaves it (Accessibility, 0.2 s timeout; CoreGraphics' window list for
-  the apps beside it): a window moved in between, not where skil.li put
+  the apps beside it), and a window the app in front creates as it opens
+  (one `kAXWindowCreatedNotification` observer, on that app only): a
+  window moved in between, not where skil.li put
   it (`WindowManager.didPlace` marks every move skil.li makes), is one
   placement; ✦W, the launcher's places and Ask's are one too, counted
   double (`WindowManager.placedByUser`). Placements per app and set of

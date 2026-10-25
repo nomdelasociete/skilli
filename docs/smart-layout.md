@@ -177,7 +177,8 @@ placement:
 skil.li reads a window's place at moments it already sees, not on every
 move (`WindowLearner`):
 
-- **At launch**: every app's windows, where they are.
+- **At launch**: every app's windows, where they are; an app launched
+  later, once it finished launching.
 - **An app comes to the front** (`NSWorkspace` activate): its visible
   standard windows are read (frame, display, title, document): where
   they are before the user works in it.
@@ -195,9 +196,10 @@ move (`WindowLearner`):
 
 Readings run off the main thread (Accessibility with a 0.2 s timeout per
 app, CoreGraphics' window list for the apps beside it: no permission).
-No Accessibility observer stays on any app for learning. A window opened
-and moved within the same visit to its app is not seen moving (no
-reading before it): learned the next time it moves, or at once with ✦W.
+One Accessibility observer, on the app in front only (window created):
+a window it opens during the visit is read where it opened, so moving it
+before leaving the app counts too. An app just launched is read once it
+finished launching. No observer on the other apps.
 
 Every window skil.li moves itself (Arrange, a layout, ✦W) is marked
 where it put it: found there (as the app rounded it, 24 pt), it is not

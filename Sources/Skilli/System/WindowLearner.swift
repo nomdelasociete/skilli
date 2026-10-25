@@ -7,9 +7,10 @@ import SkilliCore
 /// leaves it, and a window that moved in between was moved by the user,
 /// one placement. A place given with ✦W is one too, counted double. What
 /// skil.li moved itself (Arrange, a layout, ✦W) is never taken for the
-/// user's move. No observer on every window: the moments are the ones
-/// macOS already tells. Read off the main thread; kept in
-/// `placements.json`, on the Mac only.
+/// user's move. One Accessibility observer, on the app in front only:
+/// a window it opens meanwhile is read where it opened, so a move of it
+/// before the user leaves the app counts too. Read off the main thread;
+/// kept in `placements.json`, on the Mac only.
 @MainActor
 final class WindowLearner {
     private struct Key: Hashable {
@@ -52,6 +53,19 @@ final class WindowLearner {
     private var displaysChanged: ContinuousClock.Instant?
     /// When each app's last reading was asked for.
     private var readAt: [pid_t: ContinuousClock.Instant] = [:]
+    /// Windows created in the app in front (one app at a time).
+    private var observer: (pid: pid_t, observer: AXObserver, app: AXUIElement)?
+
+    /// What a reading is for.
+    fileprivate enum Use {
+        /// Where the app's windows are as it comes to the front.
+        case baseline
+        /// Only the windows not read yet: just opened.
+        case newWindows
+        /// As it leaves the front: what moved since is learned.
+        case learn
+    }
+
     private var observers: [NSObjectProtocol] = []
     private var saving: Task<Void, Never>?
 
@@ -69,17 +83,22 @@ final class WindowLearner {
         guard observers.isEmpty else { return }
         displays = Displays.current()
         let workspace = NSWorkspace.shared.notificationCenter
-        for (name, learning) in [(NSWorkspace.didActivateApplicationNotification, false), (NSWorkspace.didDeactivateApplicationNotification, true)] {
+        for (name, use) in [(NSWorkspace.didActivateApplicationNotification, Use.baseline), (NSWorkspace.didDeactivateApplicationNotification, .learn),
+                            (NSWorkspace.didLaunchApplicationNotification, .newWindows)] {
             observers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
                 let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
                 MainActor.assumeIsolated {
-                    if let pid, let app = NSRunningApplication(processIdentifier: pid) { self?.read(app, learning: learning) }
+                    guard let self, let pid, let app = NSRunningApplication(processIdentifier: pid) else { return }
+                    self.read(app, use)
+                    // The app in front: its new windows are read as they open
+                    // (an app just launched can be observed only once launched).
+                    if use != .learn, NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { self.watchNewWindows(of: app) }
                 }
             })
         }
         observers.append(workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
-                if let front = NSWorkspace.shared.frontmostApplication { self?.read(front, learning: true) }
+                if let front = NSWorkspace.shared.frontmostApplication { self?.read(front, .learn) }
                 self?.save()
             }
         })
@@ -90,6 +109,7 @@ final class WindowLearner {
                 self.seen = self.seen.filter { $0.key.pid != pid }
                 self.placedBySkilli = self.placedBySkilli.filter { $0.key.pid != pid }
                 self.readAt[pid] = nil
+                if self.observer?.pid == pid { self.unwatch() }
             }
         })
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil,
@@ -102,7 +122,8 @@ final class WindowLearner {
             }
         })
         // Where every window is now: the first move from here is learned.
-        for app in NSWorkspace.shared.runningApplications where Self.counts(app) { read(app, learning: false) }
+        for app in NSWorkspace.shared.runningApplications where Self.counts(app) { read(app, .baseline) }
+        if let front = NSWorkspace.shared.frontmostApplication { watchNewWindows(of: front) }
     }
 
     func stop() {
@@ -111,6 +132,7 @@ final class WindowLearner {
             NotificationCenter.default.removeObserver(observer)
         }
         observers.removeAll()
+        unwatch()
         save()
     }
 
@@ -120,25 +142,31 @@ final class WindowLearner {
 
     // MARK: - Readings
 
-    /// The app's windows read, off the main thread; with `learning`, each
-    /// one that moved since the last reading (not by skil.li) is learned.
-    private func read(_ app: NSRunningApplication, learning: Bool) {
+    /// The app's windows read, off the main thread; to learn, each one that
+    /// moved since the last reading (not by skil.li) is learned.
+    private func read(_ app: NSRunningApplication, _ use: Use) {
         guard isOn(), Self.counts(app), let bundleID = app.bundleIdentifier, !leftOut().contains(bundleID) else { return }
         let pid = app.processIdentifier
         let asked = ContinuousClock.now
         Task { [weak self] in
             let (readings, onScreen) = await Task.detached(priority: .utility) { (Self.windows(pid: pid), Self.onScreen()) }.value
-            self?.take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, learning: learning, asked: asked)
+            self?.take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, use: use, asked: asked)
         }
     }
 
-    private func take(_ readings: [Reading], pid: pid_t, bundleID: String, onScreen: [OnScreen], learning: Bool,
+    private func take(_ readings: [Reading], pid: pid_t, bundleID: String, onScreen: [OnScreen], use: Use,
                       asked: ContinuousClock.Instant) {
+        if use == .newWindows {
+            for reading in readings where seen[Key(pid: pid, window: reading.window)] == nil {
+                seen[Key(pid: pid, window: reading.window)] = reading.frame
+            }
+            return
+        }
         // The first reading since the displays changed only says where
         // macOS put the windows.
         let lastAsked = readAt[pid]
         readAt[pid] = asked
-        var learning = learning
+        var learning = use == .learn
         if let changed = displaysChanged, lastAsked.map({ $0 < changed }) ?? true { learning = false }
         var learned = 0
         for reading in readings {
@@ -176,6 +204,36 @@ final class WindowLearner {
         return best
     }
 
+    // MARK: - Windows opened in the app in front
+
+    /// One observer, on `app` only: each window it creates is read where it
+    /// opened. None for skil.li or an app not counted.
+    private func watchNewWindows(of app: NSRunningApplication) {
+        let pid = app.processIdentifier
+        guard observer?.pid != pid else { return }
+        unwatch()
+        guard isOn(), Self.counts(app), !leftOut().contains(app.bundleIdentifier ?? "") else { return }
+        var created: AXObserver?
+        guard AXObserverCreate(pid, windowCreatedCallback, &created) == .success, let made = created else { return }
+        let element = AXUIElementCreateApplication(pid)
+        let refcon = Unmanaged.passUnretained(self).toOpaque()
+        guard AXObserverAddNotification(made, element, kAXWindowCreatedNotification as CFString, refcon) == .success else { return }
+        CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(made), .defaultMode)
+        observer = (pid, made, element)
+    }
+
+    private func unwatch() {
+        guard let watched = observer else { return }
+        AXObserverRemoveNotification(watched.observer, watched.app, kAXWindowCreatedNotification as CFString)
+        CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(watched.observer), .defaultMode)
+        observer = nil
+    }
+
+    fileprivate func windowCreated() {
+        guard let pid = observer?.pid, let app = NSRunningApplication(processIdentifier: pid) else { return }
+        read(app, .newWindows)
+    }
+
     // MARK: - What skil.li moved
 
     /// skil.li put this window there itself: not the user's move.
@@ -211,7 +269,7 @@ final class WindowLearner {
         let pid = front.processIdentifier
         let asked = ContinuousClock.now
         let (readings, onScreen) = await Task.detached(priority: .userInitiated) { (Self.windows(pid: pid), Self.onScreen()) }.value
-        take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, learning: true, asked: asked)
+        take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, use: .learn, asked: asked)
     }
 
     // MARK: - Forget, keep
@@ -310,6 +368,19 @@ final class WindowLearner {
         AXValueGetValue(position as! AXValue, .cgPoint, &point)
         AXValueGetValue(size as! AXValue, .cgSize, &extent)
         return CGRect(origin: point, size: extent)
+    }
+}
+
+/// Accessibility calls it on the main run loop, where the observer's source
+/// was added. A free function: a closure written in main-actor code would
+/// be isolated to it.
+private func windowCreatedCallback(_ observer: AXObserver, _ element: AXUIElement, _ notification: CFString, _ refcon: UnsafeMutableRawPointer?) {
+    // The learner's address, Sendable, into the main actor.
+    let address = UInt(bitPattern: refcon)
+    guard address != 0 else { return }
+    MainActor.assumeIsolated {
+        guard let pointer = UnsafeRawPointer(bitPattern: address) else { return }
+        Unmanaged<WindowLearner>.fromOpaque(pointer).takeUnretainedValue().windowCreated()
     }
 }
 

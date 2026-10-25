@@ -17663,13 +17663,14 @@ final class SelfTest {
         let listed = await arrange()
         let alphaArranged = await at(alpha, left)
         let arranged = await at(beta, right) && alphaArranged
+        let arrangedFrames = "\(frame(alpha).map(Self.describe) ?? "?"), \(frame(beta).map(Self.describe) ?? "?")"
         guard ensureFrontmost(bundleID, before: "arrange windows again") else { return }
         let listedAgain = await arrange()
         let alphaBack = await at(alpha, away)
         let putBack = await at(beta, awayBeta) && alphaBack
         await closeTestWindows()
         record(name, placedByHand && learned && movedAway && listed && arranged && listedAgain && putBack,
-               "put by hand: \(placedByHand), learned as TextEdit left the front: \(learned), moved away: \(movedAway); “arrange windows” listed: \(listed), each on its half: \(arranged) (\(frame(alpha).map(Self.describe) ?? "?"), \(frame(beta).map(Self.describe) ?? "?")); again listed: \(listedAgain), put back: \(putBack)",
+               "put by hand: \(placedByHand), learned as TextEdit left the front: \(learned), moved away: \(movedAway); “arrange windows” listed: \(listed), each on its half: \(arranged) (\(arrangedFrames)); again listed: \(listedAgain), put back: \(putBack)",
                nil)
     }
 
