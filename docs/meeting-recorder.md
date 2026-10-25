@@ -2,8 +2,10 @@
 
 Status: 2026-10-23, spec agreed, target raised: on par with omarchy's
 recorder, then better where skil.li knows the Mac. 2026-10-23: phase 1
-built (PR #35). 2026-10-24: phase 2, the Moment below, being built; its
-views and states in `docs/meeting-recorder-views.md`.
+built (PR #35). 2026-10-24: phase 2, the Moment below, built (PR #38).
+2026-10-25: phase 3, the webcam and the screen, being built; the
+Moment checked again for them and their views and states in
+`docs/meeting-recorder-views.md` ("Phase 3").
 
 Asked for: a meeting recorder like omarchy-meeting-recorder (an
 open-source recorder for Omarchy Linux): your microphone and the

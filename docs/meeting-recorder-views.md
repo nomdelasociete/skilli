@@ -3,8 +3,10 @@
 Phase 1: spec, 2026-10-23, written before building, then brought in line
 with three rounds of captures on the test Mac (light and dark). Phase 2
 (the moment, below): spec, 2026-10-24, written before building from the
-Moment section of `docs/meeting-recorder.md`. That file says what is
-recorded, kept and measured; this says what each phase shows. Each view
+Moment section of `docs/meeting-recorder.md`. Phase 3 (the webcam and
+the screen, below): spec, 2026-10-25, written before building. That
+file says what is recorded, kept and measured; this says what each
+phase shows. Each view
 is drawn by the code that runs it (`remote recorder` saves
 `recorder-*.png`).
 
@@ -514,3 +516,263 @@ Recordings
 The webcam and the screen (the window found is kept for phase 3),
 renaming speakers, editing lines, import, chapters and the ⌘K actions
 after a transcript, search by meaning (⇥), the engine choice.
+
+# Phase 3: the webcam and the screen
+
+Spec, 2026-10-25, written before building from `docs/meeting-recorder.md`
+(Target, Before, During, Done, Privacy, and Measured's "The screen" and
+"In step over an hour"). Two sources more, both off until the user turns
+them on, recorded by the same clock as the sound; the text of what the
+screen shows read on this Mac.
+
+## The moment, again
+
+Phase 3 changes none of the Moment's answers, checked one by one:
+
+1. **When**: the same moment, the meeting's start. The webcam and the
+   screen are never on by themselves: off in every case unless the user
+   turns them on (a click in the Record card, the red dot's menu) or set
+   them on by default (Settings → Recorder). In person, the screen stays
+   off even then (no call's window to record); the webcam follows the
+   setting.
+2. **The path**: the same keys. ⌘R on the meeting card, the launcher's
+   row or the menu bar records with the case's sources plus the webcam
+   and the screen as Settings → Recorder has them; the Record card's
+   rows turn either on with a click; the red dot's menu, during the
+   call.
+3. **Hint or push**: nothing new is pushed. One thing is said that the
+   user would not see otherwise: a screen that stops giving pictures
+   (Measured: a minimized or hidden window gives none; Chrome's, fully
+   covered, the same one again and again). Said where the recording is
+   already shown, the menu bar, never a card during the call.
+4. **Deterministic**: the window is the case's app's (its window holding
+   the meeting's tab in a browser, else its front window: the window
+   list), or the one the user picks; the meeting's tab is found by its
+   address (code, `MeetingTab` in SkilliCore). The slides' text is read
+   by Vision's text recognition on this Mac: a reading, not a judgment,
+   and nothing of it leaves the Mac (Privacy's table: "read slides",
+   nowhere).
+5. **Wrong**: a wrong window costs that window's pictures until it is
+   changed: the red dot's menu picks another (or turns the screen off)
+   from then on, nothing asked; the time before stays as recorded. A
+   wrong tab: the user picks the right one in the browser, which is
+   recorded from then on (macOS records the window, not a tab). The
+   webcam not wanted: off from the same menu.
+
+## The Record card: four sources
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ● RECORD A MEETING                             English ⌃⌄ │
+│                                                          │
+│ Weekly design review▌                                    │
+│ With Paul, Anna and 4 others                             │
+│                                                          │
+│ 🎙  Microphone      MacBook Pro Microphone      ▮▮▮▮▯▯   │
+│ 🔊  The Mac's sound  Every app                  ▮▮▯▯▯▯   │
+│ 📷  Webcam           FaceTime HD Camera          ▕▓▓▓▏   │  live, 46 × 26
+│ 🖥  Screen           Google Chrome · Meet ⌃⌄     ▕▓▓▓▏   │  live, its window
+│                                                          │
+│ ⓘ  The meeting's tab comes forward as recording starts; │
+│    a tab you pick later is recorded instead. Keep its   │
+│    window in sight.                                     │
+│ ──────────────────────────────────────────────────────── │
+│ Cancel esc                                  ( Record ↩ ) │
+└──────────────────────────────────────────────────────────┘
+```
+
+- **Four rows**, the same type and height (26 pt) as phase 1's two; the
+  webcam's and the screen's show a picture where the sound shows a
+  meter: 46 × 26 pt, corners of 4 pt, a hairline around it, live (the
+  webcam mirrored as calls show you; recorded as the camera sees). Off:
+  "Off" in the secondary color, no picture, as the sound's rows.
+- **A click on a row** turns it on or off, as phase 2's.
+- **The webcam**: macOS's preferred camera (`systemPreferredCamera`),
+  its name. Asked the first time it is turned on (macOS's question over
+  the card, which steps down meanwhile, as for the microphone). Refused:
+  "Not allowed · ⌘↩ opens Privacy" in orange, no picture. No camera on
+  this Mac: "No camera". The call's app using it too is fine (macOS
+  shares a camera).
+- **The screen**: the window, named "App · its title" (the title cut to
+  fit; read on this Mac, never sent anywhere). Turned on, it is the
+  meeting's window when the case has one (the call's app's window; in a
+  browser, the window holding the meeting's tab), else the list of
+  windows opens under the row and the one picked is recorded; none
+  picked, it stays off.
+  - **⌃⌄** after the name lists the windows on screen: "The meeting's
+    window" first when one is known, then each app's normal windows,
+    front to back, "App · title" (skil.li's own left out); the one
+    recorded checked. The same list as the red dot's menu.
+  - Screen Recording never given: macOS's question as it is turned on;
+    refused: "Not allowed · ⌘↩ opens Privacy" in orange. macOS applies
+    it once skil.li reopens (`Relaunch`, as for "do it here").
+- **A meeting in a browser** (the screen on, its window the meeting's):
+  one note line under the sources, in the card's note style.
+  - Its tab can be brought forward (Safari, Chrome's family, their
+    Automation allowed, a tab on the meeting's address): "The
+    meeting's tab comes forward as recording starts; a tab you pick
+    later is recorded instead. Keep its window in sight."
+  - It cannot: "Bring the meeting's tab forward in Arc: its window is
+    recorded as it is." The reason in place of "in Arc": "in Firefox"
+    (a browser skil.li does not script), "no tab of Chrome is on the
+    meeting's address", "Chrome said no to skil.li · ⌘↩ opens
+    Automation" (refused in Privacy & Security → Automation). macOS's
+    question for Automation, never asked before, comes as the screen is
+    turned on (the card steps down), so ↩ never waits on it.
+  - A window of an app (Zoom, Discord…): "Keep the call's window in
+    sight: a minimized or hidden window gives no picture."
+- **⌘↩** opens the list of the permission a row says is missing (the
+  camera, Screen Recording, Automation), the first one down the rows.
+- **↩**: the tab comes forward (selected, never reloaded, the browser
+  left where it is: the user's app keeps the keyboard), then everything
+  on records from that moment.
+- Consent: phase 1's paragraph already says the others must agree, for
+  the webcam and the screen as for the sound; nothing added.
+
+## The menu bar while recording
+
+```
+ ● 12:04 ⣀⣤⣶⣤ ▭̸      ← the screen gives no picture: an orange mark
+```
+
+- **The label**: as phase 1's; while the screen gives no picture, a
+  small screen with a slash, in orange, after the waves (its
+  accessibility label "Recording, 12:04, the screen gives no picture").
+  It goes when the pictures come back. Nothing else is ever added to
+  the label: a source on or off is not shown there.
+- **The red dot's menu** adds the two sources after the sound's, the
+  screen's window in its submenu:
+
+  ```
+  ✓ Microphone · MacBook Pro Microphone  ▮▮▮▯
+  ✓ The Mac's Sound · Every app          ▮▯▯▯
+  ✓ Webcam · FaceTime HD Camera
+  ✓ Screen · Google Chrome · Meet          ▸   The Meeting's Window
+  The Call: Google Chrome                  ▸   ✓ Google Chrome · Meet
+  ──────────                                     Keynote · Q3 review
+  Show in Finder                                 ──────
+                                                 Off
+  ```
+
+  - **Webcam**: a click turns it off or on for the rest of the
+    recording; off, the camera is released (its green light goes) and
+    `webcam.mp4` holds its last picture, then black, until it is on
+    again. Never on in this recording: no file.
+  - **Screen ▸**: the window recorded checked; another picked is
+    recorded from then on, in the same `screen.mp4` (its pictures
+    scaled into the file's size); Off stops it. The meeting's window
+    once known comes first.
+  - **No picture**, the item says why, in place of the window's name:
+    "Screen · Google Chrome is minimized: nothing recorded until it's
+    back", "… is hidden …", "Screen · Google Chrome stopped painting:
+    keep some of its window in sight" (fully covered, the same picture
+    for 5 s), "Screen · the window closed: pick another ▸". Measured
+    (Chrome, Arc): a covered window that keeps painting is no failure,
+    and a still slide in sight is none either: only a window covered
+    whole and giving no new picture for 5 s is.
+- Paused: nothing written to any of the four (the pictures as the
+  sound), the clock stopped.
+
+## The files
+
+- `webcam.mp4`: H.264, 1280 × 720 at most, 30 pictures a second;
+  `screen.mp4`: H.264, 1920 pt wide at most (the window's own pixels,
+  scaled to fit), 15 a second. Both written as they come, in fragments
+  of a second (a crash keeps what was recorded, as the sound's).
+- **In step** (Measured, "In step over an hour"): each picture at its
+  own time, the host clock's (the camera's clock converted to it), cut
+  where the sound is cut: the start, each pause, the stop, the same host
+  moments for the four tracks. A picture between two is held (a still
+  slide costs next to nothing); each file ends at the stop.
+- `slides.json`: what the screen showed, read on this Mac:
+  `[{ "start": 75.4, "lines": ["Q3 review", "Revenue up 12 %"] }]`,
+  the time on the recording's clock (pauses out).
+
+## Reading the slides
+
+From the screen's own pictures, on this Mac (Vision's text
+recognition), nothing kept but the text:
+
+- Twice a second the picture is compared with the one last read (its
+  brightness on a 32 × 20 grid); when it changed, its text is read, at
+  most once a second.
+- The lines new since the last reading are a slide, timed at the
+  change: the last picture before the reading that differed from the
+  one read before (so a slide shown at 1:15.4 is at 1:15.4 or 1:15.9,
+  never later; the check: within a second).
+- Lines seen in most of the recording's readings (the browser's tabs,
+  the call's own buttons, the people's names under their videos) are
+  taken out of every slide at Stop; a slide left with no line goes.
+- The webcam is never read.
+
+## The recording's window
+
+```
+┌ Weekly design review ─────────────────────────────────────────────────┐
+│ Weekly design review                                                  │
+│ Wed 22 Oct 2026, 14:00 · 32 min · English · with Paul, Anna and 4…    │
+│                                                                       │
+│ ▶  12:04 / 32:10                                                      │
+│ Me    ▁▂▅▃▁  ▂▆▇▃▁       ▁▃▂          │                                │
+│ Them      ▃▆▅▂    ▁▂▆▇▅▃▂     ▅▆▃      │                               │
+│ ───────────────────────────────────────────────────────────────────── │
+│ Me      0:00  Hello everyone, can you…      ┌──────────────────────┐  │
+│ Them    0:04  Yes, loud and clear.          │                      │  │
+│ Screen  0:05  Q3 review · Revenue up 12 %   │       screen         │  │
+│ Them    0:07  I can hear you. Ingrid…       │                      │  │
+│                                             └──────────────────────┘  │
+│                                             ┌──────────┐              │
+│                                             │  webcam  │              │
+│                                             └──────────┘              │
+│ ───────────────────────────────────────────────────────────────────── │
+│      Play space   Copy Transcript ⌘C   Show in Finder ⌘↩   Delete ⌘⌫ │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+- **Beside the transcript**, on its right, a column 260 pt wide: the
+  screen at its own shape, the webcam under it (half the column's
+  width), corners of 10 pt, black behind the picture. Only what was
+  recorded shows; neither: the window as phase 2's. With them it opens
+  wider (1020 × 640) and keeps 760 for the lines.
+- **In step**: the pictures play with the sound, one clock (each player
+  started at the same host time, `setRate(_:time:atHostTime:)`), seeking
+  and pausing together; a click on a line or the waveform moves them
+  too.
+- **The slides** are lines of the transcript at their time: "Screen"
+  in the tertiary color where a speaker's name goes, the slide's lines
+  joined by " · " in the secondary color. A click plays from there, as
+  any line; ⌘C's transcript leaves them out (it is what was said).
+
+## Finding recordings
+
+The slides' words are found as the words said (the same index); a row
+found by them says so: "On screen: …Revenue up 12 %…".
+
+## Settings → Recorder
+
+The sources on by default gain two rows, off:
+
+```
+Microphone                                       [✓]
+The Mac's sound                                  [✓]
+Webcam                                           [ ]
+Screen                                           [ ]
+    The sources on when nothing says otherwise (in person: the
+    microphone only; the screen is the meeting's window).
+```
+
+Settings → Privacy's Camera and Screen Recording rows name the recorder
+among what they turn on.
+
+## Said, and not said (phase 3)
+
+- Not said: the webcam or the screen turned on or off, a window picked,
+  the meeting's tab brought forward (all seen).
+- Said: in the menu bar, a screen giving no picture and why; in the
+  card, a tab that cannot be brought forward and what to do.
+
+## Not in phase 3
+
+A browser's tab recorded whatever is in front (an extension: not
+planned), the whole display, the webcam's own sound (the microphone is
+the user's side), slides as chapters (phase 5).

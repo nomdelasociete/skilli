@@ -58,17 +58,28 @@ public enum MeetingMoment {
         case nothing
     }
 
-    /// The sources a recording starts with.
+    /// The sources a recording starts with. The webcam and the screen
+    /// (phase 3) are never on by a case: only as Settings → Recorder sets
+    /// them, the screen never in person.
     public struct Sources: Equatable, Sendable {
         public var microphone: Bool
         public var macSound: Bool
+        public var webcam: Bool
+        public var screen: Bool
 
-        public init(microphone: Bool, macSound: Bool) {
+        public init(microphone: Bool, macSound: Bool, webcam: Bool = false, screen: Bool = false) {
             self.microphone = microphone
             self.macSound = macSound
+            self.webcam = webcam
+            self.screen = screen
         }
 
         public static let both = Sources(microphone: true, macSound: true)
+
+        /// The sound as a case sets it, the pictures as `defaults` do.
+        func sound(microphone: Bool, macSound: Bool, inPerson: Bool = false) -> Sources {
+            Sources(microphone: microphone, macSound: macSound, webcam: webcam, screen: screen && !inPerson)
+        }
     }
 
     /// The moment as read: the case, the meeting (if any), the call's app
@@ -119,22 +130,24 @@ public enum MeetingMoment {
         let titled = event.map { $0.title.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
         guard let event else {
             if let app = microphone.apps.first(where: isCallApp) {
-                return Reading(kind: .callWithoutEvent, event: nil, app: app, sources: .both, title: nil)
+                return Reading(kind: .callWithoutEvent, event: nil, app: app, sources: defaults.sound(microphone: true, macSound: true), title: nil)
             }
             return Reading(kind: .nothing, event: nil, app: nil, sources: defaults, title: nil)
         }
         if event.meeting != nil {
             // The app the user joined in, else the one the link opens in.
             let joined = microphone.apps.first { $0.bundleID == linkOpensIn?.bundleID } ?? microphone.apps.first
-            return Reading(kind: .callLink, event: event, app: joined ?? linkOpensIn, sources: .both, title: titled)
+            return Reading(kind: .callLink, event: event, app: joined ?? linkOpensIn, sources: defaults.sound(microphone: true, macSound: true),
+                           title: titled)
         }
         if !microphone.apps.isEmpty {
             let named = microphone.apps.first { names(event.location, $0) }
             let app = named ?? microphone.apps.first(where: isCallApp) ?? microphone.apps[0]
-            return Reading(kind: .inApp, event: event, app: app, sources: .both, title: titled)
+            return Reading(kind: .inApp, event: event, app: app, sources: defaults.sound(microphone: true, macSound: true), title: titled)
         }
         if microphone.isEmpty, let place = place(event.location) {
-            return Reading(kind: .inPerson, event: event, app: nil, sources: Sources(microphone: true, macSound: false), title: titled, place: place)
+            return Reading(kind: .inPerson, event: event, app: nil, sources: defaults.sound(microphone: true, macSound: false, inPerson: true),
+                           title: titled, place: place)
         }
         return Reading(kind: .nothing, event: event, app: nil, sources: defaults, title: titled)
     }
