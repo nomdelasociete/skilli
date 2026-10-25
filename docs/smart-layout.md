@@ -247,9 +247,13 @@ megabyte.
    every display connected. Minimized windows, hidden apps, full-screen
    windows and skil.li's own are left as they are.
 2. **A saved layout first.** When a saved layout's displays are the ones
-   connected (each surely itself) and its apps are exactly the apps with
-   a window open, Arrange applies that layout: the user's own words beat
-   what skil.li learned. Several match: the one saved last.
+   connected (each surely itself), its apps are exactly the apps with a
+   window open, and it would open nothing (no file, folder or link it
+   opens, every file it shows already open), Arrange applies that
+   layout: the user's own words beat what skil.li learned. Several
+   match: the one saved last. A layout that would open windows is put
+   back by its name, not by Arrange: Arrange again could not take back
+   what it opened.
 3. Otherwise, each window's place (How a place is chosen). Two windows
    of one app never get the same place: the one whose title or file fits
    it better keeps it (two browser windows), the other takes its next
@@ -262,6 +266,8 @@ megabyte.
    switch for Chrome and Electron, size, place, size again); one already
    there (4 pt) is left alone. Before moving, each window's frame is kept
    for Arrange again (10 s) and for ✦W R (`WindowManager.remember`).
+   Arrange again puts every window back; one that refuses is named in a
+   card and stays kept, so Arrange again once more tries it again.
 6. One line in the log with the windows, where they went, from which
    placements, and the time taken (no titles in the log). Budget: under
    150 ms for 20 windows, off the key path (the action only starts it).
@@ -340,7 +346,9 @@ places leaves that app until the place is sure again.
     for 10 s (`UndoableDeletes`).
   - Displays never arranged when plugged in (list).
   - Never place (apps, at the bottom): Arrange and Usual places leave
-    their windows, and nothing is learned from them.
+    their windows, and nothing more is learned from them; what was
+    learned before stays (Forget erases it) and counts again if the app
+    leaves the list.
 - **Skillies and agents**: `open "skilli://run/system:arrangeWindows"`
   (asks first, as Show Desktop does: every window moves) and
   `"$SKILLI_CLI" call run_mac_command command=arrangeWindows`, as every

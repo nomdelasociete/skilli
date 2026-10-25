@@ -1830,8 +1830,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if imageFolder.onImage != nil { watchImageFolder() }
             autoQuitter.schedule()
         }
-        // Never place: nothing kept about them either.
-        windowLearner.forget(apps: Set(preferences.windowNeverPlace))
     }
 
     /// What the user made, for the Catalog: the launcher's "?" and

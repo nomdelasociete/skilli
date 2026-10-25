@@ -46,6 +46,12 @@ final class WindowLearner {
     /// Where skil.li last put a window itself.
     private var placedBySkilli: [Key: CGRect] = [:]
     private var displays: [LayoutDisplay] = []
+    /// When the displays last changed: macOS moves windows itself then, so
+    /// an app's first reading after it is where its windows are, not a
+    /// move of the user's.
+    private var displaysChanged: ContinuousClock.Instant?
+    /// When each app's last reading was asked for.
+    private var readAt: [pid_t: ContinuousClock.Instant] = [:]
     private var observers: [NSObjectProtocol] = []
     private var saving: Task<Void, Never>?
 
@@ -83,11 +89,17 @@ final class WindowLearner {
                 guard let self, let pid else { return }
                 self.seen = self.seen.filter { $0.key.pid != pid }
                 self.placedBySkilli = self.placedBySkilli.filter { $0.key.pid != pid }
+                self.readAt[pid] = nil
             }
         })
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil,
                                                                 queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.displays = Displays.current() }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.displays = Displays.current()
+                self.displaysChanged = .now
+                self.placedBySkilli.removeAll()
+            }
         })
         // Where every window is now: the first move from here is learned.
         for app in NSWorkspace.shared.runningApplications where Self.counts(app) { read(app, learning: false) }
@@ -113,13 +125,21 @@ final class WindowLearner {
     private func read(_ app: NSRunningApplication, learning: Bool) {
         guard isOn(), Self.counts(app), let bundleID = app.bundleIdentifier, !leftOut().contains(bundleID) else { return }
         let pid = app.processIdentifier
+        let asked = ContinuousClock.now
         Task { [weak self] in
             let (readings, onScreen) = await Task.detached(priority: .utility) { (Self.windows(pid: pid), Self.onScreen()) }.value
-            self?.take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, learning: learning)
+            self?.take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, learning: learning, asked: asked)
         }
     }
 
-    private func take(_ readings: [Reading], pid: pid_t, bundleID: String, onScreen: [OnScreen], learning: Bool) {
+    private func take(_ readings: [Reading], pid: pid_t, bundleID: String, onScreen: [OnScreen], learning: Bool,
+                      asked: ContinuousClock.Instant) {
+        // The first reading since the displays changed only says where
+        // macOS put the windows.
+        let lastAsked = readAt[pid]
+        readAt[pid] = asked
+        var learning = learning
+        if let changed = displaysChanged, lastAsked.map({ $0 < changed }) ?? true { learning = false }
         var learned = 0
         for reading in readings {
             let key = Key(pid: pid, window: reading.window)
@@ -189,8 +209,9 @@ final class WindowLearner {
         guard isOn(), let front = NSWorkspace.shared.frontmostApplication, Self.counts(front), let bundleID = front.bundleIdentifier,
               !leftOut().contains(bundleID) else { return }
         let pid = front.processIdentifier
+        let asked = ContinuousClock.now
         let (readings, onScreen) = await Task.detached(priority: .userInitiated) { (Self.windows(pid: pid), Self.onScreen()) }.value
-        take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, learning: true)
+        take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, learning: true, asked: asked)
     }
 
     // MARK: - Forget, keep
@@ -206,14 +227,6 @@ final class WindowLearner {
     func restore(_ placements: WindowPlacements) {
         self.placements = placements
         save()
-    }
-
-    /// Never place: nothing kept about these apps either.
-    func forget(apps: Set<String>) {
-        guard !apps.isEmpty else { return }
-        let before = placements
-        placements.forget(apps)
-        if placements != before { saveSoon() }
     }
 
     /// Written at most once every 10 s.

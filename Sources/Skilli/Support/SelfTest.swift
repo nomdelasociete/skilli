@@ -17584,12 +17584,31 @@ final class SelfTest {
         func at(_ element: AXUIElement, _ target: CGRect) async -> Bool {
             await waitUntil(timeout: 2) { frame(element).map { WindowLayout.matches($0, target) } ?? false } != nil
         }
+        /// The test's own two windows closed by their close buttons (never
+        /// ⌘W: TextEdit may have the user's windows too), TextEdit quit
+        /// only when the test opened it.
+        func closeTestWindows() async {
+            for file in files {
+                guard let element = window(file) else { continue }
+                var button: CFTypeRef?
+                if AXUIElementCopyAttributeValue(element, kAXCloseButtonAttribute as CFString, &button) == .success, let button,
+                   CFGetTypeID(button) == AXUIElementGetTypeID() {
+                    AXUIElementPerformAction(unsafeDowncast(button, to: AXUIElement.self), kAXPressAction as CFString)
+                }
+            }
+            _ = await waitUntil(timeout: 2) { files.allSatisfy { window($0) == nil } }
+            if !wasRunning {
+                let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+                for app in apps { app.terminate() }
+                _ = await waitUntil(timeout: 3) { apps.allSatisfy(\.isTerminated) }
+            }
+        }
         await pause(300)
         Self.makeFrontmost(pid: pid)
         guard await waitUntil(timeout: 6, { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid && window(files[0]) != nil && window(files[1]) != nil }) != nil,
               let alpha = window(files[0]), let beta = window(files[1]), let start = frame(alpha) else {
             record(name, false, "TextEdit's two windows never came", nil)
-            await cleanUp(bundleID: bundleID, wasRunning: wasRunning)
+            await closeTestWindows()
             return
         }
         // The usable area of the screen showing the first window.
@@ -17597,19 +17616,30 @@ final class SelfTest {
             .map { (frame: WindowManager.topLeft($0.frame), visible: WindowManager.topLeft($0.visibleFrame)) }
             .max { $0.frame.intersection(start).width * $0.frame.intersection(start).height
                 < $1.frame.intersection(start).width * $1.frame.intersection(start).height }?.visible ?? .zero
-        guard let left = WindowLayout.leftHalf.frame(in: visible), let right = WindowLayout.rightHalf.frame(in: visible) else { return }
+        guard let left = WindowLayout.leftHalf.frame(in: visible), let right = WindowLayout.rightHalf.frame(in: visible) else {
+            record(name, false, "no left or right half in the visible area \(Self.describe(visible))", nil)
+            await closeTestWindows()
+            return
+        }
         // Read as TextEdit came to the front: the moves from here count.
         await pause(600)
         move(alpha, to: left)
         move(beta, to: right)
         let alphaLeft = await at(alpha, left)
         let placedByHand = await at(beta, right) && alphaLeft
-        let before = learner.placements.entries.filter { $0.key.hasPrefix(bundleID) }.map(\.value.count).reduce(0, +)
+        /// A placement of the window showing `file` at `layout`, learned.
+        func learnedAt(_ file: URL, _ layout: WindowLayout) -> Bool {
+            let title = file.deletingPathExtension().lastPathComponent
+            return learner.placements.entries.filter { $0.key.hasPrefix(bundleID + "\n") }.flatMap(\.value).contains {
+                $0.title.contains(title) && $0.place.layout == layout.rawValue
+            }
+        }
         // TextEdit leaves the front: both placements learned.
-        guard await focusTestWindow() else { return }
-        let learned = await waitUntil(timeout: 3) {
-            learner.placements.entries.filter { $0.key.hasPrefix(bundleID) }.map(\.value.count).reduce(0, +) >= before + 2
-        } != nil
+        guard await focusTestWindow() else {
+            await closeTestWindows()
+            return
+        }
+        let learned = await waitUntil(timeout: 3) { learnedAt(files[0], .leftHalf) && learnedAt(files[1], .rightHalf) } != nil
         // Somewhere else, both of them.
         let away = CGRect(x: visible.minX + 80, y: visible.minY + 60, width: min(640, visible.width / 2), height: min(480, visible.height / 2))
         let awayBeta = away.offsetBy(dx: 60, dy: 40)
@@ -17637,10 +17667,7 @@ final class SelfTest {
         let listedAgain = await arrange()
         let alphaBack = await at(alpha, away)
         let putBack = await at(beta, awayBeta) && alphaBack
-        await cleanUp(bundleID: bundleID, wasRunning: wasRunning)
-        if NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first != nil {
-            for _ in 0..<2 { await cleanUp(bundleID: bundleID, wasRunning: wasRunning) }
-        }
+        await closeTestWindows()
         record(name, placedByHand && learned && movedAway && listed && arranged && listedAgain && putBack,
                "put by hand: \(placedByHand), learned as TextEdit left the front: \(learned), moved away: \(movedAway); “arrange windows” listed: \(listed), each on its half: \(arranged) (\(frame(alpha).map(Self.describe) ?? "?"), \(frame(beta).map(Self.describe) ?? "?")); again listed: \(listedAgain), put back: \(putBack)",
                nil)

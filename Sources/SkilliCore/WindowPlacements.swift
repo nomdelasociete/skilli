@@ -183,9 +183,9 @@ public struct WindowPlacements: Codable, Equatable, Sendable {
         entries[key] = list
     }
 
-    /// Nothing learned about these apps any more (Never place).
-    public mutating func forget(_ bundleIDs: Set<String>) {
-        entries = entries.filter { entry in !bundleIDs.contains(String(entry.key.prefix { $0 != "\n" })) }
+    /// The apps something was learned about, by bundle id.
+    public var apps: Set<String> {
+        Set(entries.keys.map { String($0.prefix { $0 != "\n" }) })
     }
 
     // MARK: - Choosing
@@ -337,11 +337,16 @@ public enum WindowArrangement {
 
     /// The saved layout for what is open now, when there is one: its
     /// displays the ones connected (each surely itself), its apps the apps
-    /// with a window open. The newest when several are.
-    public static func layout(for apps: Set<String>, among layouts: [SavedWindowLayout], on displays: [LayoutDisplay]) -> SavedWindowLayout? {
+    /// with a window open, and nothing for it to open (no file, folder or
+    /// link it opens, each file it shows among `documents`, the files open
+    /// now): Arrange again only puts windows back, it cannot close what a
+    /// layout opened. The newest when several are.
+    public static func layout(for apps: Set<String>, documents: Set<String> = [], among layouts: [SavedWindowLayout],
+                              on displays: [LayoutDisplay]) -> SavedWindowLayout? {
         guard !apps.isEmpty else { return nil }
         return layouts.filter { layout in
-            guard layout.displays.count == displays.count, Set(layout.windows.map(\.bundleID)) == apps else { return false }
+            guard layout.displays.count == displays.count, Set(layout.windows.map(\.bundleID)) == apps,
+                  layout.windows.allSatisfy({ $0.opens == nil && ($0.document.map(documents.contains) ?? true) }) else { return false }
             let pairs = DisplayPairing.pair(saved: layout.displays, current: displays)
             return pairs.count == layout.displays.count && pairs.allSatisfy { $0.match == .same(.unit) || $0.match == .same(.model) }
         }.max { $0.saved < $1.saved }

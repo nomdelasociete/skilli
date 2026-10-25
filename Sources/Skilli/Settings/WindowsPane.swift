@@ -134,7 +134,7 @@ struct WindowsPane: View {
     /// offer nothing when plugged in. One row each, like the lists above.
     @ViewBuilder
     private var advancedRows: some View {
-        LabelDetail("Never place", "Arrange Windows leaves their windows where they are, and nothing is learned from them.")
+        LabelDetail("Never place", "Arrange Windows leaves their windows where they are, and learns nothing more from them.")
             .frame(maxWidth: .infinity, alignment: .leading)
             .settingAnchor("windowNeverPlace")
         ForEach(preferences.windowNeverPlace, id: \.self) { bundleID in

@@ -270,7 +270,7 @@ public enum SettingsTable {
         setting("windows", "windowLearning", "Learn where you put windows", .toggle,
                 note: "On by default. Arrange Windows puts every window where the user usually puts it, learned on this Mac from their own moves and ✦W (each app's place, its windows' titles and files, the displays, the apps beside it); off, nothing is read or kept."),
         setting("windows", "windowNeverPlace", "Never place", .list(item: "an app, by its name or bundle id", adds: true),
-                note: "Arrange Windows leaves these apps' windows where they are, and nothing is learned from them."),
+                note: "Arrange Windows leaves these apps' windows where they are, and learns nothing more from them; what it learned before stays until Forget What skil.li Learned, used again if the app leaves this list."),
         setting("windows", "autoQuit", "Quit apps you stopped using", .toggle,
                 note: "Off by default. Never the app in front, one with unsaved work, sound or a call going on, or one busy; with a deciding key, Jev reads the windows' titles first."),
         setting("windows", "autoQuitMinutes", "Unused for",

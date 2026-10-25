@@ -95,10 +95,12 @@ final class UndoableDeletes {
     /// Settings → Windows → Forget What skil.li Learned: every place
     /// learned gone at once; ⌘Z brings them back.
     func placements(in learner: WindowLearner) {
-        guard !learner.placements.isEmpty else { return }
+        let count = learner.placements.apps.count
+        guard count > 0 else { return }
         let forgotten = learner.forget()
         Log.trace("Windows learned: forgotten")
-        offer("Window Places Forgotten", "Arrange Windows learns again from where you put them.") {
+        offer("Window Places Forgotten", UndoDelete.details(count == 1 ? "1 app's places" : "\(count) apps' places",
+                                                            ": Arrange Windows learns again from where you put them.")) {
             learner.restore(forgotten)
             Log.trace("Windows learned: put back")
         }

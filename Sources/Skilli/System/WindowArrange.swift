@@ -28,7 +28,8 @@ final class WindowArrange {
         var message: String? {
             if let layoutMessage { return layoutMessage }
             if !refused.isEmpty {
-                return "\(ListFormatter.localizedString(byJoining: refused)) did not let skil.li move \(refused.count == 1 ? "its window" : "their windows")."
+                let line = "\(ListFormatter.localizedString(byJoining: refused)) did not let skil.li move \(refused.count == 1 ? "its window" : "their windows")"
+                return restored ? line + " back: Arrange Windows again tries once more." : line + "."
             }
             if placed == 0, unknown > 0, !restored {
                 return "skil.li does not know where these windows go yet: put them where you want once, it learns."
@@ -38,6 +39,7 @@ final class WindowArrange {
     }
 
     private struct Moved {
+        let name: String
         let app: AXUIElement
         let window: AXUIElement
         let before: CGRect
@@ -63,7 +65,6 @@ final class WindowArrange {
     func run() async -> Report {
         let start = ContinuousClock.now
         if let last, start - last.at <= Self.again, !last.moved.isEmpty {
-            self.last = nil
             return putBack(last.moved)
         }
         await learner.catchUp()
@@ -74,8 +75,9 @@ final class WindowArrange {
         let displays = Displays.current()
         var report = Report()
         let apps = Set(open.compactMap(\.app.bundleIdentifier))
-        if let layout = WindowArrangement.layout(for: apps, among: arranger.layouts(), on: displays) {
-            let before = open.map { Moved(app: $0.appElement, window: $0.element, before: $0.frame) }
+        let documents = Set(open.compactMap(\.document))
+        if let layout = WindowArrangement.layout(for: apps, documents: documents, among: arranger.layouts(), on: displays) {
+            let before = open.map { Moved(name: $0.appName, app: $0.appElement, window: $0.element, before: $0.frame) }
             let applied = await arranger.apply(layout)
             report.layout = layout.name
             report.placed = applied.placed
@@ -113,7 +115,7 @@ final class WindowArrange {
             do {
                 try WindowManager.place(window.element, of: window.appElement, at: target)
                 manager.remember(window.element, pid: window.app.processIdentifier, placed: target, before: window.frame)
-                moved.append(Moved(app: window.appElement, window: window.element, before: window.frame))
+                moved.append(Moved(name: window.appName, app: window.appElement, window: window.element, before: window.frame))
                 report.placed += 1
                 lines.append(window.appName)
             } catch {
@@ -125,13 +127,21 @@ final class WindowArrange {
         return report
     }
 
-    /// Every window back where it was before the last Arrange.
+    /// Every window back where it was before the last Arrange. One that
+    /// refuses is named and kept: Arrange again once more tries it again.
     private func putBack(_ moved: [Moved]) -> Report {
         var report = Report(restored: true)
-        for item in moved where (try? WindowManager.place(item.window, of: item.app, at: item.before)) != nil {
-            report.placed += 1
+        var refused: [Moved] = []
+        for item in moved {
+            if (try? WindowManager.place(item.window, of: item.app, at: item.before)) != nil {
+                report.placed += 1
+            } else {
+                refused.append(item)
+                if !report.refused.contains(item.name) { report.refused.append(item.name) }
+            }
         }
-        Log.trace("Arrange Windows again: \(report.placed) of \(moved.count) windows put back")
+        last = refused.isEmpty ? nil : (.now, refused)
+        Log.trace("Arrange Windows again: \(report.placed) of \(moved.count) windows put back\(refused.isEmpty ? "" : ", \(refused.count) refused")")
         return report
     }
 }

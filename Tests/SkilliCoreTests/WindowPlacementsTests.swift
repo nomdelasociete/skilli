@@ -114,13 +114,12 @@ final class WindowPlacementsTests: XCTestCase {
         XCTAssertTrue(book.choices(for: .init(bundleID: editor, title: ""), displays: ["built-in"], at: now).isEmpty)
     }
 
-    func testKeptSmallAndForgotten() {
+    func testKeptSmall() {
         var book = WindowPlacements()
         for day in 0..<60 { book.record(placed(.leftHalf, daysAgo: Double(day)), bundleID: editor, displays: ["ext"]) }
         book.record(placed(.rightHalf), bundleID: browser, displays: ["ext"])
         XCTAssertEqual(book.entries.values.map(\.count).max(), WindowPlacements.kept)
-        book.forget([editor])
-        XCTAssertEqual(book.entries.count, 1)
+        XCTAssertEqual(book.apps, [editor, browser])
         // Written and read back the same.
         let data = try! JSONEncoder().encode(book)
         XCTAssertEqual(try JSONDecoder().decode(WindowPlacements.self, from: data), book)
@@ -175,6 +174,14 @@ final class WindowPlacementsTests: XCTestCase {
         let layouts = [layout("Old", [editor, browser], saved: 1), layout("Coding", [editor, browser], saved: 2), layout("Mail", [browser], saved: 3)]
         XCTAssertEqual(WindowArrangement.layout(for: [editor, browser], among: layouts, on: [display])?.name, "Coding")
         XCTAssertNil(WindowArrangement.layout(for: [editor], among: layouts, on: [display]))
+        // One that would open a file or a link: not for Arrange.
+        var opening = layout("Opening", [editor], saved: 4)
+        opening.windows[0].opens = "https://example.com"
+        var showing = layout("Showing", [editor], saved: 5)
+        showing.windows[0].document = "file:///Users/me/a.txt"
+        XCTAssertNil(WindowArrangement.layout(for: [editor], among: [opening, showing], on: [display]))
+        XCTAssertEqual(WindowArrangement.layout(for: [editor], documents: ["file:///Users/me/a.txt"], among: [opening, showing], on: [display])?.name,
+                       "Showing")
         // Another display: not that layout.
         var other = display
         other.fingerprint.serial = 1
