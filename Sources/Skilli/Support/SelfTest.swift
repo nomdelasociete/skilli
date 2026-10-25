@@ -21377,7 +21377,11 @@ final class SelfTest {
         _ = context.performStatusMenuSettings()
         let fromMenu = await waitUntil(timeout: 2) { settingsInFront() }
         let menuDetail = "menu: frontmost \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"), key \(context.settings.isKey)"
+        let inDockWhileOpen = NSRunningApplication.current.activationPolicy == .regular
         await closeSettings()
+        let outOfDockOnClose = await waitUntil(timeout: 1) { NSRunningApplication.current.activationPolicy == .accessory } != nil
+        record("Settings: skil.li in the Dock only while Settings is open", inDockWhileOpen && outOfDockOnClose,
+               "in the Dock while open \(inDockWhileOpen), out of it once closed \(outOfDockOnClose)", nil)
 
         // From the launcher, typed like a user.
         var launcherDetail = "launcher: TextEdit never came back to front"

@@ -553,6 +553,10 @@ starts from it.
 - Three entry points, all covered by `selftest` (also with another app in
   front): status menu “Settings…”, typing “settings” in the launcher, ⌘,
   while the launcher is open. `selftest settings` runs just these.
+- While Settings is open, and only then, skil.li is in the Dock and ⌘⇥
+  (`.regular`); it is an accessory again once the window closes. A
+  minimized Settings stays open, so its Dock icon stays. A click on the
+  icon shows Settings (`applicationShouldHandleReopen`).
 - Layout follows System Settings: glass sidebar of tinted `IconTile`s, one
   pane per row, each pane a grouped form under a centered `PaneHeader`.
 - A pane reads the preferences it shows in its `body` (not only inside a

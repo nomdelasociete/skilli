@@ -1,7 +1,8 @@
 import AppKit
 
-/// An accessory app has no visible menu bar, but its main menu still carries
-/// the standard key equivalents (⌘Z, ⌘X, ⌘C, ⌘V, ⌘A) for any skil.li window
+/// An accessory app has no visible menu bar (skil.li shows one only while
+/// Settings is open, in the Dock), but its main menu still carries the
+/// standard key equivalents (⌘Z, ⌘X, ⌘C, ⌘V, ⌘A) for any skil.li window
 /// that becomes key while the app is active.
 @MainActor
 enum MainMenu {
