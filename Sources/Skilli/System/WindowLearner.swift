@@ -139,6 +139,12 @@ final class WindowLearner {
         save()
     }
 
+    /// Learning on and the app not left out, asked again when a reading
+    /// comes back: the user may have turned either off meanwhile.
+    private func learns(_ bundleID: String) -> Bool {
+        isOn() && !leftOut().contains(bundleID)
+    }
+
     private static func counts(_ app: NSRunningApplication) -> Bool {
         app.activationPolicy == .regular && app.processIdentifier != getpid() && app.bundleIdentifier != nil
     }
@@ -154,7 +160,7 @@ final class WindowLearner {
         let generation = generation
         Task { [weak self] in
             let (readings, onScreen) = await Task.detached(priority: .utility) { (Self.windows(pid: pid), Self.onScreen()) }.value
-            guard let self, self.generation == generation else { return }
+            guard let self, self.generation == generation, self.learns(bundleID) else { return }
             self.take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, use: use, asked: asked)
         }
     }
@@ -262,7 +268,8 @@ final class WindowLearner {
         let generation = generation
         Task { [weak self] in
             let (readings, onScreen) = await Task.detached(priority: .utility) { (Self.windows(pid: pid), Self.onScreen()) }.value
-            guard let self, self.generation == generation, let reading = readings.first(where: { $0.window == hash }) else { return }
+            guard let self, self.generation == generation, self.learns(bundleID),
+                  let reading = readings.first(where: { $0.window == hash }) else { return }
             let key = Key(pid: pid, window: hash)
             self.seen[key] = reading.frame
             self.placedBySkilli[key] = reading.frame
@@ -279,7 +286,7 @@ final class WindowLearner {
         let asked = ContinuousClock.now
         let generation = generation
         let (readings, onScreen) = await Task.detached(priority: .userInitiated) { (Self.windows(pid: pid), Self.onScreen()) }.value
-        guard self.generation == generation else { return }
+        guard self.generation == generation, learns(bundleID) else { return }
         take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, use: .learn, asked: asked)
     }
 
