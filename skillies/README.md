@@ -7,7 +7,7 @@ previews, downloads and `catalog.json` are generated from these exact files.
 ## Contribute
 
 1. Fork this repository. Add one script at `skillies/<category>/<unique-name>.sh`
-   (also supported: `.py`, `.js`, `.rb`). Use lowercase hyphenated names.
+   (also supported: `.py`, `.js`, `.rb`, `.swift`). Use lowercase hyphenated names.
 2. Start with a shebang and the `@skilli` header from an existing example.
    Include `schemaVersion 1`, `title`, `description`, `packageName` and `mode`.
    Keep metadata within the first 60 lines and 8 KB, as required by the app.

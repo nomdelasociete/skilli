@@ -16,7 +16,7 @@ def catalog(source):
     entries = []
     seen = set()
     for path in sorted(source.glob('*/*')):
-        if path.suffix not in ('.sh', '.py', '.js', '.rb'):
+        if path.suffix not in ('.sh', '.py', '.js', '.rb', '.swift'):
             continue
         if path.is_symlink() or path.parent.is_symlink():
             raise ValueError(f'{path}: symlinks are not allowed')
@@ -73,7 +73,7 @@ def render(entries, template, target):
         args = ' · '.join(item['arguments']) or 'No arguments'
         if item['needsConfirmation']:
             args += ' · Asks before running'
-        language = {'.sh': 'Shell', '.py': 'Python', '.js': 'JavaScript', '.rb': 'Ruby'}[item['path'].suffix]
+        language = {'.sh': 'Shell', '.py': 'Python', '.js': 'JavaScript', '.rb': 'Ruby', '.swift': 'Swift'}[item['path'].suffix]
         search = esc(' '.join((item['title'], item['description'], item['package'])).lower())
         cards.append(f'''<article class="skillie-entry" id="{slug}" data-category="{item['category']}" data-search="{search}">
 <div class="skillie-meta">{esc(item['package'])} <span>{language} · MIT</span></div>
