@@ -1376,7 +1376,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let seconds: Double = command.mode == .fullOutput ? 20 : command.mode == .silent ? 2 : 4
             // Its own tool calls (`"$SKILLI_CLI" call do_in_app …`) borrow its card.
             let id = UUID().uuidString
-            aiActions.notify(caller: command.title, working: "Running “\(command.title)”…", seconds: seconds, skillie: id) { [scriptLibrary] in
+            aiActions.notify(caller: command.title, working: "Running “\(command.title)”…", seconds: seconds, skillie: id,
+                             showsWorking: command.showsRunning) { [scriptLibrary] in
                 let run = try await scriptLibrary.run(command, arguments: arguments, id: id)
                 let text = command.mode == .fullOutput ? run.output.trimmingCharacters(in: .whitespacesAndNewlines) : ScriptCommand.lastLine(run.output)
                 guard run.succeeded else {

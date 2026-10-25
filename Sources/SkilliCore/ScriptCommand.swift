@@ -38,6 +38,10 @@ public struct ScriptCommand: Hashable, Sendable {
     public let description: String
     public let arguments: [Argument]
     public let needsConfirmation: Bool
+    /// The "Running…" card while it runs (`@skilli.showsRunning false`
+    /// leaves it out: what draws on its own, a confetti cannon). What it
+    /// prints at the end and its errors still show.
+    public let showsRunning: Bool
     /// For inline: how often the line is refreshed, in seconds.
     public let refreshSeconds: Int?
     /// Where it runs; nil for the script's own folder.
@@ -79,6 +83,7 @@ public struct ScriptCommand: Hashable, Sendable {
             // Raycast takes three at most, in order.
             arguments: (1...3).compactMap { arguments[$0] },
             needsConfirmation: values["needsConfirmation"] == "true",
+            showsRunning: values["showsRunning"] != "false",
             refreshSeconds: values["refreshTime"].flatMap(seconds),
             directory: values["currentDirectoryPath"]
         )

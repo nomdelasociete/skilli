@@ -3246,7 +3246,7 @@ re-investigating.
   metadata under skil.li's name (title and mode required, schemaVersion 1;
   icon, packageName, description, argument1–3 text / password / dropdown
   with optional and percentEncoded, needsConfirmation, refreshTime,
-  currentDirectoryPath). Raycast's own scripts are never read in place:
+  currentDirectoryPath; and skil.li's own showsRunning). Raycast's own scripts are never read in place:
   `importRaycast` (no button for now, see Raycast imports) copies them in with `@raycast.`
   renamed `@skilli.` in the header comments only, executable; a name taken
   becomes "name-2". Agents write new ones with `create_skillie` (title,
@@ -3278,7 +3278,10 @@ re-investigating.
   time, then "Running…" again; esc answers that call alone; one still in
   the card when the skillie ends (its limit) is stopped as esc would. It
   grants no right. Nothing printed: the working
-  card goes, nothing said. silent: the last line 2 s;
+  card goes, nothing said. `showsRunning false` (default true): no
+  "Running…" card while it runs (what draws on its own, a confetti
+  cannon), only its line or failure after; its tool calls then take the
+  card as any agent's do. silent: the last line 2 s;
   compact: the last line; fullOutput: all of it in the card (scrolls,
   20 s); inline: the row shows the last line, read again when the launcher
   opens and it is older than refreshTime (10 s at least). Exit ≠ 0: the
