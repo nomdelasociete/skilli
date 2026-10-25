@@ -29,6 +29,7 @@ final class ScriptCommandTests: XCTestCase {
         XCTAssertEqual(command.packageName, "GitHub")
         XCTAssertEqual(command.description, "Finds issues by words.")
         XCTAssertTrue(command.needsConfirmation)
+        XCTAssertTrue(command.showsRunning, "the Running… card unless the skillie says otherwise")
         XCTAssertEqual(command.directory, "~")
         XCTAssertEqual(command.arguments.count, 2)
         XCTAssertEqual(command.arguments[0].kind, .text)
@@ -50,6 +51,8 @@ final class ScriptCommandTests: XCTestCase {
         """
         let inline = try XCTUnwrap(ScriptCommand.parse(swift, path: "/s/uptime.swift"))
         XCTAssertEqual(inline.mode, .inline)
+        let quiet = try XCTUnwrap(ScriptCommand.parse(swift + "\n// @skilli.showsRunning false", path: "/s/q.swift"))
+        XCTAssertFalse(quiet.showsRunning)
         XCTAssertEqual(inline.refreshSeconds, 300)
         XCTAssertNil(ScriptCommand.parse("#!/bin/bash\n# @raycast.title No mode\necho", path: "/s/a.sh"))
         XCTAssertNil(ScriptCommand.parse("#!/bin/bash\n# @raycast.mode silent\necho", path: "/s/b.sh"))

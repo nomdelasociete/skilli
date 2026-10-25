@@ -51,6 +51,9 @@ final class AIActionController {
     /// The card shows a question or approval for an agent outside a command:
     /// Esc answers it instead of cancelling a command.
     private var servesOutsideAgent = false
+    /// The skillie (`SkillieCall`) whose call took the card as an outside
+    /// agent's, nil for any other caller; read with `servesOutsideAgent`.
+    private var cardSkillie: String?
     /// A skillie's run holding the card with its working line: its own
     /// calls (`SkillieCall`) borrow it rather than wait for its end.
     private var lentCard: LentCard?
@@ -2888,6 +2891,7 @@ extension AIActionController: ToolPresenter {
             try? await Task.sleep(for: .milliseconds(200))
         }
         servesOutsideAgent = true
+        cardSkillie = SkillieCall.id
         // Next to the text being edited, like a command's card; the pointer
         // when there is none.
         popover.present(title: caller, at: nearSelection())
@@ -3430,13 +3434,18 @@ extension AIActionController: ToolPresenter {
     /// in place, for `seconds` (and `perLine` more for each line past the
     /// first, to read a list, 20 s at most in all). Esc closes it early. `skillie`: the run
     /// `work` is, whose own tool calls borrow the card meanwhile.
+    /// `showsWorking` false: no card while it works (a skillie that says
+    /// `showsRunning false`), only what it returns; its tool calls then
+    /// take the card as any agent's do.
     func notify(caller: String, working: String, seconds: Double, perLine: Double = 0, skillie: String? = nil,
-                _ work: @escaping @MainActor () async throws -> String) {
+                showsWorking: Bool = true, _ work: @escaping @MainActor () async throws -> String) {
         Task {
-            await takeCardForOutsideAgent(caller)
-            noteText = working
-            popover.fail(working, status: caller, hints: [("Close", "esc")])
-            if let skillie { lentCard = LentCard(skillie: skillie, caller: caller, working: working) }
+            if showsWorking {
+                await takeCardForOutsideAgent(caller)
+                noteText = working
+                popover.fail(working, status: caller, hints: [("Close", "esc")])
+                if let skillie { lentCard = LentCard(skillie: skillie, caller: caller, working: working) }
+            }
             let message: String
             do {
                 message = try await work()
@@ -3463,11 +3472,30 @@ extension AIActionController: ToolPresenter {
                 }
                 lentCard = nil
             }
-            // Closed meanwhile, or nothing to say: done, the card is free.
-            guard popover.isVisible, popover.shownText == working, !message.isEmpty else {
-                if popover.shownText == working { popover.hide() }
-                releaseCardForOutsideAgent()
-                return
+            if !showsWorking, let skillie, servesOutsideAgent, cardSkillie == skillie {
+                // One of its calls still holds the card (an approval, a
+                // question, a step): stopped as esc would, as a lent card's
+                // are. The card is that call's alone, so nothing else is.
+                outsideControl?.cancel()
+                outsideControl = nil
+                answerQuestion(nil)
+                answerApproval(.deny)
+                let deadline = ContinuousClock.now + .seconds(10)
+                while servesOutsideAgent, cardSkillie == skillie, ContinuousClock.now < deadline {
+                    try? await Task.sleep(for: .milliseconds(200))
+                }
+            }
+            if showsWorking {
+                // Closed meanwhile, or nothing to say: done, the card is free.
+                guard popover.isVisible, popover.shownText == working, !message.isEmpty else {
+                    if popover.shownText == working { popover.hide() }
+                    releaseCardForOutsideAgent()
+                    return
+                }
+            } else {
+                // Nothing shown while it worked: the card only for its line.
+                guard !message.isEmpty else { return }
+                await takeCardForOutsideAgent(caller)
             }
             noteText = message
             popover.fail(message, status: caller, hints: [("Close", "esc")], color: .labelColor)

@@ -38,6 +38,10 @@ public struct ScriptCommand: Hashable, Sendable {
     public let description: String
     public let arguments: [Argument]
     public let needsConfirmation: Bool
+    /// The "Running…" card while it runs (`@skilli.showsRunning false`
+    /// leaves it out: what draws on its own, a confetti cannon). What it
+    /// prints at the end and its errors still show.
+    public let showsRunning: Bool
     /// For inline: how often the line is refreshed, in seconds.
     public let refreshSeconds: Int?
     /// Where it runs; nil for the script's own folder.
@@ -79,6 +83,7 @@ public struct ScriptCommand: Hashable, Sendable {
             // Raycast takes three at most, in order.
             arguments: (1...3).compactMap { arguments[$0] },
             needsConfirmation: values["needsConfirmation"] == "true",
+            showsRunning: values["showsRunning"] != "false",
             refreshSeconds: values["refreshTime"].flatMap(seconds),
             directory: values["currentDirectoryPath"]
         )
@@ -141,11 +146,16 @@ public struct ScriptCommand: Hashable, Sendable {
             header.append("\(c) @skilli.argument\(index + 1) \(json)")
         }
         if needsConfirmation { header.append("\(c) @skilli.needsConfirmation true") }
-        let slug = title.lowercased().folding(options: .diacriticInsensitive, locale: nil)
-            .split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: "-")
+        let slug = slug(title)
         let body = code.hasPrefix("#!") ? code.split(separator: "\n", maxSplits: 1).dropFirst().joined() : code
-        return ("\(slug.isEmpty ? "skillie" : String(slug.prefix(60))).\(language.fileExtension)",
+        return ("\(slug.isEmpty ? "skillie" : slug).\(language.fileExtension)",
                 header.joined(separator: "\n") + "\n\n" + body.trimmingCharacters(in: .newlines) + "\n")
+    }
+
+    /// "Café Time!" → "cafe-time": a file name's words, 60 characters at most.
+    static func slug(_ text: String) -> String {
+        String(text.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: "-").prefix(60))
     }
 
     private static func oneLine(_ text: String) -> String {

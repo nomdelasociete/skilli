@@ -236,6 +236,7 @@
 		ADA8EB2408038C39E5D13F0E /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909C3A5CA605D8B57F2E96C8 /* Permissions.swift */; };
 		AF377114BB38FDC39AEB9A2C /* SkilliLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41179504621E163F41E02EA3 /* SkilliLink.swift */; };
 		AFD3D40B22AD981FFBAB983E /* AIActionController+Scheduled.swift in Sources */ = {isa = PBXBuildFile; fileRef = F454B1816091565470FD57E0 /* AIActionController+Scheduled.swift */; };
+		B02937676D83477C21CDD696 /* SkillieFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78EE0417B188C4B0409E303D /* SkillieFile.swift */; };
 		B055A6078F10B93739132063 /* AgendaPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD66CE9CAC47F6338D5DCEFA /* AgendaPane.swift */; };
 		B0964E2C34087886CD5E0356 /* PreviewParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = B700C9BCA41E9A643CE33681 /* PreviewParts.swift */; };
 		B1BB9EBFA711A5E237DCCD3F /* CopiedColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D2A4B0A49EADE906DCAE43A /* CopiedColor.swift */; };
@@ -539,6 +540,7 @@
 		770FB0B9E4F8E315F3268866 /* AutoQuitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoQuitter.swift; sourceTree = "<group>"; };
 		77684E985793CEC22D2C04A4 /* ControlTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlTarget.swift; sourceTree = "<group>"; };
 		77CE5D0F11D474C383E07DD8 /* AutomationAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationAccess.swift; sourceTree = "<group>"; };
+		78EE0417B188C4B0409E303D /* SkillieFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillieFile.swift; sourceTree = "<group>"; };
 		7976AE902A42EAACCBCA4F5A /* WindowPlacements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowPlacements.swift; sourceTree = "<group>"; };
 		7A64CB3911A51390BA9A47F4 /* SILabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SILabel.swift; sourceTree = "<group>"; };
 		7A6D55308FEC6AE23E9689ED /* AppUninstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUninstaller.swift; sourceTree = "<group>"; };
@@ -839,6 +841,7 @@
 				B50C5D5CE27307D006CE5F16 /* SettingsSkill.swift */,
 				CFAC4F714AD1BD0682334E74 /* SettingsTable.swift */,
 				1652A2C8726A9428E6EDCBA2 /* SkillieEnvironment.swift */,
+				78EE0417B188C4B0409E303D /* SkillieFile.swift */,
 				41179504621E163F41E02EA3 /* SkilliLink.swift */,
 				011CE45E11A95270E98D3DB4 /* Snippet.swift */,
 				4237B38F08280AB88DB3C3D6 /* SpokenWhen.swift */,
@@ -1508,6 +1511,7 @@
 				B4125951A88CEB67DDAE15DF /* SettingsTable.swift in Sources */,
 				AF377114BB38FDC39AEB9A2C /* SkilliLink.swift in Sources */,
 				CE2C31E6575DD75556295640 /* SkillieEnvironment.swift in Sources */,
+				B02937676D83477C21CDD696 /* SkillieFile.swift in Sources */,
 				4171B7A302A73C280DBF4DFE /* Snippet.swift in Sources */,
 				50DF5659AD6507AB3926CED6 /* SpokenWhen.swift in Sources */,
 				C2AA678DFBF20650F948A4D4 /* SymbolTable.swift in Sources */,

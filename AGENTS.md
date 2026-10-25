@@ -554,6 +554,10 @@ starts from it.
 - Three entry points, all covered by `selftest` (also with another app in
   front): status menu “Settings…”, typing “settings” in the launcher, ⌘,
   while the launcher is open. `selftest settings` runs just these.
+- While Settings is open, and only then, skil.li is in the Dock and ⌘⇥
+  (`.regular`); it is an accessory again once the window closes. A
+  minimized Settings stays open, so its Dock icon stays. A click on the
+  icon shows Settings (`applicationShouldHandleReopen`).
 - Layout follows System Settings: glass sidebar of tinted `IconTile`s, one
   pane per row, each pane a grouped form under a centered `PaneHeader`.
 - A pane reads the preferences it shows in its `body` (not only inside a
@@ -3269,7 +3273,7 @@ re-investigating.
   metadata under skil.li's name (title and mode required, schemaVersion 1;
   icon, packageName, description, argument1–3 text / password / dropdown
   with optional and percentEncoded, needsConfirmation, refreshTime,
-  currentDirectoryPath). Raycast's own scripts are never read in place:
+  currentDirectoryPath; and skil.li's own showsRunning). Raycast's own scripts are never read in place:
   `importRaycast` (no button for now, see Raycast imports) copies them in with `@raycast.`
   renamed `@skilli.` in the header comments only, executable; a name taken
   becomes "name-2". Agents write new ones with `create_skillie` (title,
@@ -3301,7 +3305,10 @@ re-investigating.
   time, then "Running…" again; esc answers that call alone; one still in
   the card when the skillie ends (its limit) is stopped as esc would. It
   grants no right. Nothing printed: the working
-  card goes, nothing said. silent: the last line 2 s;
+  card goes, nothing said. `showsRunning false` (default true): no
+  "Running…" card while it runs (what draws on its own, a confetti
+  cannon), only its line or failure after; its tool calls then take the
+  card as any agent's do. silent: the last line 2 s;
   compact: the last line; fullOutput: all of it in the card (scrolls,
   20 s); inline: the row shows the last line, read again when the launcher
   opens and it is older than refreshTime (10 s at least). Exit ≠ 0: the
@@ -3312,6 +3319,33 @@ re-investigating.
   (`script:<path>`). Agents: `list_skillies`, `run_skillie` (arguments in
   order; a missing one refused), `create_skillie`. `selftest scripts`
   (scratch folder; a real Haiku agent writes one).
+- Skillie files (docs/skillie-files.md; `SkillieFile`, `SkillieImportLink`
+  in SkilliCore, `SkilliesPaneModel`, `ScriptLibrary.add`): a `.skilli`
+  file is a skillie renamed, plain text (type
+  `com.nomdelasociete.skilli.skillie`, exported in `Config/Info.plist`,
+  conforming to `public.plain-text`; skil.li its owner, role Viewer).
+  Opened (Finder, the Dock, Open With: `application(_:open:)`, every file
+  of one open in one sheet) or `skilli://skillies/import?url=https://…`
+  (repeatable; `SmallDownload`, as `apps/import`): Settings → Skillies'
+  sheet shows each whole before Add: icon, title, description, file
+  name, arguments, "asks before it runs", where it came from (macOS's
+  Where From: Spotlight's, else the file's own `kMDItemWhereFroms`
+  attribute; else the file's name, or the link's host), every line.
+  Checked as the folder reads it (`SkillieFile.check`: UTF-8, 256 KB at
+  most, a shebang naming an absolute path, title and mode in the first
+  8 KB, schemaVersion 1); what is not one says why, nothing to add.
+  Added as the file's own name in hyphenated words, the extension from
+  the shebang (`sh`, `py`, `js`, `swift`, `rb`, else none), executable; a
+  name taken becomes "name-2". The same title as one of the user's:
+  Replace, written over that file in place (its path kept: keys, menu bar
+  line, learning follow); exactly the same text: "Already in your
+  skillies", no button. Nothing runs on add, nothing announced (the list
+  shows it); an inline one with no argument runs as the launcher opens
+  (`refreshInline`), which its card and the sheet's warning say. A link
+  names 10 addresses at most (`SkillieImportLink.most`). The self-test and benchmark ignore opened files.
+  `remote scripts` (`skillieFilesAdded`): a scratch `.skilli` with a
+  Where From, shown whole, Add pressed, written, run; again: nothing to
+  add; a new version replaced in place; a file with no shebang said.
 - Clean Keyboard (`KeyboardCleaner`, `SystemCommand.cleanKeyboard`):
   the launcher, Ask ("bloque le clavier, je vais le nettoyer"), a
   shortcut or an agent's `run_mac_command` turn every key, modifier and
@@ -3813,6 +3847,8 @@ re-investigating.
   opened it; `selftest decide`: Ask picks made-up shortcuts by name, and
   none for something else (decided only).
 - Import: `skilli://apps/import?app=<file>` adds linked apps (above);
+  `skilli://skillies/import?url=…` and `.skilli` files add skillies
+  (Skillie files, above);
   `skilli://commands/import?command=<file>` (repeatable) or
   `?url=https://…` (`CommandLink`, `Config/Info.plist`). Settings →
   Commands shows every command in full before Add; nothing is added from a

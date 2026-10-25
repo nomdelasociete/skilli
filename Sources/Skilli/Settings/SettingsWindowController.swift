@@ -18,6 +18,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// Settings → Apps' page and the shortcut its rows record; the
     /// self-test calls what its controls call.
     let apps = AppsPaneModel()
+    /// Settings → Skillies' import sheet (`.skilli` files, import links);
+    /// the self-test calls what its buttons call.
+    let skillies = SkilliesPaneModel()
     /// The search atop the sidebar; kept with its index while the window
     /// comes and goes. The self-test reads it.
     let search: SettingsSearchModel
@@ -97,6 +100,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         // SwiftUI retitles the window after its first pass; no "Untitled".
         window.title = navigation.pane == .apps ? apps.title ?? SettingsPane.apps.title : (navigation.pane ?? .general).title
         if isNew { window.center() }
+        // In the Dock and ⌘⇥ while Settings is open, as an app with a
+        // window is; an accessory again once it closes (`windowWillClose`).
+        if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
         Foreground.bring(window)
         if isNew {
             // SwiftUI ignores the sidebar's column width in this window;
@@ -316,6 +322,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         // Drop the SwiftUI hierarchy; reopening rebuilds it in a few ms.
         window = nil
+        // Out of the Dock: skil.li lives in the menu bar.
+        NSApp.setActivationPolicy(.accessory)
         // Asked and never shown: not on the next open.
         navigation.new = nil
         waitingNew = nil
@@ -341,7 +349,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         search.shortcuts = context.shortcuts
         search.catalogInput = context.catalogInput
         let root = SettingsRootView(preferences: preferences, navigation: navigation, context: context, markTilt: markTilt,
-                                    catalog: catalog, apps: apps, search: search)
+                                    catalog: catalog, apps: apps, skillies: skillies, search: search)
         let host = NSHostingController(rootView: root)
         // SwiftUI owns the title (the selected pane) and the toolbar.
         host.sceneBridgingOptions = [.title, .toolbars]

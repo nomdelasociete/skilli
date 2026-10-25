@@ -276,6 +276,7 @@ struct SettingsRootView: View {
     let markTilt: MarkTilt
     let catalog: CatalogPaneModel
     let apps: AppsPaneModel
+    let skillies: SkilliesPaneModel
     /// The search atop the sidebar; the panes' rows find it in the
     /// environment (`settingAnchor`).
     let search: SettingsSearchModel
@@ -335,7 +336,8 @@ struct SettingsRootView: View {
                                    askChords: context.shortcuts.config.shortcuts.first { $0.action == .aiPrompt("ask") }?.chords?.map(\.keycaps) ?? [],
                                    leaves: PrivacyMap.line(for: SettingsPane.tools.rawValue, .current(preferences, context)),
                                    open: { navigation.pane = $0 })
-            case .skillies: SkilliesPane(skillies: context.skillies, preferences: preferences, context: context, open: { navigation.pane = $0 })
+            case .skillies: SkilliesPane(skillies: context.skillies, preferences: preferences, context: context, model: skillies,
+                                            open: { navigation.pane = $0 })
             case .aiAccounts: AIAccountsPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .catalog: CatalogPane(preferences: preferences, context: context, model: catalog)
             case .about: AboutPane(preferences: preferences, context: context, open: { navigation.pane = $0 })

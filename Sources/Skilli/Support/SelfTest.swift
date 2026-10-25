@@ -556,7 +556,7 @@ final class SelfTest {
         }
         if scope == .scripts {
             window.center()
-            return await finish(after: [askRunsScripts, scriptCommandsRun, agentCreatesSkillie])
+            return await finish(after: [askRunsScripts, scriptCommandsRun, skillieFilesAdded, agentCreatesSkillie])
         }
         if scope == .keyboard {
             window.center()
@@ -5184,6 +5184,7 @@ final class SelfTest {
         await cleanKeyboardBlocksKeys()
         await askRunsScripts()
         await scriptCommandsRun()
+        await skillieFilesAdded()
         await agentCreatesSkillie()
         await historyPickedByMeaning()
         await browserHistorySearch()
@@ -12684,7 +12685,7 @@ final class SelfTest {
     /// killed at its limit (2 s) and 3 s more. Nothing gets past the
     /// approval: no decision key needed, no app touched.
     private func skillieStopsWithItsStep() async {
-        let name = "A skillie stopped at its time limit stops its step: its `Skilli call` ends with it, the unanswered approval goes, the card says it failed"
+        let name = "A skillie stopped at its time limit stops its step: its `Skilli call` ends with it, the unanswered approval goes, the card says it failed (showsRunning false too)"
         guard let library = context.tools.tools.scripts else {
             record(name, false, "no skillies", nil)
             return
@@ -12740,6 +12741,26 @@ final class SelfTest {
         if popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
         _ = await waitUntil(timeout: 3) { !popover.isVisible }
 
+        // The same with `showsRunning false`: no card of its own, its call
+        // takes the card as an agent's; at the limit that approval goes all
+        // the same and the card says it failed.
+        let quietText = text.replacingOccurrences(of: "Wait Forever", with: "Wait Forever Quietly")
+            .replacingOccurrences(of: "# @skilli.mode compact", with: "# @skilli.mode compact\n# @skilli.showsRunning false")
+        let quietFile = folder.appendingPathComponent("wait-forever-quietly.sh")
+        try? quietText.write(to: quietFile, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: quietFile.path)
+        var quietAsked = false
+        var quietEnded = false
+        if let quiet = ScriptCommand.parse(quietText, path: quietFile.path), !quiet.showsRunning {
+            context.aiActions.runScript?(quiet, false)
+            quietAsked = await waitUntil(timeout: 10) { popover.isVisible && popover.phase == .approving } != nil
+            quietEnded = await waitUntil(timeout: 25) {
+                popover.isVisible && popover.phase != .approving && popover.shownText.hasPrefix("“Wait Forever Quietly” failed")
+            } != nil
+        }
+        if popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        _ = await waitUntil(timeout: 3) { !popover.isVisible }
+
         // A script that ended at once, leaving behind what holds its output
         // and ignores SIGTERM: stopped at the limit all the same, killed 3 s on.
         let stubborn = folder.appendingPathComponent("leave-behind.sh")
@@ -12764,8 +12785,9 @@ final class SelfTest {
             let leftover = (try? String(contentsOf: leftPID, encoding: .utf8)).flatMap { pid_t($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
             if let leftover { leftGone = await waitUntil(timeout: 3) { kill(leftover, 0) != 0 } != nil }
         }
-        record(name, asked && ended != nil && callGone && took < .seconds(15) && leftGone && leftTook < .seconds(10),
+        record(name, asked && ended != nil && callGone && took < .seconds(15) && quietAsked && quietEnded && leftGone && leftTook < .seconds(10),
                "asked: \(asked) “\(askedText)”; ended after \(Int(took.milliseconds)) ms (limit 6 s); call \(pid.map(String.init) ?? "none") gone: \(callGone); card \(card); "
+                   + "showsRunning false: asked \(quietAsked), approval gone and failure said \(quietEnded); "
                    + "left behind, ignoring SIGTERM: run returned after \(Int(leftTook.milliseconds)) ms (limit 2 s), gone: \(leftGone)",
                took.milliseconds)
     }
@@ -19535,7 +19557,7 @@ final class SelfTest {
     /// without the executable bit runs through its shebang; a Raycast
     /// Script Command imported becomes one; agents list, create and run.
     private func scriptCommandsRun() async {
-        let name = "Skillies: listed, run from the launcher (last line, arguments with a dropdown, inline line), failures and shebang; Raycast import; agents create, list and run"
+        let name = "Skillies: listed, run from the launcher (last line, arguments with a dropdown, inline line), failures and shebang, the Running… card unless showsRunning false; Raycast import; agents create, list and run"
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/skillies", isDirectory: true)
         let raycast = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/raycast", isDirectory: true)
         for url in [folder, raycast] { try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true) }
@@ -19551,6 +19573,8 @@ final class SelfTest {
         write("clock.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Selftest Clock\n# @skilli.mode inline\n# @skilli.refreshTime 10s\necho tick-\(marker)\n")
         write("fail.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Failing Selftest\n# @skilli.mode compact\necho \"Something broke\"\nexit 3\n")
         write("plain.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Not Executable Selftest\n# @skilli.mode silent\necho shebang-\(marker)\n", executable: false)
+        write("slow.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Slow Selftest\n# @skilli.mode compact\nsleep 1.5\necho slow-\(marker)\n")
+        write("quiet.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Quiet Selftest\n# @skilli.mode compact\n# @skilli.showsRunning false\nsleep 1.5\necho quiet-\(marker)\n")
         write("notes.txt", "# @skilli.title Not a skillie without a mode\n")
         write("flush.sh", "#!/bin/bash\n# @raycast.schemaVersion 1\n# @raycast.title Imported From Raycast Selftest\n# @raycast.mode compact\necho imported-\(marker)\n", in: raycast)
         write("readme.md", "Not a command", in: raycast)
@@ -19561,7 +19585,7 @@ final class SelfTest {
             return
         }
         let titles = library.all().map(\.title)
-        let listed = titles == ["Failing Selftest", "Greet Someone Selftest", "Not Executable Selftest", "Say Hello Selftest", "Selftest Clock"]
+        let listed = titles == ["Failing Selftest", "Greet Someone Selftest", "Not Executable Selftest", "Quiet Selftest", "Say Hello Selftest", "Selftest Clock", "Slow Selftest"]
         let launcher = context.launcher
         let popover = context.aiActions.popover
         var details = ["listed: \(listed) (\(titles.joined(separator: ", ")))"]
@@ -19644,6 +19668,25 @@ final class SelfTest {
         let shebang = (try? await library.run(plain, arguments: []))?.output.contains("shebang-\(marker)") == true
         details.append("failure: \(failed), shebang: \(shebang)")
 
+        // The "Running…" card while one runs, then its line; one that says
+        // `showsRunning false` shows no card until its line.
+        var running: [Bool] = []
+        var said: [Bool] = []
+        for title in ["Slow Selftest", "Quiet Selftest"] {
+            guard let command = library.all().first(where: { $0.title == title }) else { continue }
+            context.aiActions.runScript?(command, false)
+            // The quiet one: no card at all before its line (it prints after 1.5 s).
+            running.append(await waitUntil(timeout: 1) {
+                popover.isVisible && (title == "Quiet Selftest" || popover.shownText == "Running “\(title)”…")
+            } != nil)
+            let line = (title == "Slow Selftest" ? "slow-" : "quiet-") + marker
+            said.append(await waitUntil(timeout: 5) { popover.isVisible && popover.shownText == line } != nil)
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            _ = await waitUntil(timeout: 1) { !popover.isVisible }
+        }
+        let runningCard = running == [true, false] && said == [true, true]
+        details.append("Running… card shown \(running) (default, showsRunning false), line after \(said)")
+
         // Raycast's Script Command imported: renamed metadata, then it runs.
         let imported: (imported: [String], skipped: Int) = (try? library.importRaycast([raycast])) ?? ([], 0)
         let importedCommand = library.all().first { $0.title == "Imported From Raycast Selftest" }
@@ -19674,9 +19717,91 @@ final class SelfTest {
         }
         await closeSettings()
 
-        record(name, listed && hello && lastLine && asked && missingSaid && argumentFooter == ["Next ↩", "Actions ⌘K"] && tabActions && dropdown && greeted && inline && inlineRow && shownInMenuBar && switchOn && goneFromMenuBar && failed && shebang && importOK
+        record(name, listed && hello && lastLine && asked && missingSaid && argumentFooter == ["Next ↩", "Actions ⌘K"] && tabActions && dropdown && greeted && inline && inlineRow && shownInMenuBar && switchOn && goneFromMenuBar && failed && shebang && runningCard && importOK
                && created.hasPrefix("Created the skillie “Selftest Echo”") && duplicate && toolListed && toolRun == "Hi Max, you look calm"
                && echoed == "made-zebra" && missing, details.joined(separator: "; "), nil)
+    }
+
+    /// A `.skilli` file opened in skil.li (docs/skillie-files.md): Settings
+    /// → Skillies shows it whole, with where it came from, before Add; Add
+    /// writes it into the folder, listed and run; the same file again has
+    /// nothing to add; a new version replaces it in place; a file that is
+    /// not a skillie says why.
+    private func skillieFilesAdded() async {
+        let name = "Skillie files: a .skilli shown whole (where from, its code) before Add; added, run; the same again nothing to add; a new version replaces it in place; not a skillie said"
+        guard let library = context.tools.tools.scripts else {
+            record(name, false, "no skillies library", nil)
+            return
+        }
+        let settings = context.settings
+        let model = settings.skillies
+        let manager = FileManager.default
+        let scratch = manager.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/skillie-files", isDirectory: true)
+        try? manager.createDirectory(at: scratch, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: scratch) }
+        let marker = String((0..<5).map { _ in "abcdefghijklmnopqrstuvwxyz".randomElement()! })
+        let text = "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Selftest From A File\n# @skilli.mode compact\n# @skilli.icon 📦\n"
+            + "# @skilli.description Says where it came from.\n# @skilli.needsConfirmation true\n\necho from-file-\(marker)\n"
+        let file = scratch.appendingPathComponent("Selftest From A File.skilli")
+        try? text.write(to: file, atomically: true, encoding: .utf8)
+        // Where it came from, as a browser writes it on the file.
+        if let whereFrom = try? PropertyListSerialization.data(fromPropertyList: ["https://example.com/skillies/from-a-file.skilli", "https://example.com/skillies"],
+                                                                format: .binary, options: 0) {
+            _ = whereFrom.withUnsafeBytes { setxattr(file.path, "com.apple.metadata:kMDItemWhereFroms", $0.baseAddress, whereFrom.count, 0, 0) }
+        }
+        func sheetGone() async { _ = await waitUntil(timeout: 2) { !NSApp.windows.contains { $0.isVisible && $0.isSheet } } }
+
+        settings.show(pane: .skillies)
+        await model.receive(files: [file])
+        let sheet = await waitUntil(timeout: 2) { NSApp.windows.contains { $0.isVisible && $0.isSheet } } != nil
+        let candidate = model.pendingImport.first
+        let whole = model.pendingImport.count == 1 && candidate?.source == "example.com" && candidate?.checked.fileName == "selftest-from-a-file.sh"
+            && candidate?.checked.text == text && candidate?.replacing == nil && candidate?.same == false
+        await pause(500)
+        await captureSettingsBothWays(as: "settings-skillies-import")
+        let pressed = Self.pressLastButton(labelled: "Add Skillie")
+        let added = await waitUntil(timeout: 2) { library.all().contains { $0.title == "Selftest From A File" } } != nil
+        let installed = library.all().first { $0.title == "Selftest From A File" }
+        let named = installed?.path.hasSuffix("/selftest-from-a-file.sh") == true
+        var ran = false
+        if let installed, let run = try? await library.run(installed, arguments: []) { ran = run.output.contains("from-file-\(marker)") }
+        await sheetGone()
+        var details = ["sheet \(sheet), shown whole \(whole) (from \(candidate?.source ?? "-"), as \(candidate?.checked.fileName ?? "-")), Add pressed \(pressed), added \(added) as \(installed.map { ($0.path as NSString).lastPathComponent } ?? "-") \(named), runs \(ran) \(model.importErrors.joined(separator: " "))"]
+
+        // The same file again: nothing to add, no button.
+        await model.receive(files: [file])
+        let same = model.pendingImport.first?.same == true && model.toAdd.isEmpty
+        model.isImporting = false
+        await sheetGone()
+
+        // A new version (its title kept): Replace, in place.
+        let newer = text.replacingOccurrences(of: "from-file-", with: "replaced-")
+        try? newer.write(to: file, atomically: true, encoding: .utf8)
+        await model.receive(files: [file])
+        let replacing = installed != nil && model.pendingImport.first?.replacing?.path == installed?.path
+        await pause(400)
+        let replacePressed = Self.pressLastButton(labelled: "Replace Skillie")
+        let replaced = await waitUntil(timeout: 2) { installed.flatMap { try? String(contentsOfFile: $0.path, encoding: .utf8) } == newer } != nil
+            && library.all().filter { $0.title == "Selftest From A File" }.count == 1
+        await sheetGone()
+        details.append("same again: nothing to add \(same); new version: replaces \(replacing), Replace pressed \(replacePressed), in place \(replaced)")
+
+        // Not a skillie: said in words, nothing to add.
+        let notes = scratch.appendingPathComponent("notes.skilli")
+        try? "Just notes, no shebang.\n".write(to: notes, atomically: true, encoding: .utf8)
+        await model.receive(files: [notes])
+        let refusal = model.importErrors.first ?? ""
+        let said = model.toAdd.isEmpty && refusal.hasPrefix("notes.skilli: Its first line does not say what runs it")
+        await pause(400)
+        await captureSettingsBothWays(as: "settings-skillies-import-refused")
+        model.isImporting = false
+        await sheetGone()
+        details.append("not a skillie said: \(said) “\(refusal)”")
+        await closeSettings()
+        if let installed { try? manager.removeItem(atPath: installed.path) }
+
+        record(name, sheet && whole && pressed && added && named && ran && same && replacing && replacePressed && replaced && said,
+               details.joined(separator: "; "), nil)
     }
 
     /// An agent writes a skillie when asked: Claude Code (Haiku) calls
@@ -21554,7 +21679,12 @@ final class SelfTest {
         _ = context.performStatusMenuSettings()
         let fromMenu = await waitUntil(timeout: 2) { settingsInFront() }
         let menuDetail = "menu: frontmost \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"), key \(context.settings.isKey)"
+        // Read while the window is on screen: the policy alone is set before it shows.
+        let inDockWhileOpen = context.settings.isVisible && NSRunningApplication.current.activationPolicy == .regular
         await closeSettings()
+        let outOfDockOnClose = await waitUntil(timeout: 1) { NSRunningApplication.current.activationPolicy == .accessory } != nil
+        record("Settings: skil.li in the Dock only while Settings is open", inDockWhileOpen && outOfDockOnClose,
+               "in the Dock while open \(inDockWhileOpen), out of it once closed \(outOfDockOnClose)", nil)
 
         // From the launcher, typed like a user.
         var launcherDetail = "launcher: TextEdit never came back to front"
