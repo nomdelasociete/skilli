@@ -552,7 +552,7 @@ final class SelfTest {
         }
         if scope == .scripts {
             window.center()
-            return await finish(after: [askRunsScripts, scriptCommandsRun, agentCreatesSkillie])
+            return await finish(after: [askRunsScripts, scriptCommandsRun, skillieFilesAdded, agentCreatesSkillie])
         }
         if scope == .keyboard {
             window.center()
@@ -5179,6 +5179,7 @@ final class SelfTest {
         await cleanKeyboardBlocksKeys()
         await askRunsScripts()
         await scriptCommandsRun()
+        await skillieFilesAdded()
         await agentCreatesSkillie()
         await historyPickedByMeaning()
         await browserHistorySearch()
@@ -19515,6 +19516,88 @@ final class SelfTest {
         record(name, listed && hello && lastLine && asked && missingSaid && argumentFooter == ["Next ↩", "Actions ⌘K"] && tabActions && dropdown && greeted && inline && inlineRow && shownInMenuBar && switchOn && goneFromMenuBar && failed && shebang && importOK
                && created.hasPrefix("Created the skillie “Selftest Echo”") && duplicate && toolListed && toolRun == "Hi Max, you look calm"
                && echoed == "made-zebra" && missing, details.joined(separator: "; "), nil)
+    }
+
+    /// A `.skilli` file opened in skil.li (docs/skillie-files.md): Settings
+    /// → Skillies shows it whole, with where it came from, before Add; Add
+    /// writes it into the folder, listed and run; the same file again has
+    /// nothing to add; a new version replaces it in place; a file that is
+    /// not a skillie says why.
+    private func skillieFilesAdded() async {
+        let name = "Skillie files: a .skilli shown whole (where from, its code) before Add; added, run; the same again nothing to add; a new version replaces it in place; not a skillie said"
+        guard let library = context.tools.tools.scripts else {
+            record(name, false, "no skillies library", nil)
+            return
+        }
+        let settings = context.settings
+        let model = settings.skillies
+        let manager = FileManager.default
+        let scratch = manager.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/skillie-files", isDirectory: true)
+        try? manager.createDirectory(at: scratch, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: scratch) }
+        let marker = String((0..<5).map { _ in "abcdefghijklmnopqrstuvwxyz".randomElement()! })
+        let text = "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Selftest From A File\n# @skilli.mode compact\n# @skilli.icon 📦\n"
+            + "# @skilli.description Says where it came from.\n# @skilli.needsConfirmation true\n\necho from-file-\(marker)\n"
+        let file = scratch.appendingPathComponent("Selftest From A File.skilli")
+        try? text.write(to: file, atomically: true, encoding: .utf8)
+        // Where it came from, as a browser writes it on the file.
+        if let whereFrom = try? PropertyListSerialization.data(fromPropertyList: ["https://example.com/skillies/from-a-file.skilli", "https://example.com/skillies"],
+                                                                format: .binary, options: 0) {
+            _ = whereFrom.withUnsafeBytes { setxattr(file.path, "com.apple.metadata:kMDItemWhereFroms", $0.baseAddress, whereFrom.count, 0, 0) }
+        }
+        func sheetGone() async { _ = await waitUntil(timeout: 2) { !NSApp.windows.contains { $0.isVisible && $0.isSheet } } }
+
+        settings.show(pane: .skillies)
+        await model.receive(files: [file])
+        let sheet = await waitUntil(timeout: 2) { NSApp.windows.contains { $0.isVisible && $0.isSheet } } != nil
+        let candidate = model.pendingImport.first
+        let whole = model.pendingImport.count == 1 && candidate?.source == "example.com" && candidate?.checked.fileName == "selftest-from-a-file.sh"
+            && candidate?.checked.text == text && candidate?.replacing == nil && candidate?.same == false
+        await pause(500)
+        await captureSettingsBothWays(as: "settings-skillies-import")
+        let pressed = Self.pressLastButton(labelled: "Add Skillie")
+        let added = await waitUntil(timeout: 2) { library.all().contains { $0.title == "Selftest From A File" } } != nil
+        let installed = library.all().first { $0.title == "Selftest From A File" }
+        let named = installed?.path.hasSuffix("/selftest-from-a-file.sh") == true
+        var ran = false
+        if let installed, let run = try? await library.run(installed, arguments: []) { ran = run.output.contains("from-file-\(marker)") }
+        await sheetGone()
+        var details = ["sheet \(sheet), shown whole \(whole) (from \(candidate?.source ?? "-"), as \(candidate?.checked.fileName ?? "-")), Add pressed \(pressed), added \(added) as \(installed.map { ($0.path as NSString).lastPathComponent } ?? "-") \(named), runs \(ran) \(model.importErrors.joined(separator: " "))"]
+
+        // The same file again: nothing to add, no button.
+        await model.receive(files: [file])
+        let same = model.pendingImport.first?.same == true && model.toAdd.isEmpty
+        model.isImporting = false
+        await sheetGone()
+
+        // A new version (its title kept): Replace, in place.
+        let newer = text.replacingOccurrences(of: "from-file-", with: "replaced-")
+        try? newer.write(to: file, atomically: true, encoding: .utf8)
+        await model.receive(files: [file])
+        let replacing = installed != nil && model.pendingImport.first?.replacing?.path == installed?.path
+        await pause(400)
+        let replacePressed = Self.pressLastButton(labelled: "Replace Skillie")
+        let replaced = await waitUntil(timeout: 2) { installed.flatMap { try? String(contentsOfFile: $0.path, encoding: .utf8) } == newer } != nil
+            && library.all().filter { $0.title == "Selftest From A File" }.count == 1
+        await sheetGone()
+        details.append("same again: nothing to add \(same); new version: replaces \(replacing), Replace pressed \(replacePressed), in place \(replaced)")
+
+        // Not a skillie: said in words, nothing to add.
+        let notes = scratch.appendingPathComponent("notes.skilli")
+        try? "Just notes, no shebang.\n".write(to: notes, atomically: true, encoding: .utf8)
+        await model.receive(files: [notes])
+        let refusal = model.importErrors.first ?? ""
+        let said = model.toAdd.isEmpty && refusal.hasPrefix("notes.skilli: Its first line does not say what runs it")
+        await pause(400)
+        await captureSettingsBothWays(as: "settings-skillies-import-refused")
+        model.isImporting = false
+        await sheetGone()
+        details.append("not a skillie said: \(said) “\(refusal)”")
+        await closeSettings()
+        if let installed { try? manager.removeItem(atPath: installed.path) }
+
+        record(name, sheet && whole && pressed && added && named && ran && same && replacing && replacePressed && replaced && said,
+               details.joined(separator: "; "), nil)
     }
 
     /// An agent writes a skillie when asked: Claude Code (Haiku) calls

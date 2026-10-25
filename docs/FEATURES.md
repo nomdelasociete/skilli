@@ -612,6 +612,10 @@ Your own scripts, run from the launcher like any command.
   launcher, a shortcut, Ask or agents; output silent, compact, full or
   inline.
 - **In the menu bar**: a skillie's last line, refreshed on its own.
+- **Skillie files**: double-click a `.skilli` file (or open a
+  `skilli://skillies/import?url=…` link) and Settings → Skillies shows
+  it whole, where it came from and every line; ↩ adds it, a newer one
+  with the same title replaces it. Nothing runs on add.
 
 Settings: Your Skillies · In the menu bar.
 

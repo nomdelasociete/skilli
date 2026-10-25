@@ -18,6 +18,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// Settings → Apps' page and the shortcut its rows record; the
     /// self-test calls what its controls call.
     let apps = AppsPaneModel()
+    /// Settings → Skillies' import sheet (`.skilli` files, import links);
+    /// the self-test calls what its buttons call.
+    let skillies = SkilliesPaneModel()
     /// The search atop the sidebar; kept with its index while the window
     /// comes and goes. The self-test reads it.
     let search: SettingsSearchModel
@@ -346,7 +349,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         search.shortcuts = context.shortcuts
         search.catalogInput = context.catalogInput
         let root = SettingsRootView(preferences: preferences, navigation: navigation, context: context, markTilt: markTilt,
-                                    catalog: catalog, apps: apps, search: search)
+                                    catalog: catalog, apps: apps, skillies: skillies, search: search)
         let host = NSHostingController(rootView: root)
         // SwiftUI owns the title (the selected pane) and the toolbar.
         host.sceneBridgingOptions = [.title, .toolbars]

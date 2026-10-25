@@ -3289,6 +3289,31 @@ re-investigating.
   (`script:<path>`). Agents: `list_skillies`, `run_skillie` (arguments in
   order; a missing one refused), `create_skillie`. `selftest scripts`
   (scratch folder; a real Haiku agent writes one).
+- Skillie files (docs/skillie-files.md; `SkillieFile`, `SkillieImportLink`
+  in SkilliCore, `SkilliesPaneModel`, `ScriptLibrary.add`): a `.skilli`
+  file is a skillie renamed, plain text (type
+  `com.nomdelasociete.skilli.skillie`, exported in `Config/Info.plist`,
+  conforming to `public.plain-text`; skil.li its owner, role Viewer).
+  Opened (Finder, the Dock, Open With: `application(_:open:)`, every file
+  of one open in one sheet) or `skilli://skillies/import?url=https://…`
+  (repeatable; `SmallDownload`, as `apps/import`): Settings → Skillies'
+  sheet shows each whole before Add: icon, title, description, file
+  name, arguments, "asks before it runs", where it came from (macOS's
+  Where From: Spotlight's, else the file's own `kMDItemWhereFroms`
+  attribute; else the file's name, or the link's host), every line.
+  Checked as the folder reads it (`SkillieFile.check`: UTF-8, 256 KB at
+  most, a shebang naming an absolute path, title and mode in the first
+  8 KB, schemaVersion 1); what is not one says why, nothing to add.
+  Added as the file's own name in hyphenated words, the extension from
+  the shebang (`sh`, `py`, `js`, `swift`, `rb`, else none), executable; a
+  name taken becomes "name-2". The same title as one of the user's:
+  Replace, written over that file in place (its path kept: keys, menu bar
+  line, learning follow); exactly the same text: "Already in your
+  skillies", no button. Nothing runs on add, nothing announced (the list
+  shows it). The self-test and benchmark ignore opened files.
+  `remote scripts` (`skillieFilesAdded`): a scratch `.skilli` with a
+  Where From, shown whole, Add pressed, written, run; again: nothing to
+  add; a new version replaced in place; a file with no shebang said.
 - Clean Keyboard (`KeyboardCleaner`, `SystemCommand.cleanKeyboard`):
   the launcher, Ask ("bloque le clavier, je vais le nettoyer"), a
   shortcut or an agent's `run_mac_command` turn every key, modifier and
@@ -3790,6 +3815,8 @@ re-investigating.
   opened it; `selftest decide`: Ask picks made-up shortcuts by name, and
   none for something else (decided only).
 - Import: `skilli://apps/import?app=<file>` adds linked apps (above);
+  `skilli://skillies/import?url=…` and `.skilli` files add skillies
+  (Skillie files, above);
   `skilli://commands/import?command=<file>` (repeatable) or
   `?url=https://…` (`CommandLink`, `Config/Info.plist`). Settings →
   Commands shows every command in full before Add; nothing is added from a

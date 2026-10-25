@@ -166,6 +166,27 @@ final class ScriptLibrary {
         return command
     }
 
+    /// A skillie from a `.skilli` file or a link, once the user saw it
+    /// whole and said Add: into the first folder under its name, or over
+    /// `replacing` (one of the folders' skillies) in place, so its keys,
+    /// menu bar line and learning follow it.
+    func add(_ checked: SkillieFile.Checked, replacing: ScriptCommand?) throws -> ScriptCommand {
+        let url: URL
+        // Compared resolved: a folder under /var is /private/var once scanned.
+        let resolved = URL(fileURLWithPath: replacing?.path ?? "").resolvingSymlinksInPath().path
+        if let replacing, folders().contains(where: { resolved.hasPrefix($0.resolvingSymlinksInPath().path + "/") }) {
+            url = URL(fileURLWithPath: replacing.path)
+            try checked.text.write(to: url, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+            cached = nil
+        } else {
+            url = try write(checked.text, named: checked.fileName)
+        }
+        guard let command = ScriptCommand.parse(checked.text, path: url.path) else { throw Failure(message: "The skillie could not be read back.") }
+        Log.trace("Skillie “\(command.title)” \(replacing == nil ? "added" : "replaced") from a file or link")
+        return command
+    }
+
     /// Into the first folder, executable; "name-2.sh" when the name is taken.
     @discardableResult
     private func write(_ text: String, named name: String) throws -> URL {

@@ -141,11 +141,16 @@ public struct ScriptCommand: Hashable, Sendable {
             header.append("\(c) @skilli.argument\(index + 1) \(json)")
         }
         if needsConfirmation { header.append("\(c) @skilli.needsConfirmation true") }
-        let slug = title.lowercased().folding(options: .diacriticInsensitive, locale: nil)
-            .split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: "-")
+        let slug = slug(title)
         let body = code.hasPrefix("#!") ? code.split(separator: "\n", maxSplits: 1).dropFirst().joined() : code
-        return ("\(slug.isEmpty ? "skillie" : String(slug.prefix(60))).\(language.fileExtension)",
+        return ("\(slug.isEmpty ? "skillie" : slug).\(language.fileExtension)",
                 header.joined(separator: "\n") + "\n\n" + body.trimmingCharacters(in: .newlines) + "\n")
+    }
+
+    /// "Café Time!" → "cafe-time": a file name's words, 60 characters at most.
+    static func slug(_ text: String) -> String {
+        String(text.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: "-").prefix(60))
     }
 
     private static func oneLine(_ text: String) -> String {
