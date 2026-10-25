@@ -1248,7 +1248,10 @@ starts from it.
 - Settings → Backup (`BackupCenter`, `BackupPlan` in SkilliCore): a plain
   zip ("skil.li Backup 2026-10-15 at 09.05.12.zip", made with `ditto` as
   the Finder does) of `~/Library/Application Support/skil.li` (never
-  `mcp.sock`, never the clipboard history: 2026-10-15) and the
+  `mcp.sock`, never the clipboard history: 2026-10-15; never the
+  recordings: 2026-10-24; never the words said in them,
+  `recordings-index.sqlite` and its `-wal`, `-shm`, `-journal`:
+  2026-10-25; all by exact name, `BackupPlan.neverCopied`) and the
   `Preferences.*` defaults in `Settings.plist`, minus this Mac's own state
   (`Preferences.machineKeys`: setup done, screens, launcher place, backup
   folder). API keys and sensitive form fields stay in the Keychain: never
@@ -1267,7 +1270,10 @@ starts from it.
 - "Back Up skil.li Now" in the launcher: out of sight, so one line says
   where it went; without a folder it opens Settings → Backup.
 - `selftest backup` works on scratch copies only (folder, defaults suite,
-  destination): no keys, no windows.
+  destination): no keys, no windows. It checks that no transcript's text
+  is anywhere in a backup's zip (the index open in WAL mode), that a
+  restore leaves the index as it is, and that an index SQLite cannot read
+  is made again from the transcripts (`RecordingIndex`).
 
 ### Interactions: the six rules
 
@@ -2219,8 +2225,19 @@ re-investigating.
   and at each change (`MeetingRecord`: state, the recorder's pid and
   start). At launch (normal mode, 4 s in, off the main thread) a folder
   still `recording`/`paused`/`transcribing` whose process is gone is
-  offered in the card (Save ↩, Later esc, Discard ⌘⌫); nothing is made
-  unless one is found. The menu bar while recording (`RecorderIndicator`):
+  offered in the card (Save ↩, Later esc, Discard ⌘⌫); one `stopped`
+  is transcribed without asking and without opening its window
+  (`RecorderCenter.left(in:)`, `pickUp`); nothing is made unless one is
+  found. Quit and sleep (2026-10-25, the spec's "Quit and sleep"): a quit
+  with a recording on answers `applicationShouldTerminate` with
+  `.terminateLater` (`MeetingRecorder.quitReply`), closes it as Stop does
+  (both files whole, about a second), writes it `stopped` and replies;
+  a transcript being made or waiting is left `stopped` too; never a
+  question, never transcribed at the quit. `NSWorkspace.willSleepNotification`
+  pauses a recording on (`RecorderCenter.macWillSleep`); at
+  `didWakeNotification` nothing resumes, the card offers Resume ↩, Stop
+  ⌘↩, Keep Paused esc (`RecordCard.Content.slept`), never taking the
+  keys; one the user paused shows nothing. The menu bar while recording (`RecorderIndicator`):
   a red dot, the time, both sides' waves (mic up, Mac down), hollow dot
   and still clock when paused; its menu pauses, resumes, stops; after
   Stop a ring fills while the transcript is made. Transcript
@@ -2243,7 +2260,10 @@ re-investigating.
   plays the other side, a file stands in for the microphone through the
   same engine): a call's transcript against its script, the tracks in
   step across a pause, a recording never stopped (`Skilli
-  recorderchild`, SIGKILLed), links and tools; `recorder-*.png`.
+  recorderchild`, SIGKILLed), one quit (the same child sent SIGTERM, which
+  goes through `NSApp.terminate` and `quitReply` as in skil.li), a sleep
+  and a wake (macOS's notifications posted: the test Mac cannot be woken
+  without a person), links and tools; `recorder-*.png`.
 - The recorder's moment (phase 2, 2026-10-24; docs/meeting-recorder.md's
   Moment, its views in docs/meeting-recorder-views.md "Phase 2"): the
   five cases are code, never a model (`MeetingMoment.read` in

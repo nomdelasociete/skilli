@@ -58,12 +58,21 @@ final class Recordings: Sendable {
         (try? Data(contentsOf: folder.appendingPathComponent("transcript.json"))).flatMap { try? MeetingTranscript.File.decode($0) }
     }
 
-    /// Recordings never stopped (skil.li quit, the Mac lost power), newest
-    /// first. Off the main thread: a few small files read.
+    /// Recordings never stopped (skil.li crashed, the Mac lost power),
+    /// newest first. Off the main thread: a few small files read.
     func unfinished() -> [(folder: URL, record: MeetingRecord)] {
         let folders = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
         return folders.compactMap { folder in read(folder).map { (folder, $0) } }
             .filter { $0.record.isUnfinished(isRunning: Self.isRunning) }
+            .sorted { $0.record.started > $1.record.started }
+    }
+
+    /// Recordings closed as skil.li quit, their transcript to make, newest
+    /// first. Off the main thread.
+    func stopped() -> [(folder: URL, record: MeetingRecord)] {
+        let folders = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        return folders.compactMap { folder in read(folder).map { (folder, $0) } }
+            .filter { $0.record.state == .stopped }
             .sorted { $0.record.started > $1.record.started }
     }
 

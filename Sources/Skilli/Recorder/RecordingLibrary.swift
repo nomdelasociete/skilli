@@ -201,7 +201,10 @@ final class RecordingLibrary {
 /// FTS5 table on this Mac (as the clipboard's), filled from each
 /// `transcript.json` and caught up before each search by its file's
 /// date (a transcript made again, a recording renamed or deleted in
-/// Finder). Searched off the main thread; calls serialized by a lock.
+/// Finder). Only a copy of the transcripts: never in a backup
+/// (`BackupPlan.neverCopied`), and a file that is not a database SQLite
+/// can read is made again from them. Searched off the main thread; calls
+/// serialized by a lock.
 final class RecordingIndex: @unchecked Sendable {
     private let url: URL
     private var db: OpaquePointer?
@@ -217,19 +220,47 @@ final class RecordingIndex: @unchecked Sendable {
 
     private func open() -> Bool {
         if db != nil { return true }
+        switch connect() {
+        case SQLITE_OK:
+            return true
+        case SQLITE_NOTADB, SQLITE_CORRUPT:
+            // Not a database it can read (half written, another file in its
+            // place): made again, the next sync fills it from the transcripts.
+            Log.actions.error("Recordings index unreadable: made again from the transcripts")
+            // With SQLite's files beside it (`RecordingSearch.indexFiles`).
+            for suffix in ["", "-wal", "-shm", "-journal"] {
+                try? FileManager.default.removeItem(atPath: url.path + suffix)
+            }
+            return connect() == SQLITE_OK
+        default:
+            return false
+        }
+    }
+
+    /// Opens the file and makes its tables; SQLite's primary result code
+    /// (`SQLITE_OK`), the connection closed on any other.
+    private func connect() -> Int32 {
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
+            let code = db.map { sqlite3_errcode($0) } ?? SQLITE_CANTOPEN
             sqlite3_close(db)
             db = nil
-            return false
+            return code & 0xff
         }
         // What was said is private: only the user reads the file.
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-        return execute("""
+        let made = execute("""
             PRAGMA journal_mode = WAL;
             CREATE TABLE IF NOT EXISTS transcripts (folder TEXT PRIMARY KEY, stamp REAL NOT NULL);
             CREATE VIRTUAL TABLE IF NOT EXISTS words USING fts5 (folder UNINDEXED, text, tokenize = 'unicode61 remove_diacritics 2');
             """)
+        guard made else {
+            let code = sqlite3_errcode(db) & 0xff
+            sqlite3_close(db)
+            db = nil
+            return code == SQLITE_OK ? SQLITE_ERROR : code
+        }
+        return SQLITE_OK
     }
 
     /// Each of `folders` in `root` as its transcript is now: added or read
