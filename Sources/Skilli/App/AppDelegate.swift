@@ -23,6 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // An app added from a link: its rows at once.
         settings.apps.onAppsChanged = { [unowned self] in self.launcher.reloadSources() }
+        // Skillies added from a `.skilli` file or a link: the same.
+        settings.skillies.library = self.scriptLibrary
+        settings.skillies.onSkilliesChanged = { [unowned self] in self.launcher.reloadSources() }
         return settings
     }()
     /// The self-test keeps its own Keychain item: never the user's API key.
@@ -1626,7 +1629,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `skilli://commands/import?…` from a web page or a shared link:
     /// Settings → Commands shows what it would add, and nothing is added
     /// until the user says so; `skilli://apps/import?…` the same in
-    /// Settings → Apps. Every other `skilli://` link runs what it
+    /// Settings → Apps; `.skilli` files (Finder, the Dock, Open With) and
+    /// `skilli://skillies/import?…` the same in Settings → Skillies
+    /// (docs/skillie-files.md). Every other `skilli://` link runs what it
     /// names (`LinkRunner`: asked first when it must; one skil.li does not
     /// know says so). The self-test and benchmark ignore links.
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -1635,7 +1640,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if case .selftest = mode, links.opensFromMacOS { urls.forEach(links.open) }
             return
         }
-        for url in urls {
+        // Skillie files, all in one sheet.
+        let skillieFiles = urls.filter { $0.isFileURL && $0.pathExtension.lowercased() == SkillieFile.fileExtension }
+        if !skillieFiles.isEmpty {
+            settings.show(pane: .skillies)
+            Task { await settings.skillies.receive(files: skillieFiles) }
+        }
+        for url in urls where !url.isFileURL {
+            if let links = SkillieImportLink.parse(url) {
+                settings.show(pane: .skillies)
+                Task { await settings.skillies.receive(links: links) }
+                continue
+            }
             // An app's links (`skilli://apps/import`): Settings → Apps shows it whole first.
             if let request = AppFileLink.parse(url) {
                 settings.apps.page = nil

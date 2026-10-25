@@ -200,9 +200,17 @@ said=$("$SKILLI_CLI" call run_shortcut name="Morning Routine" input="$1")  # wai
 
 ## Install
 
-Download a script from the collection, inspect it, and put it in your local
-skillies folder using Show in Finder above. The app discovers it by its header.
-It does not subscribe to the online collection or automatically replace installed
-scripts. Website publication and local installation are separate operations.
+Double-click a `.skilli` file: skil.li opens Settings → Skillies and shows
+the skillie whole (where it came from, every line of its code) before you
+add it. A `.skilli` file is the script itself, renamed; rename any script
+from the collection to `<name>.skilli` to add it this way. A link does the
+same: `skilli://skillies/import?url=https://…/the-script.sh`. A skillie with
+the same title as one you have replaces it, after you say Replace. Nothing
+runs when it is added.
+
+You can still put a script in your local skillies folder by hand (Show in
+Finder above); the app discovers it by its header. It does not subscribe to
+the online collection or replace installed scripts on its own. Website
+publication and local installation are separate operations.
 
 `skilli://commands/import` imports SI prompt files, not these scripts.

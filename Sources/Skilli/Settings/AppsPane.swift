@@ -87,26 +87,9 @@ final class AppsPaneModel {
         }
     }
 
-    /// A plain GET: no cookies, no cache (a web page chose the address).
-    /// Stopped past an app file's size as it comes, and after 15 s in all:
-    /// the link opens it before the user sees anything.
     private static func download(_ url: URL) async throws -> String {
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 10
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForResource = 15
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
-        let tooLarge = SystemCommands.Failure(message: "not an app file (over \(LinkedAppFile.largest / 1024) KB)")
-        let (bytes, response) = try await session.bytes(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard status == 200 else { throw SystemCommands.Failure(message: "the server answered \(status)") }
-        guard response.expectedContentLength <= Int64(LinkedAppFile.largest) else { throw tooLarge }
-        var data = Data()
-        for try await byte in bytes {
-            data.append(byte)
-            guard data.count <= LinkedAppFile.largest else { throw tooLarge }
-        }
+        let data = try await SmallDownload.data(url, largest: LinkedAppFile.largest,
+                                                tooLarge: "not an app file (over \(LinkedAppFile.largest / 1024) KB)")
         guard let text = String(data: data, encoding: .utf8) else { throw SystemCommands.Failure(message: "not an app file") }
         return text
     }
@@ -683,6 +666,32 @@ private struct AppItemRow: View {
 }
 
 // MARK: - Import
+
+/// The file an import link names (an app's, a skillie's), fetched once.
+enum SmallDownload {
+    /// A plain GET: no cookies, no cache (a web page chose the address).
+    /// Stopped past `largest` as it comes, and after 15 s in all: the link
+    /// opens it before the user sees anything.
+    static func data(_ url: URL, largest: Int, tooLarge: String) async throws -> Data {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForResource = 15
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let tooLarge = SystemCommands.Failure(message: tooLarge)
+        let (bytes, response) = try await session.bytes(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 200 else { throw SystemCommands.Failure(message: "the server answered \(status)") }
+        guard response.expectedContentLength <= Int64(largest) else { throw tooLarge }
+        var data = Data()
+        for try await byte in bytes {
+            data.append(byte)
+            guard data.count <= largest else { throw tooLarge }
+        }
+        return data
+    }
+}
 
 /// What a `skilli://apps/import` link would add, whole, before anything is
 /// added: each app, then every command with the very link it opens.
