@@ -17672,8 +17672,16 @@ final class SelfTest {
 
         // From the launcher over TextEdit.
         Self.makeFrontmost(pid: pid)
-        guard await waitUntil(timeout: 3, { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }) != nil,
-              ensureFrontmost(bundleID, before: "arrange windows") else { return }
+        guard await waitUntil(timeout: 3, { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }) != nil else {
+            record(name, false, "TextEdit did not come back in front before “arrange windows” (learned: \(learned))", nil)
+            await closeTestWindows()
+            return
+        }
+        // Lost focus: the run stops (ensureFrontmost records it); its windows still go.
+        guard ensureFrontmost(bundleID, before: "arrange windows") else {
+            await closeTestWindows()
+            return
+        }
         await pause(400)
         func arrange() async -> Bool {
             _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
@@ -17686,7 +17694,11 @@ final class SelfTest {
         let alphaArranged = await at(alpha, left)
         let arranged = await at(beta, right) && alphaArranged
         let arrangedFrames = "\(frame(alpha).map(Self.describe) ?? "?"), \(frame(beta).map(Self.describe) ?? "?")"
-        guard ensureFrontmost(bundleID, before: "arrange windows again") else { return }
+        guard ensureFrontmost(bundleID, before: "arrange windows again") else {
+            record(name, false, "TextEdit lost the front before “arrange windows” again (arranged: \(arranged))", nil)
+            await closeTestWindows()
+            return
+        }
         let listedAgain = await arrange()
         let alphaBack = await at(alpha, away)
         let putBack = await at(beta, awayBeta) && alphaBack

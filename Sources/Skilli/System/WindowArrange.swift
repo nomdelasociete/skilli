@@ -121,6 +121,9 @@ final class WindowArrange {
                 report.placed += 1
                 lines.append(window.appName)
             } catch {
+                // Its size may have changed before its place was refused:
+                // kept, so Arrange again puts it back too.
+                moved.append(Moved(name: window.appName, app: window.appElement, window: window.element, before: window.frame))
                 if !report.refused.contains(window.appName) { report.refused.append(window.appName) }
             }
         }

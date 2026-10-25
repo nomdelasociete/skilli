@@ -268,7 +268,7 @@ public enum SettingsTable {
                          SettingOption("12", "12 points"), SettingOption("16", "16 points")]),
                 note: "Between windows side by side and at the screen's edges, for every place ✦W, the launcher or Ask puts the front window in (halves, thirds, quarters, Maximize), and for windows placed in the layout editor."),
         setting("windows", "windowLearning", "Learn where you put windows", .toggle,
-                note: "On by default. Arrange Windows puts every window where the user usually puts it, learned on this Mac from their own moves and ✦W (each app's place, its windows' titles and files, the displays, the apps beside it); off, nothing is read or kept."),
+                note: "On by default. Arrange Windows puts every window where the user usually puts it, learned on this Mac from their own moves and ✦W (each app's place, its windows' titles and files, the displays, the apps beside it); off, nothing new is read or learned and Arrange uses only saved layouts; what was learned before stays until Forget What skil.li Learned."),
         setting("windows", "windowNeverPlace", "Never place", .list(item: "an app, by its name or bundle id", adds: true),
                 note: "Arrange Windows leaves these apps' windows where they are, and learns nothing more from them; what it learned before stays until Forget What skil.li Learned, used again if the app leaves this list."),
         setting("windows", "autoQuit", "Quit apps you stopped using", .toggle,

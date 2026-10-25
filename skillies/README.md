@@ -120,9 +120,10 @@ Everything the launcher runs, a skillie runs too, two ways:
 
 ## Arrange the windows
 
-Every window where you usually put it (learned on the Mac from your own
-moves), or the layout saved for the apps open; again within 10 seconds
-puts them back:
+Arrange Windows puts every window where you usually put it (learned on
+the Mac from your own moves), or applies the layout saved for the apps
+open. Run it again within 10 seconds and every window goes back where it
+was before:
 
 ```bash
 "$SKILLI_CLI" call run_mac_command command=arrangeWindows

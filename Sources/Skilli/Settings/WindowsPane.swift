@@ -328,7 +328,7 @@ private struct ArrangeSection: View {
         } footer: {
             Text(preferences.windowLearning
                  ? "From your own moves and ✦W: each app's place, its windows' titles and files, the displays and the apps beside it. Kept on this Mac, never sent. A layout saved for the apps open comes first."
-                 : "Off: nothing is read or kept, and Arrange Windows uses only your saved layouts.")
+                 : "Off: nothing new is read or learned, and Arrange Windows uses only your saved layouts. What it learned before stays on this Mac until you forget it.")
         }
     }
 }

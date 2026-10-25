@@ -340,7 +340,8 @@ places leaves that app until the place is sure again.
 - **The display prompt**: Arrange as Usual (Display plugged in, above).
 - **Settings → Windows**, in this order (settings first, long lists
   last):
-  - Learn where you put windows (on). Off: nothing is read or written;
+  - Learn where you put windows (on). Off: nothing new is read or
+    learned (what was learned stays until Forget);
     Arrange uses only saved layouts and the display prompt no longer
     offers Arrange as Usual.
   - Place new windows where you usually put them (off).
