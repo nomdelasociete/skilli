@@ -256,7 +256,12 @@ extension LauncherController {
             }
             list.append(act("Edit in Shortcuts", "square.and.pencil") { [weak self] in self?.onEditShortcut?(shortcut) })
             return list
-        case .command, .saveLayout, .openWindow, .startTimer, .keepAwake, .runningTimer, .createEvent, .addReminder,
+        // A window open: every window where the user usually puts it.
+        case .openWindow:
+            return [first, act(SystemCommand.arrangeWindows.title, SystemCommand.arrangeWindows.symbol) { [weak self] in
+                self?.onSystemCommand?(.system(.arrangeWindows))
+            }]
+        case .command, .saveLayout, .startTimer, .keepAwake, .runningTimer, .createEvent, .addReminder,
              .brewUpgradeAll, .setup, .ask, .siCommand, .system, .scriptArgument, .scriptChoice, .recordNamed:
             return [first]
         // A recording made: its folder, its words, gone to the Trash.

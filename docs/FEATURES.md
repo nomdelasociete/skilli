@@ -308,13 +308,20 @@ using.
   displays known by who they are. Edited on the displays in an editor.
 - **A display plugged in** asks, in its middle, which of its layouts to
   put back.
+- **Arrange Windows** (the launcher, Ask, ⌘K on a window, a shortcut you
+  give it): every window where you usually put it, learned on this Mac
+  from your own moves and ✦W (each app's place, its windows' titles and
+  files, the displays, the apps beside it); a layout saved for the apps
+  open comes first. Again within 10 seconds puts them back.
 - **Switch Window**: see Launcher.
 - **Auto Quit**: quits the apps you stopped using after a delay you
   choose; never the front app, unsaved work, sound or a call.
 
-Settings: Space between windows (with a preview) · Layouts · Always
-leave out of layouts · Monitors ignored when plugged in · Apps You
-Stopped Using: Quit apps you stopped using · Unused for · Never quit.
+Settings: Space between windows (with a preview) · Arrange Windows:
+Learn where you put windows · Forget What skil.li Learned · Layouts ·
+Never place · Always leave out of layouts · Monitors ignored when plugged
+in · Apps You Stopped Using: Quit apps you stopped using · Unused for ·
+Never quit.
 
 <!-- pane: none -->
 ## Mac

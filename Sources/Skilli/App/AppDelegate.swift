@@ -58,7 +58,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Settings → Windows → Space between windows, read at each press.
         commands.windows.gap = { [preferences] in CGFloat(preferences.windowGap) }
+        // A place given with ✦W, the launcher or Ask is learned; any move
+        // skil.li makes is not the user's.
+        commands.windows.placedByUser = { [weak self] window, frame in self?.windowLearner.placedWithKey(window, at: frame) }
+        WindowManager.didPlace = { [weak self] window, frame in self?.windowLearner.placed(window, at: frame) }
+        commands.arrange = { [weak self] in await self?.windowArrange.run() ?? WindowArrange.Report() }
         return commands
+    }()
+    /// Where the user puts windows (Arrange Windows); the self-test keeps its own.
+    private lazy var windowLearner: WindowLearner = {
+        let learner = WindowLearner(file: {
+            switch mode {
+            case .normal: WindowLearner.defaultFile
+            case .selftest: FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/placements.json")
+            case .benchmark: nil
+            }
+        }())
+        learner.isOn = { [preferences] in preferences.windowLearning }
+        learner.leftOut = { [preferences] in Set(preferences.windowNeverPlace) }
+        learner.gap = { [preferences] in CGFloat(preferences.windowGap) }
+        return learner
+    }()
+    /// Arrange Windows: a saved layout for what is open, else every window
+    /// where the user usually puts it.
+    private lazy var windowArrange: WindowArrange = {
+        let arrange = WindowArrange(arranger: arranger, learner: windowLearner, manager: systemCommands.windows)
+        arrange.leftOut = { [preferences] in Set(preferences.windowNeverPlace) }
+        arrange.gap = { [preferences] in CGFloat(preferences.windowGap) }
+        return arrange
     }()
     private lazy var setup: SetupWindowController = {
         let setup = SetupWindowController(permissions: permissions, ai: ai, preferences: preferences)
@@ -1179,6 +1206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         remapper.deactivate()
+        if case .benchmark = mode {} else { windowLearner.stop() }
         // The user's own input source, if the launcher had switched it.
         englishTyping.launcherClosed()
         ai.subscription.dropSpare()
@@ -1240,6 +1268,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             snippetExpander.start()
             timers.restore()
             scheduler.start()
+            if case .benchmark = mode {} else { windowLearner.start() }
             if case .normal = mode {
                 systemCommands.restoreAwake()
                 autoQuitter.start()
@@ -1801,6 +1830,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if imageFolder.onImage != nil { watchImageFolder() }
             autoQuitter.schedule()
         }
+        // Never place: nothing kept about them either.
+        windowLearner.forget(apps: Set(preferences.windowNeverPlace))
     }
 
     /// What the user made, for the Catalog: the launcher's "?" and
@@ -1869,6 +1900,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         context.applyLayout = { [weak self] layout in self?.applyLayout(layout) }
         context.deleteLayout = { [weak self] layout in self?.deleteLayout(layout) }
+        context.forgetPlacements = { [weak self] in
+            guard let self else { return }
+            deletes.placements(in: windowLearner)
+        }
         context.deletes = deletes
         context.rightsHelpers = { [handoff] in handoff.targets }
         context.openRightsHelper = { [handoff, preferences] server in
@@ -1982,7 +2017,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 reportPath: outputPath,
                 recorder: { [weak self] in self?.recorderCenter },
                 recordings: { [weak self] in self?.recordingLibrary },
-                moveRecordings: { [weak self] folder in await self?.moveRecordings(to: folder) }
+                moveRecordings: { [weak self] folder in await self?.moveRecordings(to: folder) },
+                windowLearner: windowLearner
             ))
             SelfTest.emit(await test.run(scope: scope), to: outputPath)
             NSApp.terminate(nil)

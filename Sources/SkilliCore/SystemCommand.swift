@@ -33,6 +33,7 @@ public enum SystemCommand: String, CaseIterable, Sendable {
     case wifiOn
     case wifiOff
     case showDesktop
+    case arrangeWindows
 
     public var title: String {
         switch self {
@@ -66,6 +67,7 @@ public enum SystemCommand: String, CaseIterable, Sendable {
         case .wifiOn: "Turn Wi-Fi On"
         case .wifiOff: "Turn Wi-Fi Off"
         case .showDesktop: "Show Desktop"
+        case .arrangeWindows: "Arrange Windows"
         }
     }
 
@@ -102,6 +104,8 @@ public enum SystemCommand: String, CaseIterable, Sendable {
         case .wifiOn: ["wifi", "wi-fi", "wireless", "allumer le wifi", "activer le wifi", "remettre le wifi"]
         case .wifiOff: ["wifi", "wi-fi", "wireless", "couper le wifi", "désactiver le wifi", "éteindre le wifi", "hors ligne", "offline"]
         case .showDesktop: ["desktop", "bureau", "afficher le bureau", "montrer le bureau", "voir le bureau", "hide windows", "écarter les fenêtres"]
+        case .arrangeWindows: ["arrange", "tidy", "tidy windows", "organize windows", "usual places", "ranger", "ranger les fenêtres",
+                               "range mes fenêtres", "organiser les fenêtres", "fenêtres à leur place", "window", "fenêtre"]
         }
     }
 
@@ -138,6 +142,7 @@ public enum SystemCommand: String, CaseIterable, Sendable {
         case .wifiOn: "Turn Wi-Fi on when it is off (allume le wifi); not restart it (off then on again), not open its settings"
         case .wifiOff: "Turn Wi-Fi off (coupe le wifi): the Mac goes offline unless a cable connects it; not restart it, not open its settings"
         case .showDesktop: "Show the desktop (montre le bureau): every window of every app moves aside; again brings them back"
+        case .arrangeWindows: "Put every open window where the user usually puts it (range les fenêtres), learned from their own moves; again within 10 seconds puts them back"
         }
     }
 
@@ -173,6 +178,7 @@ public enum SystemCommand: String, CaseIterable, Sendable {
         case .wifiOn: "wifi"
         case .wifiOff: "wifi.slash"
         case .showDesktop: "menubar.dock.rectangle"
+        case .arrangeWindows: "rectangle.3.group"
         }
     }
 

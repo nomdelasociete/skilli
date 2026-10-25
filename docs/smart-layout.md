@@ -7,8 +7,8 @@ the display prompt), and, when the user turns it on, a new window as it
 opens (**Usual places**). No layout to save first: the saved layouts
 stay, for the arrangements someone wants by name.
 
-Status: spec, not built. Nothing below exists yet unless "What skil.li
-already has" names it.
+Status: phase 1 (Learning, Arrange Windows) built; phases 2 to 5 not
+yet. "What skil.li already has" lists what came before it.
 
 ## Target
 
@@ -48,8 +48,8 @@ comes before how it learns.
 
 - **Arrange Windows**: a launcher row (`arrange`, "tidy", "ranger",
   "organiser les fenêtres"), the Catalog ("?"), Ask ("range mes
-  fenêtres"), ⌘K on the launcher's window rows, a link and a tool (Where
-  it lives). **No shortcut by default**: the user gives it the key they
+  fenêtres"), ⌘K on the launcher's window rows (Switch Window), a link
+  and a tool (Where it lives). **No shortcut by default**: the user gives it the key they
   want, from its Catalog row or Settings → Shortcuts, as any other entry.
   skil.li never picks a key for it.
 - **Arrange Windows again** within 10 s, by whichever path, puts every
@@ -104,7 +104,7 @@ day are not used (Not used, below).
 | Usual places (when on) moves a new window wrongly | a window jumping as it opens; the worst case is under the pointer or the caret | it acts only before the user touched the window (Usual places); ✦W R puts it back (the frame it opened at is kept in `WindowManager`'s memory, as for a ✦W move); moved away within 30 s, the place loses its sure state and that app is not placed again until it has been confirmed again |
 | Two windows of one app told apart wrongly by their titles | the work and personal windows swapped | Arrange again restores; dragging them back teaches the right ones |
 | Learned from a move that meant nothing (a window pushed aside for a second) | a wrong place counted once | a place needs several confirmations before Usual places uses it; a move that does not last is not counted |
-| Learned from skil.li's own moves | a loop: skil.li confirming itself | Arrange's and Usual places' moves are never counted as the user's; a window left where skil.li put it counts as a weak confirmation only |
+| Learned from skil.li's own moves | a loop: skil.li confirming itself | every window skil.li moves (Arrange, a layout, Usual places) is marked where it put it and never counted as the user's |
 
 ## What skil.li already has
 
@@ -168,34 +168,40 @@ placement:
   display, the desk's two displays.
 - **With**: the other apps with a standard window visible on the same
   display at that time.
-- **How**: dragged by hand, placed with ✦W, or left where Arrange or
-  Usual places put it (weak).
+- **How**: dragged by hand, or placed with ✦W (or a place from the
+  launcher, Ask).
 - **When**: the date, for the half-life.
 
 ### When it is read: no watcher on every window
 
 skil.li reads a window's place at moments it already sees, not on every
-move:
+move (`WindowLearner`):
 
+- **At launch**: every app's windows, where they are.
+- **An app comes to the front** (`NSWorkspace` activate): its visible
+  standard windows are read (frame, display, title, document): where
+  they are before the user works in it.
 - **An app leaves the front** (`NSWorkspace` deactivate, as
-  `AutoQuitter` already follows): its visible standard windows are read
-  once (frame, display, title, document). A window whose frame changed
-  since the last reading and that is not where skil.li put it was moved
-  by the user: one placement. Off the main thread's key path.
-- **✦W places a window** (`WindowManager.apply`): one placement, "placed
-  with ✦W", counted double.
-- **Arrange is run**: before moving anything, the windows' places are
-  read; any the user moved since they were last read are counted first.
-- **skil.li quits or the Mac sleeps**: the front app's windows are read
-  once.
+  `AutoQuitter` already follows): read again. A window whose frame
+  changed by more than 8 pt since and that is not where skil.li put it
+  was moved by the user: one placement. The place it has as the user
+  leaves the app is the one they settled on; a window moved and moved
+  back meanwhile counts nothing.
+- **✦W places a window** (`WindowManager.apply`, and a place from the
+  launcher or Ask): one placement, "placed with ✦W", counted double.
+- **Arrange is run**: the app in front is read first, so a move made in
+  it since it came to the front counts.
+- **The Mac goes to sleep**: the app in front is read.
 
-No Accessibility observer stays on every app for learning (to measure:
-whether Usual places' observers, below, are cheap enough to also tell
-moves as they end).
+Readings run off the main thread (Accessibility with a 0.2 s timeout per
+app, CoreGraphics' window list for the apps beside it: no permission).
+No Accessibility observer stays on any app for learning. A window opened
+and moved within the same visit to its app is not seen moving (no
+reading before it): learned the next time it moves, or at once with ✦W.
 
-A move counts only when the window stayed there: read again at the next
-moment above, still in place (within 8 pt). A window moved and moved back
-counts nothing.
+Every window skil.li moves itself (Arrange, a layout, ✦W) is marked
+where it put it: found there (as the app rounded it, 24 pt), it is not
+the user's move.
 
 ### How a place is chosen
 
@@ -204,7 +210,7 @@ visible now:
 
 1. The placements of A with the same set of displays.
 2. Each weighed: its age with a half-life of 30 days (as
-   `QueryLearning`); ✦W ×2; weak ×0.25; times how alike its "with" is to
+   `QueryLearning`); ✦W ×2; times how alike its "with" is to
    the apps visible now (shared apps over all apps of both: 1 when the
    same apps, 0 when none in common, never below 0.2 so a habit still
    counts with other apps open); times how alike the window is:
@@ -219,7 +225,9 @@ visible now:
    most weight wins, on its display.
 4. No placement with this set of displays: the placements on a display
    of the same kind (the built-in one, an external one) carried in
-   proportion, at half their weight.
+   proportion, at half their weight: the same display when it is
+   connected, else an external one for an external one; never an
+   external display's place on the Mac's own screen.
 5. Nothing: no place. Arrange leaves the window where it is.
 
 **Sure** (what Usual places needs): the winning place holds at least 3
@@ -227,11 +235,11 @@ placements and at least 70 % of the weight for W in this context, and
 none of the last 3 placements in this context for a window like W went
 elsewhere.
 
-Kept small: for each app and set of displays, the 12 heaviest places,
-each with its last 8 placements' "with" and titles. In
-`~/Library/Application Support/skil.li/placements.json`, written after a
-change, at most once every 10 s, and on quit; read once at launch. A
-user with 60 apps and 3 display sets stays under a megabyte.
+Kept small: for each app and set of displays, its last 48 placements.
+In `~/Library/Application Support/skil.li/placements.json`, written
+after a change, at most once every 10 s, at sleep and on quit; read once
+at launch. A user with 60 apps and 3 display sets stays under a
+megabyte.
 
 ## Arrange Windows
 
@@ -239,21 +247,21 @@ user with 60 apps and 3 display sets stays under a megabyte.
    every display connected. Minimized windows, hidden apps, full-screen
    windows and skil.li's own are left as they are.
 2. **A saved layout first.** When a saved layout's displays are the ones
-   connected and its apps are the apps open (or a subset covering all of
-   them), Arrange applies that layout: the user's own words beat what
-   skil.li learned. Several match: the one applied last.
-3. Otherwise, each window's place (How a place is chosen), front windows
-   first. Two windows wanting the same place on the same display: the one
-   whose title and document fit that place better keeps it (two browser
-   windows), else the one in front; the other takes its next place, or
-   else stays where it is.
-4. Windows with no place stay where they are. When some do, and only the
-   first few times, a small card says how many and that placing them once
-   by hand teaches skil.li.
+   connected (each surely itself) and its apps are exactly the apps with
+   a window open, Arrange applies that layout: the user's own words beat
+   what skil.li learned. Several match: the one saved last.
+3. Otherwise, each window's place (How a place is chosen). Two windows
+   of one app never get the same place: the one whose title or file fits
+   it better keeps it (two browser windows), the other takes its next
+   place, or else stays where it is. Windows of different apps may share
+   a place: the user stacks them (everything filled on the laptop).
+4. Windows with no place stay where they are. When none got one, a small
+   card says skil.li does not know where they go yet and learns once they
+   are put where the user wants.
 5. Each window is moved through `WindowManager.place` (the enhanced UI
-   switch for Chrome and Electron, size, place, size again). Before
-   moving, each window's frame is kept for Arrange again (10 s) and for
-   ✦W R, as `WindowManager`'s memory keeps it today.
+   switch for Chrome and Electron, size, place, size again); one already
+   there (4 pt) is left alone. Before moving, each window's frame is kept
+   for Arrange again (10 s) and for ✦W R (`WindowManager.remember`).
 6. One line in the log with the windows, where they went, from which
    placements, and the time taken (no titles in the log). Budget: under
    150 ms for 20 windows, off the key path (the action only starts it).
@@ -333,11 +341,10 @@ places leaves that app until the place is sure again.
   - Displays never arranged when plugged in (list).
   - Never place (apps, at the bottom): Arrange and Usual places leave
     their windows, and nothing is learned from them.
-- **Skillies and agents**: a `skilli://run/system:…` link like the other
-  built-in entries (`system:keepAwake`), and a tool `arrange_windows`
-  (`display=front` for the display in front only) next to
-  `save_window_layout` and `apply_window_layout` (`SkilliTools`);
-  documented in `skillies/README.md`. Names proposed, set when built.
+- **Skillies and agents**: `open "skilli://run/system:arrangeWindows"`
+  (asks first, as Show Desktop does: every window moves) and
+  `"$SKILLI_CLI" call run_mac_command command=arrangeWindows`, as every
+  Mac command; documented in `skillies/README.md`.
 - **Settings for agents** (`SettingTools`): both switches by the same
   names.
 

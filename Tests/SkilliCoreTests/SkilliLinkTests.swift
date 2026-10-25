@@ -140,9 +140,9 @@ final class SkilliLinkTests: XCTestCase {
     /// A web page can open these: what changes the Mac out of sight, types
     /// or runs the user's code asks first; opening and reading run at once.
     func testWhatAsksFirst() {
-        // Wi-Fi off cuts the user off; Show Desktop moves every window aside.
+        // Wi-Fi off cuts the user off; Show Desktop and Arrange Windows move every window.
         for command in [SystemCommand.lockScreen, .sleep, .sleepDisplays, .ejectDisks, .toggleHiddenFiles, .cleanKeyboard, .toggleMicrophone,
-                        .pasteLatestScreenshot, .wifiOff, .showDesktop] {
+                        .pasteLatestScreenshot, .wifiOff, .showDesktop, .arrangeWindows] {
             XCTAssertTrue(SkilliLink.asksFirst(.system(command)), command.rawValue)
         }
         // Wi-Fi on is seen at once and undone as easily.
