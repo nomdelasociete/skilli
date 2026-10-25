@@ -60,7 +60,8 @@ def catalog(source):
         entries.append(dict(id=slug, category=category, title=metadata['title'], description=metadata['description'],
                             package=metadata['packageName'], mode=metadata['mode'], arguments=arguments,
                             needsConfirmation=metadata.get('needsConfirmation') == 'true', license='MIT',
-                            download=f'files/{path.name}', source=f'skillies/{category}/{path.name}',
+                            # A .skilli file: the script itself, which skil.li opens to add it (docs/skillie-files.md).
+                            download=f'files/{slug}.skilli', source=f'skillies/{category}/{path.name}',
                             sha256=hashlib.sha256(data).hexdigest(), code=code, path=path))
     if not entries:
         raise ValueError('No skillies found')
@@ -80,7 +81,7 @@ def render(entries, template, target):
         cards.append(f'''<article class="skillie-entry" id="{slug}" data-category="{item['category']}" data-search="{search}">
 <div class="skillie-meta">{esc(item['package'])} <span>{language} · MIT</span></div>
 <h2>{esc(item['title'])}</h2><p>{esc(item['description'])}</p><p class="skillie-args">{esc(args)}</p>
-<div class="skillie-actions"><a class="download-skillie" href="{item['download']}" download>Download skillie ↓</a><button data-share="{slug}" type="button">Copy link ↗</button></div>
+<div class="skillie-actions"><a class="download-skillie" href="{item['download']}" download="{slug}.skilli">Download skillie ↓</a><button data-share="{slug}" type="button">Copy link ↗</button></div>
 <details><summary>Read the code</summary><pre><code>{esc(item['code'])}</code></pre></details></article>''')
     categories = sorted(set(item['category'] for item in entries))
     filters = ''.join(f'<button data-filter="{c}" aria-pressed="false">{esc(c.replace("-", " ").title())}</button>' for c in categories)
