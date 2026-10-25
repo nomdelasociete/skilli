@@ -90,6 +90,9 @@ final class LauncherController: NSObject {
         case snippets
         /// The menu items of the app in front ("m "), by name.
         case menus
+        /// The recordings made ("recs "): by title, date, attendees, then
+        /// the words said.
+        case recordings
     }
 
     private(set) var mode: Mode?
@@ -402,6 +405,7 @@ final class LauncherController: NSObject {
     private var fileMeaningOn = false
     private var fileIcons: [String: NSImage] = [:]
     var isInFiles: Bool { mode == .files }
+    var isInRecordings: Bool { mode == .recordings }
     var isShowingFileMeaning: Bool { fileMeaning?.query == searchField.stringValue }
     private var appIconsByPath: [String: NSImage] = [:]
     var isInWindows: Bool { mode == .windows }
@@ -423,6 +427,26 @@ final class LauncherController: NSObject {
     /// Its row's ↩ and ⌘K: stop, pause, resume; its folder.
     var onRecordingControl: ((SkilliLink.RecordingControl) -> Void)?
     var onShowRecordingFolder: (() -> Void)?
+    /// ⌘R on a meeting's row (on now or starting soon): its label ("Record",
+    /// "Record (in person)"), nil when not offered (a recording on); and
+    /// what it does (records, and joins its call when not joined yet).
+    var recordLabel: (AgendaEvent) -> String? = { _ in nil }
+    var onRecordMeeting: ((AgendaEvent) -> Void)?
+    /// The recordings made, from memory (titles, dates, attendees), newest
+    /// first; the words said, searched off the main thread.
+    var recordingSummaries: (() -> [RecordingSummary])?
+    var searchRecordingWords: ((String) async -> [(folder: String, snippet: String)])?
+    /// Search Recordings opened: the list read again.
+    var onRecordingsMode: (() -> Void)?
+    /// A recording's window, its folder in Finder, its transcript copied,
+    /// it to the Trash (⌘Z), by its folder's name.
+    var onOpenRecording: ((String) -> Void)?
+    var onShowRecordingFolderNamed: ((String) -> Void)?
+    var onCopyRecordingTranscript: ((String) -> Void)?
+    var onDeleteRecording: ((RecordingSummary) -> Void)?
+    /// Search Recordings' words said, for the text typed.
+    private var recordingWords: (query: String, found: [(folder: String, snippet: String)])?
+    private var recordingWordsTask: Task<Void, Never>?
     /// Quicklinks: "g skilli" opens Google's results.
     var quicklinks: (() -> [Quicklink])?
     var onOpenURL: ((URL) -> Void)?
@@ -965,6 +989,10 @@ final class LauncherController: NSObject {
         if mode != nil, LauncherAction.Key(keyEvent) == .delete, runSelectedAction(.delete) {
             return true
         }
+        // ⌘R records the selected meeting (on now or starting soon).
+        if LauncherAction.Key(keyEvent) == .record, runSelectedAction(.record) {
+            return true
+        }
         // ⌘Z just after Tomorrow or Next Week puts the reminder back.
         if mode == .reminders, keyEvent.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
            keyEvent.charactersIgnoringModifiers?.lowercased() == "z", undoReminderMove() {
@@ -1054,6 +1082,8 @@ final class LauncherController: NSObject {
         /// The built-in commands, without those turned off.
         var commands = LauncherCommand.all
         var projects: [(candidate: FuzzyCandidate, item: LauncherItem)] = []
+        /// The recordings by title and attendees, for any search.
+        var recordings: [(candidate: FuzzyCandidate, item: LauncherItem)] = []
         /// Bluetooth may be allowed from here (`bluetoothAskable`).
         var bluetoothAskable = false
         var links: [Quicklink] = []
@@ -1105,6 +1135,9 @@ final class LauncherController: NSObject {
                                         .map(FuzzyCandidate.init), item: .snippet(snippet), nameCount: snippet.name.isEmpty ? 0 : 1))
         }
         made.projects = (projects?() ?? []).map { (FuzzyCandidate($0.name), LauncherItem.project($0)) }
+        made.recordings = (recordingSummaries?() ?? []).filter { $0.state == .done || $0.state == .pending }.map { summary in
+            (FuzzyCandidate(([summary.title] + summary.attendees).joined(separator: " ")), LauncherItem.recorded(LauncherRecorded(summary: summary)))
+        }
         made.siCommands = siCommands?() ?? []
         made.bluetoothAskable = bluetoothAskable?() ?? false
         // What is turned off leaves here, once per show: a key never looks.
@@ -1115,6 +1148,7 @@ final class LauncherController: NSObject {
             made.commands.removeAll { off.contains(LauncherItem.command($0).learningID) }
             made.siCommands.removeAll { off.contains(LauncherItem.siCommand($0).learningID) }
             if off.contains("cmd:searchProjects") { made.projects = [] }
+            if off.contains("cmd:searchRecordings") { made.recordings = [] }
         }
         catalog = made
         refreshPinned(from: made)
@@ -1200,6 +1234,8 @@ final class LauncherController: NSObject {
             } else {
                 results = [.scriptArgument(input.command, index: input.values.count, text: text)]
             }
+        } else if mode == .recordings {
+            results = recordingRows(text)
         } else if mode == .projects {
             let filter = FuzzyMatcher.Query(text)
             results = (text.isEmpty ? projectList : projectList.filter { project in
@@ -1332,6 +1368,17 @@ final class LauncherController: NSObject {
             }
             scored += projectRows.sorted { $0.score > $1.score }.prefix(4)
             laps.lap("projects")
+            // The recordings whose title or attendees the words start, in
+            // order: the two that fit best, from three letters (from memory).
+            if text.count >= 3 {
+                let recordingRows = catalog.recordings.compactMap { recording -> (item: LauncherItem, score: Int)? in
+                    guard FuzzyMatcher.matchesWordStarts(query, recording.candidate), let score = FuzzyMatcher.score(query, recording.candidate)
+                    else { return nil }
+                    return (recording.item, score + learning.boost(query: text, item: recording.item.learningID))
+                }
+                scored += recordingRows.sorted { $0.score > $1.score }.prefix(2)
+            }
+            laps.lap("recordings")
             let links = catalog.links
             for command in catalog.siCommands {
                 if let score = command.score(query) {
@@ -1541,6 +1588,10 @@ final class LauncherController: NSObject {
         case .contacts:
             sectionHeader.stringValue = text.isEmpty ? "Contacts" : "Contacts for “\(text)”"
             emptyState.stringValue = text.isEmpty ? "A name, a company, an email, a number, a city…" : "No contact for “\(text)”"
+        case .recordings:
+            let count = recordingSummaries?().count ?? 0
+            sectionHeader.stringValue = text.isEmpty ? "\(count) recording\(count == 1 ? "" : "s")" : "Recordings with “\(text)”"
+            emptyState.stringValue = count == 0 ? "No recording yet: ⌘R on a meeting's card records it" : "No recording with “\(text)”"
         case .projects:
             sectionHeader.stringValue = "\(projectList.count) recent project\(projectList.count == 1 ? "" : "s")"
             emptyState.stringValue = projectList.isEmpty ? "No recent projects in Cursor, VS Code, Zed, Sublime Text or JetBrains" : "No project matches “\(text)”"
@@ -1861,6 +1912,44 @@ final class LauncherController: NSObject {
             if self.searchField.stringValue.trimmingCharacters(in: .whitespaces) == words {
                 self.updateResults(query: self.searchField.stringValue)
             }
+        }
+    }
+
+    /// Search Recordings: by title, date and attendees at once (from
+    /// memory), then by the words said once typing pauses (100 ms); those
+    /// rows show the words around the match.
+    private func recordingRows(_ text: String) -> [LauncherItem] {
+        let all = recordingSummaries?() ?? []
+        let typed = text.trimmingCharacters(in: .whitespaces)
+        guard !typed.isEmpty else { return all.map { .recorded(LauncherRecorded(summary: $0)) } }
+        let named = all.compactMap { summary in RecordingSearch.score(typed, summary).map { (summary: summary, score: $0) } }
+            .sorted { $0.score != $1.score ? $0.score > $1.score : $0.summary.started > $1.summary.started }
+            .map(\.summary)
+        var rows = named.map { LauncherItem.recorded(LauncherRecorded(summary: $0)) }
+        if let recordingWords, recordingWords.query == typed {
+            let shown = Set(named.map(\.folder))
+            let byFolder = Dictionary(all.map { ($0.folder, $0) }, uniquingKeysWith: { first, _ in first })
+            rows += recordingWords.found.compactMap { found in
+                guard !shown.contains(found.folder), let summary = byFolder[found.folder] else { return nil }
+                return .recorded(LauncherRecorded(summary: summary, said: found.snippet))
+            }
+        } else {
+            findRecordingWords(typed)
+        }
+        return rows
+    }
+
+    private func findRecordingWords(_ text: String) {
+        recordingWordsTask?.cancel()
+        guard let search = searchRecordingWords else { return }
+        recordingWordsTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(100))
+            guard !Task.isCancelled else { return }
+            let found = await search(text)
+            guard let self, !Task.isCancelled, self.mode == .recordings,
+                  self.searchField.stringValue.trimmingCharacters(in: .whitespaces) == text else { return }
+            self.recordingWords = (text, found)
+            self.updateResults(query: self.searchField.stringValue)
         }
     }
 
@@ -2401,6 +2490,11 @@ final class LauncherController: NSObject {
             modeChip.set(title: "Projects", color: .systemPurple)
             searchField.placeholderString = "A project's name or editor"
             projectList = projects?() ?? []
+        case .recordings:
+            modeChip.set(title: "Recordings", color: .systemRed)
+            searchField.placeholderString = "A title, a name, a date, or what was said"
+            recordingWords = nil
+            onRecordingsMode?()
         case .tabs:
             modeChip.set(title: "Tabs", color: .systemIndigo)
             searchField.placeholderString = "A tab's title"
@@ -2504,6 +2598,10 @@ final class LauncherController: NSObject {
         if mode == .windows { windowList = [] }
         if mode == .tabs { tabList = [] }
         if mode == .projects { projectList = [] }
+        if mode == .recordings {
+            recordingWordsTask?.cancel()
+            recordingWords = nil
+        }
         if mode == .script { scriptInput = nil }
         if mode == .brew { brewTask?.cancel() }
         if mode == .history {
@@ -2760,6 +2858,15 @@ final class LauncherController: NSObject {
         }
         if case .command(let command) = picked, command.id == .searchProjects {
             enterMode(.projects, filter: "")
+            return
+        }
+        if case .command(let command) = picked, command.id == .searchRecordings {
+            enterMode(.recordings, filter: "")
+            return
+        }
+        if case .recorded(let found) = picked {
+            hide()
+            if flags.contains(.command) { onShowRecordingFolderNamed?(found.summary.folder) } else { onOpenRecording?(found.summary.folder) }
             return
         }
         if case .command(let command) = picked, command.id == .homebrew {
@@ -3090,7 +3197,7 @@ final class LauncherController: NSObject {
             onSystemCommand?(command)
             return
         case .process, .clip, .snippet, .calculation, .emoji, .gif, .layout, .saveLayout, .openWindow, .startTimer, .keepAwake, .runningTimer, .keptAwake,
-             .recordNamed, .recording, .quicklink, .browserTab, .file, .contact, .event, .createEvent, .reminder, .addReminder, .project, .script, .scriptArgument, .scriptChoice, .visit, .brew, .brewUpgradeAll,
+             .recordNamed, .recording, .recorded, .quicklink, .browserTab, .file, .contact, .event, .createEvent, .reminder, .addReminder, .project, .script, .scriptArgument, .scriptChoice, .visit, .brew, .brewUpgradeAll,
              .pullRequest, .githubNotification, .catalog, .catalogHeader, .menuItem:
             return
         }
@@ -3124,6 +3231,7 @@ final class LauncherController: NSObject {
         case .searchMenus: .menus
         case .searchTabs: .tabs
         case .searchProjects: .projects
+        case .searchRecordings: .recordings
         case .searchHistory: .history
         case .homebrew: .brew
         case .searchFiles: .files
@@ -4306,6 +4414,10 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
         case .recording(let live):
             cell.configure(title: item.title, accessory: live.paused ? "Paused" : "Stop and Transcribe",
                            icon: CommandIcon.image(for: "record.circle.fill", tint: .systemRed))
+        case .recorded(let found):
+            cell.configure(title: item.title,
+                           accessory: found.said ?? RecordingSearch.detail(found.summary, length: MeetingTranscriber.length(found.summary.seconds)),
+                           icon: CommandIcon.image(for: "waveform"))
         case .layout(let layout):
             cell.configure(title: layout.name, accessory: "Layout · \(layout.summary)", icon: CommandIcon.image(for: "rectangle.3.group"))
         case .saveLayout(let name):

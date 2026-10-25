@@ -5,21 +5,43 @@ import SkilliCore
 /// A meeting alert (Settings → Calendar → Before a meeting): one glass card
 /// in the middle of the screen, the meeting in it, the time counting down
 /// live; ↩ joins (or, without a call, lets it go: Got It), ⌘↩ shows it
-/// in Calendar, esc lets it go. "Screens dark": every screen black around
-/// it, the menu bar and the Dock too, until it goes; a click on the dark
-/// lets it go. It takes the keyboard only when the user is not typing; a
-/// click does too. It leaves by itself when the meeting ends, or once the
-/// user is in the call (`MeetingWatch.onInCall`).
+/// in Calendar, ⌘R records it (and joins its call), esc lets it go.
+/// "Screens dark": every screen black around it, the menu bar and the Dock
+/// too, until it goes; a click on the dark lets it go. It takes the
+/// keyboard only when the user is not typing; a click does too. It leaves
+/// by itself when the meeting ends, or once the user is in the call
+/// (`MeetingWatch.onInCall`).
 @MainActor
 final class MeetingCard {
+    /// Record ⌘R on the card (docs/meeting-recorder-views.md, phase 2): its
+    /// label for the meeting's case, and the line said the first time.
+    struct RecordOffer: Equatable {
+        var label: String
+        var line: String?
+    }
+
     var onJoin: ((AgendaEvent) -> Void)?
     var onShowInCalendar: ((AgendaEvent) -> Void)?
+    /// ⌘R: records the meeting, then joins its call; `consentSaid`: the
+    /// card's first-time line said that the others must agree.
+    var onRecord: ((AgendaEvent, _ consentSaid: Bool) -> Void)?
+    /// Whether the card offers Record for `event` now, and how (nil: not:
+    /// a recording on, or Settings → Recorder turned it off).
+    var recordOffer: (AgendaEvent) -> RecordOffer? = { _ in nil }
+    /// The first-time line was shown.
+    var onRecordLineShown: (() -> Void)?
 
     private(set) var event: AgendaEvent?
     private(set) var isDark = false
     /// Keys before this do nothing: typed on the way to the app as the
     /// card came, they neither join nor reach it.
     private var keysFrom: ContinuousClock.Instant?
+    /// ⌘R records only from then: the card a second on screen with the
+    /// keyboard (a browser's ⌘R on its way as the card came never
+    /// records), or clicked.
+    private var recordFrom: ContinuousClock.Instant?
+    /// Record as offered on the card shown.
+    private(set) var offer: RecordOffer?
     private var panel: CardPanel?
     private var glass: NSGlassEffectView?
     private let view = MeetingCardView()
@@ -37,6 +59,8 @@ final class MeetingCard {
     var shownEyebrow: String { view.eyebrowText }
     var shownTitle: String { view.titleText }
     var shownAction: String { view.actionTitle }
+    var shownRecord: String? { view.recordTitle }
+    var shownRecordLine: String? { view.recordLineText }
     var screensDark: Bool { dimmer.isShown }
     var isChecking: Bool { view.isChecking }
     var offersCheck: Bool { view.offersCheck }
@@ -46,6 +70,7 @@ final class MeetingCard {
     init() {
         dimmer.onClick = { [weak self] in self?.dismiss() }
         view.onPrimary = { [weak self] in self?.primary() }
+        view.onRecord = { [weak self] in self?.record() }
         view.onCheck = { [weak self] in self?.toggleCheck() }
         view.checkView.onOpenPrivacy = { [weak self] in self?.onOpenPrivacy?() }
     }
@@ -58,7 +83,9 @@ final class MeetingCard {
         isDark = dark
         let panel = self.panel ?? makePanel()
         self.panel = panel
-        view.show(event, now: .now)
+        offer = recordOffer(event)
+        view.show(event, now: .now, record: offer)
+        if offer?.line != nil { onRecordLineShown?() }
         layout()
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
         if let visible = screen?.visibleFrame {
@@ -72,6 +99,7 @@ final class MeetingCard {
         // keys), the keys already on their way swallowed.
         let typing = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < 1
         keysFrom = typing ? .now + Self.typingGrace : nil
+        recordFrom = .now + Self.recordGrace
         if typing, !dark { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) }
         ticker?.invalidate()
         let ticker = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
@@ -90,6 +118,7 @@ final class MeetingCard {
         panel?.orderOut(nil)
         dimmer.hide()
         event = nil
+        offer = nil
     }
 
     /// Join for a call; for anything else the alert has said it all.
@@ -97,6 +126,20 @@ final class MeetingCard {
         guard let event else { return }
         dismiss()
         if event.meeting != nil { onJoin?(event) }
+    }
+
+    /// ⌘R or a click on Record: recorded, its call joined (the recorder
+    /// joins it once recording). The line said on this card is the consent.
+    private func record() {
+        guard let event, let offer else { return }
+        let said = offer.line != nil
+        dismiss()
+        onRecord?(event, said)
+    }
+
+    /// A click on the card: the user's from now, ⌘R included.
+    fileprivate func clicked() {
+        recordFrom = .now
     }
 
     /// ⇥ or a click: the camera and microphone shown, or put away. The
@@ -165,6 +208,8 @@ final class MeetingCard {
 
     /// Taken mid-typing: the keys of this first half second do nothing.
     static let typingGrace: Duration = .milliseconds(500)
+    /// ⌘R records once the card has been on screen this long.
+    static let recordGrace: Duration = .seconds(1)
 
     /// A key pressed while it has the keyboard; with the screens dark, any
     /// other key does nothing (the app behind cannot be seen).
@@ -186,6 +231,9 @@ final class MeetingCard {
             dismiss()
         } else if code == kVK_Tab, flags.isEmpty, self.event?.meeting != nil {
             toggleCheck()
+        } else if flags == .command, event.charactersIgnoringModifiers?.lowercased() == "r", offer != nil {
+            // Not the user's yet: nothing, and nothing reaches the app.
+            if let recordFrom, ContinuousClock.now >= recordFrom { record() }
         } else {
             return false
         }
@@ -249,6 +297,11 @@ private final class CardPanel: NSPanel {
         return super.performKeyEquivalent(with: event)
     }
 
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown { card?.clicked() }
+        super.sendEvent(event)
+    }
+
     override func cancelOperation(_ sender: Any?) {
         card?.dismiss()
     }
@@ -267,6 +320,8 @@ final class MeetingCardView: NSView {
     var onPrimary: (() -> Void)?
     /// "Camera & Mic ⇥" clicked.
     var onCheck: (() -> Void)?
+    /// "Record ⌘R" clicked.
+    var onRecord: (() -> Void)?
 
     private let dot = DotView()
     private let eyebrow = NSTextField(labelWithString: "")
@@ -280,6 +335,10 @@ final class MeetingCardView: NSView {
     private let calendarHint = HintBar()
     private let button = PrimaryButton()
     private let checkHint = ClickHint(label: "Camera & Mic", key: "⇥")
+    private let recordHint = ClickHint(label: "Record", key: "⌘R")
+    /// What ⌘R does, the first card that offers it.
+    private let recordLine = CardNoteView()
+    private var record: MeetingCard.RecordOffer?
     /// The camera and the microphone live, while checked.
     let checkView = MeetingCheckView()
     private(set) var isChecking = false
@@ -293,6 +352,8 @@ final class MeetingCardView: NSView {
     var offersCheck: Bool { !checkHint.isHidden }
     var titleText: String { title.stringValue }
     var actionTitle: String { button.title }
+    var recordTitle: String? { recordHint.isHidden ? nil : recordHint.title }
+    var recordLineText: String? { recordLine.isHidden ? nil : recordLine.text }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -315,8 +376,13 @@ final class MeetingCardView: NSView {
         button.target = self
         button.action = #selector(primaryPressed)
         checkHint.onClick = { [weak self] in self?.onCheck?() }
+        recordHint.onClick = { [weak self] in self?.onRecord?() }
+        recordHint.isHidden = true
+        recordLine.symbol = "record.circle"
+        recordLine.isHidden = true
         checkView.isHidden = true
-        for subview in [dot, eyebrow, span, title, detailIcon, detail, people, checkView, hairline, dismissHint, checkHint, calendarHint, button] as [NSView] {
+        for subview in [dot, eyebrow, span, title, detailIcon, detail, people, checkView, recordLine, hairline, dismissHint, checkHint, calendarHint,
+                        recordHint, button] as [NSView] {
             addSubview(subview)
         }
     }
@@ -328,8 +394,13 @@ final class MeetingCardView: NSView {
         onPrimary?()
     }
 
-    func show(_ event: AgendaEvent, now: Date) {
+    func show(_ event: AgendaEvent, now: Date, record: MeetingCard.RecordOffer? = nil) {
         start = event.start
+        self.record = record
+        recordHint.title = record?.label ?? "Record"
+        recordHint.isHidden = record == nil
+        recordLine.text = record?.line ?? ""
+        recordLine.isHidden = record?.line == nil
         span.stringValue = Self.span(event)
         title.stringValue = event.title.isEmpty ? "Untitled" : event.title
         var parts: [String] = []
@@ -436,13 +507,18 @@ final class MeetingCardView: NSView {
         title.frame = NSRect(x: inset - 2, y: y, width: inner + 4, height: CGFloat(lines) * lineHeight + 2)
         y = title.frame.maxY + 8
 
-        // Where: the call or the place, and the calendar.
+        // Where: the call or the place, and the calendar; a call's camera
+        // and microphone can be checked first (⇥), on its right: the keys'
+        // line has no room for it beside Record.
         let hasDetail = !detail.stringValue.isEmpty
         detail.isHidden = !hasDetail
         detailIcon.isHidden = !hasDetail
-        if hasDetail {
+        checkHint.isHidden = !hasCall
+        let checkWidth = checkHint.isHidden ? 0 : checkHint.fittingWidth
+        if hasDetail || hasCall {
             detailIcon.frame = NSRect(x: inset, y: y + 1, width: 18, height: 18)
-            detail.frame = NSRect(x: inset + 24, y: y, width: inner - 24, height: 20)
+            detail.frame = NSRect(x: inset + 24, y: y, width: max(0, inner - 24 - (checkWidth > 0 ? checkWidth + 16 : 0)), height: 20)
+            checkHint.frame = NSRect(x: width - inset - checkWidth, y: y, width: checkWidth, height: 20)
             y += 28
         }
 
@@ -460,6 +536,14 @@ final class MeetingCardView: NSView {
             y = checkView.frame.maxY + 4
         }
 
+        // What ⌘R does, the first time it is offered.
+        if !recordLine.isHidden {
+            y += 10
+            let height = recordLine.height(for: inner)
+            recordLine.frame = NSRect(x: inset, y: y, width: inner, height: height)
+            y += height
+        }
+
         // The keys, under a hairline the width of the card.
         y += 14
         hairline.frame = NSRect(x: 0, y: y, width: width, height: 1)
@@ -467,24 +551,28 @@ final class MeetingCardView: NSView {
         button.sizeToFit()
         button.frame = NSRect(x: width - inset + 6 - button.frame.width, y: y, width: button.frame.width, height: PrimaryButton.height)
         let keysY = y + (PrimaryButton.height - 20) / 2
-        // A call: Dismiss on the left, Calendar beside Join. Without one,
-        // Got It is the dismissal: Calendar takes the left.
+        // A call: Dismiss on the left, Calendar and Record beside Join.
+        // Without one, Got It is the dismissal: Calendar takes the left.
         let left = hasCall ? ("Dismiss", "esc") : ("Calendar", "⌘↩")
         dismissHint.frame = NSRect(x: inset, y: keysY, width: 160, height: 20)
         dismissHint.setHints([left])
         // HintBar right-aligns: this one starts at the inset.
         let used = dismissHint.subviews.map(\.frame.minX).min() ?? 0
         dismissHint.subviews.forEach { $0.frame.origin.x -= used }
-        calendarHint.isHidden = !hasCall
-        calendarHint.frame = NSRect(x: button.frame.minX - 20 - 160, y: keysY, width: 160, height: 20)
+        let dismissRight = inset + (dismissHint.subviews.map(\.frame.maxX).max() ?? 0)
+        // Record next to the button, then Calendar, right to left.
+        var right = button.frame.minX - 20
+        if !recordHint.isHidden {
+            let recordWidth = recordHint.fittingWidth
+            recordHint.frame = NSRect(x: right - recordWidth, y: keysY, width: recordWidth, height: 20)
+            right = recordHint.frame.minX - 18
+        }
+        calendarHint.frame = NSRect(x: right - 160, y: keysY, width: 160, height: 20)
         calendarHint.setHints([("Calendar", "⌘↩")])
-        // A call: the camera and microphone can be checked first (⇥), when
-        // there is room between Dismiss and Calendar (not in Settings'
-        // narrower preview).
-        let dismissWidth = (dismissHint.subviews.map(\.frame.maxX).max() ?? 0)
-        checkHint.frame = NSRect(x: inset + dismissWidth + 18, y: keysY, width: checkHint.fittingWidth, height: 20)
+        // No room beside Dismiss (Settings' narrower preview): Calendar
+        // goes; ⌘↩ still shows it in Calendar.
         let calendarLeft = calendarHint.frame.minX + (calendarHint.subviews.map(\.frame.minX).min() ?? 0)
-        checkHint.isHidden = !hasCall || checkHint.frame.maxX + 18 > calendarLeft
+        calendarHint.isHidden = !hasCall || calendarLeft < dismissRight + 18
     }
 
     /// The height its content needs.
@@ -496,25 +584,40 @@ final class MeetingCardView: NSView {
 
 
 extension MeetingCardView {
+    /// The sample meeting's id: never recorded (Settings' Try offers no
+    /// Record).
+    static let sampleID = "sample-meeting"
+
     /// A meeting to show the card on: Settings' Try and preview.
     static func sample(startingIn seconds: TimeInterval) -> AgendaEvent {
         let start = Date.now.addingTimeInterval(seconds)
         let people = ["Paul Martin", "Anna Lefèvre", "Claire Dubois", "Marc Petit", "Sophie Bernard", "Louis Moreau"]
-        return AgendaEvent(id: "sample-meeting", title: "Weekly design review", start: start, end: start.addingTimeInterval(30 * 60),
+        return AgendaEvent(id: sampleID, title: "Weekly design review", start: start, end: start.addingTimeInterval(30 * 60),
                            calendar: "Work", notes: "https://meet.google.com/abc-defg-hij",
                            attendees: people.map { AgendaEvent.Attendee(name: $0, email: nil) })
     }
 }
 
-/// A small round dot: mint before the meeting, red once it started.
+/// A small round dot: mint before the meeting, red once it started;
+/// hollow, a ring (a call ended).
 final class DotView: NSView {
     var color: NSColor = .controlAccentColor {
         didSet { needsDisplay = true }
     }
+    var isHollow = false {
+        didSet { if isHollow != oldValue { needsDisplay = true } }
+    }
 
     override func draw(_ dirtyRect: NSRect) {
-        color.setFill()
-        NSBezierPath(ovalIn: bounds).fill()
+        if isHollow {
+            color.setStroke()
+            let ring = NSBezierPath(ovalIn: bounds.insetBy(dx: 0.75, dy: 0.75))
+            ring.lineWidth = 1.5
+            ring.stroke()
+        } else {
+            color.setFill()
+            NSBezierPath(ovalIn: bounds).fill()
+        }
     }
 }
 
@@ -542,7 +645,7 @@ private final class PeopleView: NSView {
             addSubview(face)
         }
         x = CGFloat(shown.count - 1) * (Self.size - 7) + Self.size
-        let label = NSTextField(labelWithString: Self.sentence(names))
+        let label = NSTextField(labelWithString: MeetingPeople.sentence(names))
         label.font = .systemFont(ofSize: 13)
         label.textColor = .secondaryLabelColor
         label.lineBreakMode = .byTruncatingTail
@@ -557,19 +660,6 @@ private final class PeopleView: NSView {
         let changed = newSize.width != frame.width
         super.setFrameSize(newSize)
         if changed { rebuild() }
-    }
-
-    /// "Paul", "Paul and Anna", "Paul, Anna and 4 others": first names.
-    static func sentence(_ names: [String]) -> String {
-        let first = names.map { String($0.split(separator: " ").first ?? Substring($0)) }
-        switch first.count {
-        case 0: return ""
-        case 1: return first[0]
-        case 2: return "\(first[0]) and \(first[1])"
-        default:
-            let others = first.count - 2
-            return "\(first[0]), \(first[1]) and \(others) other\(others == 1 ? "" : "s")"
-        }
     }
 }
 
@@ -658,11 +748,23 @@ final class PrimaryButton: NSButton {
     override var isFlipped: Bool { false }
 }
 
-/// A key hint the pointer can press: "Camera & Mic ⇥" in the meeting card.
+/// A key hint the pointer can press: "Camera & Mic ⇥", "Record ⌘R" in the
+/// meeting card.
 private final class ClickHint: NSView {
     var onClick: (() -> Void)?
     private let label: NSTextField
     private let keycap: KeycapView
+
+    /// Its words ("Record (in person)").
+    var title: String {
+        get { label.stringValue }
+        set {
+            guard newValue != label.stringValue else { return }
+            label.stringValue = newValue
+            label.sizeToFit()
+            needsLayout = true
+        }
+    }
 
     init(label text: String, key: String) {
         label = NSTextField(labelWithString: text)

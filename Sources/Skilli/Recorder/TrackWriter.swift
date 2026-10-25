@@ -95,16 +95,17 @@ final class TrackWriter: @unchecked Sendable {
     }
 
     /// Stops at the host time `stop`: waits for the buffers still on their
-    /// way (1 s at most: a source gone sends none), pads the track to the
-    /// stop, closes the file. Its length in seconds.
-    func finish(at stop: Double) async -> Double {
+    /// way (1 s at most: a source gone sends none; none for a source turned
+    /// off), pads the track to the stop, closes the file. Its length in
+    /// seconds.
+    func finish(at stop: Double, waitingForSource: Bool = true) async -> Double {
         await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
             queue.async {
                 self.timeline.finish(at: stop)
                 done.resume()
             }
         }
-        let deadline = ContinuousClock.now + .seconds(1)
+        let deadline = ContinuousClock.now + .seconds(waitingForSource ? 1 : 0)
         while ContinuousClock.now < deadline {
             let arrived = await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
                 queue.async {

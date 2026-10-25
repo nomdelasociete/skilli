@@ -25,6 +25,8 @@ public enum LauncherPrefix {
         // Not "clip ": "clip studio" is an app.
         (.clipboardHistory, ["cb ", "clipboard ", "presse-papier "]),
         (.searchSnippets, ["snip ", "snippet ", "snippets "]),
+        // Not "rec ": it names a new recording ("rec Weekly sync").
+        (.searchRecordings, ["recs ", "recordings ", "enregistrements "]),
         (.catalog, ["?"])
     ]
 

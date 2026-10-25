@@ -113,7 +113,7 @@ Mac mini, driven from here:
 |---|---|---|
 | This Mac, any time | Unit tests, builds | `./script/build_and_run.sh test` |
 | This Mac, any time (no keys, no windows; restarts skil.li ~2 s) | Clipboard store, search, OCR; setup drawn off screen; live decisions (Ask, emoji, clipboard and files by meaning, nothing written) | `./script/build_and_run.sh selftest clipboard` / `selftest setup` / `selftest decide` |
-| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote` (all) |
+| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote` (all) |
 
 Nothing else that opens skil.li runs on the developer's Mac: `selftest` refuses other
 scopes and `benchmark` refuses outright unless `SKILLI_LOCAL_UI=1` (a Mac
@@ -340,7 +340,8 @@ SkilliCore (framework + SwiftPM library, no AppKit)
 | `Sources/Skilli/Support/Benchmark.swift` | `--benchmark` report |
 | `Sources/Skilli/Support/SelfTest.swift` | `--selftest` end-to-end driver |
 | `Sources/Skilli/App/UndoableDeletes.swift` | Every delete of the user's data: at once, Undo ⌘Z for 10 s in the card (`offerUndo`) |
-| `Sources/Skilli/Recorder/*` | The meeting recorder: `MeetingRecorder` (the two tracks, pause, stop), `MacSoundTap` + `MicrophoneTrack` + `TrackWriter` (sources and files), `MeetingTranscriber`, `RecordCard`, `RecorderIndicator` (menu bar), `RecordingWindow`, `RecorderCenter` (what the rest of the app calls) |
+| `Sources/Skilli/Recorder/*` | The meeting recorder: `MeetingRecorder` (the two tracks, pause, stop, sources on or off), `MacSoundTap` + `MicrophoneTrack` + `TrackWriter` (sources and files), `MeetingTranscriber`, `RecordCard`, `RecorderIndicator` (menu bar), `RecordingWindow`, `RecorderCenter` (what the rest of the app calls; the moment, the call's end), `RecordingLibrary` + `RecordingIndex` (the list, the words said) |
+| `Sources/SkilliCore/MeetingMoment.swift` | The recorder's moment: the five cases, a place, call apps, `CallEndWatch`, `RecordingRetention`, `RecordingSearch` |
 | `Sources/SkilliCore/*` | Pure logic, unit-tested |
 
 ## Invariants (do not break)
@@ -2239,6 +2240,58 @@ re-investigating.
   same engine): a call's transcript against its script, the tracks in
   step across a pause, a recording never stopped (`Skilli
   recorderchild`, SIGKILLed), links and tools; `recorder-*.png`.
+- The recorder's moment (phase 2, 2026-10-24; docs/meeting-recorder.md's
+  Moment, its views in docs/meeting-recorder-views.md "Phase 2"): the
+  five cases are code, never a model (`MeetingMoment.read` in
+  SkilliCore: the event on now or within 10 minutes, its link, its
+  location as a place (`MeetingMoment.place`: no address, phone, call
+  app or "online" word), the apps on the microphone). Who runs the
+  microphone: `MicrophoneUse.read()` maps each Core Audio process
+  running an input (not skil.li) to its app, itself when it is an app
+  the user sees, else the first such among its parents (`sysctl`'s
+  parent: a browser's or an Electron app's helper is its app); one
+  with none (WebKit's services for Safari, launchd's children) is
+  `unnamed` and the case is "Nothing to go on"; its front window from
+  the window list (`frontWindow(of:)`, no title read). Record ⌘R
+  (`LauncherAction.Key.record`; one key, one meaning): the meeting card
+  (`MeetingCard.recordOffer`, next to its button; Camera & Mic ⇥ moved
+  to the call's line; ⌘R records only once the card has been a second
+  on screen with the keyboard, or clicked: `recordGrace`; the first
+  card's line said once, `recorderCardHintShown`, also the consent),
+  the launcher's meeting row (⌘K lists it; `recordLabel`), the menu
+  bar's meeting once in its call (`MeetingWatch.canRecord`, shown as the
+  menu opens). `RecorderCenter.recordMeeting` records at once with the
+  case's sources (`MeetingRecorder.record(Start)`; a source off is never
+  started: in person no tap) then joins a call not joined; before any
+  card said the consent it opens the meeting's Record card ("Record and
+  Join"). While recording: the red dot's menu turns a source off or on
+  for the rest (`setSource`: silence written by the track's clock) and
+  picks the call's app; `CallEndWatch` (1 Hz from memory, Core Audio's
+  changes) offers Stop in the card when the app leaves its call (5 s) or
+  the meeting is over and quiet a minute; a reconnect withdraws it, Keep
+  Recording ends that reason. `meeting.json` keeps `kind`, `event`,
+  `app`, `place`, `unused` (a track never on: not transcribed, no lane;
+  in person the microphone is "Room"). Found: `RecordingLibrary`
+  (summaries in memory, read off the main thread at launch, on
+  `Recordings.changed`, on Search Recordings) and `RecordingIndex`
+  (SQLite FTS5 of the words said, `recordings-index.sqlite`, caught up
+  by `transcript.json`'s date before each search); Search Recordings
+  (`recs `, `.recorded` rows, the words around shown), two by title or
+  attendees in any search (fuzzy, prepared once per show). Settings →
+  Recorder (`RecorderPane`): the card's Record, default sources,
+  language, Keep recordings in (`RecordingLibrary.move`, refused while
+  recording, no recording starting while they move; one that cannot
+  move puts back those moved before it, the folder unchanged; `set_setting`
+  says Done only once moved (`Binding.setAsync`); never in a backup:
+  `Preferences.machineKeys`), Record ⌘R on a card only from 10 minutes
+  before,
+  Delete after (`RecordingRetention`: at launch then hourly,
+  never as set, to the Trash, done or pending only), the recordings by
+  month last. `remote moment` (Mac mini): every case and entry point on
+  stand-in events and apps, ⌘R never recorded while the card is not the
+  user's, a scratch Chrome's WebRTC page mapped to Chrome for real, the
+  call's end, search, the pane, retention and the move;
+  `recorder-*.png`, `settings-recorder*.png`.
 - Reminders (`ReminderItem`, `ReminderRequest`, `RemindersRequest`,
   `Reminders` in SkilliCore, `ReminderBook`; Permission `.reminders`):
   every list the Reminders app has, through EventKit, asked for at first

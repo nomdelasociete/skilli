@@ -20,6 +20,20 @@ final class MeetingRecorder {
         case stopping
     }
 
+    /// What a recording starts with: its name and language, its sources,
+    /// and the meeting it is of (docs/meeting-recorder-views.md, phase 2).
+    struct Start {
+        var title: String
+        var language: String
+        var sources: MeetingMoment.Sources = .both
+        var kind: MeetingMoment.Kind = .nothing
+        var event: MeetingRecord.EventLink?
+        var attendees: [String] = []
+        /// The call's app, by name.
+        var app: String?
+        var place: String?
+    }
+
     /// A transcript being made, for the menu bar.
     struct Transcribing: Equatable {
         let folder: URL
@@ -51,6 +65,10 @@ final class MeetingRecorder {
     /// Both sources started (or failed to) since the card opened: until
     /// then the Mac's sound does not count for Record.
     private(set) var sourcesStarted = false
+    /// The sources on now (the card's rows, the red dot's menu).
+    private(set) var sources = MeetingMoment.Sources.both
+    /// The tracks on at some moment of the recording on now.
+    private var everOn: Set<Speaker> = []
     private var writers: [Speaker: TrackWriter] = [:]
     private(set) var folder: URL?
     private(set) var record: MeetingRecord?
@@ -89,19 +107,29 @@ final class MeetingRecorder {
 
     // MARK: - The card
 
-    /// The Record card opened: both sources run, their meters live, nothing
-    /// kept. The microphone is asked for when macOS never asked.
-    func listen() async {
+    /// The Record card opened (or ⌘R pressed): the sources on run, their
+    /// meters live, nothing kept. The microphone is asked for when macOS
+    /// never asked. A source off is not started (in person, the Mac's
+    /// sound: no tap, no question).
+    func listen(sources: MeetingMoment.Sources = .both) async {
         guard phase == .idle else { return }
         phase = .listening
         sourcesStarted = false
+        self.sources = sources
         for inbox in [micInbox, macInbox] {
             inbox.keeping = false
             inbox.resetMeters()
         }
         // The microphone first: skil.li then has an audio process the tap
         // can leave out.
-        await microphone.start()
+        if sources.microphone { await microphone.start() }
+        if sources.macSound { startMacSound() }
+        sourcesStarted = true
+        // Closed while macOS asked.
+        if phase != .listening, !isRecording { stopSources() }
+    }
+
+    private func startMacSound() {
         do {
             try macSound.start()
             macSoundFailure = nil
@@ -109,9 +137,35 @@ final class MeetingRecorder {
             macSoundFailure = error.localizedDescription
             Log.actions.error("Recorder: \(error.localizedDescription, privacy: .public)")
         }
-        sourcesStarted = true
-        // Closed while macOS asked.
-        if phase != .listening, !isRecording { stopSources() }
+    }
+
+    /// A source turned on or off: in the card, or from the red dot's menu
+    /// for the rest of the recording (a track off writes silence for that
+    /// time, both keeping their time). Off, the microphone is released and
+    /// the tap stopped.
+    func setSource(_ speaker: Speaker, on: Bool) async {
+        guard phase == .listening || isRecording else { return }
+        let inbox = speaker == .me ? micInbox : macInbox
+        switch (speaker, on) {
+        case (.me, true) where !sources.microphone:
+            sources.microphone = true
+            inbox.markRestart()
+            await microphone.start()
+        case (.me, false) where sources.microphone:
+            sources.microphone = false
+            microphone.stop()
+        case (.them, true) where !sources.macSound:
+            sources.macSound = true
+            inbox.markRestart()
+            startMacSound()
+        case (.them, false) where sources.macSound:
+            sources.macSound = false
+            macSound.stop()
+        default:
+            return
+        }
+        if on, isRecording { everOn.insert(speaker) }
+        onChange?()
     }
 
     /// The card closed without ↩.
@@ -136,14 +190,37 @@ final class MeetingRecorder {
         var errorDescription: String? { message }
     }
 
+    /// ⌘R on a meeting: its sources started, then recorded from now, no
+    /// card in between.
+    func record(_ starting: Start) async throws {
+        guard phase == .idle else { throw Failure(message: isRecording ? "A recording is on already." : "The Record card is open.") }
+        await listen(sources: starting.sources)
+        guard phase == .listening else { throw Failure(message: "The recording was stopped before it started.") }
+        do {
+            try begin(starting)
+        } catch {
+            stopListening()
+            throw error
+        }
+    }
+
     /// ↩ in the card: recording from now, in a new folder.
     func begin(title: String, language: String) throws {
+        try begin(Start(title: title, language: language, sources: sources))
+    }
+
+    func begin(_ starting: Start) throws {
         guard phase == .listening else { throw Failure(message: phase == .idle ? "The Record card is not open." : "A recording is on already.") }
         let started = Date.now
-        let typed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let typed = starting.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let named = typed.isEmpty ? RecordingFolder.defaultTitle(at: started) : typed
         let folder = try recordings.makeFolder(title: named, started: started)
-        let record = MeetingRecord(title: named, started: started, language: language, recorder: Recordings.ownProcess)
+        var record = MeetingRecord(title: named, started: started, language: starting.language, recorder: Recordings.ownProcess)
+        record.kind = starting.kind
+        record.event = starting.event
+        record.attendees = starting.attendees
+        record.app = starting.app
+        record.place = starting.place
         try recordings.write(record, to: folder)
         start = HostClock.now
         micInbox.keeping = true
@@ -166,6 +243,7 @@ final class MeetingRecorder {
         }
         self.folder = folder
         self.record = record
+        everOn = Set(Speaker.allCases.filter { $0 == .me ? sources.microphone : sources.macSound })
         pausedAt = nil
         pausedTotal = 0
         // A call keeps the Mac and its display awake; so does a recording,
@@ -174,6 +252,16 @@ final class MeetingRecorder {
             options: [.userInitiated, .latencyCritical, .idleSystemSleepDisabled, .idleDisplaySleepDisabled], reason: "Recording a meeting")
         phase = .recording
         Log.trace("Recorder: recording “\(record.title)” in \(folder.lastPathComponent)")
+    }
+
+    /// The call's app picked from the red dot's menu (nil: none), kept in
+    /// `meeting.json`.
+    func setApp(_ name: String?) {
+        guard isRecording, var record, let folder else { return }
+        record.app = name
+        self.record = record
+        try? recordings.write(record, to: folder)
+        onChange?()
     }
 
     /// Nothing is written to any track until Resume; the clock stops.
@@ -209,13 +297,23 @@ final class MeetingRecorder {
         let now = HostClock.now
         if let pausedAt, let last = record.pauses.indices.last { record.pauses[last].seconds = now - pausedAt }
         phase = .stopping
+        #if SKILLI_SELFTEST
+        // Self-test: its files take that long to close.
+        if closingDelay > .zero { try? await Task.sleep(for: closingDelay) }
+        #endif
         var lengths: [Double] = []
         var jumps: [Speaker: [Double]] = [:]
         for speaker in Speaker.allCases {
             guard let writer = writers[speaker] else { continue }
-            lengths.append(await writer.finish(at: now))
+            let on = speaker == .me ? sources.microphone : sources.macSound
+            lengths.append(await writer.finish(at: now, waitingForSource: on))
             jumps[speaker] = writer.resumeJumps
         }
+        // A track never on (in person, the Mac's sound): no lane, nothing
+        // transcribed; the microphone then holds the whole room.
+        let unused = Speaker.allCases.filter { !everOn.contains($0) }
+        record.unused = unused.isEmpty ? nil : unused
+        if unused == [.them], record.kind == .inPerson { record.speakers[Speaker.me.rawValue] = "Room" }
         resumeJumps = jumps
         writers = [:]
         stopSources()
@@ -307,6 +405,10 @@ final class MeetingRecorder {
     }
 
     #if SKILLI_SELFTEST
+    /// Self-test: Stop takes this long to close the files (⌘R pressed
+    /// meanwhile).
+    var closingDelay: Duration = .zero
+
     /// Self-test: the Mac's sound leaves these processes out too, and a
     /// file stands in for the microphone (the test Mac has none).
     func standIn(microphone file: URL?, alsoLeaveOut pids: [pid_t]) {

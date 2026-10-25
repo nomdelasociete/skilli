@@ -1,7 +1,9 @@
 # Meeting recorder
 
 Status: 2026-10-23, spec agreed, target raised: on par with omarchy's
-recorder, then better where skil.li knows the Mac. Nothing built.
+recorder, then better where skil.li knows the Mac. 2026-10-23: phase 1
+built (PR #35). 2026-10-24: phase 2, the Moment below, being built; its
+views and states in `docs/meeting-recorder-views.md`.
 
 Asked for: a meeting recorder like omarchy-meeting-recorder (an
 open-source recorder for Omarchy Linux): your microphone and the
@@ -52,7 +54,7 @@ apart by what macOS and the calendar already say:
 | The meeting | How skil.li knows | What the Record card turns on |
 |---|---|---|
 | A call link (Meet, Zoom, Teams…) | the event's link → the app, or the browser tab | microphone + the Mac's sound; the screen, when on, is that window |
-| No link, in an app (Gather, Discord, a Slack huddle, Tuple…) | at the event's time, the app running the microphone's input. `MicrophoneUse` already reads, per process, that one runs it (Core Audio's process objects, `kAudioProcessPropertyIsRunningInput`, the PID read to leave skil.li out; no permission), but tells only "another app", not which: mapping that process to its app and window (a browser's helper to its browser) is built and tested in phase 2 (To check). Until it holds, this case is "Nothing to go on". The event's location naming the app or its address confirms it | microphone + the Mac's sound; the screen, when on, is that app's window |
+| No link, in an app (Gather, Discord, a Slack huddle, Tuple…) | at the event's time, the app running the microphone's input: `MicrophoneUse` reads, per process, that one runs it (Core Audio's process objects, `kAudioProcessPropertyIsRunningInput`, skil.li left out; no permission) and maps it to its app: itself when it is an app the user sees, else the first such among its parents (a browser's helper to its browser), and that app's front window. Measured with a WebRTC call in Chrome (Measured, "The microphone's app"). A process with no app among its parents (a system service) stays "Nothing to go on". The event's location naming the app confirms which, when two are on the microphone | microphone + the Mac's sound; the screen, when on, is that app's window |
 | In person | the event's location is a place and no app runs the microphone | the microphone only, the Mac's sound and the screen off; voices told apart on that one track (SpeakerKit); the card says to set the Mac in the middle of the table |
 | A call with no event | a meeting app (one of the known call apps) runs the microphone's input | as for a call link, named after the app |
 | Nothing to go on | — | the sources as they are at ↩ |
@@ -63,19 +65,29 @@ apart by what macOS and the calendar already say:
   Calendar ⌘↩, Join ↩; Got It ↩ without a call) gets **Record ⌘R**:
   with a call, it records and joins; without one, it records ("Record (in
   person)" for a place). ⌘R is free in skil.li and means record wherever
-  a meeting shows: ⌘↩ stays Calendar.
+  a meeting shows: ⌘↩ stays Calendar. Record sits next to the button;
+  Camera & Mic ⇥ moves up to the call's line (five keys do not fit on
+  one line of the card).
 - In a call not being recorded (the card has left, as it does once the
-  user is in the call): ⌘R on the launcher's meeting row, and Record in
-  the menu bar's meeting menu.
-- At any time: `rec` in the launcher, a key, a link, a skillie.
+  user is in the call): ⌘R on the launcher's meeting row (it joins too
+  when the call is not joined yet, as the card's), and Record ⌘R in the
+  menu bar's meeting menu.
+- At any time: `rec` in the launcher, a key, a link, a skillie. While a
+  meeting is on, the Record card is that meeting's: its title, its
+  attendees, its case's sources.
 
 **3. An action, never a push**: recording other people needs their
 agreement, so it is always the user's own key, and a card of its own on
 every call would be noise. Record is a keycap on the card that already
 shows at the moment it matters, next to Join. Taught once, then quiet
 (MANIFESTO 9): the first meeting card that offers it says in one line
-what ⌘R does; after that only the keycap, never a count or a badge.
-Never automatic.
+what ⌘R does and that the others must agree; after that only the
+keycap, never a count or a badge. The first recording from the
+launcher's row or the menu bar, before any card said it, opens the
+Record card with its consent instead. ⌘R on the card records only once
+the card has had the keyboard for a second (a browser's reload on its
+way as the card comes never records); mid-typing the card never takes
+the keyboard. Never automatic.
 
 **4. Deterministic, no Jev**: the case, the app and the window come from
 the event (link, location), Core Audio (which app runs the microphone)
@@ -319,10 +331,11 @@ step with the sound.
 Measured on 2026-10-23 on macOS 27.0.1 (the test Mac's), not on 26: see
 Measured below. Still open:
 
-- Which app runs the microphone's input during a real call in an app
-  with no link (Gather in Chrome, Discord, a Slack huddle): `MicrophoneUse`
-  reads that there is one; its PID mapped to the app and its window (a
-  browser helper to its browser) is not yet run against such a call.
+- The microphone's app in a desktop call app's real call (Discord, a
+  Slack huddle, Teams) and in Safari: not run on the test Mac (a
+  signed-in account and a call needed; Safari's own question for the
+  page needs a click). Measured: a WebRTC call in Chrome (Measured, "The
+  microphone's app"), and the process trees of Arc's and Slack's helpers.
 - The tap on a real Zoom, Teams and FaceTime call (no account and no
   second device on the test Mac); a WebRTC call in Chrome, Meet's way, was
   measured.
@@ -628,6 +641,26 @@ words; the other side's 14,218.
 them; whisper's have to be put back on the recording's clock first (the
 VAD's cuts added back), not measured here. macOS's own echo cancellation
 is still to measure on a Mac with speakers and a microphone (To check).
+
+### The microphone's app
+
+2026-10-24, on the test Mac (macOS 27.0.1, one input: a virtual audio
+device), for phase 2's "in an app" case: which app Core Audio's
+process running the input belongs to. `remote moment` runs it each
+time.
+
+| The call | The process running the input (Core Audio) | Its app | Mapped to |
+|---|---|---|---|
+| A WebRTC call in a scratch Chrome (its own profile; `getUserMedia` on a localhost page, standing in for Gather), the user's Chrome also open | `com.google.Chrome.helper`, a child of the scratch Chrome's own process | none (a helper) | the scratch Chrome by its parent, not the user's Chrome; its front window from the window list, owned by it |
+| Arc, Slack (their helpers, read in the process tree, no call) | `Browser Helper`, `Slack Helper`, children of the app | none | the app, by the same rule |
+| Safari (read in the process tree, no call) | WebKit's services are launchd's children | none | nothing: "Nothing to go on" |
+
+- A device says it runs a moment before its process does, and an app
+  just launched is named once it finished launching: the reading is
+  taken again half a second after each Core Audio change, and read
+  afresh when a key is pressed.
+- When Chrome quits (the call's end), "Google Chrome left the call."
+  comes a second later (the self-test's 1 s grace; 5 s in use).
 
 ### What the measurements changed
 

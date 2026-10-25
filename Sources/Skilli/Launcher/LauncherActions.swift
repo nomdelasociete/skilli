@@ -95,6 +95,7 @@ extension LauncherController {
         case .keptAwake: (AwakeStatus.turnOff, "power")
         case .recordNamed: ("Open", "record.circle")
         case .recording: ("Stop and Transcribe", "stop.circle")
+        case .recorded: ("Open", "waveform")
         case .process: ("Quit", "xmark.circle")
         case .clip, .snippet, .emoji: ("Paste", "doc.on.clipboard")
         case .gif(let gif):
@@ -258,6 +259,17 @@ extension LauncherController {
         case .command, .saveLayout, .openWindow, .startTimer, .keepAwake, .runningTimer, .createEvent, .addReminder,
              .brewUpgradeAll, .setup, .ask, .siCommand, .system, .scriptArgument, .scriptChoice, .recordNamed:
             return [first]
+        // A recording made: its folder, its words, gone to the Trash.
+        case .recorded(let found):
+            return [first, key("Show in Finder", "folder", .openSecond),
+                    LauncherAction(title: "Copy Transcript", symbol: "doc.on.doc", key: .copy, group: .copy) { [weak self] in
+                        self?.hide()
+                        self?.onCopyRecordingTranscript?(found.summary.folder)
+                    },
+                    remove("Delete Recording") { [weak self] in
+                        self?.hide()
+                        self?.onDeleteRecording?(found.summary)
+                    }]
         // The recording on now: paused or resumed, its folder.
         case .recording(let live):
             return [first,
@@ -344,6 +356,13 @@ extension LauncherController {
                                        act: act, open: { title, symbol, url, _ in open(title, symbol, url) }, copy: copy)
         case .event(let event):
             var list = event.meeting != nil ? [first, key("Open in Calendar", "calendar", .openSecond)] : [first]
+            // On now or starting soon: Record ⌘R, as on its card.
+            if let label = recordLabel(event) {
+                list.insert(LauncherAction(title: label, symbol: "record.circle", key: .record) { [weak self] in
+                    self?.hide()
+                    self?.onRecordMeeting?(event)
+                }, at: 1)
+            }
             if event.attendees.contains(where: { $0.email != nil }) { list.append(key("Email Invitees", "envelope", .openThird)) }
             list.append(act("Show Details", "info.circle") { [weak self] in self?.onShowEvent?(event) })
             list.append(copy("Copy Details", Self.plain(Agenda.details(event, now: .now)), .copy))

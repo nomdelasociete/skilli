@@ -180,13 +180,15 @@ struct GitHubStripPreview: NSViewRepresentable {
 struct MeetingCardPreview: NSViewRepresentable {
     let dark: Bool
     let minutes: Int
+    /// Record ⌘R on the card (Settings → Recorder).
+    var record = false
 
     func makeNSView(context: Context) -> MeetingCardPreviewView {
         MeetingCardPreviewView()
     }
 
     func updateNSView(_ view: MeetingCardPreviewView, context: Context) {
-        view.configure(dark: dark, minutes: minutes)
+        view.configure(dark: dark, minutes: minutes, record: record)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: MeetingCardPreviewView, context: Context) -> CGSize? {
@@ -216,11 +218,12 @@ final class MeetingCardPreviewView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
-    func configure(dark: Bool, minutes: Int) {
+    func configure(dark: Bool, minutes: Int, record: Bool = false) {
         layer?.backgroundColor = (dark ? NSColor.black.withAlphaComponent(0.82) : NSColor.labelColor.withAlphaComponent(0.05)).cgColor
         let sample = MeetingCardView.sample(startingIn: TimeInterval(minutes * 60) - 1)
-        card.show(sample, now: .now)
-        measure.show(sample, now: .now)
+        let offer = record ? MeetingCard.RecordOffer(label: "Record", line: nil) : nil
+        card.show(sample, now: .now, record: offer)
+        measure.show(sample, now: .now, record: offer)
         needsLayout = true
     }
 

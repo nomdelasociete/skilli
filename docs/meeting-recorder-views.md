@@ -1,9 +1,11 @@
-# Meeting recorder: the views of phase 1
+# Meeting recorder: the views
 
-Spec, 2026-10-23, written before building, then brought in line with
-three rounds of captures on the test Mac (light and dark). `docs/meeting-recorder.md`
-says what is recorded, kept and measured; this says what phase 1 shows.
-Each view is drawn by the code that runs it (`remote recorder` saves
+Phase 1: spec, 2026-10-23, written before building, then brought in line
+with three rounds of captures on the test Mac (light and dark). Phase 2
+(the moment, below): spec, 2026-10-24, written before building from the
+Moment section of `docs/meeting-recorder.md`. That file says what is
+recorded, kept and measured; this says what each phase shows. Each view
+is drawn by the code that runs it (`remote recorder` saves
 `recorder-*.png`).
 
 ## The Record card
@@ -177,9 +179,338 @@ last second). The Record card's place and frame:
   stopped: the disk is full. What was recorded is kept."), a transcript
   that failed (why, and Transcribe ↩ in the window).
 
-## Not in phase 1
+# Phase 2: the moment
 
-The webcam and the screen, the event's title and attendees, stopping at
-the call's end, Settings → Recorder and retention, finding recordings in
-the launcher, renaming speakers, editing lines, import, chapters and the
-⌘K actions after a transcript.
+What the Moment section of `docs/meeting-recorder.md` says, as views
+and states. Nothing new is pushed: Record is a key on what already
+shows (the meeting card, the launcher's meeting row, the menu bar's
+meeting), and nothing records before the user's key.
+
+## The five cases
+
+Told apart by code, from three things macOS and the calendar already
+say, read when a Record key is offered and again when it is pressed
+(`MeetingMoment` in SkilliCore, unit-tested; no model):
+
+- **The meeting**: the event on now or starting within 10 minutes
+  (all-day and declined ones never), its call link, its location.
+- **Who runs the microphone**: each Core Audio process running an input
+  (`kAudioProcessPropertyIsRunningInput`), skil.li left out, mapped to
+  its app: the process itself when it is an app with a Dock icon, else
+  the first of its parent processes that is one (a browser's helper is
+  its browser, an Electron app's helper is the app). A process with no
+  such parent (a system service, as WebKit's for Safari) is "an app
+  skil.li cannot name".
+- **The window list**: the app's front window on screen (its owner's
+  first normal window, front to back), kept for phase 3's screen and
+  checked by the self-test; phase 2 shows no window.
+
+| Case | When | Sources | Named | The call watched |
+|---|---|---|---|---|
+| A call link | the event has one (Meet, Zoom, Teams…) | microphone + the Mac's sound | the event's title | the app on the microphone, else the one the link opens in (Zoom's or Teams' app, else the browser) |
+| In an app | no link; an app runs the microphone at the meeting's time | microphone + the Mac's sound | the event's title | that app (the one the location names first, else a known call app, else the first) |
+| In person | no link; the location is a place; no app on the microphone | the microphone only | the event's title | none (the room) |
+| A call with no event | no meeting on; a known call app runs the microphone | microphone + the Mac's sound | "Discord call 14:30" | that app |
+| Nothing to go on | anything else (no event and no call app; an event with no link and no place; only an app skil.li cannot name on the microphone) | the default sources (Settings → Recorder) | the event's title, else "Meeting 14:30" | the first app that runs the microphone after ↩ |
+
+- **A place**: a location that holds no web address, no phone number,
+  names no call app (Gather, Discord, Zoom, Teams…) and is not a word
+  for "online" ("online", "remote", "visio", "en ligne", "TBD"…).
+- **Known call apps**: by bundle identifier, as each app's Info.plist
+  has it (Zoom, Teams, FaceTime, Discord, Slack, WhatsApp, Signal: read
+  on the test Mac), else by name (Webex, Skype, Telegram, Tuple,
+  Gather…). A browser is not one: a browser on the microphone with no
+  meeting on is "Nothing to go on".
+- The case is read again at the key: a card shown before the meeting
+  started may have had nobody on the microphone yet.
+
+## The meeting card: Record ⌘R
+
+The card that already shows as a meeting starts (Settings → Calendar)
+gets Record ⌘R next to its button. Settings → Recorder turns it off.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ● STARTS IN 0:42                            14:00 – 14:30 │
+│                                                          │
+│ Weekly design review                                     │
+│ ▶ Google Meet  ·  Work                  Camera & Mic ⇥   │  the check, moved up
+│ (PA)(AL)(CD)(MP)  Paul, Anna and 4 others                │
+│                                                          │
+│ ⓘ  ⌘R records this call as you join it: your microphone │  first card only
+│    and the Mac's sound, on this Mac. Everyone in it     │
+│    must agree to be recorded.                           │
+│ ──────────────────────────────────────────────────────── │
+│ Dismiss esc        Calendar ⌘↩   Record ⌘R  ( Join ↩ )   │
+└──────────────────────────────────────────────────────────┘
+```
+
+- **Keys**, under the hairline: Dismiss esc on the left (without a
+  call: Calendar ⌘↩ there, as now); on the right, Calendar ⌘↩ (calls
+  only), Record ⌘R, then the filled button (Join ↩, or Got It ↩). Five
+  keys do not fit on one line of the card's 520 pt: Camera & Mic ⇥
+  goes up to the call's line, on its right (it is about the call).
+- **The label** says the case: "Record ⌘R"; for a place, "Record (in
+  person) ⌘R".
+- **⌘R**: with a call, the recording starts, then the call is joined
+  (its first words are kept); without one, it records. The card goes.
+  It starts at once with the case's sources: no Record card. The menu
+  bar shows the red dot; nothing is said.
+- **Taught once, then quiet**: the first card that offers ⌘R says, in
+  one line above the hairline, what it does and that the others must
+  agree (`Preferences.recorderCardHintShown`; it also counts as the
+  consent told, `recorderConsentShown`). In person: "⌘R records this
+  meeting with this Mac's microphone: set it in the middle of the
+  table. Everyone in it must agree to be recorded." After that card,
+  only the keycap: no line, no count, no badge.
+- **Only the user's**: ⌘R records only when the card has the keyboard
+  and has been on screen for a second (a ⌘R on its way to a browser,
+  its reload, as the card comes never records); before that it does
+  nothing. Mid-typing the card never takes the keyboard (as now), so ⌘R
+  goes to the app the user types in. A click on the card gives it the
+  keys at once.
+- **Not offered**: while a recording is on (one at a time), and when
+  Settings → Recorder turns it off: no keycap, and ⌘R is not the
+  card's.
+
+## The launcher's meeting row
+
+The meeting row the launcher already shows first (the meeting starting
+or just started; "join", "réunion" typed; the Calendar mode's meetings
+on now):
+
+- ⌘R on it records that meeting as the card's ⌘R does (and joins its
+  call when it is not joined yet: `MeetingBar.inCall`). The launcher
+  closes.
+- ⌘K lists Record ⌘R (Record (in person) ⌘R for a place) after Join,
+  for a meeting on now or starting within 10 minutes; ⌘R on a later
+  one says "Nothing on ⌘R here" in the list, as any key with no action.
+- The footer stays as it is (↩, ⇥, ⌘K): ⌘R is taught by the card.
+
+## ⌘R at any moment
+
+One key, one meaning: ⌘R on a meeting records it, never silently
+nothing.
+
+- **The last recording still closing its files** (a second or so after
+  Stop): ⌘R is kept and records once they are closed; the menu bar's
+  dot stays meanwhile, showing the new one at 0:00 until its first
+  second. The Record card asked for then (`rec`, a link, a tool) opens
+  once they are closed. Both recordings are whole.
+- **Pressed twice** before the recording started: one recording.
+- **The Record card open**: ⌘R on a meeting closes it and records that
+  meeting.
+- **A recording on**: no Record is offered (one at a time); a key or a
+  tool asking anyway says "Already recording “…”: stop it from the menu
+  bar first."
+
+## The menu bar's meeting
+
+Once in a call (`MeetingBar.joined`: joined from skil.li, or a call
+begun on this Mac around its start) and no recording on, its menu gets
+Record, with ⌘R shown:
+
+```
+Join Google Meet
+Record “Weekly design review”   ⌘R
+Show in Calendar
+──────────
+Show Calendar
+Dismiss
+```
+
+## The first recording, before anyone was told
+
+The others must agree; the first time skil.li records, a card has said
+so. The meeting card says it on its first ⌘R. From the launcher's row
+or the menu bar before any card said it, ⌘R opens the Record card
+instead of starting at once: the event's title, its case's sources, the
+consent paragraph; its button is "Record and Join ↩" when the call is
+not joined yet. From then on, ⌘R starts at once everywhere.
+
+## The Record card, knowing the meeting
+
+Opened by `rec` (or a link, a key, a tool) while a meeting is on or
+starting within 10 minutes, the card is that meeting's:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ● RECORD A MEETING                             English ⌃⌄ │
+│                                                          │
+│ Budget review▌                                           │  the event's title
+│ With Paul, Anna and 2 others                             │  its attendees
+│                                                          │
+│ 🎙  Microphone      MacBook Pro Microphone      ▮▮▮▮▯▯   │
+│ 🔊  The Mac's sound  Off · in person                     │  a click turns it on
+│                                                          │
+│ ⓘ  In person: set the Mac in the middle of the table.   │
+│ ──────────────────────────────────────────────────────── │
+│ Cancel esc                                  ( Record ↩ ) │
+└──────────────────────────────────────────────────────────┘
+```
+
+- **The name**: the event's title (else "Meeting 14:30"), selected;
+  the attendees under it in the secondary color ("With Paul, Anna and
+  2 others"; first names).
+- **The sources**: each row a click away from on or off ("Off" in the
+  secondary color, no meter). The case sets them (in person: the Mac's
+  sound off); Settings → Recorder sets them when nothing does.
+- **In person**: one note line, "In person: set the Mac in the middle
+  of the table."
+- **The button**: "Record and Join ↩" for a call not joined yet.
+
+## The menu bar while recording
+
+The red dot's menu names each source with its level, and the call:
+
+```
+Recording “Weekly design review” · 12:04     (disabled)
+Pause Recording
+Stop and Transcribe
+──────────
+✓ Microphone · MacBook Pro Microphone  ▮▮▮▯
+✓ The Mac's Sound · Every app          ▮▯▯▯
+The Call: Google Chrome                  ▸   ✓ Google Chrome
+──────────                                     Discord
+Show in Finder                                 ──────
+                                               None
+```
+
+- **A source** is turned off or on from its item, for the rest of the
+  recording: a track turned off writes silence for that time (both
+  tracks keep their time), the microphone is released (macOS's orange
+  dot goes), the Mac's sound's tap stopped. The levels, four bars after
+  the words, move while the menu is open (a menu item's picture does
+  not show in menus on macOS 27).
+- **The call**: the app watched for the call's end, the apps on the
+  microphone to pick from (two apps on it: the one picked is kept). "The
+  Call" shows once there is one, or an app on the microphone.
+- In person misread: the user turns The Mac's Sound on; that is all.
+  Nothing is said in either case.
+
+## The call ends: Stop
+
+While recording, without a poll (Core Audio's process changes, a timer
+at the event's end):
+
+- **The call's app leaves its call**: it no longer runs the microphone
+  for 5 s (a reconnect is not an end).
+- **Or the meeting is over and the sound is quiet**: past the event's
+  end, the other side has stayed under -50 dBFS for a minute (the Mac's
+  sound; in person, the microphone).
+
+Then a card offers Stop, once for each of these:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ● THE CALL ENDED                                  32:10  │  hollow red dot
+│                                                          │
+│ Weekly design review                                     │
+│ Google Chrome left the call.                             │  or "The meeting
+│ ──────────────────────────────────────────────────────── │   ended at 14:30,
+│ Keep Recording esc                            ( Stop ↩ ) │   it has been quiet
+└──────────────────────────────────────────────────────────┘   for a minute."
+```
+
+- It never takes the keys from the app the user types in (as the
+  unfinished recording's card); a click does.
+- Stop ↩ stops and transcribes, as Stop in the menu bar. Keep Recording
+  esc: the recording goes on, nothing asked again for the same reason.
+- The call's app back on the microphone before an answer: the card goes
+  by itself (a reconnect), and the call's next end is offered again.
+
+## The recording's window
+
+- **The about line** adds the attendees: "Wed 22 Oct 2026, 14:00 · 32
+  min · English · with Paul, Anna and 2 others".
+- **In person** (the Mac's sound never on): one lane and one speaker,
+  "Room" (the microphone holds everyone; phase 4 tells their voices
+  apart). A call keeps Me and Them.
+
+## Finding recordings in the launcher
+
+- **Search Recordings** (`recs `, `recordings `, `enregistrements `; in
+  the Catalog): every recording, newest first. A row: the title, then
+  "Wed 22 Oct · 32 min · Paul, Anna and 2 others"; typing filters by
+  title, date and attendees at once, and by the words said once typing
+  pauses (100 ms): those rows show the words around the match ("…the
+  budget for the third quarter…").
+- The words said come from an index on this Mac (SQLite FTS5, beside
+  the clipboard's), filled as transcripts are made and caught up when
+  the mode opens (a recording added, renamed or deleted in Finder).
+- ↩ opens its window; ⌘K: Open ↩, Show in Finder ⌘↩, Copy Transcript ⌘C,
+  Delete ⌘⌫ (to the Trash, Undo ⌘Z for 10 s).
+- **In root search**: the two recordings whose title or attendees fit
+  best, from three letters typed (from memory: the titles, dates and
+  attendees are kept, never the words).
+
+## Settings → Recorder
+
+Its own pane, after Calendar. Settings first, the recordings last:
+
+```
+Recorder
+Your meetings recorded on this Mac, both sides, then written out.
+
+Record Meeting                       (its shortcut, when one is set)
+From the launcher                                 rec
+Search Recordings                                 recs
+[✓] Record ⌘R on the meeting card
+    As a meeting starts, its card offers to record it: your key,
+    never on its own.
+
+Microphone                                       [✓]
+The Mac's sound                                  [✓]
+    The sources on when nothing says otherwise (in person: the
+    microphone only).
+Language                                   [As Ask ⌃⌄]
+
+Keep recordings in        Recordings ⌃ [Change…] [Show in Finder]
+Delete after                               [Never ⌃⌄]
+    2 recordings are older than a month: they go to the Trash
+    within the hour.
+    Expired recordings go to the Trash, never deleted for good.
+
+Recordings
+  October 2026
+    Weekly design review     Wed 22 Oct · 32 min       ⋯
+    Budget review            Tue 21 Oct · 48 min       ⋯
+  September 2026
+    …
+```
+
+- **Language**: "As Ask" (Ask's, else the keyboard's, as now), or one
+  of the languages this Mac transcribes.
+- **Keep recordings in**: a folder; changing it moves the recordings
+  there (off the main thread, one by one; refused while one records or
+  is transcribed; no recording starts while they move: ⌘R, the card, a
+  link or a tool say so). One that cannot move stops it: those moved
+  before it go back, the folder stays the one it was, and a line under
+  the row says which and why. A recording that cannot go back either is
+  named there, to move back in Finder: until it is back in the
+  recordings' folder, the lists and the search do not show it.
+- **Delete after**: Never, 1 week, 1 month, 3 months, 1 year, Custom
+  (days). As the clipboard's: pruned at launch and then each hour, never
+  as the setting changes; the line under it says what the next pass
+  removes; an expired recording goes to the Trash. A recording being
+  made or transcribed, or never stopped, is never pruned.
+- **Recordings**, grouped by month: a row each (title; date and length
+  in the secondary color); a click opens its window; its menu (⋯ or a
+  right click): Open, Show in Finder, Delete (Undo ⌘Z for 10 s).
+- No engine row yet: one engine until phase 4's "Better
+  transcription" download.
+- Every setting is an agent's too (`set_setting`), under its own name.
+
+## Said, and not said (phase 2)
+
+- Not said: a recording started from ⌘R (the red dot), a source turned
+  off or on, the call picked, a recording moved or pruned (the pane
+  shows it).
+- Said: a recording that could not start ("The recording could not
+  start: …", in the card); a folder move that failed (under its row).
+
+## Not in phase 2
+
+The webcam and the screen (the window found is kept for phase 3),
+renaming speakers, editing lines, import, chapters and the ⌘K actions
+after a transcript, search by meaning (⇥), the engine choice.

@@ -369,21 +369,8 @@ Your next meeting, one key away, in the launcher and the menu bar.
   and **Check Camera & Mic** (the camera live and the microphone's
   level). None once you are in the call, and a card still up goes as you
   join.
-- **Record Meeting** (`rec`, or `rec Weekly sync` with its name): your
-  microphone and the Mac's sound, two tracks written as they come,
-  transcribed on this Mac when you stop (docs/meeting-recorder.md). Its
-  card shows both sources live and records nothing before ↩; the first
-  time, it says the others must agree. While it records, a red dot, the
-  time and both sides' waves in the menu bar, whose menu pauses, resumes
-  and stops. Then its window: both sides' waveforms, played in step, and
-  the transcript line by line, Me and Them; a click plays from a line;
-  ⌘C copies it, ⌘⌫ deletes the recording (⌘Z brings it back). Without
-  headphones, the other side the microphone heard again is left out of
-  your lines. One never stopped (skil.li quit, a power cut) is offered at
-  the next launch: Save, Later or Discard. Kept in
-  `~/Library/Application Support/skil.li/Recordings`; nothing leaves the
-  Mac. Also `skilli://record` and the Meeting Recorder tools
-  (`record_meeting`, `stop_recording`…).
+- **Record ⌘R** on the meeting's card, its launcher row and its menu
+  (see Recorder).
 
 Settings: Next meeting in the menu bar · Only meetings with a call in
 the menu bar · Count down to its end · Leaves the menu bar · The next
@@ -391,6 +378,45 @@ one too, during a meeting · Alerts (with Try) · Alerts for events
 without a call too · When a meeting starts · Before you type, the
 meeting shows · Open events in · Google Meet opens in · Calendars turned
 off (by account).
+
+<!-- pane: recorder -->
+## Recorder
+
+Your meetings recorded on this Mac, both sides, then written out.
+
+- **Record ⌘R** where the meeting already shows: its card as it starts
+  (records, then joins the call), the launcher's meeting row, and the
+  menu bar's meeting once you are in the call. Never on its own; the
+  first card that offers it says once what it does and that the others
+  must agree. Which meeting it is comes from the event and the Mac, no
+  model: a call link, a call in an app (the app running the microphone,
+  a browser's helper counted as its browser), in person (a place, nobody
+  on the microphone: the microphone only), a call app with no event
+  ("Discord call 14:30"), or nothing to go on. The recording takes the
+  event's title and attendees.
+- **Record Meeting** (`rec`, or `rec Weekly sync` with its name): your
+  microphone and the Mac's sound, two tracks written as they come,
+  transcribed on this Mac when you stop (docs/meeting-recorder.md). Its
+  card shows both sources live (a click turns one off) and records
+  nothing before ↩; during a meeting, it is that meeting's. While it
+  records, a red dot, the time and both sides' waves in the menu bar,
+  whose menu pauses, resumes and stops, turns a source off or on, and
+  says which app the call is in. When that app leaves the call, or the
+  meeting is over and quiet for a minute, a card offers Stop. Then its
+  window: both sides' waveforms, played in step, and the transcript line
+  by line, Me and Them (Room in person); a click plays from a line; ⌘C
+  copies it, ⌘⌫ deletes the recording (⌘Z brings it back). Without
+  headphones, the other side the microphone heard again is left out of
+  your lines. One never stopped (skil.li quit, a power cut) is offered at
+  the next launch: Save, Later or Discard. Nothing leaves the Mac. Also
+  `skilli://record` and the Meeting Recorder tools (`record_meeting`,
+  `stop_recording`…).
+- **Search Recordings** (`recs`): by title, date, attendees, and the
+  words said; the best two show in any search too.
+
+Settings: Record ⌘R on the meeting card · Microphone · The Mac's sound
+· Language · Keep recordings in · Delete after · the recordings, by
+month.
 
 <!-- pane: reminders -->
 ## Reminders

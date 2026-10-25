@@ -54,6 +54,9 @@ public struct LauncherCommand: Sendable {
         /// The Record card: a meeting recorded, the microphone and the
         /// Mac's sound, transcribed on this Mac (docs/meeting-recorder.md).
         case recordMeeting
+        /// Turns the launcher into the recordings ("recs "): by title, date,
+        /// attendees and the words said.
+        case searchRecordings
         /// Turns the launcher into the reminders ("todo ").
         case reminders
         /// Turns the launcher into GitHub: pull requests and notifications
@@ -237,6 +240,13 @@ public struct LauncherCommand: Sendable {
             symbol: "record.circle",
             keywords: ["rec", "record", "recorder", "record call", "meeting recorder", "transcribe", "transcript", "enregistrer",
                        "enregistrement", "enregistrer la réunion", "enregistreur", "transcription"]
+        ),
+        LauncherCommand(
+            id: .searchRecordings,
+            title: "Search Recordings",
+            symbol: "waveform",
+            keywords: ["recordings", "recorded", "meetings recorded", "transcripts", "what was said", "enregistrements", "réunions enregistrées",
+                       "transcriptions"]
         ),
         LauncherCommand(
             id: .reminders,

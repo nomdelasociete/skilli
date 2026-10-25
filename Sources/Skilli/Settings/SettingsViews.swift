@@ -77,6 +77,12 @@ struct SettingsContext {
     /// The setup window (Settings → General's Set Up skil.li…, while
     /// Accessibility is off).
     var showSetup: @MainActor () -> Void = {}
+    /// Settings → Recorder: the recordings made, one's window, the folder
+    /// moved (nil, or why it was refused), one to the Trash (⌘Z).
+    var recordings: RecordingLibrary?
+    var openRecording: @MainActor (String) -> Void = { _ in }
+    var moveRecordings: @MainActor (URL) async -> String? = { _ in nil }
+    var deleteRecording: @MainActor (RecordingSummary) -> Void = { _ in }
 }
 
 /// The panes, named by what they do for the user, in the sidebar's order.
@@ -92,6 +98,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     case gifs
     case windows
     case calendar
+    case recorder
     case reminders
     case github
     case apps
@@ -109,7 +116,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     static let blocks: [[SettingsPane]] = [
         [.general, .keys, .privacy, .backup],
         [.launcher, .clipboard, .snippets, .emoji, .gifs, .windows],
-        [.calendar, .reminders, .github, .apps, .yourDetails],
+        [.calendar, .recorder, .reminders, .github, .apps, .yourDetails],
         [.ask, .commands, .tools, .skillies, .aiAccounts],
         [.catalog, .about]
     ]
@@ -129,6 +136,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .gifs: "GIFs"
         case .windows: "Windows"
         case .calendar: "Calendar"
+        case .recorder: "Recorder"
         case .reminders: "Reminders"
         case .github: "GitHub"
         case .apps: "Apps"
@@ -156,6 +164,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .gifs: "A GIF where you are, animated: from Klipy, or from the ones on this Mac."
         case .windows: "Where your windows go, the layouts you saved, and the apps you stopped using."
         case .calendar: "Your next meeting, one key away, in the launcher and the menu bar."
+        case .recorder: "Your meetings recorded on this Mac, both sides, then written out."
         case .reminders: "What you have to do, said in one sentence."
         case .github: "Your pull requests and notifications in the launcher: what is ready, what waits for you."
         case .apps: "The apps skil.li drives: their commands in the launcher, on a key, in Ask."
@@ -183,6 +192,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .gifs: "photo.on.rectangle.angled"
         case .windows: "macwindow.on.rectangle"
         case .calendar: "calendar"
+        case .recorder: "record.circle.fill"
         case .reminders: "checklist"
         case .github: "arrow.triangle.pull"
         case .apps: "app.connected.to.app.below.fill"
@@ -212,6 +222,8 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .gifs: .mint
         case .windows: .teal
         case .calendar: .red
+        // The red dot of a recording in the menu bar.
+        case .recorder: .pink
         case .reminders: .orange
         case .github: .gray
         // The Catalog's "In Your Apps" group is indigo.
@@ -305,6 +317,7 @@ struct SettingsRootView: View {
             case .gifs: GIFsPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .windows: WindowsPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .calendar: AgendaPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
+            case .recorder: RecorderPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .reminders: RemindersPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .github: GitHubPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .apps: AppsPane(preferences: preferences, context: context, model: apps)

@@ -112,6 +112,10 @@ final class SelfTest {
         var reportPath: String?
         /// The meeting recorder, made when first asked for.
         var recorder: @MainActor () -> RecorderCenter? = { nil }
+        /// The recordings as the launcher and Settings → Recorder list them;
+        /// Keep recordings in's move (nil, or why it was refused).
+        var recordings: @MainActor () -> RecordingLibrary? = { nil }
+        var moveRecordings: @MainActor (URL) async -> String? = { _ in nil }
     }
 
     enum Scope: String, Sendable {
@@ -289,6 +293,13 @@ final class SelfTest {
         /// script, the tracks in step across a pause, a recording never
         /// stopped (another skil.li killed), links and tools (keys, sound).
         case recorder
+        /// Only the recorder's moment (phase 2): the five cases, Record ⌘R
+        /// on the meeting card, the launcher's row and the menu bar, never
+        /// while the card is not the user's; a browser call's microphone
+        /// mapped to Chrome (a scratch Chrome); the call's end; Search
+        /// Recordings; Settings → Recorder, Delete after and the folder's
+        /// move (keys, Chrome, stand-in events).
+        case moment
     }
 
     /// Extra trigger only the self-test registers. No Hyper tool listens to
@@ -675,6 +686,10 @@ final class SelfTest {
         if scope == .recorder {
             window.center()
             return await finish(after: [recorderChecks])
+        }
+        if scope == .moment {
+            window.center()
+            return await finish(after: [momentChecks])
         }
         if scope == .emoji {
             window.center()
@@ -22162,7 +22177,8 @@ final class SelfTest {
             case .list(_, let adds):
                 if binding.remove == nil || (adds && binding.add == nil) { unbound.append(entry.key) }
             default:
-                if binding.set == nil { unbound.append(entry.key) }
+                // A change that takes time sets through `setAsync`.
+                if binding.set == nil && binding.setAsync == nil { unbound.append(entry.key) }
             }
         }
         var refused: [String] = []
@@ -23001,7 +23017,8 @@ final class SelfTest {
 
     /// Opens the recorder's menu in the menu bar with a real click, captures
     /// it, then chooses `pick` (else esc). Its items.
-    private func openRecorderMenu(_ center: RecorderCenter, capture: String, pick: String? = nil, picked: () -> Void = {}) async -> [String] {
+    private func openRecorderMenu(_ center: RecorderCenter, capture: String, pick: String? = nil, pickPrefix: Bool = false,
+                                  picked: () -> Void = {}) async -> [String] {
         guard let button = center.menuBar.button, let frame = button.window?.frame else { return [] }
         let source = CGEventSource(stateID: .hidSystemState)
         let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
@@ -23028,7 +23045,7 @@ final class SelfTest {
            let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
             try? png.write(to: directory.appendingPathComponent(capture))
         }
-        if let pick, let item = items.first(where: { Self.axTitle($0) == pick }) {
+        if let pick, let item = items.first(where: { pickPrefix ? Self.axTitle($0)?.hasPrefix(pick) == true : Self.axTitle($0) == pick }) {
             picked()
             AXUIElementPerformAction(item, kAXPressAction as CFString)
         } else {
@@ -23527,6 +23544,834 @@ final class SelfTest {
                "link card \(linkCard), closed \(linkClosed); opened mid-typing: keys left alone \(typedOverLeftKeys), closed \(typedOverClosed); none said \(noneSaid); tool card \(toolCard), exit \(status) “\(said)”; status “\(now)”; link asks \(linkAsks) (\(pauseCard)), kept going \(keptGoing); pause asks \(pauseAsks), exit \(pauseStatus) “\(pauseSaid)”, paused \(pausedNow); stop exit \(stopStatus) “\(stopSaid.prefix(80))”",
                nil)
     }
+
+    // MARK: - The recorder's moment (phase 2)
+
+    /// The recorder's moment (docs/meeting-recorder-views.md, phase 2), on
+    /// stand-in events and, but for the browser call, stand-in apps on the
+    /// microphone: never the user's calendars or calls. A silent file stands
+    /// in for the microphone (the test Mac has none); the Mac's sound is the
+    /// real tap. The call's end comes sooner (1 s, 3 s).
+    private func momentChecks() async {
+        guard let center = context.recorder(), let book = context.launcher.calendar else {
+            record("Recorder's moment", false, "no recorder or no calendar", nil)
+            return
+        }
+        let preferences = context.preferences
+        let saved = (preferences.recorderConsentShown, preferences.recorderCardHintShown, preferences.voiceLanguage, preferences.recorderMeetingCard,
+                     preferences.recorderRetention, preferences.recorderMicrophone, preferences.recorderMacSound, preferences.agendaMenuBar,
+                     preferences.agendaAutoJoin, preferences.agendaAlerts)
+        let openURL = book.openURL
+        defer {
+            preferences.recorderConsentShown = saved.0
+            preferences.recorderCardHintShown = saved.1
+            preferences.voiceLanguage = saved.2
+            preferences.recorderMeetingCard = saved.3
+            preferences.recorderRetention = saved.4
+            preferences.recorderMicrophone = saved.5
+            preferences.recorderMacSound = saved.6
+            preferences.agendaMenuBar = saved.7
+            preferences.agendaAutoJoin = saved.8
+            preferences.agendaAlerts = saved.9
+            book.testEvents = nil
+            book.openURL = openURL
+            center.standInMicrophone(nil)
+            context.meetingWatch.microphone.standIn = nil
+            context.meetingWatch.resetForTest()
+            context.meetingWatch.refresh()
+            context.meetingCard.dismiss()
+        }
+        // The calls are English; the test Mac types French.
+        preferences.voiceLanguage = "en-US"
+        preferences.agendaAlerts = []
+        preferences.agendaAutoJoin = .off
+        preferences.recorderMeetingCard = true
+        let silence = recorderScratch.appendingPathComponent("silence.wav")
+        _ = Self.clip(nil, seconds: 120, beeps: [], to: silence)
+        center.recorder.standIn(microphone: silence, alsoLeaveOut: [])
+        center.watchTimings = (appGrace: 1, quietFor: 3)
+        // Joining opens nothing: the links are kept.
+        book.openURL = { [weak self] url in self?.momentOpened.append(url) }
+        context.meetingWatch.microphone.standIn = .idle
+        await momentCasesTold(center, book)
+        if !aborted { await momentCardRecordsAndJoins(center, book) }
+        if !aborted { await momentCardKeyIsTheUsersOnly(center, book) }
+        if !aborted { await momentInPersonRecordsTheRoom(center, book) }
+        if !aborted { await momentLauncherRowRecords(center, book) }
+        if !aborted { await momentRecordDuringClosing(center, book) }
+        if !aborted { await momentMenuBarRecords(center, book) }
+        if !aborted { await momentRedDotSwitchesSources(center, book) }
+        if !aborted { await momentCallEndOffersStop(center, book) }
+        if !aborted { await momentBrowserCallsMicrophone(center, book) }
+        if !aborted { await momentSearchRecordings(center) }
+        if !aborted { await momentRecorderPane(center) }
+        if !aborted { await momentRetentionAndFolder(center) }
+    }
+
+    /// The links a Join would have opened.
+    private var momentOpened: [URL] = []
+
+    /// A stand-in meeting: `seconds` from now (before: negative), a Meet
+    /// link or `location`, two invented people.
+    private func momentEvent(_ id: String, _ title: String, in seconds: TimeInterval, link: Bool, location: String = "",
+                             minutes: Double = 30) -> AgendaEvent {
+        let start = Date.now.addingTimeInterval(seconds)
+        return AgendaEvent(id: id, title: title, start: start, end: start.addingTimeInterval(minutes * 60), calendar: "Work", location: location,
+                           notes: link ? "https://meet.google.com/abc-defg-hij" : "",
+                           attendees: [.init(name: "Margot Martin", email: nil), .init(name: "Camille", email: nil)])
+    }
+
+    /// The stand-in apps on the microphone (no real pids: none runs).
+    private static let standInDiscord = MicrophoneApp(bundleID: "com.hnc.Discord", name: "Discord", pid: 999_901)
+    private static let standInGather = MicrophoneApp(bundleID: "com.example.gather", name: "Gather", pid: 999_902)
+
+    /// Stops the recording on now, waits for its transcript and its
+    /// window, closes the window; its folder and record.
+    @discardableResult
+    private func momentStop(_ center: RecorderCenter) async -> (URL, MeetingRecord)? {
+        guard let folder = center.recorder.folder else { return nil }
+        center.control(.stop)
+        _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil && center.window(for: folder) != nil }
+        let record = center.recordings.read(folder)
+        return record.map { (folder, $0) }
+    }
+
+    /// A recording stopped some other way (the call's end card): settled
+    /// once its transcript's window opened, then closed (else it opens
+    /// later, over the next check's keys).
+    private func momentSettled(_ center: RecorderCenter, _ folder: URL?) async {
+        guard let folder else { return }
+        _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.window(for: folder) != nil }
+        center.openWindows.forEach { $0.close() }
+    }
+
+    /// The meeting card, shown and given a second (⌘R is the user's then),
+    /// light and dark captured.
+    private func momentShowCard(_ event: AgendaEvent, capture name: String? = nil) async {
+        let card = context.meetingCard
+        card.dismiss()
+        // Not typing: the card takes the keyboard.
+        await pause(1100)
+        card.show(event, dark: false)
+        _ = await waitUntil(timeout: 2) { card.isVisible && card.isKey }
+        if let name, let directory = context.snapshotDirectory, let panel = card.window {
+            let (panelAppearance, testAppearance) = (panel.appearance, window.appearance)
+            for (suffix, appearance) in GlassCheck.appearances {
+                panel.appearance = appearance
+                window.appearance = appearance
+                await pause(700)
+                if let image = await GlassCheck.screenshot(around: panel, padding: -Theme.glassMargin + 16),
+                   let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+                    try? png.write(to: directory.appendingPathComponent("\(name)-\(suffix).png"))
+                }
+            }
+            panel.appearance = panelAppearance
+            window.appearance = testAppearance
+        }
+        await pause(1100)
+    }
+
+    /// The five cases, as the meeting card, the Record card and the
+    /// recorder read them (the event, the apps on the microphone): no
+    /// model. A call with no event is named by its app.
+    private func momentCasesTold(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: the five cases told apart by the event and the microphone's apps (a call link, in an app, in person, a call with no event, nothing to go on); the card's label; a call with no event named by its app"
+        let link = momentEvent("st-moment-link", "Weekly design review", in: 60, link: true)
+        let gather = momentEvent("st-moment-app", "Team standup", in: 0, link: false, location: "Gather · Lumière HQ")
+        let room = momentEvent("st-moment-room", "Budget review", in: 60, link: false, location: "Salle Lumière, 3e étage")
+        let online = momentEvent("st-moment-online", "Catch-up", in: 60, link: false, location: "Online")
+        let cases: [(String, AgendaEvent?, MicrophoneHolders, MeetingMoment.Kind, MeetingMoment.Sources, String)] = [
+            ("call link", link, .none, .callLink, .both, "Record"),
+            ("in an app", gather, MicrophoneHolders(apps: [Self.standInGather]), .inApp, .both, "Record"),
+            ("in person", room, .none, .inPerson, MeetingMoment.Sources(microphone: true, macSound: false), "Record (in person)"),
+            ("no event", nil, MicrophoneHolders(apps: [Self.standInDiscord]), .callWithoutEvent, .both, ""),
+            ("nothing", online, MicrophoneHolders(unnamed: 1), .nothing, .both, "Record")
+        ]
+        var wrong: [String] = []
+        var said: [String] = []
+        for (label, event, holders, kind, sources, cardLabel) in cases {
+            center.standInMicrophone(holders)
+            let reading = center.moment(for: event)
+            let offer = event.flatMap { context.meetingCard.recordOffer($0) }
+            said.append("\(label): \(reading.kind.rawValue)\(reading.app.map { " (\($0.name))" } ?? "")\(offer.map { ", “\($0.label)”" } ?? "")")
+            if reading.kind != kind || reading.sources != sources || (event != nil && offer?.label != cardLabel) { wrong.append(label) }
+        }
+        // The current meeting comes from the calendar: on now first.
+        book.testEvents = [link, gather]
+        let current = center.currentMeeting()?.id
+        // A call with no event: the Record card is named by its app.
+        book.testEvents = []
+        center.standInMicrophone(MicrophoneHolders(apps: [Self.standInDiscord]))
+        center.showCard(title: nil)
+        let view = center.cardView
+        let shown = await waitUntil(timeout: 3) { center.isCardVisible && view.macLine != "Starting…" } != nil
+        let named = view.name.hasPrefix("Discord call ")
+        center.closeCardWithoutKeys()
+        _ = await waitUntil(timeout: 2) { !center.isCardVisible && center.recorder.phase == .idle }
+        center.standInMicrophone(.none)
+        record(name, wrong.isEmpty && current == gather.id && shown && named,
+               "\(said.joined(separator: "; ")); wrong: \(wrong.isEmpty ? "none" : wrong.joined(separator: ", ")); current meeting \(current ?? "none") (on now first); no event, card named “\(view.name)”",
+               nil)
+    }
+
+    /// The meeting card's Record ⌘R, first time: its line (what ⌘R does,
+    /// the others must agree), said once; ⌘R records at once, then joins;
+    /// the recording is named and peopled by the event.
+    private func momentCardRecordsAndJoins(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: the meeting card's Record ⌘R, the line the first time only; ⌘R records at once, then joins; the recording takes the event's title and attendees"
+        let preferences = context.preferences
+        preferences.recorderConsentShown = false
+        preferences.recorderCardHintShown = false
+        center.standInMicrophone(.none)
+        momentOpened = []
+        let event = momentEvent("st-moment-card", "Weekly design review", in: 45, link: true)
+        book.testEvents = [event]
+        let card = context.meetingCard
+        await momentShowCard(event, capture: "recorder-meeting-card-first")
+        let firstLabel = card.shownRecord
+        let line = card.shownRecordLine ?? ""
+        let hintSaved = preferences.recorderCardHintShown
+        let before = Date.now
+        await pressKey("r", flags: .maskCommand)
+        let recording = await waitUntil(timeout: 4) { center.recorder.isRecording } != nil
+        let joined = await waitUntil(timeout: 3) { self.momentOpened.contains { $0.absoluteString.contains("meet.google.com") } } != nil
+        let made = center.recorder.record
+        let sources = center.recorder.sources
+        await pause(2000)
+        let stopped = await momentStop(center)
+        let kept = stopped?.1
+        // The next card: the keycap alone.
+        await momentShowCard(momentEvent("st-moment-card-2", "Weekly design review", in: 45, link: true), capture: "recorder-meeting-card")
+        let quiet = card.shownRecord == "Record" && card.shownRecordLine == nil
+        card.dismiss()
+        let passed = firstLabel == "Record" && line.contains("⌘R records this call") && line.contains("must agree") && hintSaved && recording && joined
+            && made?.title == "Weekly design review" && made?.attendees == ["Margot Martin", "Camille"] && made?.kind == .callLink
+            && made?.event?.id == event.id && sources == .both && preferences.recorderConsentShown && kept?.state == .done && quiet
+        record(name, passed,
+               "first card “\(firstLabel ?? "none")”, line “\(line)”, said once: \(hintSaved); ⌘R recorded \(recording) in \(String(format: "%.1f", Date.now.timeIntervalSince(before))) s, joined after: \(joined); record “\(made?.title ?? "")” \(made?.kind?.rawValue ?? "?") attendees \(made?.attendees ?? []), sources mic \(sources.microphone) mac \(sources.macSound); consent kept \(preferences.recorderConsentShown); stopped: \(kept?.state.rawValue ?? "?"); next card quiet: \(quiet)",
+               nil)
+    }
+
+    /// ⌘R records only when the card is the user's: never while the user
+    /// was typing as it came (it leaves the keyboard alone), never in its
+    /// first second, never when Settings turned it off or one records.
+    private func momentCardKeyIsTheUsersOnly(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: ⌘R never records when the card is not the user's (typing as it came, its first second, turned off in Settings, a recording on)"
+        let card = context.meetingCard
+        let event = momentEvent("st-moment-typing", "Standup", in: 45, link: true)
+        book.testEvents = [event]
+        center.standInMicrophone(.none)
+        // Typing in the test window as it comes: the card leaves the keys alone.
+        card.dismiss()
+        _ = await focusTestWindow()
+        window.makeFirstResponder(textView)
+        textView.string = ""
+        await pressKey("a")
+        await pause(150)
+        await pressKey("a")
+        card.show(event, dark: false)
+        let leftAlone = card.isVisible && !card.isKey
+        await pause(1200)
+        await pressKey("r", flags: .maskCommand)
+        await pause(1200)
+        let notWhileTyping = !center.recorder.isRecording
+        card.dismiss()
+        // Its first second: nothing; after it: records.
+        await pause(1100)
+        card.show(event, dark: false)
+        _ = await waitUntil(timeout: 2) { card.isKey }
+        await pause(300)
+        await pressKey("r", flags: .maskCommand)
+        await pause(900)
+        let notTooSoon = !center.recorder.isRecording && card.isVisible
+        await pause(400)
+        await pressKey("r", flags: .maskCommand)
+        let afterASecond = await waitUntil(timeout: 4) { center.recorder.isRecording } != nil
+        // A recording on: no Record on the next card.
+        card.show(momentEvent("st-moment-next", "Standup", in: 45, link: true), dark: false)
+        let noSecond = card.shownRecord == nil
+        card.dismiss()
+        await momentStop(center)
+        // Turned off: no keycap, ⌘R is not the card's.
+        context.preferences.recorderMeetingCard = false
+        await momentShowCard(event)
+        let offShown = card.shownRecord
+        await pressKey("r", flags: .maskCommand)
+        await pause(1200)
+        let offNothing = !center.recorder.isRecording
+        card.dismiss()
+        context.preferences.recorderMeetingCard = true
+        center.openWindows.forEach { $0.close() }
+        record(name, leftAlone && notWhileTyping && notTooSoon && afterASecond && noSecond && offShown == nil && offNothing,
+               "typing: keys left alone \(leftAlone), ⌘R recorded nothing \(notWhileTyping); first second: nothing \(notTooSoon), after it: recorded \(afterASecond); while recording, Record offered again: \(!noSecond); off: keycap “\(offShown ?? "none")”, ⌘R nothing \(offNothing)",
+               nil)
+    }
+
+    /// In person: "Record (in person)", the microphone only (no tap), one
+    /// lane named Room, the attendees in the window's line.
+    private func momentInPersonRecordsTheRoom(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: in person, “Record (in person) ⌘R” records the microphone only; the window shows one lane, Room, and who was there"
+        let event = momentEvent("st-moment-room-rec", "Budget review", in: 30, link: false, location: "Salle Lumière, 3e étage")
+        book.testEvents = [event]
+        center.standInMicrophone(.none)
+        momentOpened = []
+        let card = context.meetingCard
+        await momentShowCard(event, capture: "recorder-meeting-card-in-person")
+        let label = card.shownRecord
+        await pressKey("r", flags: .maskCommand)
+        let recording = await waitUntil(timeout: 4) { center.recorder.isRecording } != nil
+        let sources = center.recorder.sources
+        await pause(2500)
+        let stopped = await momentStop(center)
+        let made = stopped?.1
+        let controller = stopped.flatMap { center.window(for: $0.0) }
+        let lanes = controller?.shownLanes ?? []
+        let about = controller?.shownAbout ?? ""
+        if let controller { await captureRecordingWindow(controller, as: "recorder-window-in-person") }
+        center.openWindows.forEach { $0.close() }
+        let passed = label == "Record (in person)" && recording && sources == MeetingMoment.Sources(microphone: true, macSound: false)
+            && made?.kind == .inPerson && made?.unused == [.them] && made?.speakers["me"] == "Room" && made?.place == "Salle Lumière, 3e étage"
+            && lanes == ["Room"] && about.contains("with Margot and Camille") && momentOpened.isEmpty
+        record(name, passed,
+               "card “\(label ?? "none")”; recording \(recording), mic \(sources.microphone), Mac's sound \(sources.macSound); record \(made?.kind?.rawValue ?? "?"), unused \(made?.unused?.map(\.rawValue) ?? []), me “\(made?.speakers["me"] ?? "")”, place “\(made?.place ?? "")”; window lanes \(lanes), “\(about)”; nothing joined \(momentOpened.isEmpty)",
+               nil)
+    }
+
+    /// The launcher's meeting row: ⌘K lists Record ⌘R; the first time
+    /// (nobody told yet), ⌘R opens the Record card, the meeting's, "Record
+    /// and Join"; then ⌘R records at once and joins.
+    private func momentLauncherRowRecords(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: the launcher's meeting row, ⌘K lists Record ⌘R; the first time ⌘R opens the meeting's Record card (Record and Join, its attendees), then ⌘R records at once and joins"
+        let launcher = context.launcher
+        let preferences = context.preferences
+        let event = momentEvent("st-moment-row", "Weekly design review", in: 90, link: true)
+        book.testEvents = [event]
+        center.standInMicrophone(.none)
+        momentOpened = []
+        preferences.recorderConsentShown = false
+        _ = await focusTestWindow()
+        guard await openLauncher() else {
+            record(name, false, "the launcher did not open", nil)
+            return
+        }
+        let row = await waitUntil(timeout: 2) { if case .event? = launcher.results.first { true } else { false } } != nil
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 1) { !launcher.shownActions.isEmpty }
+        let listed = launcher.shownActions.contains { $0.title == "Record" && $0.key == "⌘R" }
+        await captureLauncherBothWays(as: "recorder-launcher-row-actions")
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        await pause(200)
+        await pressKey("r", flags: .maskCommand)
+        let view = center.cardView
+        let firstCard = await waitUntil(timeout: 3) { center.isCardVisible && view.macLine != "Starting…" } != nil
+        let button = view.buttonTitle
+        let people = view.detailText
+        await captureRecordCard(center, as: "recorder-card-meeting")
+        let firstNothing = !center.recorder.isRecording
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        _ = await waitUntil(timeout: 2) { !center.isCardVisible && center.recorder.phase == .idle }
+        // Told once: at once from then on.
+        preferences.recorderConsentShown = true
+        _ = await focusTestWindow()
+        guard await openLauncher() else {
+            record(name, false, "the launcher did not open again", nil)
+            return
+        }
+        _ = await waitUntil(timeout: 2) { if case .event? = launcher.results.first { true } else { false } }
+        await pressKey("r", flags: .maskCommand)
+        let recording = await waitUntil(timeout: 4) { center.recorder.isRecording } != nil
+        let joined = await waitUntil(timeout: 3) { self.momentOpened.contains { $0.absoluteString.contains("meet.google.com") } } != nil
+        let title = center.recorder.title
+        await pause(1000)
+        await momentStop(center)
+        center.openWindows.forEach { $0.close() }
+        // A meeting in two hours: no Record on its row.
+        book.testEvents = [momentEvent("st-moment-later", "Quarterly planning", in: 7200, link: true)]
+        let laterLabel = launcher.recordLabel(momentEvent("st-moment-later", "Quarterly planning", in: 7200, link: true))
+        record(name, row && listed && firstCard && button == "Record and Join" && people == "With Margot and Camille" && firstNothing && recording && joined
+               && title == "Weekly design review" && laterLabel == nil,
+               "row first \(row), ⌘K lists Record ⌘R \(listed); first ⌘R: card \(firstCard) “\(button)”, “\(people)”, nothing recorded \(firstNothing); then ⌘R recorded \(recording) “\(title)”, joined \(joined); a meeting in 2 h offers Record: \(laterLabel ?? "no")",
+               nil)
+    }
+
+    /// ⌘R pressed while the last recording still closes its files (here 2
+    /// s, the self-test's own delay): never dropped, it records once they
+    /// are closed; the menu bar's dot never goes; both recordings whole.
+    private func momentRecordDuringClosing(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: ⌘R pressed while the last recording closes its files records once they are closed (never dropped), the menu bar's dot stays throughout, both recordings whole"
+        let event = momentEvent("st-moment-closing", "Weekly design review", in: 30, link: true)
+        book.testEvents = [event]
+        center.standInMicrophone(.none)
+        context.preferences.recorderConsentShown = true
+        _ = await focusTestWindow()
+        guard await openLauncher() else {
+            record(name, false, "the launcher did not open", nil)
+            return
+        }
+        await pressKey("r", flags: .maskCommand)
+        guard await waitUntil(timeout: 4, { center.recorder.isRecording }) != nil, let first = center.recorder.folder else {
+            record(name, false, "the first recording did not start", nil)
+            return
+        }
+        await pause(2500)
+        center.recorder.closingDelay = .seconds(2)
+        defer { center.recorder.closingDelay = .zero }
+        _ = await focusTestWindow()
+        guard await openLauncher() else {
+            record(name, false, "the launcher did not open again", nil)
+            return
+        }
+        center.control(.stop)
+        let closing = await waitUntil(timeout: 1) { center.recorder.phase == .stopping } != nil
+        await pressKey("r", flags: .maskCommand)
+        let pressedWhileClosing = center.recorder.phase == .stopping
+        var dotGone = false
+        let second = await waitUntil(timeout: 8) {
+            if center.menuBar.shown == nil { dotGone = true }
+            return center.recorder.isRecording && center.recorder.folder != first
+        } != nil
+        let next = center.recorder.folder
+        let titleAfter = center.recorder.title
+        center.recorder.closingDelay = .zero
+        await pause(2500)
+        await momentStop(center)
+        _ = await waitUntil(timeout: 60) { center.recorder.transcribing == nil }
+        center.openWindows.forEach { $0.close() }
+        // Whole: transcribed, both tracks as long as it was recorded.
+        func whole(_ folder: URL?) -> (Bool, String) {
+            guard let folder, let made = center.recordings.read(folder) else { return (false, "missing") }
+            let me = trackLength(folder.appendingPathComponent(Speaker.me.file))
+            let them = trackLength(folder.appendingPathComponent(Speaker.them.file))
+            let ok = made.state == .done && made.seconds > 1.5 && abs(me - them) < 0.2 && abs(me - made.seconds) < 0.3
+            return (ok, "\(made.state.rawValue), \(String(format: "%.2f", made.seconds)) s, me \(String(format: "%.2f", me)), them \(String(format: "%.2f", them))")
+        }
+        let (firstWhole, firstSaid) = whole(first)
+        let (nextWhole, nextSaid) = whole(next)
+        record(name, closing && pressedWhileClosing && second && next != first && !dotGone && firstWhole && nextWhole && titleAfter == "Weekly design review",
+               "closing \(closing), ⌘R while closing \(pressedWhileClosing); the second recorded \(second) “\(titleAfter)”; dot gone meanwhile: \(dotGone); first: \(firstSaid); second: \(nextSaid)",
+               nil)
+    }
+
+    /// The menu bar's meeting, once in its call: Record “…” ⌘R in its
+    /// menu, gone while recording.
+    private func momentMenuBarRecords(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: the menu bar's meeting, once in the call, offers Record “…” ⌘R; chosen, it records; gone while recording"
+        let watch = context.meetingWatch
+        let preferences = context.preferences
+        preferences.agendaMenuBar = .tenBefore
+        let event = momentEvent("st-moment-menu", "Weekly design review", in: -60, link: true)
+        book.testEvents = [event]
+        center.standInMicrophone(.none)
+        watch.resetForTest()
+        watch.refresh()
+        let before = watch.shownMenu
+        // Joined (its Join): in the call.
+        book.join(event)
+        watch.refresh()
+        let menu = watch.shownMenu
+        let offered = menu.contains("Record “Weekly design review”")
+        if let item = watch.itemMenu?.items.first(where: { $0.title == "Record “Weekly design review”" }), let index = watch.itemMenu?.index(of: item) {
+            watch.itemMenu?.performActionForItem(at: index)
+        }
+        let recording = await waitUntil(timeout: 4) { center.recorder.isRecording } != nil
+        watch.refresh()
+        let gone = !watch.shownMenu.contains { $0.hasPrefix("Record “") }
+        await pause(800)
+        await momentStop(center)
+        center.openWindows.forEach { $0.close() }
+        watch.resetForTest()
+        record(name, !before.contains { $0.hasPrefix("Record “") } && offered && recording && gone,
+               "before joining: \(before); in the call: \(menu); recorded \(recording); while recording, Record gone \(gone)", nil)
+    }
+
+    /// The red dot's menu names each source with its level and the call's
+    /// app; a source turned off and on again for the rest of the recording,
+    /// both tracks keeping their time.
+    private func momentRedDotSwitchesSources(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: the red dot's menu names each source (its level) and the call's app; the Mac's sound turned off then on, both tracks keep their time"
+        book.testEvents = []
+        center.standInMicrophone(MicrophoneHolders(apps: [Self.standInDiscord]))
+        context.preferences.recorderConsentShown = true
+        center.showCard(title: "Sources check")
+        let view = center.cardView
+        _ = await waitUntil(timeout: 3) { center.isCardVisible && view.macLine != "Starting…" }
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 3, { center.recorder.isRecording }) != nil else {
+            record(name, false, "the recording did not start", nil)
+            return
+        }
+        await pause(1500)
+        let titles = await openRecorderMenu(center, capture: "recorder-menu-sources.png", pick: "The Mac's Sound · Every app", pickPrefix: true)
+        let off = await waitUntil(timeout: 2) { !center.recorder.sources.macSound } != nil
+        await pause(2000)
+        let offTitles = await openRecorderMenu(center, capture: "recorder-menu-sources-off.png", pick: "The Mac's Sound · Off", pickPrefix: true)
+        let on = await waitUntil(timeout: 3) { center.recorder.sources.macSound } != nil
+        await pause(1500)
+        let stopped = await momentStop(center)
+        let folder = stopped?.0
+        let lengths = folder.map { (me: trackLength($0.appendingPathComponent(Speaker.me.file)), them: trackLength($0.appendingPathComponent(Speaker.them.file))) }
+        center.openWindows.forEach { $0.close() }
+        center.standInMicrophone(.none)
+        let sameLength = lengths.map { abs($0.me - $0.them) < 0.2 && $0.me > 4 } ?? false
+        let passed = titles.contains { $0.hasPrefix("Microphone · ") } && titles.contains { $0.hasPrefix("The Mac's Sound · Every app") }
+            && titles.contains("The Call: Discord") && off && offTitles.contains { $0.hasPrefix("The Mac's Sound · Off") } && on && sameLength
+            && stopped?.1.unused == nil
+        record(name, passed,
+               "menu \(titles); off \(off), then \(offTitles.filter { $0.hasPrefix("The Mac") }); on \(on); tracks me \(String(format: "%.2f", lengths?.me ?? 0)) s, them \(String(format: "%.2f", lengths?.them ?? 0)) s; unused \(stopped?.1.unused?.map(\.rawValue) ?? [])",
+               nil)
+    }
+
+    /// The call ends: its app leaves (here a stand-in, for a second) and a
+    /// card offers Stop; the app back withdraws it; Keep Recording ends
+    /// that reason's offers. A meeting over and quiet: Stop offered too.
+    private func momentCallEndOffersStop(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: the call's app leaving offers Stop (never taking the keys), its return withdraws it, ↩ stops; a meeting over and quiet offers Stop, Keep Recording esc keeps it going"
+        book.testEvents = []
+        center.standInMicrophone(MicrophoneHolders(apps: [Self.standInDiscord]))
+        center.showCard(title: nil)
+        let view = center.cardView
+        _ = await waitUntil(timeout: 3) { center.isCardVisible && view.macLine != "Starting…" }
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 3, { center.recorder.isRecording }) != nil else {
+            record(name, false, "the recording did not start", nil)
+            return
+        }
+        let title = center.recorder.title
+        let named = title.hasPrefix("Discord call ")
+        let discordFolder = center.recorder.folder
+        await pause(1500)
+        // Discord leaves the call.
+        center.standInMicrophone(.none)
+        let offered = await waitUntil(timeout: 5) { if case .callEnded? = center.cardContent { true } else { false } } != nil
+        let line = view.detailText
+        if offered { await captureRecordCard(center, as: "recorder-call-ended") }
+        // Back: the offer goes.
+        center.standInMicrophone(MicrophoneHolders(apps: [Self.standInDiscord]))
+        let withdrawn = await waitUntil(timeout: 4) { !center.isCardVisible } != nil
+        center.standInMicrophone(.none)
+        let again = await waitUntil(timeout: 5) { if case .callEnded? = center.cardContent { true } else { false } } != nil
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let stoppedByCard = await waitUntil(timeout: 4) { !center.recorder.isRecording } != nil
+        await momentSettled(center, discordFolder)
+
+        // A meeting over two seconds from now, nothing heard: quiet.
+        let short = momentEvent("st-moment-quiet", "Short sync", in: -60, link: false, location: "Online", minutes: 62.0 / 60)
+        book.testEvents = [short]
+        center.recordMeeting(short, joining: false)
+        _ = await waitUntil(timeout: 4) { center.recorder.isRecording }
+        let quietOffered = await waitUntil(timeout: 12) { if case .callEnded? = center.cardContent { true } else { false } } != nil
+        let quietLine = view.detailText
+        if quietOffered, await recordCardHasKeys(center, name) { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        await pause(5000)
+        let kept = center.recorder.isRecording && !center.isCardVisible
+        await momentStop(center)
+        center.openWindows.forEach { $0.close() }
+        record(name, named && offered && line == "Discord left the call." && withdrawn && again && stoppedByCard && quietOffered
+               && quietLine.hasPrefix("The meeting ended at ") && kept,
+               "named “\(title)”: \(named); left: offered \(offered) “\(line)”, back: withdrawn \(withdrawn), left again: offered \(again), ↩ stopped \(stoppedByCard); over and quiet: offered \(quietOffered) “\(quietLine)”, esc kept recording \(kept)",
+               nil)
+    }
+
+    /// A browser call's microphone, for real: a scratch Chrome (its own
+    /// profile, the page's question answered by Chrome's test flag) runs a
+    /// WebRTC page standing in for Gather; Core Audio's process running the
+    /// input is Chrome's helper, mapped to that Chrome and its window. A
+    /// meeting with no link at that time is "in an app"; no meeting, a
+    /// browser is not a call app. Recorded, Chrome quitting is the call's
+    /// end.
+    private func momentBrowserCallsMicrophone(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: a WebRTC call in a scratch Chrome (standing in for Gather): its helper on the microphone mapped to Chrome and its window; “in an app” with a meeting, nothing to go on without; Chrome leaving the call offers Stop"
+        guard let chromeURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.google.Chrome") else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "no Google Chrome on this Mac", latencyMs: nil))
+            return
+        }
+        center.standInMicrophone(nil)
+        let profile = recorderScratch.appendingPathComponent("chrome-profile", isDirectory: true)
+        let page = """
+            <!doctype html><meta charset="utf-8"><title>Lumière HQ</title>
+            <body style="font:20px -apple-system;padding:40px"><h1>Lumière HQ</h1><div id="s">starting…</div>
+            <script>
+            navigator.mediaDevices.getUserMedia({audio:true}).then(stream => {
+              const a = new RTCPeerConnection(), b = new RTCPeerConnection();
+              a.onicecandidate = e => e.candidate && b.addIceCandidate(e.candidate);
+              b.onicecandidate = e => e.candidate && a.addIceCandidate(e.candidate);
+              stream.getTracks().forEach(t => a.addTrack(t, stream));
+              a.createOffer().then(o => a.setLocalDescription(o)).then(() => b.setRemoteDescription(a.localDescription))
+                .then(() => b.createAnswer()).then(o => b.setLocalDescription(o)).then(() => a.setRemoteDescription(b.localDescription));
+              document.getElementById('s').textContent = 'in the call';
+            }).catch(e => document.getElementById('s').textContent = 'error: ' + e);
+            </script>
+            """
+        // getUserMedia needs a secure origin: 127.0.0.1 is one.
+        guard let server = LoopbackServer(handler: { _ in .html(page) }), let port = await server.port() else {
+            record(name, false, "the call's page could not be served", nil)
+            return
+        }
+        defer { server.stop() }
+        let before = Set(NSRunningApplication.runningApplications(withBundleIdentifier: "com.google.Chrome").map(\.processIdentifier))
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        configuration.activates = false
+        configuration.arguments = ["--user-data-dir=\(profile.path)", "--no-first-run", "--no-default-browser-check", "--use-fake-ui-for-media-stream",
+                                   "http://127.0.0.1:\(port)/"]
+        let chrome = try? await NSWorkspace.shared.openApplication(at: chromeURL, configuration: configuration)
+        let pid = chrome?.processIdentifier ?? 0
+        defer {
+            chrome?.forceTerminate()
+            try? FileManager.default.removeItem(at: profile)
+        }
+        var holders = MicrophoneHolders.none
+        let mapped = await waitUntil(timeout: 20) {
+            holders = MicrophoneUse.read().holders
+            return holders.apps.contains { $0.pid == pid && $0.bundleID == "com.google.Chrome" }
+        } != nil
+        let fresh = !before.contains(pid)
+        let window = MicrophoneUse.frontWindow(of: pid)
+        let windowOwner = window.flatMap { id in
+            (CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]])?.first?[kCGWindowOwnerPID as String] as? NSNumber
+        }?.int32Value
+        // With a meeting and no link: in that app; without one: a browser is
+        // not a call app.
+        let meeting = momentEvent("st-moment-chrome", "Team standup", in: -30, link: false, location: "Gather · Lumière HQ")
+        let inApp = center.moment(for: meeting)
+        let noEvent = center.moment(for: nil)
+        // Recorded, then Chrome quits: the call's end.
+        book.testEvents = [meeting]
+        center.recordMeeting(meeting, joining: false)
+        _ = await waitUntil(timeout: 4) { center.recorder.isRecording }
+        let chromeFolder = center.recorder.folder
+        let watched = center.callApp?.pid == pid && center.callWindow == window
+        await pause(2000)
+        chrome?.terminate()
+        let ended = await waitUntil(timeout: 15) { if case .callEnded? = center.cardContent { true } else { false } } != nil
+        let line = center.cardView.detailText
+        if ended, await recordCardHasKeys(center, name) { await pressKey(nil, code: CGKeyCode(kVK_Return)) }
+        await momentSettled(center, chromeFolder)
+        let others = holders.apps.filter { $0.pid != pid }.map(\.bundleID)
+        record(name, mapped && fresh && window != nil && windowOwner == pid && inApp.kind == .inApp && inApp.app?.pid == pid && noEvent.kind == .nothing
+               && watched && ended && line == "Google Chrome left the call.",
+               "scratch Chrome \(pid) (new instance \(fresh)); on the microphone: mapped to it \(mapped), unnamed \(holders.unnamed), other apps \(others); its window \(window.map(String.init) ?? "none") owned by \(windowOwner.map(String.init) ?? "?"); with a meeting: \(inApp.kind.rawValue) \(inApp.app?.name ?? ""), without: \(noEvent.kind.rawValue); watched \(watched); quit: Stop offered \(ended) “\(line)”",
+               nil)
+    }
+
+    /// Recordings written as the recorder writes them (no sound: what the
+    /// lists read), in the self-test's own Recordings: `daysAgo` old, the
+    /// words said as their transcript.
+    @discardableResult
+    private func momentSeed(_ center: RecorderCenter, _ title: String, daysAgo: Double, attendees: [String], said: [String],
+                            state: MeetingRecord.State = .done) -> URL? {
+        let started = Date.now.addingTimeInterval(-daysAgo * 86_400)
+        guard let folder = try? center.recordings.makeFolder(title: title, started: started) else { return nil }
+        var record = MeetingRecord(title: title, started: started, language: "en-US", recorder: nil)
+        record.seconds = 1_920
+        record.state = state
+        record.attendees = attendees
+        record.engine = MeetingTranscriber.engine
+        let lines = said.enumerated().map { index, text in
+            TranscriptLine(speaker: index % 2 == 0 ? .me : .them,
+                           words: text.split(separator: " ").enumerated().map { TranscriptWord(String($1), start: Double(index * 10 + $0), end: Double(index * 10 + $0) + 0.5) })
+        }
+        try? center.recordings.write(record, to: folder)
+        try? MeetingTranscript.File(language: "en-US", engine: MeetingTranscriber.engine, lines: lines).encoded()
+            .write(to: folder.appendingPathComponent("transcript.json"))
+        try? MeetingTranscriber.markdown(record, lines: lines).write(to: folder.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)
+        return folder
+    }
+
+    /// Search Recordings: every recording, by title, date and attendees at
+    /// once, by the words said a moment later (the words around shown);
+    /// ↩ opens one. In any search, a recording by its title.
+    private func momentSearchRecordings(_ center: RecorderCenter) async {
+        let name = "Recorder's moment: Search Recordings (“recs ”) lists them, finds one by an attendee at once and by the words said a moment later (the words shown), ↩ opens its window; any search finds one by its title"
+        guard let library = context.recordings() else {
+            record(name, false, "no recordings list", nil)
+            return
+        }
+        let launcher = context.launcher
+        momentSeed(center, "Quarterly budget", daysAgo: 2, attendees: ["Ysaline Vandevelde", "Camille"],
+                   said: ["Let's start with the numbers.", "The budget for the third quarter is on track.", "Good, then the hiring plan."])
+        momentSeed(center, "Weekly design review", daysAgo: 1, attendees: ["Jean-François Martaing"],
+                   said: ["The new icons are ready.", "We ship them on Thursday."])
+        momentSeed(center, "Standup", daysAgo: 0.5, attendees: [], said: ["Nothing blocking today."])
+        library.reload()
+        _ = await waitUntil(timeout: 3) { library.recordings.contains { $0.record.title == "Quarterly budget" } }
+        let count = library.recordings.count
+        // Any search: by its title.
+        _ = await focusTestWindow()
+        guard await typeInLauncher("quarterly bud") else {
+            record(name, false, "the launcher did not take “quarterly bud”", nil)
+            return
+        }
+        let anySearch = launcher.results.contains { if case .recorded(let found) = $0 { found.summary.title == "Quarterly budget" } else { false } }
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        _ = await focusTestWindow()
+        guard await openLauncher() else {
+            record(name, false, "the launcher did not open", nil)
+            return
+        }
+        // The prefix turns it into the mode: the field empties.
+        for character in "recs " { _ = await typeCharacter(character) }
+        let mode = await waitUntil(timeout: 1) { launcher.isInRecordings } != nil
+        let listed = launcher.results.count
+        for character in "ysaline" { _ = await typeCharacter(character) }
+        _ = await waitUntil(timeout: 1) { launcher.query.hasSuffix("ysaline") }
+        let byPerson = launcher.results.first?.title
+        for _ in 0..<7 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+        for character in "third quar" { _ = await typeCharacter(character) }
+        var said: String?
+        let byWords = await waitUntil(timeout: 3) {
+            guard case .recorded(let found)? = launcher.results.first else { return false }
+            said = found.said
+            return found.summary.title == "Quarterly budget" && found.said?.contains("third quarter") == true
+        } != nil
+        await captureLauncherBothWays(as: "recorder-search")
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let opened = await waitUntil(timeout: 3) { center.openWindows.contains { $0.isVisible && $0.nsWindow.title == "Quarterly budget" } } != nil
+        center.openWindows.forEach { $0.close() }
+        record(name, count >= 3 && anySearch && mode && listed >= 3 && byPerson == "Quarterly budget" && byWords && opened,
+               "\(count) recordings; any search “quarterly bud”: “Quarterly budget” \(anySearch); recs: mode \(mode), \(listed) rows; “ysaline” → “\(byPerson ?? "none")”; “third quar” → words \(byWords) “\(said ?? "")”; ↩ opened \(opened)",
+               nil)
+    }
+
+    /// Settings → Recorder: its settings first, the recordings last by
+    /// month; within the window; light and dark.
+    private func momentRecorderPane(_ center: RecorderCenter) async {
+        let name = "Recorder's moment: Settings → Recorder, the settings first, the recordings last by month, within the window, light and dark"
+        let settings = context.settings
+        settings.show(pane: .recorder)
+        await pause(700)
+        let overflow = settings.paneOverflow()
+        await captureSettingsBothWays(as: "settings-recorder")
+        let bottom = settings.scrollPaneToBottom()
+        if bottom {
+            await pause(300)
+            await captureSettingsBothWays(as: "settings-recorder-bottom")
+        }
+        settings.close()
+        record(name, overflow <= 1 && bottom, "overflow \(Int(overflow)) pt; scrolled to its list \(bottom)", nil)
+    }
+
+    /// Delete after: nothing goes as it is set; the pane's line says what
+    /// the next pass moves to the Trash; the pass moves only the expired
+    /// ones that are done. Keep recordings in: the recordings move there,
+    /// refused while one records.
+    private func momentRetentionAndFolder(_ center: RecorderCenter) async {
+        let name = "Recorder's moment: Delete after removes nothing as set, says what goes, the pass moves only expired finished ones to the Trash; Keep recordings in moves them, puts them all back when one cannot move, refused while recording; no recording starts while they move"
+        guard let library = context.recordings() else {
+            record(name, false, "no recordings list", nil)
+            return
+        }
+        let preferences = context.preferences
+        let old = momentSeed(center, "Old planning", daysAgo: 40, attendees: [], said: ["An old meeting."])
+        let oldPending = momentSeed(center, "Old waiting", daysAgo: 45, attendees: [], said: [], state: .pending)
+        let oldNeverStopped = momentSeed(center, "Old never stopped", daysAgo: 50, attendees: [], said: [], state: .recording)
+        library.reload()
+        _ = await waitUntil(timeout: 3) { library.recordings.contains { $0.record.title == "Old planning" } }
+        preferences.recorderRetention = .month
+        let line = preferences.recorderRetention.removalLine(older: library.expiredCount(.month)) ?? ""
+        context.settings.show(pane: .recorder)
+        await pause(700)
+        await captureSettingsBothWays(as: "settings-recorder-retention")
+        context.settings.close()
+        let keptAsSet = [old, oldPending].allSatisfy { $0.map { FileManager.default.fileExists(atPath: $0.path) } ?? false }
+        let pruned = await library.prune(.month)
+        let gone = [old, oldPending].allSatisfy { $0.map { !FileManager.default.fileExists(atPath: $0.path) } ?? false }
+        let neverStoppedKept = oldNeverStopped.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+        // The test's own, out of the Trash again.
+        let trash = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash")
+        for folder in [old, oldPending].compactMap({ $0 }) {
+            let trashed = (try? FileManager.default.contentsOfDirectory(atPath: trash.path))?.filter { $0.hasPrefix(folder.lastPathComponent) } ?? []
+            trashed.forEach { try? FileManager.default.removeItem(at: trash.appendingPathComponent($0)) }
+        }
+        if let oldNeverStopped { try? FileManager.default.removeItem(at: oldNeverStopped) }
+        preferences.recorderRetention = .never
+
+        // Keep recordings in: moved there, then back.
+        let root = center.recordings.root
+        let elsewhere = root.deletingLastPathComponent().appendingPathComponent("Recordings elsewhere", isDirectory: true)
+        library.reload()
+        _ = await waitUntil(timeout: 3) { !library.recordings.contains { $0.record.title == "Old planning" } }
+        var names = Set(library.recordings.map(\.folder))
+        // One the list has not read yet: it moves too (the folder is read).
+        if let unlisted = momentSeed(center, "Not listed yet", daysAgo: 3, attendees: [], said: ["Moved all the same."]) {
+            names.insert(unlisted.lastPathComponent)
+        }
+        // One whose meeting.json cannot be decoded: it moves too.
+        if let broken = momentSeed(center, "Broken record", daysAgo: 4, attendees: [], said: []) {
+            try? Data("{".utf8).write(to: broken.appendingPathComponent(Recordings.record))
+            names.insert(broken.lastPathComponent)
+        }
+        let listedBefore = library.recordings.count
+        // Slowed, to ask for a recording while they move: said, not started.
+        let notify = center.notify
+        var said: [String] = []
+        center.notify = { said.append($0) }
+        library.moveStepDelay = .milliseconds(300)
+        let moving = Task { await context.moveRecordings(elsewhere) }
+        _ = await waitUntil(timeout: 3) { library.moving != nil }
+        center.showCard(title: "During the move")
+        let blocked = !center.isCardVisible && said.last?.hasPrefix("Your recordings are moving to another folder") == true
+        let refusedNone = await moving.value
+        library.moveStepDelay = .zero
+        center.notify = notify
+        let there = Set((try? FileManager.default.contentsOfDirectory(atPath: elsewhere.path)) ?? [])
+        let moved = !names.isEmpty && names.isSubset(of: there) && center.recordings.root == elsewhere && names.count == listedBefore + 2
+        _ = await context.moveRecordings(root)
+        let back = names.isSubset(of: Set((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []))
+        // One that cannot move (made immutable, the oldest: moved last):
+        // those moved before it come back, the folder stays the same.
+        let stuck = momentSeed(center, "Stuck", daysAgo: 20, attendees: [], said: ["Kept."])
+        if let stuck { try? FileManager.default.setAttributes([.immutable: true], ofItemAtPath: stuck.path) }
+        library.reload()
+        _ = await waitUntil(timeout: 3) { library.recordings.contains { $0.record.title == "Stuck" } }
+        let all = Set(library.recordings.map(\.folder))
+        let stuckSaid = await context.moveRecordings(elsewhere)
+        let rolledBack = stuckSaid?.contains("could not move") == true && all.isSubset(of: Set((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? [])) && library.root == root
+            && center.recordings.root == root && library.moveFailures.first?.contains("could not move") == true
+        let failureSaid = library.moveFailures.first ?? ""
+        if let stuck {
+            try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: stuck.path)
+            try? FileManager.default.removeItem(at: stuck)
+        }
+        // A row older than a move naming another recording's folder: its
+        // delete trashes nothing.
+        var staleKept = false
+        if let target = library.recordings.first(where: { $0.record.title == "Not listed yet" }) {
+            var stale = RecordingSummary(folder: target.folder, record: target.record)
+            stale.started = target.record.started.addingTimeInterval(-86_400)
+            context.launcher.onDeleteRecording?(stale)
+            staleKept = FileManager.default.fileExists(atPath: library.folder(target.folder).path)
+        }
+        // A folder that cannot be read: nothing moved, never "done" with none.
+        try? FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: root.path)
+        let unreadableSaid = await context.moveRecordings(elsewhere)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+        let unreadableKept = unreadableSaid?.contains("could not be read") == true && library.root == root && center.recordings.root == root
+        try? FileManager.default.removeItem(at: elsewhere)
+        preferences.recorderFolderPath = ""
+        // While recording: refused.
+        center.standInMicrophone(.none)
+        center.showCard(title: "Refused move")
+        _ = await waitUntil(timeout: 3) { center.isCardVisible && center.cardView.macLine != "Starting…" }
+        var refused: String?
+        if await recordCardHasKeys(center, name) {
+            await pressKey(nil, code: CGKeyCode(kVK_Return))
+            _ = await waitUntil(timeout: 3) { center.recorder.isRecording }
+            refused = await context.moveRecordings(elsewhere)
+            await momentStop(center)
+            center.openWindows.forEach { $0.close() }
+        }
+        record(name, line.hasPrefix("2 recordings are older than a month") && keptAsSet && pruned == 2 && gone && neverStoppedKept && refusedNone == nil
+               && blocked && moved && back && rolledBack && unreadableKept && staleKept && refused != nil,
+               "line “\(line)”; kept as set \(keptAsSet); pass moved \(pruned) to the Trash, gone \(gone), never stopped kept \(neverStoppedKept); the card asked while moving: said, not shown \(blocked) “\(said.last ?? "")”; moved \(names.count) there \(moved), back \(back); one stuck: all put back \(rolledBack) “\(failureSaid)”; an unreadable folder: kept \(unreadableKept) “\(unreadableSaid ?? "moved")”; a stale row's delete kept it \(staleKept); while recording: “\(refused ?? "not refused")”",
+               nil)
+    }
+
 
     // MARK: - Event helpers
 

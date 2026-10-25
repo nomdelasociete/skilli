@@ -150,6 +150,32 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
     public var recorder: Owner?
     /// When the last part was written.
     public var stopped: Date?
+    /// The meeting's case (docs/meeting-recorder-views.md, "The five
+    /// cases"); nil before phase 2.
+    public var kind: MeetingMoment.Kind?
+    /// The calendar's event it records, when one was on.
+    public var event: EventLink?
+    /// The call's app, by name, as last picked.
+    public var app: String?
+    /// The location, when it is a place (in person).
+    public var place: String?
+    /// Tracks never on while it was recorded (in person: the Mac's
+    /// sound): no lane, nothing transcribed.
+    public var unused: [Speaker]?
+
+    /// The calendar's event a recording is of: which occurrence, and when
+    /// it ends (the call's end is watched from then).
+    public struct EventLink: Codable, Equatable, Sendable {
+        public var id: String
+        public var start: Date
+        public var end: Date
+
+        public init(id: String, start: Date, end: Date) {
+            self.id = id
+            self.start = start
+            self.end = end
+        }
+    }
 
     public init(title: String, started: Date, language: String, recorder: Owner?) {
         self.title = title

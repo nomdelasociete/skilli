@@ -4,18 +4,29 @@ import SkilliCore
 /// The menu bar while recording (docs/meeting-recorder-views.md): a red
 /// dot, the time, the two waves (the microphone above, the Mac's sound
 /// below); paused, the dot hollow and the clock still. Its menu pauses,
-/// resumes and stops. After Stop, a ring fills as the transcript is made.
-/// Never a hidden recording: it shows for as long as one runs.
+/// resumes and stops, names each source with its level (a click turns it
+/// off or on for the rest of the recording) and the call's app. After
+/// Stop, a ring fills as the transcript is made. Never a hidden
+/// recording: it shows for as long as one runs.
 @MainActor
 final class RecorderIndicator: NSObject, NSMenuDelegate {
     var onPause: (() -> Void)?
     var onResume: (() -> Void)?
     var onStop: (() -> Void)?
     var onShowFolder: ((URL) -> Void)?
+    /// A source's item chosen: off or on.
+    var onToggleSource: ((Speaker) -> Void)?
+    /// The call's app picked (nil: None).
+    var onPickApp: ((MicrophoneApp?) -> Void)?
+    /// The apps on the microphone now, and the call's app.
+    var calls: () -> (apps: [MicrophoneApp], picked: MicrophoneApp?) = { ([], nil) }
 
     private let recorder: MeetingRecorder
     private var item: NSStatusItem?
     private var ticker: Timer?
+    /// The sources' items while the menu is open: their levels move.
+    private var sourceItems: [Speaker: NSMenuItem] = [:]
+    private var menuOpen = false
     /// The last 1.5 s of each track's level, eight a second.
     private var mic = [Double](repeating: 0, count: 12)
     private var mac = [Double](repeating: 0, count: 12)
@@ -29,10 +40,14 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     private(set) var said = ""
     var button: NSStatusBarButton? { item?.button }
 
+    /// A recording asked for while the last one closed its files: the
+    /// dot shown stays, as it was, until it starts (never one made empty).
+    var holding = false
+
     /// Shown, changed or gone as the recorder is now.
     func update() {
         let live = recorder.isRecording || recorder.phase == .stopping
-        guard live || recorder.transcribing != nil else {
+        guard live || recorder.transcribing != nil || (holding && item != nil) else {
             ticker?.invalidate()
             ticker = nil
             if let item { NSStatusBar.system.removeStatusItem(item) }
@@ -71,6 +86,14 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
             button.image = Self.recording(time: said, paused: paused, mic: mic, mac: mac)
             button.setAccessibilityLabel(paused ? "Recording paused, \(said)" : "Recording, \(said)")
             button.toolTip = paused ? "“\(recorder.title)” paused" : "Recording “\(recorder.title)”"
+            if menuOpen { updateSourceItems() }
+        } else if holding {
+            // The next one, asked for while the last closed: its dot at
+            // once, before its first second.
+            said = MeetingTranscript.clock(0)
+            button.image = Self.recording(time: said, paused: false, mic: [Double](repeating: 0, count: mic.count),
+                                          mac: [Double](repeating: 0, count: mac.count))
+            button.setAccessibilityLabel("Recording, \(said)")
         } else if let transcribing = recorder.transcribing {
             switch transcribing.step {
             case .downloading(let language):
@@ -87,8 +110,17 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
 
     // MARK: - The menu
 
+    func menuWillOpen(_ menu: NSMenu) {
+        menuOpen = true
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        menuOpen = false
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
+        sourceItems = [:]
         if recorder.isRecording {
             let title = NSMenuItem(title: "\(recorder.phase == .paused ? "Paused" : "Recording") “\(recorder.title)” · \(said)", action: nil, keyEquivalent: "")
             title.isEnabled = false
@@ -99,6 +131,38 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
                 menu.addItem(entry("Pause Recording", #selector(pause)))
             }
             menu.addItem(entry("Stop and Transcribe", #selector(stop)))
+            // Each source with its level: a click turns it off or on.
+            menu.addItem(.separator())
+            for speaker in Speaker.allCases {
+                let item = entry("", #selector(toggleSource(_:)))
+                item.tag = speaker == .me ? 0 : 1
+                sourceItems[speaker] = item
+                menu.addItem(item)
+            }
+            updateSourceItems()
+            // The call: the apps on the microphone, the one picked kept.
+            let calls = calls()
+            if recorder.record?.kind != .inPerson || calls.picked != nil, !calls.apps.isEmpty || calls.picked != nil {
+                let call = NSMenuItem(title: "The Call: \(calls.picked?.name ?? "None")", action: nil, keyEquivalent: "")
+                let choices = NSMenu()
+                var apps = calls.apps
+                if let picked = calls.picked, !apps.contains(where: { $0.pid == picked.pid }) { apps.insert(picked, at: 0) }
+                for (index, app) in apps.enumerated() {
+                    let choice = entry(app.name, #selector(pickApp(_:)))
+                    choice.tag = index
+                    choice.representedObject = app.pid
+                    choice.state = app.pid == calls.picked?.pid && app.bundleID == calls.picked?.bundleID ? .on : .off
+                    choices.addItem(choice)
+                }
+                choices.addItem(.separator())
+                let none = entry("None", #selector(pickApp(_:)))
+                none.tag = -1
+                none.state = calls.picked == nil ? .on : .off
+                choices.addItem(none)
+                pickable = apps
+                call.submenu = choices
+                menu.addItem(call)
+            }
             if recorder.folder != nil {
                 menu.addItem(.separator())
                 menu.addItem(entry("Show in Finder", #selector(showFolder)))
@@ -117,6 +181,52 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
         let menu = NSMenu()
         menuNeedsUpdate(menu)
         return menu.items.filter { !$0.isSeparatorItem }.map(\.title)
+    }
+
+    /// The apps the call's submenu offers, in its order.
+    private var pickable: [MicrophoneApp] = []
+
+    /// "Microphone · NDI Audio", checked while on, its level after it as
+    /// four bars (a menu item's image does not show in menus on macOS 27).
+    private func updateSourceItems() {
+        let levels = recorder.levels
+        let sources = recorder.sources
+        for (speaker, item) in sourceItems {
+            let on = speaker == .me ? sources.microphone : sources.macSound
+            let device: String
+            if speaker == .me {
+                if case .on(let name) = recorder.microphone.state { device = name } else { device = "Off" }
+            } else {
+                device = on ? (recorder.macSoundFailure == nil ? "Every app" : "Not available") : "Off"
+            }
+            let title = "\(speaker == .me ? "Microphone" : "The Mac's Sound") · \(on ? device : "Off")"
+            if item.title != title { item.title = title }
+            item.state = on ? .on : .off
+            item.attributedTitle = on ? Self.withMeter(title, level: speaker == .me ? levels.mic : levels.mac) : nil
+        }
+    }
+
+    /// The item's words, then its level as four bars rising, the lit ones
+    /// in the label color (quiet speech still shows: square root).
+    static func withMeter(_ title: String, level: Double) -> NSAttributedString {
+        let font = NSFont.menuFont(ofSize: 0)
+        let text = NSMutableAttributedString(string: title + "   ", attributes: [.font: font])
+        let lit = Int((min(1, max(0, level)).squareRoot() * 4).rounded(.up))
+        for (index, bar) in ["▂", "▄", "▆", "█"].enumerated() {
+            text.append(NSAttributedString(string: bar, attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: font.pointSize - 2, weight: .regular),
+                .foregroundColor: index < lit ? NSColor.labelColor : NSColor.tertiaryLabelColor
+            ]))
+        }
+        return text
+    }
+
+    @objc private func toggleSource(_ item: NSMenuItem) {
+        onToggleSource?(item.tag == 0 ? .me : .them)
+    }
+
+    @objc private func pickApp(_ item: NSMenuItem) {
+        onPickApp?(pickable.indices.contains(item.tag) ? pickable[item.tag] : nil)
     }
 
     private func entry(_ title: String, _ action: Selector) -> NSMenuItem {
