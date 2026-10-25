@@ -103,7 +103,9 @@ final class WindowArrange {
                                                         rank: rank, with: beside),
                                           frame: window.frame)
         }
-        let targets = WindowArrangement.targets(of: items, on: keyed, placements: learner.placements, gap: gap())
+        // Learning off: only the saved layouts, nothing learned is used.
+        let targets = WindowArrangement.targets(of: items, on: keyed, placements: learner.isOn() ? learner.placements : WindowPlacements(),
+                                                gap: gap())
         var moved: [Moved] = []
         var lines: [String] = []
         for (window, target) in zip(open, targets) {

@@ -53,6 +53,9 @@ final class WindowLearner {
     private var displaysChanged: ContinuousClock.Instant?
     /// When each app's last reading was asked for.
     private var readAt: [pid_t: ContinuousClock.Instant] = [:]
+    /// Goes up with Forget and its Undo: a reading asked for before is
+    /// dropped, never learned into what was just cleared or put back.
+    private var generation = 0
     /// Windows created in the app in front (one app at a time).
     private var observer: (pid: pid_t, observer: AXObserver, app: AXUIElement)?
 
@@ -148,9 +151,11 @@ final class WindowLearner {
         guard isOn(), Self.counts(app), let bundleID = app.bundleIdentifier, !leftOut().contains(bundleID) else { return }
         let pid = app.processIdentifier
         let asked = ContinuousClock.now
+        let generation = generation
         Task { [weak self] in
             let (readings, onScreen) = await Task.detached(priority: .utility) { (Self.windows(pid: pid), Self.onScreen()) }.value
-            self?.take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, use: use, asked: asked)
+            guard let self, self.generation == generation else { return }
+            self.take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, use: use, asked: asked)
         }
     }
 
@@ -162,9 +167,12 @@ final class WindowLearner {
             }
             return
         }
+        // Readings come back in the order they finish: one asked for
+        // before the last one taken is out of date.
+        let lastAsked = readAt[pid]
+        if let lastAsked, lastAsked > asked { return }
         // The first reading since the displays changed only says where
         // macOS put the windows.
-        let lastAsked = readAt[pid]
         readAt[pid] = asked
         var learning = use == .learn
         if let changed = displaysChanged, lastAsked.map({ $0 < changed }) ?? true { learning = false }
@@ -251,9 +259,10 @@ final class WindowLearner {
               let bundleID = app.bundleIdentifier, !leftOut().contains(bundleID) else { return }
         let pid = owner
         let hash = Int(CFHash(window))
+        let generation = generation
         Task { [weak self] in
             let (readings, onScreen) = await Task.detached(priority: .utility) { (Self.windows(pid: pid), Self.onScreen()) }.value
-            guard let self, let reading = readings.first(where: { $0.window == hash }) else { return }
+            guard let self, self.generation == generation, let reading = readings.first(where: { $0.window == hash }) else { return }
             let key = Key(pid: pid, window: hash)
             self.seen[key] = reading.frame
             self.placedBySkilli[key] = reading.frame
@@ -268,7 +277,9 @@ final class WindowLearner {
               !leftOut().contains(bundleID) else { return }
         let pid = front.processIdentifier
         let asked = ContinuousClock.now
+        let generation = generation
         let (readings, onScreen) = await Task.detached(priority: .userInitiated) { (Self.windows(pid: pid), Self.onScreen()) }.value
+        guard self.generation == generation else { return }
         take(readings, pid: pid, bundleID: bundleID, onScreen: onScreen, use: .learn, asked: asked)
     }
 
@@ -278,12 +289,14 @@ final class WindowLearner {
     func forget() -> WindowPlacements {
         let was = placements
         placements = WindowPlacements()
+        generation += 1
         save()
         return was
     }
 
     func restore(_ placements: WindowPlacements) {
         self.placements = placements
+        generation += 1
         save()
     }
 
