@@ -21,8 +21,9 @@ previews, downloads and `catalog.json` are generated from these exact files.
    skil.li shows a "Running…" card while a skillie runs; one that shows
    something of its own (confetti) says `@skilli.showsRunning false`, and
    only what it prints at the end, or its error, shows.
-5. Try the script on your Mac. In skil.li, open Settings → Launcher → Skillies →
-   Show in Finder and put it there. Check arguments, output and failure cases.
+5. Try the script on your Mac: copy it as `<name>.skilli` and double-click it
+   (or put it in Settings → Skillies → Show in Finder). Check arguments,
+   output and failure cases.
 6. Run `python3 website/build.py --preview` from the repository root. Open a PR
    describing what you tested and any dependencies. Do not edit generated files
    under `website/skillies/files/` or the generated catalog HTML.
@@ -211,8 +212,8 @@ same: `skilli://skillies/import?url=https://…/the-script.sh`. A skillie with
 the same title as one you have replaces it, after you say Replace. Nothing
 runs when it is added.
 
-You can still put a script in your local skillies folder by hand (Show in
-Finder above); the app discovers it by its header. It does not subscribe to
+You can still put a script in your local skillies folder by hand (Settings →
+Skillies → Show in Finder); the app discovers it by its header. It does not subscribe to
 the online collection or replace installed scripts on its own. Website
 publication and local installation are separate operations.
 

@@ -167,9 +167,11 @@ new AI request. Keep the command useful (the current example is Project status).
 
 The repository's `skillies/` folder is canonical for the public collection.
 Merges rebuild the catalog automatically. This is website publication, not an
-app subscription to the catalog: installation currently means inspecting and
-placing a downloaded script in the local Skillies folder. SI command import
-links are a different format and must not be presented as script installation.
+app subscription to the catalog: installation means downloading a skillie as a
+`.skilli` file (the script itself, renamed) and double-clicking it, which shows
+it whole in skil.li before Add (docs/skillie-files.md); placing it in the local
+Skillies folder by hand still works. SI command import links are a different
+format and must not be presented as script installation.
 
 ### Everything else
 
