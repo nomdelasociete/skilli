@@ -79,6 +79,9 @@ final class SkillieFileTests: XCTestCase {
         XCTAssertEqual(SkillieImportLink.parse(mixed), [URL(string: "https://example.com/a.skilli")!])
         XCTAssertNil(SkillieImportLink.parse(try XCTUnwrap(URL(string: "skilli://skillies/import?url=http://example.com/a"))))
         XCTAssertNil(SkillieImportLink.parse(try XCTUnwrap(URL(string: "skilli://apps/import?url=https://example.com/a"))))
+        // A page chose the link: the first few addresses only.
+        let many = (1...30).map { URL(string: "https://example.com/\($0).skilli")! }
+        XCTAssertEqual(SkillieImportLink.parse(SkillieImportLink.importLink(for: many)), Array(many.prefix(SkillieImportLink.most)))
         // Neither a run link nor another import.
         XCTAssertNil(SkilliLink.parse(link))
         XCTAssertNil(AppFileLink.parse(link))

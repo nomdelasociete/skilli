@@ -100,8 +100,11 @@ public enum SkillieFile {
 /// Skillies shows each whole before Add, as `AppFileLink` does for apps;
 /// nothing is added from a link alone.
 public enum SkillieImportLink {
-    /// The https addresses it names; nil for anything that is not an
-    /// import link with at least one.
+    /// The most addresses one link may name: a page chose the link.
+    public static let most = 10
+
+    /// The https addresses it names, `most` at most; nil for anything that
+    /// is not an import link with at least one.
     public static func parse(_ url: URL) -> [URL]? {
         guard url.scheme?.lowercased() == CommandLink.scheme, url.host()?.lowercased() == "skillies",
               url.path() == "/import" || url.path() == "/import/",
@@ -112,7 +115,7 @@ public enum SkillieImportLink {
                   remote.scheme?.lowercased() == "https", remote.host() != nil else { return nil }
             return remote
         }
-        return urls.isEmpty ? nil : urls
+        return urls.isEmpty ? nil : Array(urls.prefix(most))
     }
 
     /// A link to the skillies at these addresses.

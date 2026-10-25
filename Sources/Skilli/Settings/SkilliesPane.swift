@@ -325,6 +325,12 @@ private struct SkillieIcon: View {
 
 // MARK: - Import
 
+private extension ScriptCommand {
+    /// Inline with no argument: its line is read (it runs) as the launcher
+    /// opens (`ScriptLibrary.refreshInline`), with nobody running it.
+    var runsByItself: Bool { mode == .inline && arguments.isEmpty }
+}
+
 /// What a `.skilli` file or a `skilli://skillies/import` link would add,
 /// whole, before anything is added: each skillie, where it came from, and
 /// every line of its code.
@@ -340,7 +346,9 @@ private struct SkillieImportSheet: View {
                      : toAdd[0].replacing == nil ? "Add This Skillie?" : "Replace This Skillie?")
                     .font(.title3.weight(.semibold))
                 if !toAdd.isEmpty {
-                    Text("A skillie is a script: when you run it, it runs as you, with your files and apps. Read it, and add only skillies you trust.")
+                    Text("A skillie is a script: when it runs, it runs as you, with your files and apps"
+                         + (toAdd.contains { $0.checked.command.runsByItself } ? ", and one that shows a line in the launcher runs each time it opens" : "")
+                         + ". Read it, and add only skillies you trust.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -445,11 +453,13 @@ private struct SkillieCandidateCard: View {
 
     private var lineCount: Int { candidate.checked.text.split(separator: "\n", omittingEmptySubsequences: false).count }
 
-    /// "week-number.sh · 1 argument · asks before it runs · Everyday".
+    /// "week-number.sh · 1 argument · asks before it runs · Everyday";
+    /// an inline one with no argument says it runs as the launcher opens.
     private var details: String {
         let skillie = candidate.checked.command
         var parts = [candidate.checked.fileName]
         if !skillie.arguments.isEmpty { parts.append(skillie.arguments.count == 1 ? "1 argument" : "\(skillie.arguments.count) arguments") }
+        if skillie.runsByItself { parts.append("runs each time the launcher opens") }
         if skillie.needsConfirmation { parts.append("asks before it runs") }
         if !skillie.packageName.isEmpty { parts.append(skillie.packageName) }
         return parts.joined(separator: " · ")

@@ -60,8 +60,10 @@ Add); skillies join them.
    cookies, as `apps/import` does.
 5. **Wrong.**
    - *A harmful script added*: it does nothing until run, from the
-     launcher, a key, Ask or an agent. The sheet says what a skillie can
-     do, shows every line and where it came from before Add. Removed as any
+     launcher, a key, Ask or an agent; but an inline one with no argument
+     runs each time the launcher opens (its line is read then), and its
+     card says so. The sheet says what a skillie can do, shows every line
+     and where it came from before Add. Removed as any
      skillie: its file, Settings → Skillies → Show in Finder.
    - *A skillie replaced by mistake*: one with the same title as one the
      user has replaces it, in place (its keys, menu bar line and learning
@@ -90,7 +92,7 @@ Add); skillies join them.
 
 ## The link
 
-`skilli://skillies/import?url=https://…` (repeatable): each address
+`skilli://skillies/import?url=https://…` (repeatable, 10 at most): each address
 downloaded (https only, 256 KB at most, 15 s, ephemeral session), then the
 same sheet, "from example.com". A link alone adds nothing.
 

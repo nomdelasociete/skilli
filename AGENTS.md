@@ -3310,7 +3310,9 @@ re-investigating.
   Replace, written over that file in place (its path kept: keys, menu bar
   line, learning follow); exactly the same text: "Already in your
   skillies", no button. Nothing runs on add, nothing announced (the list
-  shows it). The self-test and benchmark ignore opened files.
+  shows it); an inline one with no argument runs as the launcher opens
+  (`refreshInline`), which its card and the sheet's warning say. A link
+  names 10 addresses at most (`SkillieImportLink.most`). The self-test and benchmark ignore opened files.
   `remote scripts` (`skillieFilesAdded`): a scratch `.skilli` with a
   Where From, shown whole, Add pressed, written, run; again: nothing to
   add; a new version replaced in place; a file with no shebang said.
