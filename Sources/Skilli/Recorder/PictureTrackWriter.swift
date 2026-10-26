@@ -204,13 +204,16 @@ final class PictureTrackWriter: @unchecked Sendable {
         let end = timeline.finish(at: stop)
         latest = nil
         guard written > 0, !failed, writer.status == .writing else {
+            // None written, none failed, none required missed, the writer
+            // still fine: nothing to be whole. One that failed, or whose
+            // first picture never went in: not whole (read before the
+            // cancel, which ends the writing).
+            let whole = written == 0 && !failed && !missedRequired && writer.status == .writing
             if written == 0 {
                 writer.cancelWriting()
                 try? FileManager.default.removeItem(at: url)
             }
-            // None written and none failed: nothing to be whole. One that
-            // failed (before its first picture too): not whole.
-            closed(written > 0 ? end : 0, complete: written == 0 && !failed, done)
+            closed(written > 0 ? end : 0, complete: whole, done)
             return
         }
         writer.endSession(atSourceTime: CMTime(seconds: end, preferredTimescale: 600))

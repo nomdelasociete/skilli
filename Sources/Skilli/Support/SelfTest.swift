@@ -25341,7 +25341,50 @@ final class SelfTest {
         if !aborted { await picturesSayAWindowWithoutPictures(center, slides) }
         if !aborted { await picturesCommandRDoesNotWaitForTheWindow(center, slides) }
         if !aborted { await picturesLateWindowStaysWithItsCard(center, slides) }
+        if !aborted { await picturesCardLevelBackAfterMacOSAsks(center) }
         if !aborted { await picturesInAScratchChrome(center) }
+    }
+
+    /// macOS asks (a source turned on) while the card shows the call's
+    /// end, or the Record card closes meanwhile: the card steps down under
+    /// the question and back up after, whatever it shows then (macOS's
+    /// question itself is never shown here: it needs a person).
+    private func picturesCardLevelBackAfterMacOSAsks(_ center: RecorderCenter) async {
+        let name = "Recorder's pictures: the card under macOS's question while it asks, back over the apps after, whether it shows the call's end or closed meanwhile"
+        defer {
+            if center.isCardVisible { center.dismissCardForTest() }
+        }
+        center.showCallEndedForTest(app: "Discord")
+        let ended = await waitUntil(timeout: 2) { center.isCardVisible } != nil
+        var during: NSWindow.Level?
+        await center.whileMacOSAsksForTest {
+            during = center.cardWindow?.level
+            await pause(200)
+        }
+        let after = center.cardWindow?.level
+        let endedOK = ended && during == .floating && after == .modalPanel && center.isCardVisible
+        center.dismissCardForTest()
+
+        // The Record card closed while macOS asks: shown again, over the apps.
+        context.preferences.recorderWebcam = false
+        context.preferences.recorderScreen = false
+        center.standInMicrophone(.none)
+        defer { center.standInMicrophone(nil) }
+        center.showCard(title: "Level check")
+        let shown = await waitUntil(timeout: 3) { center.isCardVisible && center.recorder.phase == .listening } != nil
+        await center.whileMacOSAsksForTest {
+            center.closeCardWithoutKeys()
+            await pause(200)
+        }
+        let hidden = !center.isCardVisible
+        center.showCard(title: "Level check")
+        let again = await waitUntil(timeout: 3) { center.isCardVisible } != nil
+        let reopened = center.cardWindow?.level
+        center.closeCardWithoutKeys()
+        _ = await waitUntil(timeout: 2) { center.recorder.phase == .idle }
+        record(name, endedOK && shown && hidden && again && reopened == .modalPanel,
+               "the call's end: shown \(ended), level while asked \(during.map { "\($0.rawValue)" } ?? "none"), after \(after.map { "\($0.rawValue)" } ?? "none") (over the apps \(NSWindow.Level.modalPanel.rawValue)); the Record card closed while asked: hidden \(hidden), shown again \(again) at \(reopened.map { "\($0.rawValue)" } ?? "none")",
+               nil)
     }
 
     /// The Record card over the test window, light and dark (skil.li's own
