@@ -111,25 +111,26 @@ final class TrackWriter: @unchecked Sendable {
 
     /// Stops at the host time `stop`: waits for the buffers still on their
     /// way (1 s at most: a source gone sends none; none for a source turned
-    /// off), pads the track to the stop, closes the file. Its length in
-    /// seconds.
-    func finish(at stop: Double, waitingForSource: Bool = true) async -> Double {
+    /// off), pads the track to the stop, closes the file, by `closeBy` (the
+    /// Stop's, shared by its tracks). Its length in seconds, and whether the
+    /// file is whole and finished (not: it plays up to its last fragment, as
+    /// after a crash).
+    func finish(at stop: Double, waitingForSource: Bool = true,
+                closeBy: DispatchTime = .now() + 1 + TrackWriter.closingTime) async -> (seconds: Double, complete: Bool) {
         await onQueue { self.timeline.finish(at: stop) }
         let deadline = ContinuousClock.now + .seconds(waitingForSource ? 1 : 0)
         while ContinuousClock.now < deadline {
             if await onQueue({ self.drained(upTo: stop) }) { break }
             try? await Task.sleep(for: .milliseconds(50))
         }
-        let closeBy = DispatchTime.now() + Self.closingTime
         let closed = await onQueue { self.close(until: closeBy) }
         // Finished, or past the deadline: never waits on a writer for good.
-        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+        let finished = await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
             DispatchQueue.global(qos: .userInitiated).async {
-                _ = closed.finished.wait(timeout: closeBy)
-                done.resume()
+                done.resume(returning: closed.finished.wait(timeout: closeBy) == .success)
             }
         }
-        return closed.seconds
+        return (closed.seconds, closed.whole && finished)
     }
 
     // MARK: - Closing while skil.li quits

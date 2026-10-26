@@ -129,6 +129,7 @@ final class RecorderCenter {
         recorder.onChange = { [weak self] in self?.changed() }
         recorder.onFinished = { [weak self] folder in self?.finished(folder) }
         recorder.onStoppedByItself = { [weak self] line in self?.notify(line) }
+        recorder.onLeftUnfinished = { [weak self] folder, record in self?.offerAtOnce(folder, record: record) }
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append(workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.macWillSleep() }
@@ -567,6 +568,17 @@ final class RecorderCenter {
         guard !left.unfinished.isEmpty else { return }
         unfinished = left.unfinished
         offerNext()
+    }
+
+    /// A Stop that could not finish its files: offered now, first, as one
+    /// never stopped (its length read from its files, off the main thread).
+    private func offerAtOnce(_ folder: URL, record: MeetingRecord) {
+        Task { [weak self] in
+            let measured = await Task.detached(priority: .userInitiated) { MeetingRecorder.measured(folder, record: record) }.value
+            guard let self else { return }
+            self.unfinished.insert((folder, measured), at: 0)
+            self.offerNext()
+        }
     }
 
     private func offerNext() {
