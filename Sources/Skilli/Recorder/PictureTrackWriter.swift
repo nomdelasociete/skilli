@@ -198,9 +198,9 @@ final class PictureTrackWriter: @unchecked Sendable {
                 writer.cancelWriting()
                 try? FileManager.default.removeItem(at: url)
             }
-            // None written: nothing to be whole. One that failed: it plays
-            // up to its last fragment, not whole.
-            closed(written > 0 ? end : 0, complete: written == 0, done)
+            // None written and none failed: nothing to be whole. One that
+            // failed (before its first picture too): not whole.
+            closed(written > 0 ? end : 0, complete: written == 0 && !failed, done)
             return
         }
         writer.endSession(atSourceTime: CMTime(seconds: end, preferredTimescale: 600))
