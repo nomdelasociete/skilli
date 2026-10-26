@@ -24143,7 +24143,7 @@ final class SelfTest {
             return false
         }
         store.refresh()
-        context.settings.show(pane: .recorder)
+        context.settings.show(pane: .recorder, section: "section.betterTranscription")
         await pause(800)
         let notDownloaded = store.state == .notDownloaded
         await captureSettingsBothWays(as: "settings-recorder-better")
@@ -24347,11 +24347,14 @@ final class SelfTest {
                 }
             }
         }
-        // The words left close to the clean track's (Measured with whisper's
-        // times off: about twice as many; with each word's time, macOS's
-        // engine left 3 % of the other side).
+        // A measurement (the spec's "To check"): the kit's echo_dedup.py
+        // gives the table from what is written here. The check: every call
+        // heard at both levels, and the drop by the words' times taking the
+        // user's transcript back under twice the clean track's (Measured
+        // with whisper's times off: the user's errors after the drop were
+        // 130 per hundred words, against 9 with headphones).
         let ratio = Double(totals.kept) / Double(max(1, totals.clean))
-        let passed = totals.clean > 0 && ratio <= 1.35
+        let passed = totals.clean > 0 && rows.count == 2 * Self.playedBackCalls.count && !rows.contains { $0.contains("no words") } && ratio < 2
         record(name, passed,
                String(format: "-12 dB: %d words heard without headphones, %d left after the drop, the clean track %d (×%.2f); %@", totals.heard, totals.kept,
                       totals.clean, ratio, rows.joined(separator: "; ")),
