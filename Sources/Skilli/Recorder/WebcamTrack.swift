@@ -95,6 +95,12 @@ final class WebcamTrack {
             return
         }
         #endif
+        // No camera: nothing to ask for.
+        guard let device = AVCaptureDevice.systemPreferredCamera ?? AVCaptureDevice.default(for: .video) else {
+            state = .none
+            onChange?()
+            return
+        }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             break
@@ -109,8 +115,7 @@ final class WebcamTrack {
             onChange?()
             return
         }
-        guard let device = AVCaptureDevice.systemPreferredCamera ?? AVCaptureDevice.default(for: .video),
-              let input = try? AVCaptureDeviceInput(device: device) else {
+        guard let input = try? AVCaptureDeviceInput(device: device) else {
             state = .none
             onChange?()
             return
@@ -172,19 +177,22 @@ final class WebcamTrack {
 #if SKILLI_SELFTEST
 /// Self-test: a camera drawn here (the test Mac has none), 30 pictures a
 /// second, each timed by the host clock as it is made: dark grey, white
-/// for 150 ms from each of `flashes` (host seconds), so where each landed
-/// in `webcam.mp4` tells how it kept in step with the sound.
+/// for 150 ms from each of `flashes` (host seconds, set once the call's
+/// clock is known), so where each landed in `webcam.mp4` tells how it kept
+/// in step with the sound.
 final class StandInCamera: @unchecked Sendable {
     let width = 640
     let height = 360
-    let flashes: [Double]
+    private let lock = NSLock()
+    private var flashTimes: [Double] = []
     private let queue = DispatchQueue(label: "com.nomdelasociete.Skilli.selftest.camera", qos: .userInitiated)
     private var timer: DispatchSourceTimer?
     private var pool: CVPixelBufferPool?
     private(set) var made = 0
 
-    init(flashes: [Double]) {
-        self.flashes = flashes
+    /// White from each of `times` (host seconds).
+    func flash(at times: [Double]) {
+        lock.withLock { flashTimes = times }
     }
 
     func start(into sink: WebcamSink) {
@@ -210,7 +218,7 @@ final class StandInCamera: @unchecked Sendable {
         guard let pool else { return nil }
         var made: CVPixelBuffer?
         guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &made) == kCVReturnSuccess, let made else { return nil }
-        let white = flashes.contains { time >= $0 && time < $0 + 0.15 }
+        let white = lock.withLock { flashTimes.contains { time >= $0 && time < $0 + 0.15 } }
         CVPixelBufferLockBaseAddress(made, [])
         if let base = CVPixelBufferGetBaseAddress(made) {
             let level: UInt32 = white ? 0xFF : 0x30

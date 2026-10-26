@@ -188,6 +188,21 @@ final class RecordCard {
         relayout()
     }
 
+    /// The screen turned on with no meeting's window to record: its list
+    /// opens under its row.
+    func showWindows() {
+        guard content == .record, let row = view.row(.screen) else { return }
+        showWindows(under: row)
+    }
+
+    /// macOS asks a question (the camera, Screen Recording, Automation):
+    /// the card steps down while it does, so the question is not under it.
+    func whileMacOSAsks(_ asking: Bool, _ work: () async -> Void) async {
+        if asking { stepDown() }
+        await work()
+        if asking, content == .record { stepUp() }
+    }
+
     /// The screen's ⌃⌄: the windows it can record, the meeting's first,
     /// the one recorded checked.
     private func showWindows(under row: NSView) {
@@ -486,6 +501,18 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     var macLine: String { macRow.line }
     var webcamLine: String { webcamRow.line }
     var screenLine: String { screenRow.line }
+
+    /// The webcam's or the screen's row.
+    func row(_ source: PictureSource) -> NSView? {
+        let row = source == .webcam ? webcamRow : screenRow
+        return row.isHidden ? nil : row
+    }
+
+    /// Self-test hook: where a row is on screen (AppKit's coordinates).
+    func screenFrame(of source: PictureSource) -> NSRect? {
+        guard let row = row(source), let window else { return nil }
+        return window.convertToScreen(row.convert(row.bounds, to: nil))
+    }
     var noteText: String { note.isHidden ? "" : note.text }
     var consentShown: Bool { !consent.isHidden }
     var detailText: String { detail.isHidden ? "" : detail.stringValue }
