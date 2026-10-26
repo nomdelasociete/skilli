@@ -438,7 +438,9 @@ Measured below. Still open:
 
 ## Measured
 
-2026-10-23, on the test Mac (Mac mini, M4, 24 GB, macOS 27.0.1), with
+2026-10-23 (and 2026-10-24 for the microphone's app; 2026-10-26 for
+phase 4's runs through the app, each dated where it is), on the test Mac
+(Mac mini, M4, 24 GB, macOS 27.0.1), with
 `script/recorder-measure/` (its README says how to run it again). None of
 it is in the app: whisper.cpp and the speaker-separation packages were
 built in that folder's `work/`, which git ignores; the app probe

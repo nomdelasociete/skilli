@@ -484,10 +484,12 @@ final class MeetingRecorder {
     private func transcribeNext() async {
         while !queue.isEmpty, !quitting {
             let (folder, record, again, engine) = queue.removeFirst()
+            // The job is this one before anything is awaited: another asked
+            // meanwhile waits in the queue.
+            transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0))
             let setup = await transcriptSetup()
             // Made again: the record as it is before, put back if it fails.
             let before = again ? recordings.read(folder) : nil
-            transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0))
             var working = record
             working.state = .transcribing
             working.recorder = Recordings.ownProcess

@@ -332,7 +332,7 @@ public enum SettingsTable {
                 note: "A language this Mac transcribes (“en-US”), or “” to follow Ask's (else the keyboard's)."),
         setting("recorder", "recorderEngine", "Engine",
                 .choice([SettingOption(TranscriptEngine.whisper.rawValue, "Better transcription"), SettingOption(TranscriptEngine.macOS.rawValue, "macOS")]),
-                note: "Better transcription (whisper, once its 1.6 GB is downloaded in the pane: the user's click only) is the default from then on; macOS's own engine until then. A language one engine lacks goes to the other."),
+                note: "Read: the engine in use. Better transcription (whisper) is the default once its 1.6 GB is downloaded in the pane (the user's click only), macOS's own engine until then; macOS set here stays the choice after a download. A language one engine lacks goes to the other."),
         setting("recorder", "recorderFolderPath", "Keep recordings in", .folder(empty: "Application Support's skil.li/Recordings"),
                 note: "Changing it moves the recordings there, one by one; refused while one is recorded or transcribed. “default” for the standard folder."),
         setting("recorder", "recorderRetention", "Delete after",

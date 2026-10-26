@@ -67,6 +67,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         didSet { considerBetterHint() }
     }
     private var betterHintAsked = false
+    /// The line shown, until the transcript is no longer macOS's.
+    private var betterHintShown = false
 
     init(folder: URL, record: MeetingRecord, transcript: MeetingTranscript.File?, ownName: (() async -> String?)? = nil) {
         self.folder = folder
@@ -139,6 +141,12 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// none.
     func show(_ record: MeetingRecord, transcript: MeetingTranscript.File?, transcribing: MeetingTranscriber.Step? = nil) {
         self.record = record
+        // Made again (by whisper, or being made): the line no longer
+        // applies.
+        if betterHintShown, transcribing != nil || TranscriptEngine(stored: transcript?.engine) != .macOS {
+            betterHintShown = false
+            view.setHint(nil)
+        }
         window.title = record.title
         view.header(title: record.title, about: MeetingTranscriber.about(record))
         // In person, the microphone holds the room: one lane, its name.
@@ -173,6 +181,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         guard !betterHintAsked, draft != nil, let betterHint else { return }
         betterHintAsked = true
         if betterHint(record) {
+            betterHintShown = true
             view.setHint("Names heard wrong? Better transcription gets two in three right, on this Mac: Settings → Recorder (1.6 GB download).")
         }
     }

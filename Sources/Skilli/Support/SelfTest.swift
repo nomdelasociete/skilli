@@ -24062,7 +24062,7 @@ final class SelfTest {
         }
         context.preferences.voiceLanguage = "en-US"
         guard await betterTranscriptionDownloads() else { return }
-        var them: [String: [TranscriptWord]] = [:]
+        var them: [String: (them: [TranscriptWord], me: Int)] = [:]
         var kept: URL?
         if !aborted { (them, kept) = await whisperOnTheCalls() }
         if !aborted, !them.isEmpty { await echoDropWithWhisper(them) }
@@ -24114,6 +24114,9 @@ final class SelfTest {
             record(name, false, "no recorder, or no self-test folder for the models", nil)
             return false
         }
+        // The folder is named by the process: one left by an earlier run
+        // with the same number would make the model look downloaded.
+        try? FileManager.default.removeItem(at: folder)
         // Taught once: the first window on a transcript macOS made, not the next.
         context.preferences.recorderBetterHintShown = false
         var hints: [String?] = []
@@ -24195,7 +24198,9 @@ final class SelfTest {
         let start = ContinuousClock.now
         var lines: [String] = []
         store.download()
-        let done = await waitUntil(timeout: 1800) {
+        // Under SelfTestWatchdog's limit without a check: this check
+        // reports, and removes its folder, not the watchdog.
+        let done = await waitUntil(timeout: 1700) {
             if case .downloading(_, _, let line) = store.state, lines.last != line, lines.count < 400 { lines.append(line) }
             if case .stopped = store.state { return true }
             return store.state == .downloaded || store.state == .wrongFile
@@ -24212,8 +24217,9 @@ final class SelfTest {
     /// names in its prompt (the attendees, then the user's and the
     /// contacts' as Dictate orders them), its VAD, its two failures taken
     /// out, the voices told apart. Written for the kit's scorers
-    /// (`voices/app-w`). The other side's words, for the echo check.
-    private func whisperOnTheCalls() async -> ([String: [TranscriptWord]], URL?) {
+    /// (`voices/app-w`). For the echo check: the other side's words and
+    /// the number of the user's on the clean track.
+    private func whisperOnTheCalls() async -> ([String: (them: [TranscriptWord], me: Int)], URL?) {
         let name = "Recorder phase 4: whisper (the default once downloaded) on the played-back calls as skil.li runs it: the names in its prompt, its VAD, its two failures taken out, the voices told apart"
         let calls = Self.playedBackCalls
         guard !calls.isEmpty else {
@@ -24222,7 +24228,7 @@ final class SelfTest {
         }
         let recordings = Recordings(root: recorderScratch.appendingPathComponent("whisper-recordings", isDirectory: true))
         let out = context.snapshotDirectory?.appendingPathComponent("voices", isDirectory: true)
-        var them: [String: [TranscriptWord]] = [:]
+        var them: [String: (them: [TranscriptWord], me: Int)] = [:]
         var kept: URL?
         var rows: [String] = []
         var errors = (me: 0.0, meWords: 0, them: 0.0, themWords: 0)
@@ -24262,7 +24268,7 @@ final class SelfTest {
             engines.insert(done.engine ?? "none")
             if call.lastPathComponent == "en01" { kept = folder }
             let mine = transcript.lines.filter { $0.speaker.track == .me }, theirs = transcript.lines.filter { $0.speaker.track == .them }
-            them[call.lastPathComponent] = theirs.flatMap(\.words)
+            them[call.lastPathComponent] = (theirs.flatMap(\.words), mine.flatMap(\.words).count)
             let me = Self.errorsPerHundred(truth.turns.filter(\.me).map(\.text).joined(separator: " "), mine.map(\.text).joined(separator: " "))
             let other = Self.errorsPerHundred(truth.turns.filter { !$0.me }.map(\.text).joined(separator: " "), theirs.map(\.text).joined(separator: " "))
             errors.me += me.errors * Double(me.words) / 100
@@ -24311,22 +24317,17 @@ final class SelfTest {
     /// the recording's clock (whisper.cpp adds its VAD's cuts back), then
     /// the drop by word times against the Mac's sound. Written for
     /// `echo_dedup.py`; here, the words left against the clean track's.
-    private func echoDropWithWhisper(_ them: [String: [TranscriptWord]]) async {
+    private func echoDropWithWhisper(_ them: [String: (them: [TranscriptWord], me: Int)]) async {
         let name = "Recorder phase 4: no headphones with whisper: its word times on the recording's clock, the other side's words heard again dropped by word times"
         let out = context.snapshotDirectory?.appendingPathComponent("voices", isDirectory: true)
         var rows: [String] = []
         var totals = (clean: 0, heard: 0, kept: 0)
         for call in Self.playedBackCalls {
-            guard let heard = them[call.lastPathComponent],
+            guard let (heard, clean) = them[call.lastPathComponent],
                   let data = try? Data(contentsOf: call.appendingPathComponent("truth.json")),
                   let truth = try? JSONDecoder().decode(CallTruth.self, from: data) else { continue }
             let language = truth.language == "fr" ? "fr" : "en"
             let attendees = (truth.attendees ?? []).filter { $0 != truth.turns.first(where: \.me)?.speaker }
-            var clean = 0
-            if let words = try? Data(contentsOf: (out ?? call).appendingPathComponent("app-w/\(call.lastPathComponent)/me.json")),
-               let json = try? JSONSerialization.jsonObject(with: words) as? [String: Any] {
-                clean = (json["words"] as? [Any])?.count ?? 0
-            }
             for level in ["12", "20"] {
                 let track = recorderScratch.appendingPathComponent("\(call.lastPathComponent)-echo-\(level).m4a")
                 let converted = await Task.detached { Self.m4a(from: call.appendingPathComponent("echo-\(level).wav"), to: track) }.value

@@ -71,10 +71,11 @@ enum MeetingTranscriber {
         }
     }
 
-    /// `language` among `languages` (the same id, or a language whose code
-    /// it has: "it-IT" in Better transcription's "it").
+    /// `language` among `languages` (the same id, or Better
+    /// transcription's code for it: "it-IT" in its "it", "nb-NO" in its
+    /// "no").
     static func canTranscribe(_ language: String, in languages: [(id: String, name: String)]) -> Bool {
-        let code = Locale(identifier: language).language.languageCode?.identifier
+        let code = WhisperTranscript.code(for: language)
         return languages.contains { $0.id == language || ($0.id == code && !$0.id.contains("-")) }
     }
 

@@ -243,15 +243,23 @@ final class BetterTranscription {
             Task { @MainActor in self?.current = task as? URLSessionDownloadTask }
         }
         let downloaded: URL
+        let resumed = resumeData(for: file)
         do {
-            if let data = resumeData(for: file) {
-                downloaded = try await session.download(resumeFrom: data, delegate: delegate).0
+            if let resumed {
+                downloaded = try await session.download(resumeFrom: resumed, delegate: delegate).0
             } else {
                 downloaded = try await session.download(from: file.url, delegate: delegate).0
             }
         } catch {
-            if let data = (error as? URLError)?.downloadTaskResumeData { keepResumeData(data, for: file) }
-            if Task.isCancelled || (error as? URLError)?.code == .cancelled { throw CancellationError() }
+            let cancelled = Task.isCancelled || (error as? URLError)?.code == .cancelled
+            if let data = (error as? URLError)?.downloadTaskResumeData {
+                keepResumeData(data, for: file)
+            } else if resumed != nil, !cancelled {
+                // What came before could not be resumed (its file purged,
+                // the data refused): the next Download starts afresh.
+                dropResumeData(for: file)
+            }
+            if cancelled { throw CancellationError() }
             throw error
         }
         dropResumeData(for: file)
@@ -329,13 +337,20 @@ final class BetterTranscription {
     /// Remove: the files to the Trash at once (`UndoableDeletes` offers
     /// them back); where each went, to put it back.
     func moveToTrash() throws -> [(from: URL, trashed: URL)] {
-        var moved: [(URL, URL)] = []
-        for file in files {
-            let url = folder.appendingPathComponent(file.name)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            var trashed: NSURL?
-            try FileManager.default.trashItem(at: url, resultingItemURL: &trashed)
-            if let trashed = trashed as URL? { moved.append((url, trashed)) }
+        var moved: [(from: URL, trashed: URL)] = []
+        do {
+            for file in files {
+                let url = folder.appendingPathComponent(file.name)
+                guard FileManager.default.fileExists(atPath: url.path) else { continue }
+                var trashed: NSURL?
+                try FileManager.default.trashItem(at: url, resultingItemURL: &trashed)
+                if let trashed = trashed as URL? { moved.append((url, trashed)) }
+            }
+        } catch {
+            // One file could not go: those gone already come back, all or
+            // nothing.
+            try? putBack(moved)
+            throw error
         }
         state = .notDownloaded
         return moved
