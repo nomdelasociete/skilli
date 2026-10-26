@@ -37,9 +37,17 @@ enum TranscriberHelper {
     static func whisper(of audio: URL, language: String, prompt: String,
                         progress: @escaping @Sendable (Double) -> Void) async throws -> WhisperTranscript.Run? {
         guard let paths = BetterTranscription.paths() else { throw Failure(message: "Better transcription isn't downloaded: Settings → Recorder offers it.") }
-        let out = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-whisper-\(UUID().uuidString).json")
-        defer { try? FileManager.default.removeItem(at: out) }
-        guard try await run(["whisper", audio.path, paths.model.path, paths.vad.path, language, prompt, out.path], progress: progress) else { return nil }
+        let id = UUID().uuidString
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-whisper-\(id).json")
+        // The names as written: an argument reaches the helper decomposed
+        // (the file system's form), and whisper would not know "Maëlys".
+        let names = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-whisper-\(id).txt")
+        defer {
+            try? FileManager.default.removeItem(at: out)
+            try? FileManager.default.removeItem(at: names)
+        }
+        try Data(prompt.precomposedStringWithCanonicalMapping.utf8).write(to: names)
+        guard try await run(["whisper", audio.path, paths.model.path, paths.vad.path, language, names.path, out.path], progress: progress) else { return nil }
         return try JSONDecoder().decode(WhisperTranscript.Run.self, from: Data(contentsOf: out))
     }
 

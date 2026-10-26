@@ -14,12 +14,14 @@ import whisper
 /// Tells the voices of one track apart (SpeakerKit, the count found by
 /// itself) and writes their stretches (`[MeetingVoices.Stretch]`).
 ///
-///     skil.li Transcriber whisper <audio> <model> <VAD model> <language> <prompt> <out.json>
+///     skil.li Transcriber whisper <audio> <model> <VAD model> <language> <prompt file> <out.json>
 ///
 /// Better transcription: one track's words by whisper large-v3-turbo
 /// (whisper.cpp 1.9.5, Metal), as whisper-cli ran it when measured (beam
 /// search of 5, its Silero VAD, the names as its prompt carried to every
 /// window, token times), each token's time on the recording's clock
+/// (the prompt in a UTF-8 file: an argument would reach the helper
+/// decomposed, "Maëlys" as "Mae" and a mark, and whisper would not know it)
 /// (whisper.cpp adds its VAD's cuts back); writes `WhisperTranscript.Run`.
 ///
 /// Prints "progress 0.42" lines as it goes; a failure is its last line on
@@ -33,10 +35,11 @@ enum Transcriber {
             case "voices" where arguments.count == 4:
                 try await voices(audio: URL(fileURLWithPath: arguments[1]), models: arguments[2], out: URL(fileURLWithPath: arguments[3]))
             case "whisper" where arguments.count == 7:
+                let prompt = try String(contentsOf: URL(fileURLWithPath: arguments[5]), encoding: .utf8)
                 try whisperWords(audio: URL(fileURLWithPath: arguments[1]), model: arguments[2], vad: arguments[3], language: arguments[4],
-                                 prompt: arguments[5], out: URL(fileURLWithPath: arguments[6]))
+                                 prompt: prompt, out: URL(fileURLWithPath: arguments[6]))
             default:
-                throw Failure("usage: skil.li Transcriber voices <audio> <models folder> <out.json> | whisper <audio> <model> <VAD model> <language> <prompt> <out.json>")
+                throw Failure("usage: skil.li Transcriber voices <audio> <models folder> <out.json> | whisper <audio> <model> <VAD model> <language> <prompt file> <out.json>")
             }
         } catch {
             FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))

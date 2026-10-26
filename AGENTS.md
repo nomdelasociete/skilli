@@ -2402,7 +2402,10 @@ re-investigating.
   macOS's engine. `WhisperTranscript`: tokens to words (a character cut
   between tokens made whole), a segment repeated right after itself and
   an attendee's name written as a label taken out, the prompt (attendees,
-  then Dictate's contacts, 450 characters). Once downloaded it is the
+  then Dictate's contacts, 450 characters), handed to the helper in a
+  UTF-8 file: `Process` passes its arguments decomposed (NFD), and
+  whisper, given "Mae" and a mark for "Maëlys", got the accented names
+  wrong (names right 60 % against 67 % measured). Once downloaded it is the
   default engine (`recorderEngine` empty); a language it lacks goes to
   macOS's (`MeetingTranscriber.engine(for:picked:setup:)`), Transcribe
   Again uses the one picked or says why not. Taught once: the first
