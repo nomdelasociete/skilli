@@ -23731,6 +23731,8 @@ final class SelfTest {
         let out = context.snapshotDirectory?.appendingPathComponent("voices", isDirectory: true)
         var kept: URL?
         var rows: [String] = []
+        // The calls that went through (rows also say those that did not).
+        var processed = 0
         var errors = (me: 0.0, meWords: 0, them: 0.0, themWords: 0)
         var given = (call: (right: 0, of: 0), mix: (right: 0, of: 0))
         var counts = (callRight: 0, callFewer: 0, mixRight: 0, mixFewer: 0)
@@ -23795,6 +23797,7 @@ final class SelfTest {
             counts.callFewer += callVoices.count < others.count ? 1 : 0
             counts.mixRight += mixVoices.count == everyone.count ? 1 : 0
             counts.mixFewer += mixVoices.count < everyone.count ? 1 : 0
+            processed += 1
             rows.append(String(format: "%@ them %d/%d voices %.0f %%, mix %d/%d %.0f %%", call.lastPathComponent, callVoices.count, others.count,
                                100 * Double(callGiven.right) / Double(max(1, callGiven.of)), mixVoices.count, everyone.count,
                                100 * Double(mixGiven.right) / Double(max(1, mixGiven.of))))
@@ -23822,10 +23825,10 @@ final class SelfTest {
         let me = 100 * errors.me / Double(max(1, errors.meWords)), them = 100 * errors.them / Double(max(1, errors.themWords))
         // Measured (SpeakerKit): never fewer voices than people on the Mac's
         // sound; the words given to the right person, most of them.
-        let passed = rows.count == calls.count && kept != nil && counts.callFewer == 0 && callShare >= 85 && mixShare >= 75 && me <= 30 && them <= 25
+        let passed = processed == calls.count && kept != nil && counts.callFewer == 0 && callShare >= 85 && mixShare >= 75 && me <= 30 && them <= 25
         record(name, passed,
                String(format: "%d calls (%.0f min of tracks in %.0f s, ×%.0f real time); errors per hundred words me %.1f (%d words), them %.1f (%d words), numbers left out; the other side's words given to the right person %.1f %%, voices found right in %d calls, fewer in %d; one-track mix %.1f %%, right in %d, fewer in %d; %@",
-                      rows.count, audio / 60, wall, audio / max(1, wall), me, errors.meWords, them, errors.themWords, callShare, counts.callRight,
+                      processed, audio / 60, wall, audio / max(1, wall), me, errors.meWords, them, errors.themWords, callShare, counts.callRight,
                       counts.callFewer, mixShare, counts.mixRight, counts.mixFewer, rows.joined(separator: "; ")),
                nil)
         return kept
