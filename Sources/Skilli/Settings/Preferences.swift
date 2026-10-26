@@ -138,6 +138,8 @@ final class Preferences {
         static let autoQuit = "Preferences.autoQuit"
         static let autoQuitMinutes = "Preferences.autoQuitMinutes"
         static let autoQuitNever = "Preferences.autoQuitNever"
+        static let windowLearning = "Preferences.windowLearning"
+        static let windowNeverPlace = "Preferences.windowNeverPlace"
         static let clipboardMeaningSearch = "Preferences.clipboardMeaningSearch"
         static let snippetExpansion = "Preferences.snippetExpansion"
         static let snippetExpansionMode = "Preferences.snippetExpansionMode"
@@ -349,6 +351,17 @@ final class Preferences {
 
     var autoQuitNever: [String] {
         didSet { save(autoQuitNever, Key.autoQuitNever) }
+    }
+
+    /// Learn where you put windows (Arrange Windows): on by default.
+    var windowLearning: Bool {
+        didSet { save(windowLearning, Key.windowLearning) }
+    }
+
+    /// Never place (bundle ids): Arrange leaves their windows, nothing is
+    /// learned from them.
+    var windowNeverPlace: [String] {
+        didSet { save(windowNeverPlace, Key.windowNeverPlace) }
     }
 
     /// Monitors that never offer a layout when plugged in (Ignore This
@@ -669,6 +682,8 @@ final class Preferences {
         autoQuit = defaults.bool(forKey: Key.autoQuit)
         autoQuitMinutes = defaults.object(forKey: Key.autoQuitMinutes) as? Int ?? AutoQuit.defaultDelay
         autoQuitNever = defaults.stringArray(forKey: Key.autoQuitNever) ?? []
+        windowLearning = defaults.object(forKey: Key.windowLearning) as? Bool ?? true
+        windowNeverPlace = defaults.stringArray(forKey: Key.windowNeverPlace) ?? []
         ignoredMonitors = defaults.data(forKey: Key.ignoredMonitors).flatMap { try? JSONDecoder().decode([DisplayFingerprint].self, from: $0) } ?? []
         clipboardMeaningSearch = defaults.object(forKey: Key.clipboardMeaningSearch) as? Bool ?? true
         snippetExpansion = defaults.object(forKey: Key.snippetExpansion) as? Bool ?? true

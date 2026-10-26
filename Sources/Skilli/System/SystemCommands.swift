@@ -14,6 +14,8 @@ final class SystemCommands {
     private var awakeTimer: Timer?
     /// Places for the front window (✦W, the launcher, Ask, agents).
     let windows = WindowManager()
+    /// Arrange Windows: every window where the user usually puts it.
+    var arrange: (@MainActor () async -> WindowArrange.Report)?
     /// Clean Keyboard's tap and card.
     let cleaner = KeyboardCleaner()
     /// "Keep Awake" is on.
@@ -241,6 +243,15 @@ final class SystemCommands {
         case .showDesktop:
             try Self.showDesktop()
             return "Desktop shown."
+        case .arrangeWindows:
+            guard let arrange else { throw Failure(message: "Arrange Windows is not available here.") }
+            let report = await arrange()
+            // The windows moving are the answer; a card only for what went
+            // wrong or what skil.li does not know yet.
+            if let message = report.message { throw Failure(message: message) }
+            if report.restored { return "\(report.placed) window\(report.placed == 1 ? "" : "s") put back." }
+            if let layout = report.layout { return "The layout “\(layout)”: \(report.placed) window\(report.placed == 1 ? "" : "s") placed." }
+            return "\(report.placed) window\(report.placed == 1 ? "" : "s") arranged\(report.unknown > 0 ? ", \(report.unknown) left where \(report.unknown == 1 ? "it was" : "they were")" : "")."
         }
     }
 

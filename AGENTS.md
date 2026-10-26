@@ -2935,6 +2935,33 @@ re-investigating.
   `layout-editor-opens-light/-dark.png`, `settings-windows.png`,
   `settings-windows-light/-dark(-bottom).png`, `display-prompt.png` and
   `display-prompt-actions.png`.
+- Arrange Windows (docs/smart-layout.md; `WindowPlacements` and
+  `WindowArrangement` in SkilliCore, `WindowLearner`, `WindowArrange`):
+  `SystemCommand.arrangeWindows`, so the launcher, the Catalog, Ask,
+  `run_mac_command`, `skilli://run/system:arrangeWindows` (asks first, as
+  Show Desktop) and ⌘K on a Switch Window row all reach it; no shortcut
+  by default (the user gives it one). `WindowLearner` reads an app's
+  windows off the main thread when it comes to the front and when it
+  leaves it (Accessibility, 0.2 s timeout; CoreGraphics' window list for
+  the apps beside it), and a window the app in front creates as it opens
+  (one `kAXWindowCreatedNotification` observer, on that app only): a
+  window moved in between, not where skil.li put
+  it (`WindowManager.didPlace` marks every move skil.li makes), is one
+  placement; ✦W, the launcher's places and Ask's are one too, counted
+  double (`WindowManager.placedByUser`). Placements per app and set of
+  displays (`WindowPlacements.displayKey`), the last 48, in
+  `placements.json` (Application Support, the self-test's in its scratch
+  folder), written at most every 10 s, at sleep and on quit. Choosing:
+  age with a 30-day half-life, the apps beside it, the window's file or
+  title words (the words every title of the app has left out), else its
+  rank; named places within 24 pt stay named (with the gap of the
+  moment). Arrange: a saved layout whose displays are the ones connected
+  and whose apps are exactly the apps open first; else each window to
+  its place (two windows of one app never share one), unknown ones left;
+  again within 10 s puts every window back; ✦W R puts one back
+  (`WindowManager.remember`). Settings → Windows: Learn where you put
+  windows (on), Forget What skil.li Learned (⌘Z, `UndoableDeletes`),
+  Never place (Advanced). `selftest windows` (`arrangeWindowsLearnsAndPutsBack`).
 - File search (`FileSearch`, `FileMeaning` in SkilliCore): Search Files
   or "f " / "file " / "fichier " turns the launcher into Spotlight's files
   (a green chip). Typing searches names (every word, case and accents

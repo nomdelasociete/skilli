@@ -119,6 +119,18 @@ Everything the launcher runs, a skillie runs too, two ways:
   `skilli://run/system:link:warp.settings`). What could change the Mac
   asks first, as for any link.
 
+## Arrange the windows
+
+Arrange Windows puts every window where you usually put it (learned on
+the Mac from your own moves), or applies the layout saved for the apps
+open. Run it again within 10 seconds and every window goes back where it
+was before:
+
+```bash
+"$SKILLI_CLI" call run_mac_command command=arrangeWindows
+open "skilli://run/system:arrangeWindows"   # asks first, as Show Desktop does
+```
+
 ## Keep the Mac awake
 
 A long job can keep the Mac awake while it runs, then turn it off:

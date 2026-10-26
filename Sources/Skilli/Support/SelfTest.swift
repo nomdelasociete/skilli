@@ -116,6 +116,9 @@ final class SelfTest {
         /// Keep recordings in's move (nil, or why it was refused).
         var recordings: @MainActor () -> RecordingLibrary? = { nil }
         var moveRecordings: @MainActor (URL) async -> String? = { _ in nil }
+        /// Where the user puts windows (Arrange Windows), in the
+        /// self-test's own placements.json.
+        var windowLearner: WindowLearner?
     }
 
     enum Scope: String, Sendable {
@@ -490,6 +493,7 @@ final class SelfTest {
             window.center()
             return await finish(after: [
                 windowsPlaceTheFrontWindow,
+                arrangeWindowsLearnsAndPutsBack,
                 windowLayoutsAndSwitching,
                 layoutOpensAFileAndALink,
                 layoutDeleteUndoes
@@ -5148,6 +5152,7 @@ final class SelfTest {
         await clipboardPreviewAndMeaning()
         await clipboardPreviewsShowEachKind()
         await windowsPlaceTheFrontWindow()
+        await arrangeWindowsLearnsAndPutsBack()
         await windowLayoutsAndSwitching()
         await layoutOpensAFileAndALink()
         await browserTabsAreFound()
@@ -17532,6 +17537,175 @@ final class SelfTest {
 
     private static func describe(_ rect: CGRect) -> String {
         "\(Int(rect.minX)),\(Int(rect.minY)) \(Int(rect.width))×\(Int(rect.height))"
+    }
+
+    /// Arrange Windows (docs/smart-layout.md): two TextEdit windows put
+    /// by hand on the left and right halves (Accessibility, not skil.li's
+    /// own moves), learned as TextEdit leaves the front; moved away; then
+    /// "arrange windows" in the launcher puts each back on its own half,
+    /// told apart by its title and file, and Arrange again within 10 s
+    /// puts both where they were.
+    private func arrangeWindowsLearnsAndPutsBack() async {
+        let name = "Arrange Windows: two windows of one app placed by hand are learned as it leaves the front; “arrange windows” puts each on its own half, again puts them back"
+        guard let learner = context.windowLearner else {
+            record(name, false, "no window learner", nil)
+            return
+        }
+        let gapBefore = context.preferences.windowGap
+        context.preferences.windowGap = 0
+        defer { context.preferences.windowGap = gapBefore }
+        let bundleID = "com.apple.TextEdit"
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            record(name, false, "TextEdit not installed", nil)
+            return
+        }
+        let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        let marker = Int.random(in: 1000...9999)
+        let files = ["alpha", "beta"].map { FileManager.default.temporaryDirectory.appendingPathComponent("skilli-arrange-\($0)-\(marker).txt") }
+        for file in files { try? "arrange".write(to: file, atomically: true, encoding: .utf8) }
+        defer { for file in files { try? FileManager.default.removeItem(at: file) } }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        guard let pid = (try? await NSWorkspace.shared.open(files, withApplicationAt: appURL, configuration: configuration))?.processIdentifier else {
+            record(name, false, "could not open TextEdit", nil)
+            return
+        }
+        /// TextEdit's window showing `file`, read through Accessibility.
+        func window(_ file: URL) -> AXUIElement? {
+            let app = AXUIElementCreateApplication(pid)
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success, let list = value as? [AXUIElement] else { return nil }
+            return list.first { element in
+                var title: CFTypeRef?
+                AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &title)
+                return (title as? String)?.contains(file.deletingPathExtension().lastPathComponent) == true
+            }
+        }
+        func frame(_ element: AXUIElement) -> CGRect? {
+            var position: CFTypeRef?
+            var size: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &position) == .success,
+                  AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &size) == .success,
+                  let position, let size else { return nil }
+            var point = CGPoint.zero
+            var extent = CGSize.zero
+            AXValueGetValue(position as! AXValue, .cgPoint, &point)
+            AXValueGetValue(size as! AXValue, .cgSize, &extent)
+            return CGRect(origin: point, size: extent)
+        }
+        /// As a hand would: straight through Accessibility, not skil.li's
+        /// own placing (which marks the window as moved by skil.li).
+        func move(_ element: AXUIElement, to target: CGRect) {
+            var origin = target.origin
+            var size = target.size
+            guard let originValue = AXValueCreate(.cgPoint, &origin), let sizeValue = AXValueCreate(.cgSize, &size) else { return }
+            AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, sizeValue)
+            AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, originValue)
+            AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, sizeValue)
+        }
+        func at(_ element: AXUIElement, _ target: CGRect) async -> Bool {
+            await waitUntil(timeout: 2) { frame(element).map { WindowLayout.matches($0, target) } ?? false } != nil
+        }
+        /// The test's own two windows closed by their close buttons (never
+        /// ⌘W: TextEdit may have the user's windows too), TextEdit quit
+        /// only when the test opened it.
+        func closeTestWindows() async {
+            for file in files {
+                guard let element = window(file) else { continue }
+                var button: CFTypeRef?
+                if AXUIElementCopyAttributeValue(element, kAXCloseButtonAttribute as CFString, &button) == .success, let button,
+                   CFGetTypeID(button) == AXUIElementGetTypeID() {
+                    AXUIElementPerformAction(unsafeDowncast(button, to: AXUIElement.self), kAXPressAction as CFString)
+                }
+            }
+            _ = await waitUntil(timeout: 2) { files.allSatisfy { window($0) == nil } }
+            if !wasRunning {
+                let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+                for app in apps { app.terminate() }
+                _ = await waitUntil(timeout: 3) { apps.allSatisfy(\.isTerminated) }
+            }
+        }
+        await pause(300)
+        Self.makeFrontmost(pid: pid)
+        guard await waitUntil(timeout: 6, { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid && window(files[0]) != nil && window(files[1]) != nil }) != nil,
+              let alpha = window(files[0]), let beta = window(files[1]), let start = frame(alpha) else {
+            record(name, false, "TextEdit's two windows never came", nil)
+            await closeTestWindows()
+            return
+        }
+        // The usable area of the screen showing the first window.
+        let visible = NSScreen.screens
+            .map { (frame: WindowManager.topLeft($0.frame), visible: WindowManager.topLeft($0.visibleFrame)) }
+            .max { $0.frame.intersection(start).width * $0.frame.intersection(start).height
+                < $1.frame.intersection(start).width * $1.frame.intersection(start).height }?.visible ?? .zero
+        guard let left = WindowLayout.leftHalf.frame(in: visible), let right = WindowLayout.rightHalf.frame(in: visible) else {
+            record(name, false, "no left or right half in the visible area \(Self.describe(visible))", nil)
+            await closeTestWindows()
+            return
+        }
+        // Read as TextEdit came to the front: the moves from here count.
+        await pause(600)
+        move(alpha, to: left)
+        move(beta, to: right)
+        let alphaLeft = await at(alpha, left)
+        let placedByHand = await at(beta, right) && alphaLeft
+        /// A placement of the window showing `file` at `layout`, learned.
+        func learnedAt(_ file: URL, _ layout: WindowLayout) -> Bool {
+            let title = file.deletingPathExtension().lastPathComponent
+            return learner.placements.entries.filter { $0.key.hasPrefix(bundleID + "\n") }.flatMap(\.value).contains {
+                $0.title.contains(title) && $0.place.layout == layout.rawValue
+            }
+        }
+        // TextEdit leaves the front: both placements learned.
+        guard await focusTestWindow() else {
+            await closeTestWindows()
+            return
+        }
+        let learned = await waitUntil(timeout: 3) { learnedAt(files[0], .leftHalf) && learnedAt(files[1], .rightHalf) } != nil
+        // Somewhere else, both of them.
+        let away = CGRect(x: visible.minX + 80, y: visible.minY + 60, width: min(640, visible.width / 2), height: min(480, visible.height / 2))
+        let awayBeta = away.offsetBy(dx: 60, dy: 40)
+        move(alpha, to: away)
+        move(beta, to: awayBeta)
+        let alphaAway = await at(alpha, away)
+        let movedAway = await at(beta, awayBeta) && alphaAway
+
+        // From the launcher over TextEdit.
+        Self.makeFrontmost(pid: pid)
+        guard await waitUntil(timeout: 3, { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }) != nil else {
+            record(name, false, "TextEdit did not come back in front before “arrange windows” (learned: \(learned))", nil)
+            await closeTestWindows()
+            return
+        }
+        // Lost focus: the run stops (ensureFrontmost records it); its windows still go.
+        guard ensureFrontmost(bundleID, before: "arrange windows") else {
+            await closeTestWindows()
+            return
+        }
+        await pause(400)
+        func arrange() async -> Bool {
+            _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+            for character in "arrange windows" { await pressKey(character) }
+            let listed = await waitUntil(timeout: 1) { self.context.launcher.resultTitles.first == SystemCommand.arrangeWindows.title } != nil
+            await pressKey(nil, code: CGKeyCode(listed ? kVK_Return : kVK_Escape))
+            return listed
+        }
+        let listed = await arrange()
+        let alphaArranged = await at(alpha, left)
+        let arranged = await at(beta, right) && alphaArranged
+        let arrangedFrames = "\(frame(alpha).map(Self.describe) ?? "?"), \(frame(beta).map(Self.describe) ?? "?")"
+        guard ensureFrontmost(bundleID, before: "arrange windows again") else {
+            record(name, false, "TextEdit lost the front before “arrange windows” again (arranged: \(arranged))", nil)
+            await closeTestWindows()
+            return
+        }
+        let listedAgain = await arrange()
+        let alphaBack = await at(alpha, away)
+        let putBack = await at(beta, awayBeta) && alphaBack
+        await closeTestWindows()
+        record(name, placedByHand && learned && movedAway && listed && arranged && listedAgain && putBack,
+               "put by hand: \(placedByHand), learned as TextEdit left the front: \(learned), moved away: \(movedAway); “arrange windows” listed: \(listed), each on its half: \(arranged) (\(arrangedFrames)); again listed: \(listedAgain), put back: \(putBack)",
+               nil)
     }
 
     /// A TextEdit window on the left half saved as a layout from the

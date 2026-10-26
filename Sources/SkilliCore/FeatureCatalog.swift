@@ -537,6 +537,7 @@ public enum FeatureCatalog {
         case .wifiOn: "Turns Wi-Fi on"
         case .wifiOff: "Turns Wi-Fi off; a cable keeps the Mac online"
         case .showDesktop: "Moves every window aside to show the desktop; again brings them back"
+        case .arrangeWindows: "Puts every window where you usually put it; again puts them back"
         }
     }
 

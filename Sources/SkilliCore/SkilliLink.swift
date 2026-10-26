@@ -214,7 +214,7 @@ public enum SkilliLink: Equatable, Sendable {
 extension SystemCommand {
     /// Asked first when a link runs it (`SkilliLink.asksFirst`): it takes
     /// the Mac away from the user (locked, asleep, displays or keyboard
-    /// off, every window moved aside), cuts them off (Wi-Fi off), can lose
+    /// off, every window moved aside or arranged), cuts them off (Wi-Fi off), can lose
     /// work (disks ejected during a copy, Finder restarted
     /// for hidden files), turns the microphone on or pastes the last
     /// screenshot (into a page that asked for it). Those that ask in the
@@ -223,7 +223,7 @@ extension SystemCommand {
     public var asksFromALink: Bool {
         switch self {
         case .lockScreen, .sleep, .sleepDisplays, .ejectDisks, .toggleHiddenFiles, .cleanKeyboard, .toggleMicrophone, .pasteLatestScreenshot,
-             .wifiOff, .showDesktop: true
+             .wifiOff, .showDesktop, .arrangeWindows: true
         case .emptyTrash, .restart, .shutDown, .logOut, .quitAllApps, .quitOtherApps: false
         case .toggleDarkMode, .keepAwake, .playPause, .nextTrack, .previousTrack, .volumeUp, .volumeDown, .mute, .speedTest, .pickColor,
              .systemInfo, .hideOtherApps, .showAllApps, .wifiOn: false

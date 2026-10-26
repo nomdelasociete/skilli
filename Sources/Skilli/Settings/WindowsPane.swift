@@ -49,6 +49,8 @@ struct WindowsPane: View {
                 Text("Between windows side by side and at the screen's edges, for every place: halves, thirds, quarters, Maximize, and the windows you place in a layout.")
             }
 
+            ArrangeSection(preferences: preferences, context: context)
+
             AutoQuitSection(preferences: preferences, context: context)
 
             Section {
@@ -91,8 +93,8 @@ struct WindowsPane: View {
                 }
             }
 
-            AdvancedSection(summary: "Apps always left out of layouts, monitors ignored when plugged in",
-                            anchors: ["windowLayoutIgnoredApps", "ignoredMonitors"]) {
+            AdvancedSection(summary: "Apps never placed, apps always left out of layouts, monitors ignored when plugged in",
+                            anchors: ["windowNeverPlace", "windowLayoutIgnoredApps", "ignoredMonitors"]) {
                 advancedRows
             }
         }
@@ -132,6 +134,22 @@ struct WindowsPane: View {
     /// offer nothing when plugged in. One row each, like the lists above.
     @ViewBuilder
     private var advancedRows: some View {
+        LabelDetail("Never place", "Arrange Windows leaves their windows where they are, and learns nothing more from them.")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .settingAnchor("windowNeverPlace")
+        ForEach(preferences.windowNeverPlace, id: \.self) { bundleID in
+            ExcludedAppRow(bundleID: bundleID, help: "Arrange this app's windows again") {
+                preferences.windowNeverPlace.removeAll { $0 == bundleID }
+            }
+        }
+        HStack {
+            Button("Never Place an App…") {
+                guard let url = context.chooseApp(), let bundleID = Bundle(url: url)?.bundleIdentifier,
+                      !preferences.windowNeverPlace.contains(bundleID) else { return }
+                preferences.windowNeverPlace.append(bundleID)
+            }
+            Spacer()
+        }
         LabelDetail("Always leave out of layouts", "Their windows show unticked in the editor: tick one to keep it in a layout once.")
             .frame(maxWidth: .infinity, alignment: .leading)
             .settingAnchor("windowLayoutIgnoredApps")
@@ -277,6 +295,41 @@ private struct LayoutRow: View {
 
     private var shortcuts: [ShortcutConfig.Entry] {
         context.shortcuts.config.shortcuts.filter { $0.action == .windowLayout(layout.id) }
+    }
+}
+
+/// Arrange Windows: how it is reached (the launcher; a shortcut only if
+/// the user gives it one), learning on or off, and forgetting what was
+/// learned (⌘Z for 10 s). The apps never placed are under Advanced.
+private struct ArrangeSection: View {
+    @Bindable var preferences: Preferences
+    let context: SettingsContext
+
+    var body: some View {
+        Section {
+            LabeledContent {
+                if let chords = context.shortcuts.config.shortcuts.first(where: { $0.action == .mac(.system(.arrangeWindows)) })?.chords,
+                   !chords.isEmpty {
+                    ShortcutView(chords: chords.map(\.keycaps))
+                } else {
+                    KeycapLabel("arrange")
+                }
+            } label: {
+                LabelDetail("Arrange every window", "Where you usually put it; again within 10 seconds puts them back. A shortcut, if you want one: Catalog.")
+            }
+            Toggle("Learn where you put windows", isOn: $preferences.windowLearning)
+                .settingAnchor("windowLearning")
+            Button("Forget What skil.li Learned") { context.forgetPlacements() }
+                .settingAnchor("section.forgetPlaces")
+        } header: {
+            Text("Arrange Windows")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .settingAnchor("section.arrangeWindows")
+        } footer: {
+            Text(preferences.windowLearning
+                 ? "From your own moves and ✦W: each app's place, its windows' titles and files, the displays and the apps beside it. Kept on this Mac, never sent. A layout saved for the apps open comes first."
+                 : "Off: nothing new is read or learned, and Arrange Windows uses only your saved layouts. What it learned before stays on this Mac until you forget it.")
+        }
     }
 }
 
