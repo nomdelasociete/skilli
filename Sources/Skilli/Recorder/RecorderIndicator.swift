@@ -5,9 +5,11 @@ import SkilliCore
 /// dot, the time, the two waves (the microphone above, the Mac's sound
 /// below); paused, the dot hollow and the clock still. Its menu pauses,
 /// resumes and stops, names each source with its level (a click turns it
-/// off or on for the rest of the recording) and the call's app. After
-/// Stop, a ring fills as the transcript is made. Never a hidden
-/// recording: it shows for as long as one runs.
+/// off or on for the rest of the recording), the webcam and the screen's
+/// window (phase 3) and the call's app. A screen that gives no picture
+/// is the one thing added to the label: an orange mark, and why in the
+/// menu. After Stop, a ring fills as the transcript is made. Never a
+/// hidden recording: it shows for as long as one runs.
 @MainActor
 final class RecorderIndicator: NSObject, NSMenuDelegate {
     var onPause: (() -> Void)?
@@ -20,6 +22,14 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     var onPickApp: ((MicrophoneApp?) -> Void)?
     /// The apps on the microphone now, and the call's app.
     var calls: () -> (apps: [MicrophoneApp], picked: MicrophoneApp?) = { ([], nil) }
+    /// The webcam's item chosen, the screen's Off.
+    var onTogglePicture: ((PictureSource) -> Void)?
+    /// A window picked for the screen.
+    var onPickWindow: ((ScreenWindow) -> Void)?
+    /// The webcam and the screen, once the recorder has them.
+    var pictures: RecorderPictures?
+    /// The windows the screen can record: the meeting's, then the others.
+    var windows: () -> (meeting: ScreenWindow?, all: [ScreenWindow]) = { (nil, ScreenWindows.list()) }
 
     private let recorder: MeetingRecorder
     private var item: NSStatusItem?
@@ -83,8 +93,9 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
             mic.append(paused ? 0 : levels.mic)
             mac.append(paused ? 0 : levels.mac)
             said = MeetingTranscript.clock(recorder.elapsed)
-            button.image = Self.recording(time: said, paused: paused, mic: mic, mac: mac)
-            button.setAccessibilityLabel(paused ? "Recording paused, \(said)" : "Recording, \(said)")
+            let noPicture = pictures?.screen.problem != nil
+            button.image = Self.recording(time: said, paused: paused, mic: mic, mac: mac, noPicture: noPicture)
+            button.setAccessibilityLabel((paused ? "Recording paused, \(said)" : "Recording, \(said)") + (noPicture ? ", the screen gives no picture" : ""))
             button.toolTip = paused ? "“\(recorder.title)” paused" : "Recording “\(recorder.title)”"
             if menuOpen { updateSourceItems() }
         } else if holding {
@@ -140,6 +151,7 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
                 menu.addItem(item)
             }
             updateSourceItems()
+            if let pictures { addPictures(pictures, to: menu) }
             // The call: the apps on the microphone, the one picked kept.
             let calls = calls()
             if recorder.record?.kind != .inPerson || calls.picked != nil, !calls.apps.isEmpty || calls.picked != nil {
@@ -185,6 +197,71 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
 
     /// The apps the call's submenu offers, in its order.
     private var pickable: [MicrophoneApp] = []
+    /// The windows the screen's submenu offers, in its order.
+    private var pickableWindows: [ScreenWindow] = []
+
+    /// "Webcam · FaceTime HD Camera" (a click turns it off or on), then
+    /// "Screen · Google Chrome · Meet ▸": the windows to pick, Off; a
+    /// window giving no picture says why in its place.
+    private func addPictures(_ pictures: RecorderPictures, to menu: NSMenu) {
+        let webcamOn = recorder.sources.webcam
+        let device: String = if case .on(let name) = pictures.webcam.state { name } else { "Off" }
+        let webcam = entry("Webcam · \(webcamOn ? device : "Off")", #selector(toggleWebcam))
+        webcam.state = webcamOn && pictures.webcam.isOn ? .on : .off
+        menu.addItem(webcam)
+        let window = recorder.sources.screen ? pictures.screen.window : nil
+        let said: String
+        if let window, let problem = pictures.screen.problem {
+            said = PictureWatch.line(problem, app: window.app)
+        } else if let window {
+            said = window.name
+        } else if case .denied = pictures.screen.state, recorder.sources.screen {
+            said = "not allowed in Screen Recording"
+        } else {
+            said = "Off"
+        }
+        let screen = NSMenuItem(title: "Screen · \(said)", action: nil, keyEquivalent: "")
+        screen.state = window != nil ? .on : .off
+        let choices = NSMenu()
+        let (meeting, all) = windows()
+        var listed: [ScreenWindow] = []
+        if let meeting {
+            let header = NSMenuItem(title: "The Meeting's Window", action: nil, keyEquivalent: "")
+            header.isEnabled = false
+            choices.addItem(header)
+            listed.append(meeting)
+            choices.addItem(windowItem(meeting, index: 0, checked: meeting.id == window?.id))
+            choices.addItem(.separator())
+        }
+        for other in all where other.id != meeting?.id {
+            listed.append(other)
+            choices.addItem(windowItem(other, index: listed.count - 1, checked: other.id == window?.id))
+        }
+        if !listed.isEmpty { choices.addItem(.separator()) }
+        let off = entry("Off", #selector(screenOff))
+        off.state = window == nil ? .on : .off
+        choices.addItem(off)
+        pickableWindows = listed
+        screen.submenu = choices
+        menu.addItem(screen)
+    }
+
+    private func windowItem(_ window: ScreenWindow, index: Int, checked: Bool) -> NSMenuItem {
+        let item = entry(window.name, #selector(pickWindow(_:)))
+        item.tag = index
+        item.state = checked ? .on : .off
+        return item
+    }
+
+    @objc private func toggleWebcam() { onTogglePicture?(.webcam) }
+
+    @objc private func screenOff() {
+        if recorder.sources.screen { onTogglePicture?(.screen) }
+    }
+
+    @objc private func pickWindow(_ item: NSMenuItem) {
+        if pickableWindows.indices.contains(item.tag) { onPickWindow?(pickableWindows[item.tag]) }
+    }
 
     /// "Microphone · NDI Audio", checked while on, its level after it as
     /// four bars (a menu item's image does not show in menus on macOS 27).
@@ -247,14 +324,17 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     private static let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
     private static let height: CGFloat = 16
 
-    /// The dot, the time, the waves: drawn when the menu bar draws it, in
-    /// its appearance (the label color is light on a dark bar).
-    static func recording(time: String, paused: Bool, mic: [Double], mac: [Double]) -> NSImage {
+    /// The dot, the time, the waves, and while the screen gives no
+    /// picture a small screen struck through in orange: drawn when the
+    /// menu bar draws it, in its appearance (the label color is light on a
+    /// dark bar).
+    static func recording(time: String, paused: Bool, mic: [Double], mac: [Double], noPicture: Bool = false) -> NSImage {
         let text = NSAttributedString(string: time, attributes: [.font: font, .foregroundColor: NSColor.labelColor])
         let textWidth = ceil(text.size().width)
         // Whole points: 2 pt bars a point apart stay sharp on a 1x screen.
         let wavesWidth = CGFloat(mic.count) * 3 - 1
-        let size = NSSize(width: 8 + 5 + textWidth + 6 + wavesWidth, height: height)
+        let markWidth: CGFloat = noPicture ? 6 + 12 : 0
+        let size = NSSize(width: 8 + 5 + textWidth + 6 + wavesWidth + markWidth, height: height)
         let image = NSImage(size: size, flipped: false) { _ in
             let dot = NSRect(x: 0.5, y: (height - 8) / 2, width: 7.5, height: 7.5)
             if paused {
@@ -280,6 +360,25 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
                 let down = max(1, (CGFloat(mac[index]).squareRoot() * room).rounded())
                 NSRect(x: x, y: middle + 1, width: 2, height: up).fill()
                 NSRect(x: x, y: middle - 1 - down, width: 2, height: down).fill()
+            }
+            if noPicture {
+                // A screen (a rounded rectangle on its foot), struck through.
+                let x = (left + wavesWidth + 6).rounded()
+                NSColor.systemOrange.setStroke()
+                let screen = NSBezierPath(roundedRect: NSRect(x: x + 0.75, y: 4.75, width: 10.5, height: 8), xRadius: 1.5, yRadius: 1.5)
+                screen.lineWidth = 1.5
+                screen.stroke()
+                let foot = NSBezierPath()
+                foot.move(to: NSPoint(x: x + 3.5, y: 2.75))
+                foot.line(to: NSPoint(x: x + 8.5, y: 2.75))
+                foot.lineWidth = 1.5
+                foot.stroke()
+                let slash = NSBezierPath()
+                slash.move(to: NSPoint(x: x + 1, y: 14))
+                slash.line(to: NSPoint(x: x + 11.5, y: 2))
+                slash.lineWidth = 1.5
+                slash.lineCapStyle = .round
+                slash.stroke()
             }
             return true
         }

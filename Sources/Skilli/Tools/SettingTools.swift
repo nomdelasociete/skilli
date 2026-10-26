@@ -1022,6 +1022,8 @@ final class SettingTools {
         bindings["recorderMeetingCard"] = toggle(\.recorderMeetingCard)
         bindings["recorderMicrophone"] = toggle(\.recorderMicrophone)
         bindings["recorderMacSound"] = toggle(\.recorderMacSound)
+        bindings["recorderWebcam"] = toggle(\.recorderWebcam)
+        bindings["recorderScreen"] = toggle(\.recorderScreen)
         bindings["recorderLanguage"] = string(\.recorderLanguage) {
             [SettingOption("", "As Ask")] + (await MeetingTranscriber.languages()).map { SettingOption($0.id, $0.name) }
         }

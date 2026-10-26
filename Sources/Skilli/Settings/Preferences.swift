@@ -122,6 +122,8 @@ final class Preferences {
         static let recorderMeetingCard = "Preferences.recorderMeetingCard"
         static let recorderMicrophone = "Preferences.recorderMicrophone"
         static let recorderMacSound = "Preferences.recorderMacSound"
+        static let recorderWebcam = "Preferences.recorderWebcam"
+        static let recorderScreen = "Preferences.recorderScreen"
         static let recorderLanguage = "Preferences.recorderLanguage"
         static let recorderFolderPath = "Preferences.recorderFolderPath"
         static let recorderRetention = "Preferences.recorderRetention"
@@ -272,6 +274,16 @@ final class Preferences {
 
     var recorderMacSound: Bool {
         didSet { save(recorderMacSound, Key.recorderMacSound) }
+    }
+
+    /// The webcam and the screen (the meeting's window), off unless set
+    /// on here; the screen never in person.
+    var recorderWebcam: Bool {
+        didSet { save(recorderWebcam, Key.recorderWebcam) }
+    }
+
+    var recorderScreen: Bool {
+        didSet { save(recorderScreen, Key.recorderScreen) }
     }
 
     /// The language recordings are transcribed in; empty: as Ask (Ask's,
@@ -654,6 +666,8 @@ final class Preferences {
         recorderMeetingCard = defaults.object(forKey: Key.recorderMeetingCard) as? Bool ?? true
         recorderMicrophone = defaults.object(forKey: Key.recorderMicrophone) as? Bool ?? true
         recorderMacSound = defaults.object(forKey: Key.recorderMacSound) as? Bool ?? true
+        recorderWebcam = defaults.object(forKey: Key.recorderWebcam) as? Bool ?? false
+        recorderScreen = defaults.object(forKey: Key.recorderScreen) as? Bool ?? false
         recorderLanguage = defaults.string(forKey: Key.recorderLanguage) ?? ""
         recorderFolderPath = defaults.string(forKey: Key.recorderFolderPath) ?? ""
         recorderRetention = RecordingRetention(rawValue: defaults.string(forKey: Key.recorderRetention) ?? "never")

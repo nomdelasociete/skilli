@@ -1,6 +1,12 @@
 import AppKit
 import SkilliCore
 
+/// The two picture sources, as the card's rows and the red dot's menu
+/// turn them on or off.
+enum PictureSource {
+    case webcam, screen
+}
+
 /// The recorder's pictures (docs/meeting-recorder-views.md, phase 3): the
 /// webcam and the screen, each off until turned on, their files written
 /// by the same host moments as the sound's (the start, each pause, the
@@ -9,9 +15,9 @@ import SkilliCore
 /// turn them on or off.
 @MainActor
 final class RecorderPictures {
-    static let webcamFile = "webcam.mp4"
-    static let screenFile = "screen.mp4"
-    static let slidesFile = "slides.json"
+    nonisolated static let webcamFile = "webcam.mp4"
+    nonisolated static let screenFile = "screen.mp4"
+    nonisolated static let slidesFile = "slides.json"
 
     let webcam = WebcamTrack()
     let screen = ScreenTrack()
