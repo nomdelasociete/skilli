@@ -23830,7 +23830,7 @@ final class SelfTest {
     /// offered as unfinished). Then the next launch's pick-up: its
     /// transcript made without a card and without opening its window.
     private func recorderQuitClosesItWhole() async {
-        let name = "Recorder: skil.li quit while recording (another skil.li sent SIGTERM) closes both tracks whole before it exits, left stopped, never offered as unfinished; the next launch makes its transcript without a card or a window; a file stuck as it closes (finishing, encoder, slow encoder) leaves it offered as never stopped"
+        let name = "Recorder: skil.li quit while recording (another skil.li sent SIGTERM) closes both tracks whole before it exits, left stopped, never offered as unfinished; the next launch makes its transcript without a card or a window; a file stuck or failing as it closes (finishing, encoder, slow encoder, a writer not completed) leaves it offered as never stopped"
         guard let center = context.recorder() else {
             record(name, false, "no recorder", nil)
             return
@@ -23875,7 +23875,7 @@ final class SelfTest {
         // never stopped, never transcribed unasked.
         var stalls: [String] = []
         var stallPassed = true
-        for kind in [TrackWriter.Stall.finishing, .encoder, .slow] {
+        for kind in [TrackWriter.Stall.finishing, .encoder, .slow, .failing] {
             guard let stuck = await recordInAnotherSkilli(root: root, me: me, them: them, seconds: 4, ending: SIGTERM, stalls: kind) else {
                 stallPassed = false
                 stalls.append("\(kind.rawValue) stuck: the child did not record")
@@ -23919,7 +23919,7 @@ final class SelfTest {
     /// slowly): no transcript starts, `meeting.json` stays as it was while
     /// recording, and the Unfinished Recording card offers it at once.
     private func recorderStopStuckOffersIt() async {
-        let name = "Recorder: a Stop whose files cannot be finished in time (finishing, encoder, slow encoder stuck) starts no transcript, leaves meeting.json as it was and offers the recording at once as never stopped"
+        let name = "Recorder: a Stop whose files cannot be finished whole in time (finishing, encoder, slow encoder stuck; a writer not completed) starts no transcript, leaves meeting.json as it was and offers the recording at once as never stopped"
         guard let center = context.recorder() else {
             record(name, false, "no recorder", nil)
             return
@@ -23929,7 +23929,7 @@ final class SelfTest {
         center.openWindows.forEach { $0.close() }
         var details: [String] = []
         var passed = true
-        for kind in [TrackWriter.Stall.finishing, .encoder, .slow] {
+        for kind in [TrackWriter.Stall.finishing, .encoder, .slow, .failing] {
             center.recorder.standIn(microphone: clip, alsoLeaveOut: [])
             center.recorder.stalls = kind
             await center.recorder.listen()
