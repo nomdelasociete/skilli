@@ -17566,9 +17566,11 @@ final class SelfTest {
         }
         let preferences = context.preferences
         let learned = learner.placements
-        let (gap, learning, usual) = (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces)
+        let (gap, learning, usual, never) = (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces, preferences.windowNeverPlace)
         preferences.windowGap = 0
         preferences.windowLearning = true
+        // Never place would rightly leave TextEdit alone.
+        preferences.windowNeverPlace.removeAll { $0 == bundleID }
         let marker = Int.random(in: 1000...9999)
         let files = ["on", "off"].map { FileManager.default.temporaryDirectory.appendingPathComponent("skilli-usual-\($0)-\(marker).txt") }
         for file in files { try? "usual".write(to: file, atomically: true, encoding: .utf8) }
@@ -17638,7 +17640,7 @@ final class SelfTest {
 
         for file in files { try? FileManager.default.removeItem(at: file) }
         learner.restore(learned)
-        (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces) = (gap, learning, usual)
+        (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces, preferences.windowNeverPlace) = (gap, learning, usual, never)
         record(name, placed && leftAlone,
                "on: placed in the bottom right quarter: \(placed) (\(placedFrame.map(Self.describe) ?? "?")); off: opened \(opened), left where it opened: \(leftAlone) (\(offFrame.map(Self.describe) ?? "?"))",
                nil)
