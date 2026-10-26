@@ -955,12 +955,13 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         }
     }
 
-    /// The speakers' column fits the longest name (up to 140 pt).
+    /// The speakers' column fits the longest name (up to 160 pt: a first
+    /// and a last name).
     private func measureSpeakers() {
         let widest = lines.map { MeetingVoices.name(of: $0.speaker, in: names) }.reduce(CGFloat(0)) { widest, name in
             max(widest, (name as NSString).size(withAttributes: [.font: LineCell.speakerFont]).width)
         }
-        let width = min(140, max(LineCell.minimumSpeakerWidth, ceil(widest) + 12))
+        let width = min(160, max(LineCell.minimumSpeakerWidth, ceil(widest) + 12))
         if width != speakerWidth {
             speakerWidth = width
             heights = [:]
