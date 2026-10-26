@@ -197,13 +197,16 @@ final class ScreenTrack {
     /// Recording never asked: macOS asks now.
     func start(_ window: ScreenWindow) async {
         stopStream()
-        guard Self.isAllowed || CGRequestScreenCaptureAccess() || Self.ownWindow(window) else {
+        // skil.li's own window needs no Screen Recording (the self-test's).
+        let own = Self.ownWindow(window)
+        guard own || Self.isAllowed || CGRequestScreenCaptureAccess() else {
             state = .denied
             onChange?()
             return
         }
         do {
-            let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
+            let content = own ? try await SCShareableContent.currentProcess
+                : try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
             guard let target = content.windows.first(where: { $0.windowID == window.id }) else {
                 state = .failed("the window closed")
                 onChange?()
