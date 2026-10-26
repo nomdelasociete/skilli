@@ -53,8 +53,10 @@ final class PictureTrackWriter: @unchecked Sendable {
     var onFailure: (@Sendable (Error) -> Void)?
 
     /// A file at `url` whose 0 is the host time `start`; `held` is the
-    /// picture the source shows then (it goes at 0).
-    init(url: URL, width: Int, height: Int, perSecond: Int, bitRate: Int, start: Double, held: CVPixelBuffer?, label: String) throws {
+    /// picture the source shows at host time `heldAt` (the start, or when a
+    /// source turned on later joined: nothing before it).
+    init(url: URL, width: Int, height: Int, perSecond: Int, bitRate: Int, start: Double, held: CVPixelBuffer?, heldAt: Double? = nil,
+         label: String) throws {
         self.url = url
         // H.264 wants even sizes.
         self.width = max(16, width / 2 * 2)
@@ -83,7 +85,8 @@ final class PictureTrackWriter: @unchecked Sendable {
         guard writer.startWriting() else { throw writer.error ?? Failure(message: "“\(url.lastPathComponent)” could not be written.") }
         writer.startSession(atSourceTime: .zero)
         latest = held
-        queue.async { self.placeHeld(at: start) }
+        let moment = heldAt ?? start
+        queue.async { self.placeHeld(at: moment) }
     }
 
     /// A picture from the source (any queue).

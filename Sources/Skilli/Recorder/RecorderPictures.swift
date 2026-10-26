@@ -87,7 +87,8 @@ final class RecorderPictures {
         }
         await screen.start(window)
         guard isRecording, screen.window != nil else { return }
-        await recordScreen(held: nil)
+        // Joining a recording on: its first picture where it joins.
+        await recordScreen(held: nil, from: HostClock.now)
     }
 
     /// Recording from host time `start`, into `folder`: each source on
@@ -104,11 +105,13 @@ final class RecorderPictures {
         }
         if screenOn, screen.window != nil {
             let held = screen.sink.latestPicture
-            Task { await self.recordScreen(held: held) }
+            Task { await self.recordScreen(held: held, from: start) }
         }
     }
 
-    private func recordScreen(held: CVPixelBuffer?) async {
+    /// The screen's file, if none yet, its first picture at host time
+    /// `moment` (the start, or when the screen joined), then the pictures.
+    private func recordScreen(held: CVPixelBuffer?, from moment: Double) async {
         guard let folder else { return }
         let mine = session
         if screenWriter == nil {
@@ -118,7 +121,7 @@ final class RecorderPictures {
             // Stopped, or the screen turned off, meanwhile: nothing set up.
             guard session == mine, self.folder == folder else { return }
             if screenWriter == nil {
-                screenWriter = makeWriter(Self.screenFile, size: screen.plannedSize, perSecond: ScreenTrack.perSecond, held: full ?? held)
+                screenWriter = makeWriter(Self.screenFile, size: screen.plannedSize, perSecond: ScreenTrack.perSecond, held: full ?? held, heldAt: moment)
             }
         }
         if slides == nil {
@@ -137,14 +140,15 @@ final class RecorderPictures {
     /// A file for a source on now, its time the recording's (its pauses
     /// so far replayed). Nil: it could not be made (said, the recording
     /// goes on without it).
-    private func makeWriter(_ name: String, size: (width: Int, height: Int), perSecond: Int, held: CVPixelBuffer?) -> PictureTrackWriter? {
+    private func makeWriter(_ name: String, size: (width: Int, height: Int), perSecond: Int, held: CVPixelBuffer?,
+                            heldAt: Double? = nil) -> PictureTrackWriter? {
         guard let folder else { return nil }
         // About 0.07 bits a pixel at the rate: 1.5 Mb/s for a 1280 × 720
         // webcam at 30, a 1920 × 1200 window at 15.
         let bitRate = max(500_000, min(2_500_000, Int(Double(size.width * size.height * perSecond) * 0.055)))
         do {
             let writer = try PictureTrackWriter(url: folder.appendingPathComponent(name), width: size.width, height: size.height, perSecond: perSecond,
-                                                bitRate: bitRate, start: start, held: held, label: name)
+                                                bitRate: bitRate, start: start, held: held, heldAt: heldAt, label: name)
             for pause in pauses {
                 writer.pause(at: pause.from)
                 if let to = pause.to { writer.resume(at: to) }
