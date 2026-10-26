@@ -58,6 +58,9 @@ final class TranscribeAgainPanel: NSObject, NSPopoverDelegate {
     var shownEngines: [String] { content.engineMenu.itemTitles }
     var shownNote: String { content.noteText ?? "" }
     var canTranscribe: Bool { content.transcribe.isEnabled }
+    var window: NSWindow? { content.window }
+    /// The engine's languages are read.
+    var isLoaded: Bool { loaded }
 
     func show(relativeTo button: NSView) {
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)

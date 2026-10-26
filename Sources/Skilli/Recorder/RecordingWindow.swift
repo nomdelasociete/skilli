@@ -115,7 +115,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     func screenFrame(ofLine row: Int) -> NSRect? { view.screenFrame(ofLine: row) }
     /// Where a line's speaker's name is on screen, to click it.
     func screenFrame(ofSpeakerIn row: Int) -> NSRect? { view.screenFrame(ofSpeakerIn: row) }
-    /// The rename menu last shown (self-test: its items, to pick one).
+    /// The rename menu while it is open (self-test: its items, to pick one).
     private(set) var renameMenu: NSMenu?
     /// The Transcribe Again panel shown now.
     private(set) var againPanel: TranscribeAgainPanel?
@@ -315,7 +315,15 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// ⇧⌘Z undo and redo the lines' changes.
     fileprivate func key(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
-        let code = Int(event.keyCode)
+        // Letters by what they type (on AZERTY, Z is W's key): C and Z are
+        // the only ones the window takes.
+        let letter = event.charactersIgnoringModifiers?.lowercased()
+        let code: Int = switch letter {
+        case "c": kVK_ANSI_C
+        case "z": kVK_ANSI_Z
+        case let typed? where typed.count == 1 && typed.first?.isLetter == true: -1
+        default: Int(event.keyCode)
+        }
         let selected = view.selectedLine
         switch (flags, code) {
         case ([], kVK_Space):
@@ -520,6 +528,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         renameMenu = menu
         let at = point ?? view.speakerPoint(ofLine: line)
         menu.popUp(positioning: nil, at: at, in: view)
+        renameMenu = nil
     }
 
     private final class RenamePick: NSObject {
@@ -571,6 +580,14 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     func typeName(_ text: String) -> Bool {
         view.commitRenaming(text)
     }
+
+    /// Self-test: the ring a file dragged over the window shows.
+    func showDropRing(_ shown: Bool) {
+        view.showDropRing(shown)
+    }
+
+    /// Self-test: the speaker being named in place.
+    var isRenaming: Bool { view.renamingLine != nil }
     #endif
 
     // MARK: - Transcribe Again (phase 4)
@@ -1066,6 +1083,10 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         cell.words.stringValue = text
         endEditing(keep: true)
         return true
+    }
+
+    func showDropRing(_ shown: Bool) {
+        dropRing.isHidden = !shown
     }
 
     func commitRenaming(_ text: String) -> Bool {
