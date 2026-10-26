@@ -7,8 +7,8 @@ the display prompt), and, when the user turns it on, a new window as it
 opens (**Usual places**). No layout to save first: the saved layouts
 stay, for the arrangements someone wants by name.
 
-Status: phase 1 (Learning, Arrange Windows) built; phases 2 to 5 not
-yet. "What skil.li already has" lists what came before it.
+Status: phases 1 (Learning, Arrange Windows) and 2 (Arrange as Usual in
+the display prompt) built; phases 3 to 5 not yet. "What skil.li already has" lists what came before it.
 
 ## Target
 
@@ -100,7 +100,7 @@ day are not used (Not used, below).
 | Wrong guess | What it costs | How the user sees it and undoes it |
 |---|---|---|
 | Arrange puts a window in a place the user does not want | one window to move back | Arrange Windows again within 10 s: every window back; or ✦W R on that window; or drag it: the drag is learned and lowers the wrong place |
-| Arrange as Usual offered when the user did not want it | one prompt to dismiss | esc ignores it once; ⌘K → Never Arrange on This Display, or Ignore This Monitor (as today) |
+| Arrange as Usual offered when the user did not want it | one prompt to dismiss | esc ignores it once; ⌘K → Never Arrange on These Displays, or Ignore This Monitor (as today) |
 | Usual places (when on) moves a new window wrongly | a window jumping as it opens; the worst case is under the pointer or the caret | it acts only before the user touched the window (Usual places); ✦W R puts it back (the frame it opened at is kept in `WindowManager`'s memory, as for a ✦W move); moved away within 30 s, the place loses its sure state and that app is not placed again until it has been confirmed again |
 | Two windows of one app told apart wrongly by their titles | the work and personal windows swapped | Arrange again restores; dragging them back teaches the right ones |
 | Learned from a move that meant nothing (a window pushed aside for a second) | a wrong place counted once | a place needs several confirmations before Usual places uses it; a move that does not last is not counted |
@@ -285,9 +285,11 @@ places learned: at least half of the visible windows would get a place.
 - **No saved layout matches**: the prompt shows with Arrange as Usual
   alone, where it showed nothing until now. ↩ arranges.
 - **Nothing learned for these displays**: no prompt, as today.
-- ⌘K on the row: Ignore Once (esc), Never Arrange on This Display (this
-  set of displays no longer gets the row; listed in Settings → Windows),
-  Ignore This Monitor (as today).
+- ⌘K on the row: Arrange as Usual (↩), Record New Layout Here…, Ignore
+  Once (esc), Never Arrange on These Displays (the displays connected
+  then no longer get the row; listed in Settings → Windows → Advanced,
+  Displays never arranged when plugged in), Ignore the monitors (as
+  today). Learning off: no row.
 - Same rules as the prompt today: a real plug, not a wake from sleep
   (`DisplayArrival`); one prompt on the biggest new display; the keyboard
   only if no key was typed in the last second; no timeout.
@@ -390,7 +392,7 @@ new window. Listed in Settings → Privacy (`PrivacyMap`) with its switch.
    two windows of one browser placed by hand, moved away, Arrange puts
    them back; Arrange again restores.
 2. **Arrange as Usual in the display prompt**: the row, the prompt shown
-   with no saved layout, Never Arrange on This Display. Self-test with a
+   with no saved layout, Never Arrange on These Displays. Self-test with a
    display offered as plugged, as `selftest windows` does today.
 3. **Usual places on launch** (off by default): `AXWait` on app launch,
    the conditions, the title settling, moved-away rule.
