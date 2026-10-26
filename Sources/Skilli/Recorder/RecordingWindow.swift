@@ -605,6 +605,10 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     /// Self-test: the speaker being named in place.
     var isRenaming: Bool { view.renamingLine != nil }
+
+    /// Self-test: the line's editor as it is now (shown, its text), and
+    /// who closed one while it still had the keyboard.
+    var editorState: String { view.editorState + "; closed under the keyboard by " + (LineCell.closedUnderKeyboard.last ?? "nobody") }
     #endif
 
     // MARK: - Transcribe Again (phase 4)
@@ -1116,6 +1120,12 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         dropRing.isHidden = !shown
     }
 
+    var editorState: String {
+        guard let line = editingLine, line < rowOfLine.count,
+              let cell = table.view(atColumn: 0, row: rowOfLine[line], makeIfNecessary: false) as? LineCell else { return "no cell for the line" }
+        return "editor shown \(!cell.editor.isHidden), in the window \(cell.editor.window != nil), text “\(cell.editor.string.prefix(30))”"
+    }
+
     func commitRenaming(_ text: String) -> Bool {
         guard let line = renamingLine, line < rowOfLine.count,
               let cell = table.view(atColumn: 0, row: rowOfLine[line], makeIfNecessary: false) as? LineCell else { return false }
@@ -1151,6 +1161,12 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let cell = tableView.makeView(withIdentifier: LineCell.identifier, owner: nil) as? LineCell ?? LineCell()
+        // The line being edited or renamed, asked for again as it grows:
+        // left as it is (shown again, its editor would close under the
+        // keyboard).
+        if cell.isEditing, [editingLine, renamingLine].contains(where: { $0.map { $0 < rowOfLine.count && rowOfLine[$0] == row } ?? false }) {
+            return cell
+        }
         cell.speakerWidth = speakerWidth
         switch rows[row] {
         case .said(let line): cell.show(line, name: MeetingVoices.name(of: line.speaker, in: names))
@@ -1405,6 +1421,11 @@ private final class LineCell: NSTableCellView {
         didSet { if speakerWidth != oldValue { needsLayout = true } }
     }
     var onName: (() -> Void)?
+    /// Its words or its speaker's name are being typed.
+    var isEditing: Bool { !editor.isHidden || !nameField.isHidden }
+    #if SKILLI_SELFTEST
+    nonisolated(unsafe) static var closedUnderKeyboard: [String] = []
+    #endif
 
     init() {
         super.init(frame: .zero)
@@ -1476,6 +1497,13 @@ private final class LineCell: NSTableCellView {
 
     func endEditing() {
         guard !editor.isHidden else { return }
+        #if SKILLI_SELFTEST
+        // Self-test: closed while it still had the keyboard, and by whom.
+        if window?.firstResponder === editor {
+            LineCell.closedUnderKeyboard.append(Thread.callStackSymbols.dropFirst().prefix(5)
+                .map { $0.split(separator: " ", omittingEmptySubsequences: true).dropFirst(3).prefix(1).joined() }.joined(separator: " < "))
+        }
+        #endif
         editor.onEnd = nil
         editor.onChange = nil
         editor.isHidden = true
