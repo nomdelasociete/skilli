@@ -121,6 +121,17 @@ enum PictureCheck {
         }
     }
 
+    /// When a picture file's first picture is (seconds; nil: none).
+    static func firstPicture(in url: URL) async -> Double? {
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first, let reader = try? AVAssetReader(asset: asset) else { return nil }
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+        reader.add(output)
+        guard reader.startReading(), let first = output.copyNextSampleBuffer() else { return nil }
+        reader.cancelReading()
+        return CMSampleBufferGetPresentationTimeStamp(first).seconds
+    }
+
     /// A length in seconds, a file of any kind.
     static func length(_ url: URL) async -> Double {
         guard let duration = try? await AVURLAsset(url: url).load(.duration) else { return 0 }

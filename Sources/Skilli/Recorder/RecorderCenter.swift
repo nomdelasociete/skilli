@@ -256,6 +256,12 @@ final class RecorderCenter {
     /// on, an app not running yet).
     private func findMeetingWindow(_ reading: MeetingMoment.Reading) async -> (window: ScreenWindow?, note: String?, automation: Bool) {
         meetingTab = nil
+        #if SKILLI_SELFTEST
+        if let standIn = standInMeetingWindow {
+            try? await Task.sleep(for: standIn.after)
+            return (standIn.window, nil, false)
+        }
+        #endif
         guard reading.kind != .inPerson, let app = reading.app, app.pid != 0 else { return (nil, nil, false) }
         let front = MicrophoneUse.frontWindow(of: app.pid).flatMap(ScreenWindows.window)
         guard MeetingTabSelect.isBrowser(app.bundleID), let link = reading.event?.meeting?.url else {
@@ -421,18 +427,14 @@ final class RecorderCenter {
     }
 
     private func start(_ reading: MeetingMoment.Reading, title: String, language: String, sources: MeetingMoment.Sources, joining: Bool) {
-        var start = Self.start(reading, title: title, language: language, sources: sources)
+        let start = Self.start(reading, title: title, language: language, sources: sources)
         Task { [weak self] in
             guard let self else { return }
-            // The screen on: the meeting's window, its tab brought forward.
-            if sources.screen {
-                let found = await self.findMeetingWindow(reading)
-                self.meetingWindow = found.window
-                start.screen = found.window
-            }
+            // The sound from the key on; the meeting's window looked for
+            // after (Automation's question, a browser slow to answer: seconds
+            // the call would lose), the screen joining once it is found.
             do {
                 try await self.recorder.record(start)
-                self.bringMeetingTabForward()
             } catch {
                 self.starting = false
                 self.notify("The recording could not start: \(error.localizedDescription)")
@@ -442,7 +444,18 @@ final class RecorderCenter {
             self.preferences.recorderConsentShown = true
             self.began(reading)
             if joining, let event = reading.event { self.join(event) }
+            if sources.screen { await self.addMeetingScreen(reading) }
         }
+    }
+
+    /// The screen on for a recording ⌘R started: the meeting's window,
+    /// once found, recorded from then on, its tab brought forward.
+    private func addMeetingScreen(_ reading: MeetingMoment.Reading) async {
+        let found = await findMeetingWindow(reading)
+        meetingWindow = found.window
+        guard let window = found.window, recorder.isRecording, !recorder.sources.screen else { return }
+        await recorder.setScreen(window)
+        bringMeetingTabForward()
     }
 
     /// What `reading` starts a recording with.
@@ -748,6 +761,10 @@ final class RecorderCenter {
     }
 
     #if SKILLI_SELFTEST
+    /// Self-test: the meeting's window, found only `after` that long (a
+    /// browser slow to answer, Automation's question).
+    var standInMeetingWindow: (window: ScreenWindow, after: Duration)?
+
     /// Self-test: recorded at once as ⌘R records (the sources as Settings
     /// sets them), `screen` the window recorded.
     func recordForTest(screen: ScreenWindow?) {

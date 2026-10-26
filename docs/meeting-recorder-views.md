@@ -584,9 +584,11 @@ Phase 3 changes none of the Moment's answers, checked one by one:
    setting.
 2. **The path**: the same keys. ⌘R on the meeting card, the launcher's
    row or the menu bar records with the case's sources plus the webcam
-   and the screen as Settings → Recorder has them; the Record card's
-   rows turn either on with a click; the red dot's menu, during the
-   call.
+   and the screen as Settings → Recorder has them: the sound from the
+   key, the screen joining once the meeting's window is found
+   (Automation's question, a browser slow to answer never delay the
+   sound); the Record card's rows turn either on with a click; the red
+   dot's menu, during the call.
 3. **Hint or push**: nothing new is pushed. One thing is said that the
    user would not see otherwise: a screen that stops giving pictures
    (Measured: a minimized or hidden window gives none; Chrome's, fully
