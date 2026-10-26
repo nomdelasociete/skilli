@@ -94,6 +94,8 @@ final class UsualPlaces {
         var made: AXObserver?
         guard AXObserverCreate(pid, usualWindowCreated, &made) == .success, let observer = made else { return }
         let element = AXUIElementCreateApplication(pid)
+        // A busy app must not hold skil.li up when its new window is read.
+        AXUIElementSetMessagingTimeout(element, 0.3)
         let refcon = Unmanaged.passUnretained(self).toOpaque()
         guard AXObserverAddNotification(observer, element, kAXWindowCreatedNotification as CFString, refcon) == .success else { return }
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)

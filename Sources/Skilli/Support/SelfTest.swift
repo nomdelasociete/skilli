@@ -17703,6 +17703,10 @@ final class SelfTest {
             CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
             observers.append((observer, element))
         }
+        guard !observers.isEmpty else {
+            record(name, false, "no window-created observer could be added (\(apps.count) apps running): nothing measured", nil)
+            return
+        }
         let with = await rest(15)
         for (observer, element) in observers {
             AXObserverRemoveNotification(observer, element, kAXWindowCreatedNotification as CFString)
