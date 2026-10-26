@@ -23487,20 +23487,36 @@ final class SelfTest {
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
-    /// A WAV as the recorder's own tracks are written (AAC in M4A).
+    /// A WAV as the recorder's own tracks are written (`TrackWriter`: AAC
+    /// in M4A, mono, 48 kHz, 64 kb/s), so the engines hear what they hear
+    /// in a recording.
     nonisolated private static func m4a(from wav: URL, to url: URL) -> Bool {
         guard let input = try? AVAudioFile(forReading: wav),
-              let output = try? AVAudioFile(forWriting: url, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC,
-                                                                         AVSampleRateKey: input.processingFormat.sampleRate,
-                                                                         AVNumberOfChannelsKey: input.processingFormat.channelCount],
+              let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48000, channels: 1, interleaved: false),
+              let converter = AVAudioConverter(from: input.processingFormat, to: format),
+              let output = try? AVAudioFile(forWriting: url, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 48000,
+                                                                         AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64000],
                                             commonFormat: .pcmFormatFloat32, interleaved: false),
-              let buffer = AVAudioPCMBuffer(pcmFormat: input.processingFormat, frameCapacity: 65536) else { return false }
-        while input.framePosition < input.length {
-            guard (try? input.read(into: buffer, frameCount: 65536)) != nil, buffer.frameLength > 0, (try? output.write(from: buffer)) != nil else {
-                return false
+              let read = AVAudioPCMBuffer(pcmFormat: input.processingFormat, frameCapacity: 16384),
+              let written = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(16384 * 48000 / input.processingFormat.sampleRate) + 1024)
+        else { return false }
+        var finished = false
+        while true {
+            written.frameLength = 0
+            var error: NSError?
+            let status = converter.convert(to: written, error: &error) { _, state in
+                guard !finished, (try? input.read(into: read, frameCount: 16384)) != nil, read.frameLength > 0 else {
+                    finished = true
+                    state.pointee = .endOfStream
+                    return nil
+                }
+                state.pointee = .haveData
+                return read
             }
+            if error != nil { return false }
+            if written.frameLength > 0, (try? output.write(from: written)) == nil { return false }
+            if status == .endOfStream || status == .error { return status == .endOfStream }
         }
-        return true
     }
 
     /// Of `lines` on `track` (nil: every line), the words given to the
