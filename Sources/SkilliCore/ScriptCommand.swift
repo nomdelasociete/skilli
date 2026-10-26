@@ -52,8 +52,11 @@ public struct ScriptCommand: Hashable, Sendable {
 
     /// Its icon when it is an emoji, drawn as text; nil for an image or none.
     public var emojiIcon: String? {
+        let scalars = icon.unicodeScalars
         guard !icon.isEmpty, icon.count <= 2,
-              icon.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation || $0.properties.isEmoji && $0.value > 0xFF })
+              scalars.contains(where: { $0.properties.isEmojiPresentation || $0.properties.isEmoji && $0.value > 0xFF })
+                // "©️", "1️⃣": a text character asked to draw as an emoji.
+                || scalars.first?.properties.isEmoji == true && scalars.contains(where: { $0 == "\u{FE0F}" || $0 == "\u{20E3}" })
         else { return nil }
         return icon
     }

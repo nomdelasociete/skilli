@@ -19884,9 +19884,10 @@ final class SelfTest {
     /// dropdown argument filled in the launcher reach the script; a key
     /// bound to one with arguments asks them in the launcher, one with
     /// none runs; inline shows its line in the row, and in the menu bar
-    /// its image icon as an image, never its file name; a failure says its last line; a script
-    /// without the executable bit runs through its shebang; a Raycast
-    /// Script Command imported becomes one; agents list, create and run.
+    /// its image icon as an image, never its file name; a failure says its
+    /// last line; a script without the executable bit runs through its
+    /// shebang; a Raycast Script Command imported becomes one; agents
+    /// list, create and run.
     private func scriptCommandsRun() async {
         let name = "Skillies: listed, run from the launcher (last line, arguments with a dropdown, inline line) and by key (arguments asked in the launcher), the menu bar's image icon, failures and shebang, the Running… card unless showsRunning false; Raycast import; agents create, list and run"
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/skillies", isDirectory: true)

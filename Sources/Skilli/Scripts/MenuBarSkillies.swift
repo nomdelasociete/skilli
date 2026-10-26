@@ -75,6 +75,8 @@ final class MenuBarSkillies: NSObject {
                 ?? (run == nil ? "\(command.title) did not answer" : command.title)
             lines[command.path] = line
             item.button?.title = Self.short(Self.titled(line, command))
+            // Read again with the line: its icon may have changed.
+            item.button?.image = Self.image(command)
             item.menu = menu(for: command, line: line)
         }
     }

@@ -98,6 +98,11 @@ final class ScriptCommandTests: XCTestCase {
         let emoji = try command("⏰")
         XCTAssertEqual(emoji.emojiIcon, "⏰")
         XCTAssertNil(emoji.iconImagePath)
+        for drawnAsEmoji in ["©️", "1️⃣", "❤️"] {
+            XCTAssertEqual(try command(drawnAsEmoji).emojiIcon, drawnAsEmoji)
+            XCTAssertNil(try command(drawnAsEmoji).iconImagePath)
+        }
+        XCTAssertNil(try command("©").emojiIcon, "a plain text character")
         let image = try command("clock.png")
         XCTAssertNil(image.emojiIcon)
         XCTAssertEqual(image.iconImagePath, "/Users/me/skillies/clock.png")

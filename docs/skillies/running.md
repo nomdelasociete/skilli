@@ -67,8 +67,9 @@ key, Ask, an agent, a link, the menu bar). The code: `ScriptLibrary.run`
 
 ### The time limit
 
-At the limit, skil.li sends SIGTERM to the skillie **and every process it
-started** (its process group), then SIGKILL three seconds later. A
+At the limit, skil.li sends SIGTERM to the skillie **and every process
+still in its process group** (what it started, unless one moved to a group
+of its own, as `setsid` does), then SIGKILL three seconds later. A
 `"$SKILLI_CLI" call` the skillie was waiting for stops with it, and a
 question still open in the card for it goes away.
 
