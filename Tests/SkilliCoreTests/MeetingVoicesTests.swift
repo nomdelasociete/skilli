@@ -97,6 +97,19 @@ final class MeetingVoicesTests: XCTestCase {
         XCTAssertEqual(MeetingVoices.names(of: [.single(1), .single(2)]), ["s1": "Speaker 1", "s2": "Speaker 2"])
     }
 
+    func testNamesGivenAreKeptWhenATranscriptIsMadeAgain() {
+        XCTAssertTrue(MeetingVoices.isStandard("Them 2"))
+        XCTAssertTrue(MeetingVoices.isStandard("Speaker 10"))
+        XCTAssertTrue(MeetingVoices.isStandard("Room"))
+        XCTAssertFalse(MeetingVoices.isStandard("Paul Arnaud"))
+        XCTAssertFalse(MeetingVoices.isStandard("Them two"))
+        let previous = ["me": "Room", "them": "Paul", "them2": "Them 2", "them3": "Anna"]
+        let fresh = ["them": "Them 1", "them2": "Them 2"]
+        // Paul stays on the same voice; Anna's voice was not found again; Me's
+        // lane keeps its name.
+        XCTAssertEqual(MeetingVoices.keepingGiven(previous, fresh: fresh), ["me": "Room", "them": "Paul", "them2": "Them 2"])
+    }
+
     func testOrderIsMeFirstThenAsTheyFirstSpeak() {
         let lines = [line(.them(2), "a", at: 0), line(.them, "b", at: 1), line(.me, "c", at: 2), line(.them(2), "d", at: 3)]
         XCTAssertEqual(MeetingVoices.order(of: lines), [.me, .them(2), .them])
