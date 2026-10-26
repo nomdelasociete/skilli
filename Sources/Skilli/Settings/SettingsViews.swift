@@ -924,6 +924,11 @@ struct KeyGlyph: View {
 struct ShortcutSections: View {
     let context: SettingsContext
     @State private var confirmRestore = false
+    @State private var adding = false
+    /// The row Add Shortcut… made last: left without keys, it goes when
+    /// another is added or Keys closes (docs/adding-a-shortcut.md).
+    @State private var added: String?
+    @Environment(SettingsSearchModel.self) private var search: SettingsSearchModel?
 
     private var store: ShortcutStore { context.shortcuts }
 
@@ -978,131 +983,15 @@ struct ShortcutSections: View {
 
             Section {
                 HStack {
-                    Menu {
-                        Section("skil.li") {
-                            ForEach(ActionCatalog.general, id: \.id) { action in
-                                Button(action.title) { store.beginRecording(store.add(action)) }
-                            }
-                        }
-                        Section("\(Brand.intelligence) Commands") {
-                            ForEach(ActionCatalog.ai, id: \.id) { action in
-                                Button(action.title) { store.beginRecording(store.add(action)) }
-                            }
-                        }
-                        Section("Windows") {
-                            ForEach(ActionCatalog.windows, id: \.id) { action in
-                                Button(action.title) { store.beginRecording(store.add(action)) }
-                            }
-                        }
-                        Section("Mac") {
-                            ForEach(ActionCatalog.mac, id: \.id) { action in
-                                Button(action.title) { store.beginRecording(store.add(action)) }
-                            }
-                        }
-                        Section("Sound") {
-                            ForEach(ActionCatalog.sound(), id: \.id) { action in
-                                Button(action.title) { store.beginRecording(store.add(action)) }
-                            }
-                        }
-                        // 45 panes: a submenu, not a section that buries the rest.
-                        Menu("System Settings") {
-                            ForEach(ActionCatalog.settingsPanes(), id: \.id) { action in
-                                Button(action.title) { store.beginRecording(store.add(action)) }
-                            }
-                        }
-                        // Every launcher command, by the "?"'s groups.
-                        Menu("Launcher Commands") {
-                            ForEach(ActionCatalog.launcherCommands, id: \.group) { group in
-                                Section(group.group) {
-                                    ForEach(group.actions, id: \.id) { action in
-                                        Button(action.title) { store.beginRecording(store.add(action)) }
-                                    }
-                                }
-                            }
-                        }
-                        if !context.windowLayouts().isEmpty {
-                            Section("Window Layouts") {
-                                ForEach(context.windowLayouts(), id: \.id) { layout in
-                                    Button(layout.name) { store.beginRecording(store.add(.windowLayout(layout.id))) }
-                                }
-                            }
-                        }
-                        if !context.recentProjects().isEmpty {
-                            Section("Projects") {
-                                ForEach(context.recentProjects().prefix(12).map { SkilliAction.mac(.project($0)) }, id: \.id) { action in
-                                    Button(action.title) { store.beginRecording(store.add(action)) }
-                                }
-                            }
-                        }
-                        if !context.scriptCommands().isEmpty {
-                            Section("Skillies") {
-                                ForEach(context.scriptCommands().map { SkilliAction.mac(.script($0)) }, id: \.id) { action in
-                                    Button(action.title) { store.beginRecording(store.add(action)) }
-                                }
-                            }
-                        }
-                        // The user's own lists, as long as they make them:
-                        // a submenu each.
-                        if !context.snippets.all.isEmpty {
-                            Menu("Snippets") {
-                                ForEach(context.snippets.all) { snippet in
-                                    Button(snippet.name) { store.beginRecording(store.add(.snippet(snippet.id))) }
-                                }
-                            }
-                        }
-                        if !context.quicklinks.links.isEmpty {
-                            Menu("Quicklinks") {
-                                ForEach(context.quicklinks.links) { link in
-                                    Button(link.name) { store.beginRecording(store.add(.quicklink(link.id))) }
-                                }
-                            }
-                        }
-                        // An app's commands: a submenu each, the
-                        // variants of a command in its own.
-                        ForEach(LinkedApps.installed(), id: \.app.id) { installed in
-                            Menu(installed.app.name) {
-                                ForEach(installed.app.commands.filter { $0.runs(onVersion: installed.version) }, id: \.id) { command in
-                                    let variants = command.variants(forVersion: installed.version)
-                                    if variants.isEmpty {
-                                        Button(command.title) { store.beginRecording(store.add(.mac(.appLink(command, variant: nil)))) }
-                                    } else {
-                                        Menu(command.title) {
-                                            Button(command.title) { store.beginRecording(store.add(.mac(.appLink(command, variant: nil)))) }
-                                            Divider()
-                                            ForEach(variants, id: \.id) { variant in
-                                                Button(variant.title) {
-                                                    store.beginRecording(store.add(.mac(.appLink(command, variant: variant.id))))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        // The user's shortcuts in Apple's Shortcuts app: a
-                        // submenu each, run as it is or on the selection.
-                        if !AppleShortcuts.all().isEmpty {
-                            Menu("Shortcuts") {
-                                ForEach(AppleShortcuts.all(), id: \.id) { shortcut in
-                                    Menu(shortcut.name) {
-                                        Button(shortcut.name) { store.beginRecording(store.add(.mac(.shortcut(shortcut, withSelection: false)))) }
-                                        Button("With the Selection") {
-                                            store.beginRecording(store.add(.mac(.shortcut(shortcut, withSelection: true))))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Divider()
-                        Button("Open App…") {
-                            if let url = context.chooseApp() {
-                                store.beginRecording(store.add(.openApp(url.path)))
-                            }
-                        }
+                    Button {
+                        adding = true
                     } label: {
-                        Label("Add Shortcut", systemImage: "plus")
+                        Label("Add Shortcut…", systemImage: "plus")
                     }
                     .fixedSize()
+                    .sheet(isPresented: $adding) {
+                        AddShortcutSheet(load: { ShortcutChoice.all(context) }, pick: add)
+                    }
                     Spacer()
                     // One click used to erase every custom shortcut: it
                     // asks first, saying what goes.
@@ -1117,9 +1006,33 @@ struct ShortcutSections: View {
                 }
                 .settingAnchor("section.addShortcut")
             } footer: {
-                Text("Click a shortcut, then press the new keys: one chord (✦G) or a chain (✦K then G). ⓧ removes it. A command can have several shortcuts: Add Shortcut. Saved in ~/Library/Application Support/skil.li/shortcuts.json.")
+                Text("Click a shortcut, then press the new keys: one chord (✦G) or a chain (✦K then G). ⓧ removes it. Add Shortcut… finds any command by name; a command can have several shortcuts. Saved in ~/Library/Application Support/skil.li/shortcuts.json.")
             }
         }
+        .onDisappear { dropAddedWithoutKeys() }
+    }
+
+    /// Picked in the sheet: its row, without keys, shown where it is in
+    /// Keys (scrolled to, glowing). Open App… asks for the app first.
+    private func add(_ choice: ShortcutChoice) {
+        let action: SkilliAction
+        switch choice.kind {
+        case .action(let picked): action = picked
+        case .chooseApp:
+            guard let url = context.chooseApp() else { return }
+            action = .openApp(url.path)
+        }
+        dropAddedWithoutKeys()
+        let id = store.add(action)
+        added = id
+        search?.reveal(SettingsSearch.shortcutAnchor(id), in: .keys, drawing: true)
+    }
+
+    private func dropAddedWithoutKeys() {
+        guard let id = added else { return }
+        added = nil
+        if store.recordingID == id { store.cancelRecording() }
+        if store.config.shortcuts.first(where: { $0.id == id })?.keys == nil { store.remove(id) }
     }
 }
 

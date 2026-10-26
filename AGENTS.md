@@ -821,9 +821,15 @@ starts from it.
   again closes it). Their titles read the names live
   (`SkilliAction.snippetName`, `quicklinkName`): renamed, the shortcut
   stays. Deleting one takes its shortcuts with it (⌘Z puts both back).
-  Keys → Add Shortcut: Launcher Commands (a submenu, by the "?"'s
-  groups), then Snippets and Quicklinks (a submenu each, after Skillies);
-  `add_shortcut` takes them by name or id.
+  Keys → Add Shortcut… (docs/adding-a-shortcut.md, asked 2026-10-26: the
+  menu could not be narrowed, its new row landed out of sight already
+  recording): a sheet (`AddShortcutSheet`, `ShortcutChoice.all`, read as
+  it opens) with a focused search over every command the menu listed,
+  each word in its title or section; ↑↓ and ↩, or a click, pick. Picked:
+  its row added without keys, not recording, Keys scrolled to it, glowing
+  (`SettingsSearchModel.reveal(_:in:drawing:)`); left without keys, it
+  goes when another is picked or Keys closes. `add_shortcut` takes them
+  by name or id.
 - Keys → Restore Defaults asks first and names what goes
   (`RestoreDefaults` in SkilliCore, `ShortcutStore.changesFromDefaults`:
   "Your 3 custom shortcuts and 2 changed keys are removed.", destructive
@@ -3364,8 +3370,10 @@ re-investigating.
   card says the last line. needsConfirmation asks in the card, even when
   `run_skillie` is always allowed. Ask: skillies that need no argument
   join the command question as `script0`…; one that fits (≥ 60 %) beats
-  the agent, asked first under 85 %. Shortcuts: Add Shortcut → Skillies
-  (`script:<path>`). Agents: `list_skillies`, `run_skillie` (arguments in
+  the agent, asked first under 85 %. Shortcuts: on its row in Settings →
+  Skillies (a `ShortcutField` reading "Record Shortcut", one that needs no
+  argument typed; a click records there, `NewShortcut`, ⎋ leaves none), or
+  Keys → Add Shortcut… (`script:<path>`). Agents: `list_skillies`, `run_skillie` (arguments in
   order; a missing one refused), `create_skillie`. `selftest scripts`
   (scratch folder; a real Haiku agent writes one).
 - Skillie files (docs/skillie-files.md; `SkillieFile`, `SkillieImportLink`

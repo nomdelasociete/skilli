@@ -836,6 +836,7 @@ final class SelfTest {
                 catalogOffLeavesResults,
                 catalogAliasFromPane,
                 catalogShortcutFromPane,
+                shortcutsWhereTheyBelong,
                 generalMarkFollowsPointer,
                 tapEscapePreference,
                 settingsSearchFindsAndOpens,
@@ -13249,6 +13250,95 @@ final class SelfTest {
         record(name, shown && recording && saved == "hyper+b" && ran,
                "popover shown: \(shown); recording from it: \(recording); saved: \(saved ?? "none"); ✦B ran Keep Awake: \(ran) "
                    + "(awake before: \(wasAwake), after: \(commands.isKeepingAwake))", nil)
+    }
+
+    /// docs/adding-a-shortcut.md. Settings → Skillies: a skillie's row
+    /// shows "Record Shortcut"; its button pressed records there, ⎋ leaves
+    /// no shortcut behind, pressed again ✦B is saved for it. Keys → Add
+    /// Shortcut…: a sheet that finds the skillie by typing, ↩ adds its row
+    /// without recording, scrolled to and glowing; left without keys, it
+    /// goes once Keys closes.
+    private func shortcutsWhereTheyBelong() async {
+        let name = "Shortcuts where they belong: a skillie's row records its shortcut (⎋ leaves none); Keys → Add Shortcut… finds by typing, adds without recording, shows the row"
+        let settings = context.settings
+        let store = context.shortcuts
+        guard let library = context.tools.tools.scripts else {
+            record(name, false, "no skillies library", nil)
+            return
+        }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/skillies", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("row-shortcut.sh")
+        try? "#!/bin/sh\n# @skilli.schemaVersion 1\n# @skilli.title Row Shortcut Selftest\n# @skilli.mode silent\necho hi\n"
+            .write(to: file, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+        // By title, as the folder lists it: its path may read /private/var.
+        let title = "Row Shortcut Selftest"
+        func entries() -> [ShortcutConfig.Entry] {
+            store.config.shortcuts.filter { if case .mac(.script(let command)) = $0.action { command.title == title } else { false } }
+        }
+        defer {
+            if store.recordingID != nil { store.cancelRecording() }
+            for entry in entries() { store.remove(entry.id) }
+            try? FileManager.default.removeItem(at: file)
+        }
+        _ = await waitUntil(timeout: 3) { library.all().contains { $0.title == title } }
+        guard let skillie = library.all().first(where: { $0.title == title }) else {
+            record(name, false, "the skillie was not read", nil)
+            return
+        }
+        let action = SkilliAction.mac(.script(skillie))
+        var details: [String] = []
+
+        // Its row, in Settings → Skillies.
+        settings.show(pane: .skillies)
+        _ = await waitUntil(timeout: 3) { Self.axButton("Record Shortcut") != nil }
+        let field = Self.axButton("Record Shortcut")
+        await captureSettingsBothWays(as: "settings-skillies-shortcut")
+        let pressed = field.map { AXUIElementPerformAction($0, kAXPressAction as CFString) == .success } ?? false
+        let recording = await waitUntil(timeout: 2) { store.recordingID != nil && store.recordingID == store.entryID(for: action) } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let noneLeft = await waitUntil(timeout: 2) { store.recordingID == nil && entries().isEmpty } != nil
+        _ = await waitUntil(timeout: 2) { Self.axButton("Record Shortcut") != nil }
+        let again = Self.axButton("Record Shortcut")
+        let pressedAgain = again.map { AXUIElementPerformAction($0, kAXPressAction as CFString) == .success } ?? false
+        _ = await waitUntil(timeout: 2) { store.recordingID != nil }
+        await hyperChord(["b"], trigger: Self.ownTriggerKeyCode)
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        _ = await waitUntil(timeout: 3) { store.recordingID == nil }
+        let saved = store.entryID(for: action).flatMap(keys)
+        await pause(300)
+        await captureSettingsBothWays(as: "settings-skillies-shortcut-saved")
+        details.append("row's field: \(field != nil), pressed: \(pressed), recording for it: \(recording); ⎋: none left \(noneLeft); again: \(pressedAgain), saved \(saved ?? "none")")
+        for entry in entries() { store.remove(entry.id) }
+
+        // Keys → Add Shortcut…: found by typing, added, shown, not recording.
+        settings.show(pane: .keys)
+        _ = await waitUntil(timeout: 3) { Self.axButton("Add Shortcut…") != nil }
+        let addButton = Self.axButton("Add Shortcut…")
+        let opened = addButton.map { AXUIElementPerformAction($0, kAXPressAction as CFString) == .success } ?? false
+        let sheet = await waitUntil(timeout: 2) { NSApp.windows.contains { $0.isVisible && $0.isSheet } } != nil
+        await pause(300)
+        for character in "row shortcut" { await pressKey(character) }
+        await pause(300)
+        await captureSettingsBothWays(as: "settings-keys-add-shortcut")
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let closed = await waitUntil(timeout: 2) { !NSApp.windows.contains { $0.isVisible && $0.isSheet } } != nil
+        _ = await waitUntil(timeout: 2) { !entries().isEmpty }
+        let added = entries().first
+        let notRecording = store.recordingID == nil
+        let shownAt = added.map { SettingsSearch.shortcutAnchor($0.id) }
+        let landed = await waitUntil(timeout: 3) { shownAt != nil && settings.search.landed == shownAt } != nil
+        await captureSettingsBothWays(as: "settings-keys-added")
+        settings.show(pane: .general)
+        let gone = await waitUntil(timeout: 2) { entries().isEmpty } != nil
+        details.append("Add Shortcut…: \(opened), sheet: \(sheet), ↩ closed it: \(closed), row added without keys: \(added.map { $0.keys == nil } ?? false), "
+            + "not recording: \(notRecording), scrolled to and glowing: \(landed); left without keys, gone after Keys: \(gone)")
+        await closeSettings()
+
+        record(name, field != nil && pressed && recording && noneLeft && pressedAgain && saved == "hyper+b"
+               && opened && sheet && closed && added?.keys == nil && notRecording && landed && gone,
+               details.joined(separator: "; "), nil)
     }
 
     /// Light then dark, the test window behind it in the same appearance:
