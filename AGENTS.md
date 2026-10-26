@@ -3000,6 +3000,17 @@ re-investigating.
   least half of the windows open (`ArrangeOffer.offered`); alone, it shows
   with no saved layout too. ↩ runs Arrange Windows; ⌘K adds Never Arrange
   on These Displays. `selftest windows` (`displayPromptArrangesAsUsual`).
+  Usual places (`UsualPlaces`, `Preferences.usualPlaces`, off by default,
+  needs learning on): on an app's launch, `AXWait` for its first window
+  (4 s, nothing stays observed); one window only (several: left to
+  Arrange), its title waited for up to 1 s when empty, then placed when
+  `WindowPlacements.sure` (3 placements on these very displays, 70 % of
+  the weight, the last 3 of the windows most like it there; never from an
+  empty title unless the app's windows go by rank) and
+  `UsualPlace.untouched` (under 1.5 s old, no key or click since, mouse
+  up); `WindowManager.remember` keeps where it opened for ✦W R. A move
+  away is learned as usual and makes it unsure. `selftest windows`
+  (`usualPlacesOnLaunch`).
 - File search (`FileSearch`, `FileMeaning` in SkilliCore): Search Files
   or "f " / "file " / "fichier " turns the launcher into Spotlight's files
   (a green chip). Typing searches names (every word, case and accents

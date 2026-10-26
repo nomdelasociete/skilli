@@ -141,6 +141,7 @@ final class Preferences {
         static let autoQuitNever = "Preferences.autoQuitNever"
         static let windowLearning = "Preferences.windowLearning"
         static let windowNeverPlace = "Preferences.windowNeverPlace"
+        static let usualPlaces = "Preferences.usualPlaces"
         static let clipboardMeaningSearch = "Preferences.clipboardMeaningSearch"
         static let snippetExpansion = "Preferences.snippetExpansion"
         static let snippetExpansionMode = "Preferences.snippetExpansionMode"
@@ -358,6 +359,12 @@ final class Preferences {
     /// Learn where you put windows (Arrange Windows): on by default.
     var windowLearning: Bool {
         didSet { save(windowLearning, Key.windowLearning) }
+    }
+
+    /// Place new windows where you usually put them (Usual places): off by
+    /// default, on only when the user turns it on.
+    var usualPlaces: Bool {
+        didSet { save(usualPlaces, Key.usualPlaces) }
     }
 
     /// Never place (bundle ids): Arrange leaves their windows, nothing is
@@ -701,6 +708,7 @@ final class Preferences {
         autoQuitNever = defaults.stringArray(forKey: Key.autoQuitNever) ?? []
         windowLearning = defaults.object(forKey: Key.windowLearning) as? Bool ?? true
         windowNeverPlace = defaults.stringArray(forKey: Key.windowNeverPlace) ?? []
+        usualPlaces = defaults.bool(forKey: Key.usualPlaces)
         ignoredMonitors = defaults.data(forKey: Key.ignoredMonitors).flatMap { try? JSONDecoder().decode([DisplayFingerprint].self, from: $0) } ?? []
         neverArrangeDisplays = defaults.data(forKey: Key.neverArrangeDisplays)
             .flatMap { try? JSONDecoder().decode([ArrangeOffer.DisplaySet].self, from: $0) } ?? []

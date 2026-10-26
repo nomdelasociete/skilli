@@ -260,6 +260,7 @@
 		BC4302FC81D030B094F7F945 /* FinderSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7771A4932899B9EBA4EF5B1 /* FinderSelection.swift */; };
 		BD5D6D778E80BA248688348F /* ScheduledAsk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E6D581AD87DE821705933C4 /* ScheduledAsk.swift */; };
 		BE00AA1480A38B5D4C5B3161 /* PrivacyPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4304EA5425019877798D98D /* PrivacyPane.swift */; };
+		BEE254D6A3D65C369CAB54C9 /* UsualPlaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72DEBFE7DA3F67F74AF730E2 /* UsualPlaces.swift */; };
 		BF3E48D2E22DE3E01FA4572D /* MeetingMoment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115A6B490420DDF7ECF9B5E5 /* MeetingMoment.swift */; };
 		C0CD4B2798F9A8E42D71FE8C /* ComputerControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C78CF07B6DB33CAAA10BC7 /* ComputerControl.swift */; };
 		C234C6B7E32F368735B62F47 /* ImageTags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B4C6157780BFC4A9800FE7 /* ImageTags.swift */; };
@@ -536,6 +537,7 @@
 		711A8BEB4020ABBCF16DB085 /* SystemSettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemSettingsPane.swift; sourceTree = "<group>"; };
 		714B2B01BE20FBE3A213B814 /* WelcomeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeModel.swift; sourceTree = "<group>"; };
 		72C04A03C3CFB05353E7D60B /* MeetingCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingCheck.swift; sourceTree = "<group>"; };
+		72DEBFE7DA3F67F74AF730E2 /* UsualPlaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsualPlaces.swift; sourceTree = "<group>"; };
 		738E57A49A152A4B343380FA /* HyperKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HyperKey.swift; sourceTree = "<group>"; };
 		73C96BF2E237C85FCFC3FCF7 /* AppleShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleShortcut.swift; sourceTree = "<group>"; };
 		7401408A8769931FA8BADBD0 /* SymbolicHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymbolicHotKey.swift; sourceTree = "<group>"; };
@@ -1205,6 +1207,7 @@
 				975661806A8576A6C7721645 /* SystemCommands.swift */,
 				C5FF857B9AB86A64DEAE6C63 /* SystemSettingsPanes.swift */,
 				5537A8A3A8BBB9A0B7ED0CAE /* TimerCenter.swift */,
+				72DEBFE7DA3F67F74AF730E2 /* UsualPlaces.swift */,
 				EF9DC2C6C11F6C0B0E10E03C /* WiFi.swift */,
 				4B0E2F4D9239AA39A1DA756B /* WindowArrange.swift */,
 				C4BBB834A8ECE555C3DA7739 /* WindowArranger.swift */,
@@ -1737,6 +1740,7 @@
 				51AE288725D1B90029424847 /* UIReader.swift in Sources */,
 				AA1B2F0D6AF209B46974877B /* UndoableDeletes.swift in Sources */,
 				7758910C1694E8E46FDC0114 /* UsageStore.swift in Sources */,
+				BEE254D6A3D65C369CAB54C9 /* UsualPlaces.swift in Sources */,
 				B72B9865DB9B55F147D12BBC /* VoiceInput.swift in Sources */,
 				A940D91F85D3CDBFF552409B /* WelcomeModel.swift in Sources */,
 				8B30E628E7EA65C5C7E2D7F1 /* WelcomeStages.swift in Sources */,
