@@ -1696,7 +1696,11 @@ final class SkilliTools {
         case "list_github_notifications":
             let shown = github.unreadNotifications.filter { fits([$0.title, $0.repository, $0.reasonTitle]) }
             let more = github.notificationsComplete ? "" : "\nMore unread notifications than listed: https://github.com/notifications"
-            guard !shown.isEmpty else { return stale(notifications: true) + "No unread notification." + more }
+            guard !shown.isEmpty else {
+                // A cut list cannot say there is none: only none among those read.
+                let none = github.notificationsComplete ? "No unread notification." : "None among the unread notifications read; GitHub has more."
+                return stale(notifications: true) + none + more
+            }
             return stale(notifications: true) + shown.map { "\($0.id) — \($0.reasonTitle) — \($0.repository) “\($0.title)” — \($0.url.absoluteString)" }.joined(separator: "\n") + more
         case "merge_pull_request":
             let found = try pullRequest()
