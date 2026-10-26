@@ -20,6 +20,9 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// The screen's and the webcam's players, kept in step with the
     /// sound's (one host time to start them all).
     private var pictures: [AVPlayer] = []
+    /// A correction scheduled for a picture, until its host time: not
+    /// scheduled again meanwhile (its time reads the old one until then).
+    private var correcting: [ObjectIdentifier: CMTime] = [:]
     /// Loading it: once, however often the window is shown meanwhile.
     private var loadingPlayer = false
     private var observer: Any?
@@ -189,6 +192,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         for each in [player] + pictures {
             each.setRate(1, time: time, atHostTime: host)
         }
+        // Each picture starts then: nothing to correct before.
+        correcting = Dictionary(uniqueKeysWithValues: pictures.map { (ObjectIdentifier($0), host) })
     }
 
     /// While playing, a picture more than a frame off the sound (a file
@@ -196,12 +201,17 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private func keepPicturesInStep() {
         guard let player, player.rate > 0, !pictures.isEmpty else { return }
         let now = player.currentTime()
+        let hostNow = CMClockGetTime(CMClockGetHostTimeClock())
         for picture in pictures {
+            let key = ObjectIdentifier(picture)
+            if let pending = correcting[key], CMTimeCompare(hostNow, pending) < 0 { continue }
+            correcting[key] = nil
             guard let item = picture.currentItem, item.duration.isNumeric else { continue }
             let wanted = min(now.seconds, item.duration.seconds)
             if abs(picture.currentTime().seconds - wanted) > 0.07, now.seconds < item.duration.seconds {
-                let host = CMTimeAdd(CMClockGetTime(CMClockGetHostTimeClock()), CMTime(value: 1, timescale: 20))
+                let host = CMTimeAdd(hostNow, CMTime(value: 1, timescale: 20))
                 picture.setRate(1, time: CMTimeAdd(now, CMTime(value: 1, timescale: 20)), atHostTime: host)
+                correcting[key] = host
             }
         }
     }
@@ -274,6 +284,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         player?.pause()
         pictures.forEach { $0.pause() }
         pictures = []
+        correcting = [:]
         if let observer { player?.removeTimeObserver(observer) }
         observer = nil
         player = nil

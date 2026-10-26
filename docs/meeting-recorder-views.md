@@ -524,7 +524,8 @@ after a transcript, search by meaning (⇥), the engine choice.
 ## skil.li quits while recording
 
 - Nothing is shown: skil.li quits about a second later than it would,
-  the time the two files take to close. The red dot goes with it.
+  the time every file being recorded takes to close (the sound's two,
+  the webcam's and the screen's when on). The red dot goes with it.
 - At the next launch, a few seconds in: the menu bar's ring, "Transcribing
   40 %", its menu "Transcribing “Weekly sync”…", as after Stop. Done, the
   item goes and no window opens: the recording is in Search Recordings
