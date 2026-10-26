@@ -25052,7 +25052,8 @@ final class SelfTest {
         let event = momentEvent("st-pictures-key", "Design sync", in: -60, link: false)
         let pressed = ContinuousClock.now
         center.recordMeeting(event, joining: false)
-        let soundAfter = await waitUntil(timeout: 3) { center.recorder.isRecording }
+        // From the key, as the screen's join is.
+        let soundAfter = await waitUntil(timeout: 3) { center.recorder.isRecording }.map { _ in ContinuousClock.now - pressed }
         // Paused half a second before the screen joins: its file's time is
         // the recording's, that pause taken out.
         await pause(500)
