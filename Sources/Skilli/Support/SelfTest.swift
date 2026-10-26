@@ -23814,12 +23814,16 @@ final class SelfTest {
         let count = controller.shownLines.count
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         let editing = await waitUntil(timeout: 1) { controller.isEditingLine } != nil
+        // Captured before typing (switching the window's appearance for
+        // it lost the keys before ↩ in earlier rounds), then the keys made
+        // sure again.
+        await captureRecordingWindow(controller, as: "recorder-line-editing")
+        guard await recordingWindowHasKeys(controller, name) else { return }
         await pressKey("a", flags: .maskCommand)
         for character in "We meet at noon" { _ = await typeCharacter(character) }
-        await captureRecordingWindow(controller, as: "recorder-line-editing")
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         let edited = await waitUntil(timeout: 2) { !controller.isEditingLine && controller.shownLines[2].text == "We meet at noon" } != nil
-        let afterReturn = edited ? "" : " (still editing \(controller.isEditingLine), first responder \(controller.nsWindow.firstResponder.map { String(describing: type(of: $0)) } ?? "none"), line 3 “\(controller.shownLines[2].text.prefix(30))”)"
+        let afterReturn = edited ? "" : " (still editing \(controller.isEditingLine), first responder \(controller.nsWindow.firstResponder.map { String(describing: type(of: $0)) } ?? "none"), key \(controller.nsWindow.isKeyWindow), front \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"), line 3 “\(controller.shownLines[2].text.prefix(30))”)"
         let written = center.recordings.transcript(folder)?.lines[2].text == "We meet at noon" && center.recordings.read(folder)?.edited == true
         let order = MeetingVoices.order(of: controller.shownLines)
         let next = MeetingVoices.next(after: original.speaker, in: order)
