@@ -157,6 +157,12 @@ final class NewShortcut {
     private(set) var added: String?
 
     func record(_ action: SkilliAction, _ store: ShortcutStore) {
+        // One kept for its refusal goes once another is recorded; a retry
+        // of the same one records over it.
+        if let previous = added, let entry = store.config.shortcuts.first(where: { $0.id == previous }), entry.action.id != action.id {
+            added = nil
+            if entry.keys == nil { store.remove(previous) }
+        }
         if let id = store.entryID(for: action) {
             store.beginRecording(id)
             return
