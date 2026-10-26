@@ -714,8 +714,8 @@ words; the other side's 14,218.
 | `DictationTranscriber` + names | 20 dB under | 19.0 | 145.6 | 67.9 | 41.4 % | 15.6 % |
 | whisper turbo + VAD + names | 12 dB under | 9.2 | 281.8 | 130.4 | 88.1 % | 36.8 % |
 | whisper turbo + VAD + names | 20 dB under | 9.2 | 291.5 | 134.7 | 82.9 % | 30.4 % |
-| whisper, times on the recording's clock (phase 4, through the app) | 12 dB under | 10.0 | 283.9 | 62.2 | 89.6 % | 14.5 % |
-| whisper, times on the recording's clock (phase 4, through the app) | 20 dB under | 10.0 | 271.7 | 69.0 | 84.0 % | 15.3 % |
+| whisper, times on the recording's clock (phase 4, through the app) | 12 dB under | 8.8 | 285.7 | 64.6 | 90.3 % | 15.3 % |
+| whisper, times on the recording's clock (phase 4, through the app) | 20 dB under | 8.8 | 276.0 | 68.2 | 84.0 % | 13.9 % |
 
 - Without headphones the user's transcript holds most of the other side's
   words again, even 20 dB under the voice: the transcript doubles.
@@ -729,8 +729,8 @@ words; the other side's 14,218.
 - 2026-10-26 (phase 4): with each token's time read through whisper.cpp
   1.9.5's `whisper_full_get_token_t0/t1`, which put its VAD's cuts back,
   through the app's own transcript (`remote whisper`, scored by
-  `echo_dedup.py`; the tracks written as the recorder writes them): 14.5
-  and 15.3 % of the other side left, against 36.8 and 30.4 % with the
+  `echo_dedup.py`; the tracks written as the recorder writes them): 15.3
+  and 13.9 % of the other side left, against 36.8 and 30.4 % with the
   times off. Its two tracks agree less on the same words than
   `SpeechTranscriber`'s do, as `DictationTranscriber`'s: the rule and its
   window stay as they were set, not tuned on this.
@@ -760,6 +760,24 @@ time.
   afresh when a key is pressed.
 - When Chrome quits (the call's end), "Google Chrome left the call."
   comes a second later (the self-test's 1 s grace; 5 s in use).
+
+### Through the app (phase 4)
+
+2026-10-26, `remote whisper` and `remote voices` on the test Mac: the
+sixteen calls through the recorder's own transcript (`MeetingTranscriber`,
+`skil.li Transcriber`), their tracks written as the recorder writes them
+(AAC, 48 kHz, 64 kb/s), scored by this kit's scorers:
+
+| | Errors per hundred words | Names right | Attendees right |
+|---|---|---|---|
+| macOS's engine (`SpeechTranscriber`) | 17.7 (Measured 17.9) | 38.3 % (38.7 %) | – |
+| whisper turbo + VAD + names, both failures taken out | 10.6 (10.4) | 69.0 % (66.9 %) | 75.7 % (72 %) |
+
+SpeakerKit through the helper: 9.5 % DER on the Mac's sound (Measured
+10.8 % with the hour), 11.8 % on the one-track mix (12.7 %), never fewer
+voices than people on the Mac's sound. whisper's prompt is handed to the
+helper in a UTF-8 file: as a process argument it arrived decomposed
+(NFD), and the accented names fell to 60 %.
 
 ### What the measurements changed
 
