@@ -1161,14 +1161,27 @@ private final class SourceRow: NSView {
 /// around it, its corners rounded; mirrored for the webcam, as calls
 /// show you.
 private final class PictureView: NSView {
+    /// The picture, in a layer of its own: mirrored there, never the
+    /// view's own (AppKit lays that one out).
+    private let picture = CALayer()
+
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer?.cornerRadius = 4
         layer?.masksToBounds = true
         layer?.borderWidth = 1
-        layer?.contentsGravity = .resizeAspectFill
         layer?.backgroundColor = NSColor.black.cgColor
+        picture.contentsGravity = .resizeAspectFill
+        layer?.addSublayer(picture)
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        picture.frame = bounds
+        CATransaction.commit()
     }
 
     @available(*, unavailable)
@@ -1182,8 +1195,12 @@ private final class PictureView: NSView {
     func show(_ pixels: CVPixelBuffer?, mirrored: Bool) {
         layer?.borderColor = Theme.hairline.cgColor
         let surface = pixels.flatMap { CVPixelBufferGetIOSurface($0)?.takeUnretainedValue() }
-        layer?.contents = surface
-        layer?.setAffineTransform(mirrored ? CGAffineTransform(scaleX: -1, y: 1) : .identity)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        picture.frame = bounds
+        picture.contents = surface
+        picture.setAffineTransform(mirrored ? CGAffineTransform(scaleX: -1, y: 1) : .identity)
+        CATransaction.commit()
     }
 }
 

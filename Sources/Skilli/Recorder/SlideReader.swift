@@ -8,8 +8,10 @@ import Vision
 /// four times a second as a small grid of their brightness, read by
 /// Vision's text recognition when the picture changed (`SlideSchedule`),
 /// the lines new since the readings before kept as a slide at the time it
-/// changed (`SlideLog`), in `slides.json` as they come. Nothing of the
-/// pictures is kept, nothing leaves the Mac. On its own queue, one
+/// changed (`SlideLog`), in `slides.json` as they come. A still window
+/// gives no new picture: its last one is sampled again as time goes on,
+/// so a change seen while a reading waited is read all the same. Nothing
+/// of the pictures is kept, nothing leaves the Mac. On its own queue, one
 /// reading at a time.
 final class SlideReader: @unchecked Sendable {
     let url: URL
@@ -20,15 +22,26 @@ final class SlideReader: @unchecked Sendable {
     private var lastSample = -Double.infinity
     private var reading: Task<Void, Never>?
     private var finished = false
+    /// The last picture given, sampled again while no other comes.
+    private var latest: Picture?
+    private var timer: DispatchSourceTimer?
+    /// Pictures narrower than this (the card's small ones) are not read.
+    private let smallest: Int
 
     /// Readings made, and the seconds they took in all (the self-test's
     /// cost).
     private(set) var readings = 0
     private(set) var readingSeconds = 0.0
 
-    init(url: URL, start: Double) {
+    init(url: URL, start: Double, smallest: Int = 0) {
         self.url = url
+        self.smallest = smallest
         timeline = PictureTimeline(start: start)
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + SlideSchedule.sampleEvery, repeating: SlideSchedule.sampleEvery, leeway: .milliseconds(50))
+        timer.setEventHandler { [weak self] in self?.sampleAgain() }
+        timer.resume()
+        self.timer = timer
     }
 
     /// A picture of the screen (the stream's queue): sampled four times a
@@ -48,17 +61,20 @@ final class SlideReader: @unchecked Sendable {
     /// Stopped at host time `stop`: the reading under way finished, then
     /// the slides as kept (the window's own lines out), written.
     func finish(at stop: Double) async -> [SlideLog.Slide] {
-        let task = await withCheckedContinuation { (done: CheckedContinuation<Task<Void, Never>?, Never>) in
+        let (task, end) = await withCheckedContinuation { (done: CheckedContinuation<(Task<Void, Never>?, Double), Never>) in
             queue.async {
-                self.timeline.finish(at: stop)
-                done.resume(returning: self.reading)
+                let end = self.timeline.finish(at: stop)
+                self.timer?.cancel()
+                self.timer = nil
+                self.latest = nil
+                done.resume(returning: (self.reading, end))
             }
         }
         await task?.value
         return await withCheckedContinuation { (done: CheckedContinuation<[SlideLog.Slide], Never>) in
             queue.async {
                 self.finished = true
-                let kept = self.log.kept()
+                let kept = self.log.kept().filter { $0.start <= end }
                 self.write(kept)
                 Log.trace("Recorder: \(kept.count) slides read in \(self.readings) readings (\(String(format: "%.1f", self.readingSeconds)) s)")
                 done.resume(returning: kept)
@@ -68,8 +84,18 @@ final class SlideReader: @unchecked Sendable {
 
     // MARK: - On the reader's queue
 
+    /// No new picture for a while (a still window): the last one again, at
+    /// the time it is now.
+    private func sampleAgain() {
+        let now = HostClock.now
+        guard let latest, now - lastSample >= SlideSchedule.sampleEvery - 0.01 else { return }
+        sample(Picture(pixels: latest.pixels, time: now))
+    }
+
     private func sample(_ picture: Picture) {
-        guard !finished, picture.time - lastSample >= SlideSchedule.sampleEvery - 0.01, timeline.records(picture.time) else { return }
+        guard !finished, CVPixelBufferGetWidth(picture.pixels) >= smallest else { return }
+        latest = picture
+        guard picture.time - lastSample >= SlideSchedule.sampleEvery - 0.01, timeline.records(picture.time) else { return }
         lastSample = picture.time
         let grid = Self.grid(picture.pixels)
         let time = timeline.fileTime(of: picture.time)

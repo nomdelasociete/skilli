@@ -154,8 +154,11 @@ final class MeetingRecorder {
         // can leave out.
         if sources.microphone { await microphone.start() }
         if sources.macSound { startMacSound() }
-        if sources.webcam || window != nil {
-            await pictures.listen(webcam: sources.webcam, screen: window)
+        // As they are now: one turned off meanwhile stays off, a window
+        // picked meanwhile stays picked.
+        let screen = self.sources.screen && madePictures?.screen.window == nil ? window : nil
+        if self.sources.webcam || screen != nil {
+            await pictures.listen(webcam: self.sources.webcam, screen: screen)
         }
         sourcesStarted = true
         // Closed while macOS asked.
@@ -289,7 +292,7 @@ final class MeetingRecorder {
                 }
                 writers[speaker] = writer
             }
-            try madePictures?.begin(folder: folder, start: start)
+            try pictures.begin(folder: folder, start: start, webcam: sources.webcam, screen: sources.screen)
         } catch {
             writers.values.forEach { $0.cancel() }
             writers = [:]
@@ -355,6 +358,8 @@ final class MeetingRecorder {
         let now = HostClock.now
         if let pausedAt, let last = record.pauses.indices.last { record.pauses[last].seconds = now - pausedAt }
         phase = .stopping
+        // The pictures stop at this moment too: none placed past it.
+        let picturesClosed = madePictures.map { pictures in Task { await pictures.finish(at: now) } }
         #if SKILLI_SELFTEST
         // Self-test: its files take that long to close.
         if closingDelay > .zero { try? await Task.sleep(for: closingDelay) }
@@ -368,7 +373,7 @@ final class MeetingRecorder {
             jumps[speaker] = writer.resumeJumps
         }
         // The pictures end at the same moment (none written: no file).
-        if let pictures = await madePictures?.finish(at: now), pictures.webcam > 0 || pictures.screen > 0 {
+        if let pictures = await picturesClosed?.value, pictures.webcam > 0 || pictures.screen > 0 {
             Log.trace("Recorder: pictures closed, webcam \(Int(pictures.webcam)) s, screen \(Int(pictures.screen)) s, \(pictures.slides) slides")
         }
         // A track never on (in person, the Mac's sound): no lane, nothing

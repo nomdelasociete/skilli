@@ -59,8 +59,9 @@ final class RecorderPictures {
             if webcamWriter == nil { webcamWriter = makeWriter(Self.webcamFile, size: webcam.size, perSecond: WebcamTrack.perSecond, held: nil) }
             webcam.record(into: webcamWriter)
         } else {
-            webcamWriter?.blank(at: HostClock.now)
+            // Detached first: no picture after the black one.
             webcam.record(into: nil)
+            webcamWriter?.blank(at: HostClock.now)
             webcam.stop()
         }
     }
@@ -70,6 +71,8 @@ final class RecorderPictures {
     /// to its size; off writes black from that moment.
     func setScreen(_ window: ScreenWindow?) async {
         guard let window else {
+            // Detached first: no picture after the black one.
+            screen.sink.record(into: nil, reading: nil)
             screenWriter?.blank(at: HostClock.now)
             screen.stop()
             return
@@ -80,16 +83,17 @@ final class RecorderPictures {
     }
 
     /// Recording from host time `start`, into `folder`: each source on
-    /// gets its file, the picture it shows now at 0.
-    func begin(folder: URL, start: Double) throws {
+    /// (`webcam`, `screen`: as the recorder has them) gets its file, the
+    /// picture it shows now at 0.
+    func begin(folder: URL, start: Double, webcam webcamOn: Bool, screen screenOn: Bool) throws {
         self.folder = folder
         self.start = start
         pauses = []
-        if webcam.isOn {
+        if webcamOn, webcam.isOn {
             webcamWriter = makeWriter(Self.webcamFile, size: webcam.size, perSecond: WebcamTrack.perSecond, held: webcam.sink.latestPicture)
             webcam.record(into: webcamWriter)
         }
-        if screen.window != nil {
+        if screenOn, screen.window != nil {
             let held = screen.sink.latestPicture
             Task { await self.recordScreen(held: held) }
         }
@@ -101,7 +105,8 @@ final class RecorderPictures {
             screenWriter = makeWriter(Self.screenFile, size: screen.plannedSize, perSecond: ScreenTrack.perSecond, held: held)
         }
         if slides == nil {
-            let reader = SlideReader(url: folder.appendingPathComponent(Self.slidesFile), start: start)
+            // Pictures far smaller than the file's (the card's) are not read.
+            let reader = SlideReader(url: folder.appendingPathComponent(Self.slidesFile), start: start, smallest: screen.plannedSize.width / 2)
             for pause in pauses {
                 reader.pause(at: pause.from)
                 if let to = pause.to { reader.resume(at: to) }

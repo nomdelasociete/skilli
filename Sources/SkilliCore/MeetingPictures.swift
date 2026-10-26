@@ -184,6 +184,12 @@ public struct PictureWatch: Sendable {
         return problem
     }
 
+    /// The window's stream stopped with the window gone: said at once.
+    public mutating func closed() {
+        candidate = (.closed, -.infinity)
+        problem = .closed
+    }
+
     /// A new picture came: a window painting again is no problem.
     public mutating func pictured() {
         if problem == .stoppedPainting {
@@ -221,8 +227,10 @@ extension PictureChange {
 /// small grid of its brightness; read when it changed since the last
 /// reading, at most once a second, less often while readings find nothing
 /// new (a video moving), at once again for a change of a quarter of the
-/// picture (a slide). The slide is timed at the last jump before the
-/// reading: when the picture changed from one sample to the next.
+/// picture (a slide). The slide is timed at the biggest jump since the
+/// last reading (the picture changing most from one sample to the next:
+/// a slide, not a video moving around it). A still window gives no new
+/// picture: its reader samples the last one again as time goes on.
 public struct SlideSchedule: Sendable {
     /// Grid size, sampled every this many seconds.
     public static let columns = 32
@@ -238,7 +246,8 @@ public struct SlideSchedule: Sendable {
 
     private var lastRead: (grid: [UInt8], at: Double)?
     private var previous: [UInt8]?
-    private var jumpAt: Double?
+    /// The biggest jump since the last reading: how much, and when.
+    private var jump: (share: Double, at: Double)?
     private var wait = SlideSchedule.soonest
 
     public init() {}
@@ -247,20 +256,23 @@ public struct SlideSchedule: Sendable {
     /// should be read now, the time the slide began; nil: not now.
     public mutating func sample(_ grid: [UInt8], at time: Double) -> Double? {
         defer { previous = grid }
-        if let previous, PictureChange.changedFraction(grid, previous) >= Self.change { jumpAt = time }
+        if let previous {
+            let share = PictureChange.changedFraction(grid, previous)
+            if share >= Self.change, share >= jump?.share ?? 0 { jump = (share, time) }
+        }
         guard let lastRead else { return time }
         let since = PictureChange.changedFraction(grid, lastRead.grid)
         guard since >= Self.change else { return nil }
         if since >= Self.bigChange { wait = Self.soonest }
         guard time - lastRead.at >= wait else { return nil }
-        return max(lastRead.at, jumpAt ?? time)
+        return max(lastRead.at, jump?.at ?? time)
     }
 
     /// The text of `grid` read at `time`; whether it held lines new since
     /// the reading before.
     public mutating func read(_ grid: [UInt8], at time: Double, foundNew: Bool) {
         lastRead = (grid, time)
-        jumpAt = nil
+        jump = nil
         wait = foundNew ? Self.soonest : min(Self.latest, wait * 2)
     }
 }
