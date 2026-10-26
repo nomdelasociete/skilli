@@ -78,6 +78,9 @@ enum Transcriber {
               let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(Double(chunk) * 16000 / file.processingFormat.sampleRate) + 1024)
         else { throw Failure("\(url.lastPathComponent): its sound cannot be read.") }
         var finished = false
+        // A read that fails: thrown, not taken for the end of the file (the
+        // voices would be told apart on part of it).
+        var readError: Error?
         while true {
             output.frameLength = 0
             var error: NSError?
@@ -89,6 +92,7 @@ enum Transcriber {
                 do {
                     try file.read(into: input, frameCount: chunk)
                 } catch {
+                    readError = error
                     finished = true
                     state.pointee = .endOfStream
                     return nil
@@ -102,6 +106,7 @@ enum Transcriber {
                 return input
             }
             if let error { throw error }
+            if let readError { throw readError }
             if let data = output.floatChannelData?[0], output.frameLength > 0 {
                 samples.append(contentsOf: UnsafeBufferPointer(start: data, count: Int(output.frameLength)))
             }
