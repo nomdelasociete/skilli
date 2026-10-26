@@ -279,6 +279,8 @@ public enum SettingsTable {
         setting("windows", "autoQuitNever", "Never quit", .list(item: "an app, by its name or bundle id", adds: true),
                 note: "Shown when Quit apps you stopped using is on."),
         setting("windows", "windowLayoutIgnoredApps", "Always leave out of layouts", .list(item: "an app, by its name or bundle id", adds: true)),
+        setting("windows", "neverArrangeDisplays", "Displays never arranged when plugged in", .list(item: "a set of displays, by their names", adds: false),
+                note: "Added from the question a display asks when it is plugged in (Never Arrange on These Displays): Arrange as Usual is not offered with them; tools only take one off."),
         setting("windows", "ignoredMonitors", "Monitors ignored when plugged in", .list(item: "a monitor, by its name", adds: false),
                 note: "A monitor is ignored from the question shown when it is plugged in (Ignore This Monitor); tools only take one off."),
         setting("windows", "windowLayouts", "Layouts", .list(item: "a saved window layout", adds: false),

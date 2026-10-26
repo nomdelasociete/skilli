@@ -156,6 +156,10 @@ final class AgentContext {
     /// Runs out of sight (an ask on a schedule): its questions and
     /// approvals take the card as an agent outside a command does.
     let background: Bool
+    /// The user allowed a step on the screen in this run: its other steps
+    /// there run without asking, except what may not be taken back
+    /// (`SkilliTools.mayNotBeUndone`).
+    var screenAllowed = false
 
     init(title: String, groups: Set<ToolGroup>, read: SelectionService.Read?, targetPID: pid_t?, background: Bool = false) {
         self.title = title
@@ -489,7 +493,7 @@ final class SkilliTools {
                        group: .apps, risk: .read, parameters: []),
         ToolDefinition(name: "focus_window", title: "Bring a window forward",
                        description: "Brings the window whose app or title matches to the front.",
-                       group: .apps, risk: .changes,
+                       group: .apps, risk: .harmless,
                        parameters: [.init(name: "window", description: "Its app or title, as list_windows gives them.")]),
         ToolDefinition(name: "save_window_layout", title: "Save the window layout",
                        description: "Saves where every window is now, under a name (the same name replaces it).",
@@ -675,7 +679,7 @@ final class SkilliTools {
     /// `open_url` with an unusual scheme can do more than open a page.
     static func risk(of definition: ToolDefinition, arguments: [String: Any]) -> ToolRisk {
         if definition.name == "open_url", let url = (arguments["url"] as? String).flatMap(URL.init(string:)),
-           !["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") {
+           !["http", "https", "mailto", "x-apple.systempreferences"].contains(url.scheme?.lowercased() ?? "") {
             return .changes
         }
         return definition.risk
@@ -696,6 +700,40 @@ final class SkilliTools {
         }
         let text = values.joined(separator: "\n")
         return text.count > 400 ? String(text.prefix(400)) + "…" : text
+    }
+
+    /// What the card shows for a call: the screen tools' element by its
+    /// name ("button “Desktop & Dock” in System Settings"), never its id.
+    func cardSummary(of definition: ToolDefinition, arguments: [String: Any]) -> String {
+        guard ["press_ui", "set_ui_value"].contains(definition.name), let id = arguments["id"] as? String,
+              let element = ui.describe(id) else {
+            return Self.summary(of: definition, arguments: arguments)
+        }
+        let named = element.prefix(1).uppercased() + element.dropFirst()
+        guard definition.name == "set_ui_value" else { return named }
+        let text = (arguments["text"] as? String) ?? ""
+        return named + "\n" + (text.count > 300 ? String(text.prefix(300)) + "…" : text)
+    }
+
+    /// A step on the screen that may not be taken back: a button that
+    /// sends, deletes, pays or overwrites (`ScreenControl.isRisky`), a field
+    /// that has text (or cannot be read) filled over, or Return, Enter,
+    /// Delete or ⌘S (a save over a file) pressed. It asks even once the run
+    /// was allowed.
+    func mayNotBeUndone(_ name: String, arguments: [String: Any]) -> Bool {
+        let element = (arguments["id"] as? String).flatMap(ui.label)
+        switch name {
+        case "press_ui":
+            return element.map { ScreenControl.isRisky($0.label) } ?? true
+        case "set_ui_value":
+            // A value that cannot be read may be text: it asks.
+            return element.map { ScreenControl.isRisky($0.label) || $0.value?.isEmpty != true } ?? true
+        case "press_keys":
+            let keys = ((arguments["keys"] as? String) ?? "").lowercased()
+            return ["return", "enter", "delete", "backspace", "cmd+s"].contains { keys.contains($0) }
+        default:
+            return false
+        }
     }
 
     // MARK: - Running

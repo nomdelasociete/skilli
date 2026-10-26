@@ -93,8 +93,8 @@ struct WindowsPane: View {
                 }
             }
 
-            AdvancedSection(summary: "Apps never placed, apps always left out of layouts, monitors ignored when plugged in",
-                            anchors: ["windowNeverPlace", "windowLayoutIgnoredApps", "ignoredMonitors"]) {
+            AdvancedSection(summary: "Apps never placed, apps always left out of layouts, monitors ignored and displays never arranged when plugged in",
+                            anchors: ["windowNeverPlace", "windowLayoutIgnoredApps", "ignoredMonitors", "neverArrangeDisplays"]) {
                 advancedRows
             }
         }
@@ -191,6 +191,28 @@ struct WindowsPane: View {
                 }
                 .buttonStyle(.plain)
                 .help("Offer its layouts again when it is plugged in")
+            }
+        }
+        LabelDetail("Displays never arranged when plugged in",
+                    preferences.neverArrangeDisplays.isEmpty
+                        ? "None. Never Arrange on These Displays, in ⌘K of the question a display asks when it is plugged in, adds them here."
+                        : "Arrange as Usual is not offered when one of them is plugged in with the others.")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .settingAnchor("neverArrangeDisplays")
+        ForEach(preferences.neverArrangeDisplays, id: \.key) { set in
+            HStack {
+                Image(systemName: "display.2")
+                    .foregroundStyle(.secondary)
+                Text(set.label)
+                Spacer()
+                Button {
+                    preferences.neverArrangeDisplays.removeAll { $0.key == set.key }
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Offer Arrange as Usual again when they are plugged in")
             }
         }
     }
