@@ -80,6 +80,14 @@ class CatalogTests(unittest.TestCase):
                 self.assertIn(label, page)
                 self.assertIn(f'<span>{language} · MIT</span>', page)
 
+    def test_the_shebangs_language_is_escaped(self):
+        self.path.write_text(self.path.read_text().replace('#!/bin/sh', '#!/usr/bin/osascript -l <img/onerror=x>', 1))
+        target = self.root / 'out'
+        build.render(build.catalog(self.source), build.ROOT / 'website/skillies/index.template.html', target)
+        page = (target / 'index.html').read_text()
+        self.assertNotIn('<img/onerror', page)
+        self.assertIn('&lt;img/onerror=x&gt; · MIT', page)
+
     def test_unknown_requirements_and_relative_shebangs_fail(self):
         original = self.path.read_text()
         for text in [original.replace('# MIT License', '# @skilli.requires python\n# MIT License', 1),

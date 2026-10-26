@@ -134,7 +134,7 @@ def render(entries, template, target):
             language = 'JavaScript for Automation' if named == 'JavaScript' else named
         search = esc(' '.join((item['title'], item['description'], item['package'])).lower())
         cards.append(f'''<article class="skillie-entry" id="{slug}" data-category="{item['category']}" data-search="{search}">
-<div class="skillie-meta">{esc(item['package'])} <span>{language} · MIT</span></div>
+<div class="skillie-meta">{esc(item['package'])} <span>{esc(language)} · MIT</span></div>
 <h2>{esc(item['title'])}</h2><p>{esc(item['description'])}</p><p class="skillie-args">{esc(args)}</p>
 <div class="skillie-actions"><a class="download-skillie" href="{item['download']}" download="{slug}.skilli">Download skillie ↓</a><button data-share="{slug}" type="button">Copy link ↗</button></div>
 <details><summary>Read the code</summary><pre><code>{esc(item['code'])}</code></pre></details></article>''')
