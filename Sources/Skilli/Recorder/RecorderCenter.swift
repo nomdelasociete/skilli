@@ -65,13 +65,19 @@ final class RecorderCenter {
     /// ⌘R's recording is being started (its language read, its sources
     /// started): another ⌘R meanwhile asks the same.
     private var starting = false {
-        didSet { holdMenuBar() }
+        didSet {
+            holdMenuBar()
+            // Started or failed to: one never stopped, asked meanwhile, is
+            // offered once nothing records (`offerNext` checks).
+            if !starting { offerNext() }
+        }
     }
     private lazy var card: RecordCard = {
         let card = RecordCard(recorder: recorder)
         card.onRecord = { [weak self] title, language, meeting in self?.begin(title: title, language: language, meeting: meeting) }
         card.onCancel = { [weak self] in self?.cancelled() }
-        card.onStopCall = { [weak self] in self?.control(.stop) }
+        card.onStop = { [weak self] in self?.control(.stop) }
+        card.onResume = { [weak self] in self?.control(.resume) }
         card.onKeepRecording = { [weak self] reason in self?.watch.kept(reason) }
         card.onToggleSource = { [weak self] speaker in self?.toggle(speaker) }
         // An unfinished one answered (Save, Later, Discard): the next.
@@ -112,6 +118,13 @@ final class RecorderCenter {
     private var waiting: CheckedContinuation<String?, Never>?
     /// Recordings never stopped, offered one after another.
     private var unfinished: [(URL, MeetingRecord)] = []
+    /// Transcripts made at launch for recordings closed as skil.li quit:
+    /// no window opens when done (nobody asked for it then).
+    private var madeQuietly: Set<String> = []
+    /// When the Mac went to sleep, the recording on paused for it; nil when
+    /// it did not pause one (none on, or already paused by the user).
+    private(set) var pausedForSleep: Date?
+    private var observers: [NSObjectProtocol] = []
 
     init(recordings: Recordings, preferences: Preferences, deletes: UndoableDeletes) {
         self.recordings = recordings
@@ -121,6 +134,39 @@ final class RecorderCenter {
         recorder.onChange = { [weak self] in self?.changed() }
         recorder.onFinished = { [weak self] folder in self?.finished(folder) }
         recorder.onStoppedByItself = { [weak self] line in self?.notify(line) }
+        recorder.onLeftUnfinished = { [weak self] folder, record in self?.offerAtOnce(folder, record: record) }
+        let workspace = NSWorkspace.shared.notificationCenter
+        observers.append(workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.macWillSleep() }
+        })
+        observers.append(workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.macDidWake() }
+        })
+    }
+
+    // MARK: - Sleep
+
+    /// The Mac goes to sleep (the lid closed, Sleep, the battery out): the
+    /// recording on is paused as Pause does, both tracks at that moment
+    /// (docs/meeting-recorder.md, "Quit and sleep"). One the user paused
+    /// stays as it is.
+    private func macWillSleep() {
+        guard recorder.phase == .recording else { return }
+        recorder.pause()
+        pausedForSleep = .now
+        Log.trace("Recorder: “\(recorder.title)” paused as the Mac goes to sleep")
+    }
+
+    /// Awake: never resumed by itself (whoever is in the room now has not
+    /// agreed); the card offers Resume ↩, Stop ⌘↩, Keep Paused esc. It
+    /// takes the place of a call's end card left from before the sleep
+    /// (offered again if the call is still over).
+    private func macDidWake() {
+        guard let asleep = pausedForSleep else { return }
+        pausedForSleep = nil
+        guard recorder.phase == .paused else { return }
+        card.showSlept(title: recorder.title, elapsed: recorder.elapsed,
+                       line: "The Mac went to sleep at \(asleep.formatted(date: .omitted, time: .shortened)).")
     }
 
     /// Self-test hooks.
@@ -226,6 +272,9 @@ final class RecorderCenter {
         Task { [weak self] in
             guard let self else { return }
             let language = await MeetingTranscriber.defaultLanguage(asked: self.askedLanguage)
+            #if SKILLI_SELFTEST
+            if self.startDelay > .zero { try? await Task.sleep(for: self.startDelay) }
+            #endif
             self.start(reading, title: reading.title ?? "", language: language, sources: reading.sources, joining: joining)
         }
     }
@@ -235,6 +284,12 @@ final class RecorderCenter {
         Task { [weak self] in
             guard let self else { return }
             do {
+                #if SKILLI_SELFTEST
+                if self.startFails {
+                    self.startFails = false
+                    throw MeetingRecorder.Failure(message: "the self-test's start failed.")
+                }
+                #endif
                 try await self.recorder.record(start)
             } catch {
                 self.starting = false
@@ -428,6 +483,8 @@ final class RecorderCenter {
             stopWatching()
             if case .callEnded? = card.content { card.dismiss() }
         }
+        // Resumed or stopped from the menu bar: the card at wake goes.
+        if card.content == .slept, recorder.phase != .paused { card.dismiss() }
         // Closed: what was asked meanwhile, in order.
         if recorder.phase == .idle, !afterClosing.isEmpty {
             let asked = afterClosing
@@ -435,6 +492,8 @@ final class RecorderCenter {
             asked.forEach { $0() }
             holdMenuBar()
         }
+        // One never stopped, asked while another recorded: offered now.
+        if recorder.phase == .idle, !starting, !unfinished.isEmpty { offerNext() }
         onChange?()
         // The window open while its transcript is made follows it.
         if let transcribing = recorder.transcribing, let window = windows[Self.key(transcribing.folder)], let record = recordings.read(transcribing.folder) {
@@ -444,9 +503,17 @@ final class RecorderCenter {
 
     // MARK: - Done
 
-    /// A transcript made (or kept waiting for a language): its window.
+    /// A transcript made (or kept waiting for a language): its window. One
+    /// made at launch for a recording closed as skil.li quit opens none:
+    /// the lists have it; a window already open on it shows it.
     private func finished(_ folder: URL) {
         NotificationCenter.default.post(name: Recordings.changed, object: nil)
+        if madeQuietly.remove(Self.key(folder)) != nil {
+            if let window = windows[Self.key(folder)], let record = recordings.read(folder) {
+                window.show(record, transcript: recordings.transcript(folder))
+            }
+            return
+        }
         open(folder)
     }
 
@@ -483,26 +550,58 @@ final class RecorderCenter {
         }
     }
 
-    // MARK: - Never stopped
+    // MARK: - Never stopped, or closed as skil.li quit
 
-    /// At launch, a few seconds in: the recordings never stopped in
-    /// `root`, read off the main thread (a few small files), as their
-    /// files say them. Nothing is made when there are none.
-    nonisolated static func unfinished(in root: URL) async -> [(URL, MeetingRecord)] {
+    /// What a launch finds in the Recordings folder: the recordings never
+    /// stopped (a crash, a power cut) as their files say them, and those
+    /// closed as skil.li quit, whose transcript waits.
+    struct Left {
+        var unfinished: [(URL, MeetingRecord)] = []
+        var toTranscribe: [(URL, MeetingRecord)] = []
+        var isEmpty: Bool { unfinished.isEmpty && toTranscribe.isEmpty }
+    }
+
+    /// At launch, a few seconds in: what `root` holds that was left,
+    /// read off the main thread (a few small files). Nothing is made when
+    /// there is none.
+    nonisolated static func left(in root: URL) async -> Left {
         await Task.detached(priority: .utility) {
-            Recordings(root: root).unfinished().map { ($0.folder, MeetingRecorder.measured($0.folder, record: $0.record)) }
+            let recordings = Recordings(root: root)
+            return Left(unfinished: recordings.unfinished().map { ($0.folder, MeetingRecorder.measured($0.folder, record: $0.record)) },
+                        toTranscribe: recordings.stopped().map { ($0.folder, $0.record) })
         }.value
     }
 
-    /// Offered one at a time (Save, Later, Discard).
-    func offer(_ found: [(URL, MeetingRecord)]) {
-        guard !found.isEmpty else { return }
-        unfinished = found
+    /// The transcripts left at the quit made now, oldest first, without
+    /// asking and without opening their windows (the menu bar's ring shows
+    /// them being made); the ones never stopped offered one at a time
+    /// (Save, Later, Discard).
+    func pickUp(_ left: Left) {
+        for (folder, record) in left.toTranscribe.reversed() {
+            madeQuietly.insert(Self.key(folder))
+            recorder.transcribe(folder, record: record)
+        }
+        guard !left.unfinished.isEmpty else { return }
+        unfinished = left.unfinished
         offerNext()
     }
 
+    /// A Stop that could not finish its files: offered now, first, as one
+    /// never stopped (its length read from its files, off the main thread).
+    private func offerAtOnce(_ folder: URL, record: MeetingRecord) {
+        Task { [weak self] in
+            let measured = await Task.detached(priority: .userInitiated) { MeetingRecorder.measured(folder, record: record) }.value
+            guard let self else { return }
+            self.unfinished.insert((folder, measured), at: 0)
+            self.offerNext()
+        }
+    }
+
+    /// The next one never stopped, in the card: only while nothing records
+    /// or starts to (a ⌘R start under way included); else `changed()`
+    /// offers it once the recorder is idle.
     private func offerNext() {
-        guard !card.isVisible, !recorder.isRecording, !unfinished.isEmpty else { return }
+        guard !card.isVisible, recorder.phase == .idle, !starting, !unfinished.isEmpty else { return }
         let (folder, record) = unfinished.removeFirst()
         Log.trace("Recorder: “\(record.title)” was never stopped: offered")
         card.showUnfinished(folder, record: record)
@@ -522,6 +621,18 @@ final class RecorderCenter {
 
     /// Self-test: what the card shows now.
     var cardContent: RecordCard.Content? { card.content }
+
+    /// Self-test: ⌘R's recording takes this long to start (an unfinished
+    /// one found meanwhile).
+    var startDelay: Duration = .zero
+    /// Self-test: ⌘R's next recording fails to start.
+    var startFails = false
+
+    /// Self-test: a Stop that could not finish `folder`'s files, as the
+    /// recorder reports it.
+    func offerAtOnceForTest(_ folder: URL, record: MeetingRecord) {
+        offerAtOnce(folder, record: record)
+    }
 
     /// Self-test: the found ones offered now, without the wait.
     func offerUnfinishedNow() -> Int {

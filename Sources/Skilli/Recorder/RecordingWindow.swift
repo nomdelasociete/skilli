@@ -69,6 +69,9 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             view.showTranscribing(transcribing)
         } else if let transcript {
             view.showLines(transcript.lines)
+        } else if record.state == .transcribing || record.state == .stopped {
+            // Its turn not come yet (another being made, or the launch's).
+            view.showWaiting()
         } else {
             view.showPending(language: record.language)
         }
@@ -347,6 +350,19 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         case .downloading(let language): state.stringValue = "Downloading the \(language) speech model…"
         case .transcribing(let done): state.stringValue = "Transcribing… \(Int((done * 100).rounded())) %"
         }
+        languageMenu.isHidden = true
+        transcribeButton.isHidden = true
+        hints.setHints([("Play", "space"), ("Show in Finder", "⌘↩"), ("Delete", "⌘⌫")])
+        needsLayout = true
+    }
+
+    /// Its transcript waits its turn.
+    func showWaiting() {
+        lines = []
+        table.reloadData()
+        scroll.isHidden = true
+        state.isHidden = false
+        state.stringValue = "Waiting to be transcribed…"
         languageMenu.isHidden = true
         transcribeButton.isHidden = true
         hints.setHints([("Play", "space"), ("Show in Finder", "⌘↩"), ("Delete", "⌘⌫")])

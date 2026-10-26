@@ -109,6 +109,17 @@ final class MeetingRecordTests: XCTestCase {
         record.recorder = nil
         XCTAssertTrue(record.isUnfinished { _ in true })
     }
+
+    func testOneClosedAsSkilliQuitIsNotUnfinished() throws {
+        // Its files whole, its transcript waits for the next launch: nothing
+        // to offer (Save, Later, Discard is for a crash or a power cut).
+        var record = MeetingRecord(title: "Weekly sync", started: .now, language: "en-US", recorder: nil)
+        record.state = .stopped
+        XCTAssertFalse(record.isUnfinished { _ in false })
+        let read = try MeetingRecord.decode(record.encoded())
+        XCTAssertEqual(read.state, .stopped)
+        XCTAssertTrue(String(decoding: try record.encoded(), as: UTF8.self).contains(#""state" : "stopped""#))
+    }
 }
 
 final class TrackTimelineTests: XCTestCase {

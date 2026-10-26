@@ -3,8 +3,9 @@
 Phase 1: spec, 2026-10-23, written before building, then brought in line
 with three rounds of captures on the test Mac (light and dark). Phase 2
 (the moment, below): spec, 2026-10-24, written before building from the
-Moment section of `docs/meeting-recorder.md`. That file says what is
-recorded, kept and measured; this says what each phase shows. Each view
+Moment section of `docs/meeting-recorder.md`. Quit and sleep (last
+part): 2026-10-25, from that file's "Quit and sleep". That file says
+what is recorded, kept and measured; this says what each phase shows. Each view
 is drawn by the code that runs it (`remote recorder` saves
 `recorder-*.png`).
 
@@ -150,8 +151,9 @@ when closed.
 
 ## An unfinished recording
 
-At launch, a recording that was never stopped (skil.li quit, the Mac
-lost power): what was written is kept (the files are readable up to the
+At launch, a recording that was never stopped (skil.li crashed, the Mac
+lost power), or at once after a Stop whose files could not be finished
+within 5 s: what was written is kept (the files are readable up to the
 last second). The Record card's place and frame:
 
 ```
@@ -514,3 +516,49 @@ Recordings
 The webcam and the screen (the window found is kept for phase 3),
 renaming speakers, editing lines, import, chapters and the ⌘K actions
 after a transcript, search by meaning (⇥), the engine choice.
+
+# Quit and sleep
+
+2026-10-25, from "Quit and sleep" in `docs/meeting-recorder.md`.
+
+## skil.li quits while recording
+
+- Nothing is shown: skil.li quits about a second later than it would,
+  the time the two files take to close. The red dot goes with it.
+- At the next launch, a few seconds in: the menu bar's ring, "Transcribing
+  40 %", its menu "Transcribing “Weekly sync”…", as after Stop. Done, the
+  item goes and no window opens: the recording is in Search Recordings
+  and Settings → Recorder. Its window opened before then says "Waiting to
+  be transcribed…" (and so does one whose turn has not come after
+  another Stop).
+- Nothing is offered: the Unfinished Recording card stays for a crash or
+  a power cut.
+
+## The Mac slept: Resume
+
+As the Mac goes to sleep the recording pauses (the menu bar: the hollow
+grey dot, the clock still). At wake, the call's end card's place and
+frame:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ○ RECORDING PAUSED                                12:04  │  hollow grey dot,
+│                                                          │  as the menu bar's
+│ Weekly design review                                     │
+│ The Mac went to sleep at 14:32.                          │
+│ ──────────────────────────────────────────────────────── │
+│ Keep Paused esc   Stop ⌘↩                    ( Resume ↩ )│
+└──────────────────────────────────────────────────────────┘
+```
+
+- Resume ↩ records again from now; Stop ⌘↩ stops and transcribes, as
+  Stop in the menu bar; Keep Paused esc closes the card, the recording
+  stays paused (the red dot's menu resumes or stops it).
+- It never takes the keys from the app the user types in (the password
+  at the lock screen first); a click does, or a second without a key.
+- Resumed or stopped from the menu bar meanwhile: the card goes.
+- Paused by the user before the sleep: no card at wake.
+- A call's end card left from before the sleep gives way to this one;
+  the call's end is offered again once this one is answered, if the call
+  is still over.
+

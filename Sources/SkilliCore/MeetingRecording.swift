@@ -97,6 +97,10 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
         /// Kept without a transcript: no engine of this Mac has its
         /// language (`engine` nil).
         case pending
+        /// Stopped whole as skil.li quit: its transcript is made at the
+        /// next launch, nothing asked (docs/meeting-recorder.md, "Quit and
+        /// sleep").
+        case stopped
     }
 
     /// Who records it: a process, told from another that later got the same
@@ -193,14 +197,14 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
 
     /// Never stopped: still `recording` or `paused` (or its transcript
     /// started and never finished) while no process with its owner's
-    /// number and start runs (`isRunning`). skil.li quit, crashed, or the
-    /// Mac lost power.
+    /// number and start runs (`isRunning`). skil.li crashed, or the Mac
+    /// lost power; a quit closes it (`stopped`).
     public func isUnfinished(isRunning: (Owner) -> Bool) -> Bool {
         switch state {
         case .recording, .paused, .transcribing:
             guard let recorder else { return true }
             return !isRunning(recorder)
-        case .done, .pending:
+        case .done, .pending, .stopped:
             return false
         }
     }
