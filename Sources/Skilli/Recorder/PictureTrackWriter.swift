@@ -52,17 +52,24 @@ final class PictureTrackWriter: @unchecked Sendable {
     /// queue, once.
     var onFailure: (@Sendable (Error) -> Void)?
 
-    /// A file at `url` whose 0 is the host time `start`; `held` is the
-    /// picture the source shows at host time `heldAt` (the start, or when a
-    /// source turned on later joined: nothing before it).
-    init(url: URL, width: Int, height: Int, perSecond: Int, bitRate: Int, start: Double, held: CVPixelBuffer?, heldAt: Double? = nil,
-         label: String) throws {
+    /// A file at `url` whose 0 is the host time `start`, cut by the
+    /// recording's `pauses` so far (a file made later in the recording);
+    /// `held` is the picture the source shows at host time `heldAt` (the
+    /// start, or when a source turned on later joined: nothing before it).
+    init(url: URL, width: Int, height: Int, perSecond: Int, bitRate: Int, start: Double, pauses: [(from: Double, to: Double?)] = [],
+         held: CVPixelBuffer?, heldAt: Double? = nil, label: String) throws {
         self.url = url
         // H.264 wants even sizes.
         self.width = max(16, width / 2 * 2)
         self.height = max(16, height / 2 * 2)
         queue = DispatchQueue(label: "com.nomdelasociete.Skilli.recorder.\(label)", qos: .userInitiated)
         timeline = PictureTimeline(start: start)
+        // The pauses before the held picture is placed: its time is the
+        // recording's, the pauses taken out.
+        for pause in pauses {
+            timeline.pause(at: pause.from)
+            if let to = pause.to { timeline.resume(at: to) }
+        }
         writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         writer.movieFragmentInterval = CMTime(seconds: 1, preferredTimescale: 600)
         input = AVAssetWriterInput(mediaType: .video, outputSettings: [

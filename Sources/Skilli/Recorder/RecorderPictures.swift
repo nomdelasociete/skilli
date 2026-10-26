@@ -148,11 +148,7 @@ final class RecorderPictures {
         let bitRate = max(500_000, min(2_500_000, Int(Double(size.width * size.height * perSecond) * 0.055)))
         do {
             let writer = try PictureTrackWriter(url: folder.appendingPathComponent(name), width: size.width, height: size.height, perSecond: perSecond,
-                                                bitRate: bitRate, start: start, held: held, heldAt: heldAt, label: name)
-            for pause in pauses {
-                writer.pause(at: pause.from)
-                if let to = pause.to { writer.resume(at: to) }
-            }
+                                                bitRate: bitRate, start: start, pauses: pauses, held: held, heldAt: heldAt, label: name)
             writer.onFailure = { [weak self] error in
                 let said = error.localizedDescription
                 DispatchQueue.main.async { MainActor.assumeIsolated { self?.onFailure?(said) } }

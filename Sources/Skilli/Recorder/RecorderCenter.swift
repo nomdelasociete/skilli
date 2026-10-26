@@ -358,7 +358,10 @@ final class RecorderCenter {
         case "mac_sound":
             if sources.macSound != on { await recorder.setSource(.them, on: on) }
         case "webcam":
-            await recorder.setWebcam(on)
+            // macOS's question for the camera over the card, never under it.
+            let asks = on && card.isVisible && AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined
+                && (AVCaptureDevice.systemPreferredCamera ?? AVCaptureDevice.default(for: .video)) != nil
+            await card.whileMacOSAsks(asks) { await recorder.setWebcam(on) }
         case "screen":
             if !on {
                 await recorder.setScreen(nil)
@@ -370,7 +373,7 @@ final class RecorderCenter {
                 guard let window = found.window else {
                     throw MeetingRecorder.Failure(message: "No meeting's window is known: pick one in the Record card or the red dot's menu (Screen).")
                 }
-                await recorder.setScreen(window)
+                await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(window) }
                 card.setScreenNote(found.note, automation: found.automation)
             }
         default:
