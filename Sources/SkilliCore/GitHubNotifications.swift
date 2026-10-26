@@ -36,8 +36,12 @@ public enum GitHubNotifications {
     /// GitHub's notifications, newest first; those it cannot place are left
     /// out.
     public static func parse(_ data: Data) throws -> [GitHubNotification] {
-        let threads = try GitHubInbox.decoder.decode([Thread].self, from: data)
-        return threads.compactMap { thread in
+        notifications(try GitHubInbox.decoder.decode([Thread].self, from: data))
+    }
+
+    /// The same threads, from the relay's copy (`RelayInbox`).
+    static func notifications(_ threads: [Thread]) -> [GitHubNotification] {
+        threads.compactMap { thread in
             guard let updated = GitHubInbox.date(thread.updatedAt) else { return nil }
             return GitHubNotification(id: thread.id, reason: thread.reason, type: thread.subject.type, title: thread.subject.title,
                                       repository: thread.repository.fullName, updatedAt: updated, unread: thread.unread,
@@ -87,7 +91,7 @@ public enum GitHubNotifications {
         }
     }
 
-    private struct Thread: Decodable {
+    struct Thread: Decodable {
         let id: String
         let reason: String
         let unread: Bool
@@ -101,13 +105,13 @@ public enum GitHubNotifications {
         }
     }
 
-    private struct Subject: Decodable {
+    struct Subject: Decodable {
         let title: String
         let url: String?
         let type: String
     }
 
-    private struct Repository: Decodable {
+    struct Repository: Decodable {
         let fullName: String
 
         private enum CodingKeys: String, CodingKey {

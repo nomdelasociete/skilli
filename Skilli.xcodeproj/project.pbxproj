@@ -17,6 +17,7 @@
 		079F72F739507947C167C6BA /* RecorderPictures.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEC0859C6CF39E1EC9EEB7C9 /* RecorderPictures.swift */; };
 		095D4C24B369E1BF5F8D3451 /* SkilliCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 512A4230C03E002AF05528B1 /* SkilliCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		097885C631EA9F8ADB7D8AC1 /* FormsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D386DC1B188B5CE3D216A4 /* FormsPane.swift */; };
+		098DA881E3AB36E897810310 /* GitHubServerInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E2E708A3831FF5D35F7E422 /* GitHubServerInbox.swift */; };
 		09E7FA668510C1A71AA9AC42 /* SystemCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 975661806A8576A6C7721645 /* SystemCommands.swift */; };
 		0A060D3B4C20C37D9ECBA27B /* ModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91AE12E3FE514EF3A2F63647 /* ModelPicker.swift */; };
 		0A5668C1E42C673FF50A96FE /* RecorderCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA0BC6066120EAD8ED27716 /* RecorderCenter.swift */; };
@@ -249,6 +250,7 @@
 		B055A6078F10B93739132063 /* AgendaPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD66CE9CAC47F6338D5DCEFA /* AgendaPane.swift */; };
 		B0964E2C34087886CD5E0356 /* PreviewParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = B700C9BCA41E9A643CE33681 /* PreviewParts.swift */; };
 		B1BB9EBFA711A5E237DCCD3F /* CopiedColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D2A4B0A49EADE906DCAE43A /* CopiedColor.swift */; };
+		B2F4ED9AFC496993B9D5C5BC /* RelayInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5883A013981BCCB2A5C8C645 /* RelayInbox.swift */; };
 		B30C601DAAE60EEBE5CF7A7E /* Reminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D0A34413F83EEBBE4B6BDFE /* Reminders.swift */; };
 		B356254A656403CF73E81E6B /* BrowserHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF91D64C6E06D80F6EA699B5 /* BrowserHistory.swift */; };
 		B4125951A88CEB67DDAE15DF /* SettingsTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFAC4F714AD1BD0682334E74 /* SettingsTable.swift */; };
@@ -268,6 +270,7 @@
 		BC4302FC81D030B094F7F945 /* FinderSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7771A4932899B9EBA4EF5B1 /* FinderSelection.swift */; };
 		BD5D6D778E80BA248688348F /* ScheduledAsk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E6D581AD87DE821705933C4 /* ScheduledAsk.swift */; };
 		BE00AA1480A38B5D4C5B3161 /* PrivacyPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4304EA5425019877798D98D /* PrivacyPane.swift */; };
+		BEE254D6A3D65C369CAB54C9 /* UsualPlaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72DEBFE7DA3F67F74AF730E2 /* UsualPlaces.swift */; };
 		BF3E48D2E22DE3E01FA4572D /* MeetingMoment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115A6B490420DDF7ECF9B5E5 /* MeetingMoment.swift */; };
 		C0CD4B2798F9A8E42D71FE8C /* ComputerControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C78CF07B6DB33CAAA10BC7 /* ComputerControl.swift */; };
 		C234C6B7E32F368735B62F47 /* ImageTags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B4C6157780BFC4A9800FE7 /* ImageTags.swift */; };
@@ -520,6 +523,7 @@
 		4B0E2F4D9239AA39A1DA756B /* WindowArrange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowArrange.swift; sourceTree = "<group>"; };
 		4CEC9C21A84E642EA8273653 /* AskValues+Schedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AskValues+Schedule.swift"; sourceTree = "<group>"; };
 		4E23092B68A7985F89C4A4DB /* AwakeChipView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AwakeChipView.swift; sourceTree = "<group>"; };
+		4E2E708A3831FF5D35F7E422 /* GitHubServerInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubServerInbox.swift; sourceTree = "<group>"; };
 		4EA51B92C127D5758C086CEF /* FormProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormProfile.swift; sourceTree = "<group>"; };
 		4ED70BFD03C11B2A2B00BBD0 /* QuitRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuitRequest.swift; sourceTree = "<group>"; };
 		4F4086CD6F54E9BD93594CDD /* MCPOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPOAuth.swift; sourceTree = "<group>"; };
@@ -538,6 +542,7 @@
 		56C53464F74920F31258E6E9 /* SkilliAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkilliAction.swift; sourceTree = "<group>"; };
 		56DD19CABB02002377A1F9F6 /* KeyboardLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardLayout.swift; sourceTree = "<group>"; };
 		576C650EA613B299A691E8B4 /* GIFGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFGridView.swift; sourceTree = "<group>"; };
+		5883A013981BCCB2A5C8C645 /* RelayInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayInbox.swift; sourceTree = "<group>"; };
 		589BBB57B8D9D8261748F540 /* BrandCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandCheck.swift; sourceTree = "<group>"; };
 		58B4A1895097409DCE7B5323 /* ScriptCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptCommand.swift; sourceTree = "<group>"; };
 		590078DE8974AF14C3ECA15C /* AskScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskScheduler.swift; sourceTree = "<group>"; };
@@ -580,6 +585,7 @@
 		711A8BEB4020ABBCF16DB085 /* SystemSettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemSettingsPane.swift; sourceTree = "<group>"; };
 		714B2B01BE20FBE3A213B814 /* WelcomeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeModel.swift; sourceTree = "<group>"; };
 		72C04A03C3CFB05353E7D60B /* MeetingCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingCheck.swift; sourceTree = "<group>"; };
+		72DEBFE7DA3F67F74AF730E2 /* UsualPlaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsualPlaces.swift; sourceTree = "<group>"; };
 		738E57A49A152A4B343380FA /* HyperKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HyperKey.swift; sourceTree = "<group>"; };
 		73C96BF2E237C85FCFC3FCF7 /* AppleShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleShortcut.swift; sourceTree = "<group>"; };
 		7401408A8769931FA8BADBD0 /* SymbolicHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymbolicHotKey.swift; sourceTree = "<group>"; };
@@ -847,6 +853,7 @@
 				B5A35E54F69A3211F500FFD3 /* GIFSearch.swift */,
 				CDC65C623EC3B08106698073 /* GitHubInbox.swift */,
 				2C2318642465DC00FF0DA4A5 /* GitHubNotifications.swift */,
+				4E2E708A3831FF5D35F7E422 /* GitHubServerInbox.swift */,
 				85222576F80105D3893F2D45 /* Handoff.swift */,
 				F066C8F59CD75C6A215E724C /* Health.swift */,
 				525E82EB8EF05ED0519C7498 /* HistoryVisit.swift */,
@@ -895,6 +902,7 @@
 				55C15C52EEEC0A36810B6B03 /* QuitSender.swift */,
 				E4EB9C667EA61C311D91175E /* RaycastImport.swift */,
 				1A62F9D6E626D18C9D7331D9 /* RelayDeviceSession.swift */,
+				5883A013981BCCB2A5C8C645 /* RelayInbox.swift */,
 				E5B165B5511BD01A9E85604E /* RelayStream.swift */,
 				E34B51AAB9C1C5EA206ED217 /* ReminderDate.swift */,
 				8D0A34413F83EEBBE4B6BDFE /* Reminders.swift */,
@@ -1288,6 +1296,7 @@
 				975661806A8576A6C7721645 /* SystemCommands.swift */,
 				C5FF857B9AB86A64DEAE6C63 /* SystemSettingsPanes.swift */,
 				5537A8A3A8BBB9A0B7ED0CAE /* TimerCenter.swift */,
+				72DEBFE7DA3F67F74AF730E2 /* UsualPlaces.swift */,
 				EF9DC2C6C11F6C0B0E10E03C /* WiFi.swift */,
 				4B0E2F4D9239AA39A1DA756B /* WindowArrange.swift */,
 				C4BBB834A8ECE555C3DA7739 /* WindowArranger.swift */,
@@ -1587,6 +1596,7 @@
 				1D7729B502A98EB7ECDA647C /* GIFSearch.swift in Sources */,
 				9AE0DA9CE17B385FDA0547EF /* GitHubInbox.swift in Sources */,
 				D0C5CDF1F43A67CB441E2C13 /* GitHubNotifications.swift in Sources */,
+				098DA881E3AB36E897810310 /* GitHubServerInbox.swift in Sources */,
 				C546920AB16EDB49D0CBB270 /* Handoff.swift in Sources */,
 				E7858DD3BA597D8B32E9B822 /* Health.swift in Sources */,
 				6491E278431C90438EF5EE62 /* HistoryVisit.swift in Sources */,
@@ -1635,6 +1645,7 @@
 				9F742071118F0DE6CDD215B0 /* QuitSender.swift in Sources */,
 				9867FCC0DA791C395EF35134 /* RaycastImport.swift in Sources */,
 				2241C02C4C2F7D8AA1C68B85 /* RelayDeviceSession.swift in Sources */,
+				B2F4ED9AFC496993B9D5C5BC /* RelayInbox.swift in Sources */,
 				6A9CD8F261F5817ACE89B7C7 /* RelayStream.swift in Sources */,
 				67272E176356FD3B98701914 /* ReminderDate.swift in Sources */,
 				B30C601DAAE60EEBE5CF7A7E /* Reminders.swift in Sources */,
@@ -1878,6 +1889,7 @@
 				51AE288725D1B90029424847 /* UIReader.swift in Sources */,
 				AA1B2F0D6AF209B46974877B /* UndoableDeletes.swift in Sources */,
 				7758910C1694E8E46FDC0114 /* UsageStore.swift in Sources */,
+				BEE254D6A3D65C369CAB54C9 /* UsualPlaces.swift in Sources */,
 				B72B9865DB9B55F147D12BBC /* VoiceInput.swift in Sources */,
 				3A6A621C1F7CBB341D59FE39 /* WebcamTrack.swift in Sources */,
 				A940D91F85D3CDBFF552409B /* WelcomeModel.swift in Sources */,

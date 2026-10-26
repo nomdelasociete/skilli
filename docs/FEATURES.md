@@ -314,13 +314,17 @@ using.
   give it): every window where you usually put it, learned on this Mac
   from your own moves and ✦W (each app's place, its windows' titles and
   files, the displays, the apps beside it); a layout saved for the apps
-  open comes first. Again within 10 seconds puts them back.
+  open comes first. Again within 10 seconds puts them back. Place new
+  windows where you usually put them (off by default; needs Learn where
+  you put windows): an app you open gets its window there, when skil.li
+  is sure and before you touch it.
 - **Switch Window**: see Launcher.
 - **Auto Quit**: quits the apps you stopped using after a delay you
   choose; never the front app, unsaved work, sound or a call.
 
 Settings: Space between windows (with a preview) · Arrange Windows:
-Learn where you put windows · Forget What skil.li Learned · Layouts ·
+Learn where you put windows · Place new windows where you usually put
+them · Forget What skil.li Learned · Layouts ·
 Never place · Always leave out of layouts · Monitors ignored when plugged
 in · Displays never arranged when plugged in · Apps You Stopped Using: Quit apps you stopped using · Unused for ·
 Never quit.
@@ -481,9 +485,14 @@ what waits for you.
   twice), updates the branch or shows the checks, ⌘⌫ marks read.
 - **The strip** under the launcher's search field.
 - Sign in with GitHub (device flow); authorize this Mac in the browser for live updates. Access renews automatically and can be revoked independently of GitHub sign-in. If live updates are unavailable, the inbox keeps polling.
+- **Server sync** (off by default): the relay reads your pull requests
+  and notifications on GitHub with its own authorization, given in the
+  browser, and keeps one copy for all your Macs; this Mac only acts
+  (merge, update a branch, mark read). A relay that cannot answer is
+  said, never read around. Turn it off on one Mac, or delete it for all.
 
 Settings: GitHub (sign in) · Show under the search field · Live updates
-from · Live updates token.
+from · Live updates token · Server sync.
 
 <!-- pane: apps -->
 ## Apps

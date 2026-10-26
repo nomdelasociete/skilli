@@ -2261,12 +2261,8 @@ final class LauncherController: NSObject {
 
     /// A skillie's icon: its emoji, its image file, else a terminal.
     private func scriptIcon(_ command: ScriptCommand) -> NSImage {
-        let icon = command.icon
-        if !icon.isEmpty, icon.count <= 2, icon.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation || $0.properties.isEmoji && $0.value > 0xFF }) {
-            return emojiImage(icon)
-        }
-        if !icon.isEmpty, !icon.hasPrefix("http") {
-            let path = icon.hasPrefix("/") ? icon : ((command.path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(icon)
+        if let emoji = command.emojiIcon { return emojiImage(emoji) }
+        if let path = command.iconImagePath {
             if let cached = appIconsByPath[path] { return cached }
             if let image = NSImage(contentsOfFile: path) {
                 image.size = NSSize(width: 32, height: 32)
@@ -3395,7 +3391,8 @@ final class LauncherController: NSObject {
     }
 
     /// A `skilli://` link to `entry` opened (`LinkRunner`, after the card
-    /// asked when it must): what Return on it in the "?" does. What needs
+    /// asked when it must), or a key bound to a skillie that asks
+    /// arguments (`ActionRunner`): what Return on it in the "?" does. What needs
     /// the launcher (a mode, words to go on with, a quicklink's query, a
     /// skillie's arguments) opens it first; the rest runs without it.
     func run(fromLink entry: CatalogEntry) {

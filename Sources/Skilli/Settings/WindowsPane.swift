@@ -341,6 +341,12 @@ private struct ArrangeSection: View {
             }
             Toggle("Learn where you put windows", isOn: $preferences.windowLearning)
                 .settingAnchor("windowLearning")
+            Toggle(isOn: $preferences.usualPlaces) {
+                LabelDetail("Place new windows where you usually put them",
+                            "An app you open: its window goes where you put it the last times, only when skil.li is sure and before you touch it. ✦W R puts it back.")
+            }
+            .disabled(!preferences.windowLearning)
+            .settingAnchor("usualPlaces")
             Button("Forget What skil.li Learned") { context.forgetPlacements() }
                 .settingAnchor("section.forgetPlaces")
         } header: {

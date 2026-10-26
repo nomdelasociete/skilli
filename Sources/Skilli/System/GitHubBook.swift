@@ -198,7 +198,11 @@ actor GitHubClient {
 /// origin and a sealed stream token, the strip or GitHub mode holds one
 /// stream instead: a connect or a wake reads pull requests at once, and the
 /// inbox timer runs only while that stream is down. Notifications stay a
-/// local poll.
+/// local poll. With server sync on (the user's consent, then a separate
+/// authorization in the browser), every read of pull requests and
+/// notifications goes to the relay's copy instead (`GitHubServerInbox`):
+/// this Mac's GitHub token only acts (merge, update a branch, mark read),
+/// and a relay that cannot answer is said, never read around.
 @MainActor
 @Observable
 final class GitHubBook {
@@ -214,6 +218,10 @@ final class GitHubBook {
     /// The relay refused the sealed token. The GitHub poll keeps going.
     private(set) var relayProblem: String?
     private(set) var hasRelayToken = false
+    /// Server sync's state while it is on: what holds it back.
+    private(set) var serverHold: GitHubServerHold?
+    /// False when GitHub had more unread notifications than the relay keeps.
+    private(set) var notificationsComplete = true
 
     /// Changed (the strip and the GitHub mode redraw).
     @ObservationIgnored var onChange: (() -> Void)?
@@ -229,6 +237,24 @@ final class GitHubBook {
     /// GitHub mode is on screen. The stream stays up with the strip or this.
     @ObservationIgnored var showsGitHub = false {
         didSet { if showsGitHub != oldValue { syncRelay(); schedule() } }
+    }
+    /// Settings → GitHub is open: this Mac's relay identity is checked so
+    /// server sync can be turned on, without opening the stream.
+    @ObservationIgnored var showsSettings = false {
+        didSet { if showsSettings != oldValue { syncRelay() } }
+    }
+    /// Settings → GitHub → Server sync. On: pull requests and notifications
+    /// are read from the relay only. What was read the other way goes.
+    @ObservationIgnored var serverSync = false {
+        didSet {
+            guard serverSync != oldValue else { return }
+            Log.actions.notice("GitHub: server sync \(self.serverSync ? "on" : "off")")
+            clearReadData()
+            relayEndpoint = nil
+            syncRelay()
+            refresh(force: true)
+            onChange?()
+        }
     }
     /// Relay origin from Settings. Empty leaves the timer as it is.
     /// `RELAY_PUBLIC_URL` overrides it.
@@ -262,6 +288,8 @@ final class GitHubBook {
     @ObservationIgnored private let relay = RelayConnection()
     @ObservationIgnored private var relayCoalescer = RelayCoalescer()
     @ObservationIgnored private var relayEndpoint: String?
+    @ObservationIgnored private var relayEndpointInbox = false
+    @ObservationIgnored let server = GitHubServerInbox(client: { nil })
 
     private static let minimumSpacing: TimeInterval = 15
     private static let activeSpacing: TimeInterval = 15
@@ -292,13 +320,18 @@ final class GitHubBook {
             self.relayProblem = self.relayDevice.message
             self.relayEndpoint = nil
             self.syncRelay()
+            if self.serverSync { self.refresh(force: true) }
             self.schedule()
             self.onChange?()
         }
+        server.client = { [weak self] in self?.serverAccess().map(RelayInboxClient.init(access:)) }
+        server.onChange = { [weak self] in self?.applyServer() }
+        server.onDeviceExpired = { [weak self] in self?.relayDevice.accessExpired() }
         relay.onConnect = { [weak self] in
             guard let self else { return }
             self.relayProblem = nil
             self.noteRelay()
+            if self.serverSync { self.server.readNotifications() }
             self.schedule()
         }
         relay.onWake = { [weak self] in self?.noteRelay() }
@@ -346,6 +379,8 @@ final class GitHubBook {
     /// for a wake.
     func refresh(force: Bool = false, inbox: Bool = true) {
         guard let token else { return schedule() }
+        // Server sync: the relay's copy, whatever happens to the relay.
+        if serverSync { return refreshServer(force: force, inbox: inbox) }
         if let busyUntil, busyUntil > .now { return schedule() }
         if inbox {
             guard force || Date.now.timeIntervalSince(lastAttempt) >= Self.minimumSpacing, refreshing == nil else { return }
@@ -372,12 +407,16 @@ final class GitHubBook {
                 }
             }
             do {
+                // Server sync turned on meanwhile: this Mac reads nothing.
+                guard !serverSync else { return }
                 let inboxResult: (login: String, pullRequests: [PullRequest])?
                 if inbox {
                     inboxResult = try await client.inbox(token: token)
                 } else {
                     inboxResult = nil
                 }
+                // Again after the first read: server sync may have come on during it.
+                guard accountGeneration == generation, !serverSync, !Task.isCancelled else { return }
                 let answer = askNotifications ? try await client.notifications(token: token, since: since) : nil
                 guard accountGeneration == generation, !Task.isCancelled else { return }
                 apply(login: inboxResult?.login, pullRequests: inboxResult?.pullRequests, notifications: answer)
@@ -388,6 +427,115 @@ final class GitHubBook {
                 guard accountGeneration == generation, !Task.isCancelled else { return }
                 failed(GitHubError(message: error.localizedDescription))
             }
+        }
+    }
+
+    /// Reads the relay's copy: pull requests unless read in the last 15 s
+    /// (`force`: a wake, sign-in, the network back), notifications at the
+    /// relay's pace. Each waits for the relay's `Retry-After`.
+    private func refreshServer(force: Bool, inbox: Bool) {
+        if inbox, force || Date.now.timeIntervalSince(server.lastInboxRead ?? .distantPast) >= Self.minimumSpacing {
+            server.readInbox()
+        }
+        server.readNotifications()
+        schedule()
+    }
+
+    /// What kept this kind from being read again, for an agent's list.
+    func problem(notifications: Bool) -> String? {
+        guard serverSync else { return problem }
+        return (notifications ? server.notificationsHold : server.inboxHold)?.message
+    }
+
+    /// Settings → Read Now: the relay reads GitHub again (spaced and
+    /// limited there).
+    func readNow() {
+        guard serverSync else { return refresh(force: true) }
+        guard isSignedIn else { return }
+        server.readInbox(refresh: true)
+        server.readNotifications(refresh: true)
+    }
+
+    private func applyServer() {
+        guard serverSync else { return }
+        pullRequests = server.pullRequests ?? []
+        notifications = server.notifications ?? []
+        notificationsComplete = server.notificationsComplete
+        if let login = server.login { self.login = login }
+        serverHold = server.hold
+        problem = server.hold?.message
+        lastRefresh = server.lastInboxRead
+        if server.pullRequests != nil { Log.trace("GitHub (relay): \(GitHubInbox.summary(pullRequests)), \(unreadNotifications.count) unread") }
+        schedule()
+        onChange?()
+    }
+
+    /// This Mac's way to the relay's inbox, once signed in and verified.
+    private func serverAccess() -> RelayInboxAccess? {
+        guard isSignedIn, let origin = resolvedRelayOrigin else { return nil }
+        return relayDevice.inboxAccess(origin: origin.absoluteString)
+    }
+
+    /// Server sync can be authorized now (this Mac's relay identity checked).
+    var canAuthorizeServerSync: Bool { serverAccess() != nil }
+
+    /// Server sync was just turned on: when the user's other Mac already
+    /// authorized it, the relay answers at once and nothing opens; else the
+    /// browser, for the grant.
+    func startServerSync() async throws {
+        guard let access = serverAccess() else {
+            throw GitHubError(message: "Authorize this Mac for live updates first.")
+        }
+        do {
+            _ = try await RelayInboxClient(access: access).inbox()
+            return
+        } catch RelayInboxFailure.authorizationRequired {
+        } catch let failure as RelayInboxFailure {
+            throw GitHubError(message: Self.serverMessage(failure))
+        }
+        try await authorizeServerSync()
+    }
+
+    /// Opens the relay's page where the user grants server sync on GitHub.
+    /// Nothing is read until that grant exists: the relay answers 428.
+    func authorizeServerSync() async throws {
+        guard let access = serverAccess() else {
+            throw GitHubError(message: "Authorize this Mac for live updates first.")
+        }
+        do {
+            let url = try await RelayInboxClient(access: access).authorizationURL()
+            openURL(url)
+            server.authorizationStarted()
+            schedule()
+        } catch let failure as RelayInboxFailure {
+            throw GitHubError(message: Self.serverMessage(failure))
+        }
+    }
+
+    /// Deletes the relay's authorization and copy for all the user's Macs.
+    func deleteServerSync() async throws {
+        guard let access = serverAccess() else {
+            throw GitHubError(message: "Authorize this Mac for live updates first.")
+        }
+        do {
+            try await RelayInboxClient(access: access).delete()
+            Log.actions.notice("GitHub: server sync deleted for all Macs")
+            server.reset()
+            applyServer()
+        } catch let failure as RelayInboxFailure {
+            throw GitHubError(message: Self.serverMessage(failure))
+        }
+    }
+
+    private static func serverMessage(_ failure: RelayInboxFailure) -> String {
+        switch failure {
+        case .deviceExpired: GitHubServerHold.deviceExpired.message
+        case .authorizationRequired: GitHubServerHold.authorizationRequired.message
+        case .wrongAccount: GitHubServerHold.wrongAccount.message
+        case .limited(let until?), .unavailable(let until?):
+            "Server sync is not available right now. Try again after \(until.formatted(date: .omitted, time: .shortened))."
+        case .limited(nil), .unavailable(nil): "Server sync is not available right now. Try again in a moment."
+        case .invalidResponse: "The relay did not answer as expected: it may not offer server sync yet."
         }
     }
 
@@ -434,6 +582,20 @@ final class GitHubBook {
         timer = nil
         guard isSignedIn else { return }
         let connected = relay.isConnected
+        if serverSync {
+            guard keepsFresh || showsGitHub, let next = server.nextRead(connected: connected) else { return }
+            let timer = Timer(timeInterval: max(next.timeIntervalSinceNow, 1), repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.server.readDue(connected: self.relay.isConnected)
+                    self.schedule()
+                }
+            }
+            timer.tolerance = 2
+            RunLoop.main.add(timer, forMode: .common)
+            self.timer = timer
+            return
+        }
         let notificationsOnly = RelayPlan.suspendsInboxPoll(configured: relayIsConfigured, connected: connected)
         // No relay: only the strip polls, as before. With one, GitHub mode
         // also polls while the stream is down.
@@ -473,6 +635,8 @@ final class GitHubBook {
     }
 
     private func noteRelay() {
+        // The relay's stream woke for its own copy: one read, folded.
+        if serverSync { return server.readInbox() }
         if relayCoalescer.push(inFlight: refreshing != nil) {
             refresh(force: true)
             if refreshing == nil { _ = relayCoalescer.finished() }
@@ -481,7 +645,7 @@ final class GitHubBook {
 
     private func syncRelay() {
         let visible = keepsFresh || showsGitHub
-        if visible && isSignedIn, let origin = resolvedRelayOrigin { relayDevice.activate(origin: origin.absoluteString) }
+        if (visible || showsSettings) && isSignedIn, let origin = resolvedRelayOrigin { relayDevice.activate(origin: origin.absoluteString) }
         else { relayDevice.suspend() }
         guard isSignedIn, RelayPlan.holdsStream(configured: relayIsConfigured, interfaceVisible: visible),
               let origin = resolvedRelayOrigin, let config = relayDevice.configuration(origin: origin.absoluteString) else {
@@ -490,9 +654,10 @@ final class GitHubBook {
             return
         }
         let endpoint = origin.absoluteString
-        if relayEndpoint == endpoint, relay.isRunning { return }
+        if relayEndpoint == endpoint, relayEndpointInbox == serverSync, relay.isRunning { return }
         relayEndpoint = endpoint
-        relay.start(origin: origin, token: config.token)
+        relayEndpointInbox = serverSync
+        relay.start(origin: origin, token: config.token, inbox: serverSync)
     }
 
     /// Drop a stale socket (sleep, network back) and open it again.
@@ -535,7 +700,7 @@ final class GitHubBook {
     func refreshed() async {
         if let lastRefresh, Date.now.timeIntervalSince(lastRefresh) < Self.minimumSpacing { return }
         refresh(force: true)
-        await refreshing?.value
+        if serverSync { await server.settled() } else { await refreshing?.value }
     }
 
     // MARK: Acting
@@ -544,18 +709,25 @@ final class GitHubBook {
         guard let token else { throw GitHubError(message: "Sign in to GitHub in skil.li's Settings first.") }
         try await client.merge(pullRequest, token: token)
         Log.actions.notice("GitHub: merged \(pullRequest.repositoryFullName, privacy: .private)#\(pullRequest.number)")
-        refresh(force: true)
+        readAfterWrite()
     }
 
     func updateBranch(_ pullRequest: PullRequest) async throws {
         guard let token else { throw GitHubError(message: "Sign in to GitHub in skil.li's Settings first.") }
         try await client.updateBranch(pullRequest, token: token)
-        refresh(force: true)
+        readAfterWrite()
+    }
+
+    /// After a native write: the relay rereads GitHub (its copy is for all
+    /// the user's Macs), else this Mac does.
+    private func readAfterWrite() {
+        if serverSync { server.readInbox(refresh: true) } else { refresh(force: true) }
     }
 
     func markRead(_ notification: GitHubNotification) async throws {
         guard let token else { throw GitHubError(message: "Sign in to GitHub in skil.li's Settings first.") }
         try await client.markRead(notification.id, token: token)
+        if serverSync { return server.markedRead(notification.id) }
         notifications = notifications.map { $0.id == notification.id ? GitHubNotification(
             id: $0.id, reason: $0.reason, type: $0.type, title: $0.title, repository: $0.repository, updatedAt: $0.updatedAt, unread: false, url: $0.url) : $0 }
         onChange?()
@@ -630,16 +802,27 @@ final class GitHubBook {
     }
 
     private func clearAccountData() {
+        clearReadData()
+        login = nil
+    }
+
+    /// What was read, from GitHub or the relay; any answer on its way is
+    /// dropped.
+    private func clearReadData() {
         accountGeneration = UUID()
         refreshing?.cancel()
         refreshing = nil
         busyUntil = nil
         lastAttempt = .distantPast
         nextNotifications = .distantPast
-        login = nil
         pullRequests = []
         notifications = []
+        notificationsComplete = true
         lastModified = nil
+        lastRefresh = nil
+        problem = nil
+        serverHold = nil
+        server.reset()
     }
 
     /// Self-test hook: a token as if the user had signed in.

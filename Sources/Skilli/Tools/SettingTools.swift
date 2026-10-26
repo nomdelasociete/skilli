@@ -998,6 +998,7 @@ final class SettingTools {
         bindings["autoQuitMinutes"] = number(\.autoQuitMinutes)
         bindings["autoQuitNever"] = apps(\.autoQuitNever)
         bindings["windowLearning"] = toggle(\.windowLearning)
+        bindings["usualPlaces"] = toggle(\.usualPlaces)
         bindings["windowNeverPlace"] = apps(\.windowNeverPlace)
         bindings["windowLayoutIgnoredApps"] = apps(\.windowLayoutIgnoredApps)
         var monitors = Binding(get: { [unowned self] in .list(self.preferences.ignoredMonitors.map(\.name)) })
@@ -1083,6 +1084,7 @@ final class SettingTools {
         // GitHub
         bindings["githubUnderSearch"] = toggle(\.githubUnderSearch)
         bindings["relayPublicURL"] = string(\.relayPublicURL)
+        bindings["githubServerSync"] = toggle(\.githubServerSync)
         bindings["githubAccount"] = Binding(get: { [unowned self] in
             // Signed in or not: who is the user's own.
             .text(self.github?.isSignedIn == true ? "Signed in" : "Not signed in")

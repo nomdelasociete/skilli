@@ -620,9 +620,10 @@ starts from it.
   Open skil.li first ("Shortcuts", "✦K, then a key", "Windows: ✦W, then a key"; the ✦K
   group's stored name, "Leader", is never shown). Backup: Back up to, How
   often, Keep, Back Up Now, where backups go, then the backups. GitHub:
-  the account and Last read, the strip and its preview, what leaves, then
-  Live updates from (the relay: "relay" only in Advanced's help) and its
-  token under Advanced. Your Details: the card (Contacts in its place
+  the account and Last read, the strip and its preview, what leaves, Live
+  updates (this Mac's authorization), Server sync (once this Mac is
+  authorized, or while on), then Live updates from (the relay: "relay"
+  only in Advanced's help) and its token under Advanced. Your Details: the card (Contacts in its place
   while missing), your other details, About You, what leaves, then the
   people and what forms get from the card.
   Apps (docs/apps.md): a list of the apps skil.li drives that are
@@ -1256,7 +1257,7 @@ starts from it.
   2026-10-25; all by exact name, `BackupPlan.neverCopied`) and the
   `Preferences.*` defaults in `Settings.plist`, minus this Mac's own state
   (`Preferences.machineKeys`: setup done, screens, launcher place, backup
-  folder). API keys and sensitive form fields stay in the Keychain: never
+  folder, GitHub server sync: consent given on each Mac). API keys and sensitive form fields stay in the Keychain: never
   in a backup.
 - The folder is the user's choice (iCloud Drive offered first); how often
   (only when asked, every day, week, month) and how many stay (5, 10, 30,
@@ -2483,6 +2484,35 @@ re-investigating.
   that stream is down. Notifications stay `GET /notifications` on GitHub's
   interval. No origin: the timer above, unchanged. The GitHub OAuth token
   is never sent to the relay.
+  Server sync (Settings → GitHub → Server sync, `githubServerSync`, off by
+  default, pane only: the user's consent): the relay reads pull requests
+  and notifications on GitHub with its own OAuth grant (`read:user repo`,
+  given in the browser on the relay's `/inbox/authorize`, which must prove
+  this Mac's numeric GitHub id) and keeps one encrypted copy per product
+  and user for all their Macs. Every read then goes to the relay's
+  authority (`RelayInboxClient`: `GET`/`POST /inbox`, `GET`/`POST
+  /inbox/notifications`, `DELETE /inbox`, `POST /inbox/authorization`;
+  this Mac's v2 relay token only) through `GitHubServerInbox`, which has no
+  way to GitHub: `GitHubBook.refresh` returns into it before any native
+  read, and the native read task checks again. The stream sends
+  `X-Relay-Inbox: 1` (wakes only when the relay's copy changed); the copy
+  is read on connect, on a wake (a burst folded into one more read), every
+  minute while connected and every 30 s while not (the relay reconciles
+  with GitHub at most once a minute); notifications at the relay's
+  `pollInterval`. 401 renews this Mac's relay access; 428 says to authorize
+  (checked every 5 min, every 5 s for 10 min after the browser opened,
+  never reopened by itself) and clears what was read; 429/503 keep the last
+  copy, said as paused, until `Retry-After` (else 30 s doubling to 15 min,
+  `RelayReadPacer`). A snapshot for another subject, too old, cut (checks
+  or results) or without a field the classification reads
+  (`isInMergeQueue`, `viewerCanUpdateBranch`, `createdAt`, a status's
+  `context`) is refused, never guessed. Late answers after sign-out, an
+  account change or turning it off are dropped (`reset`). Merge, Update
+  Branch and Mark Read stay native, then ask the relay to reread
+  (`POST`). Turn Off on This Mac goes back to native reads (the user's
+  choice, never a fallback); Delete for All Macs is `DELETE /inbox`.
+  Agents' lists say "Not up to date: …" when their kind could not be read
+  again.
   "pr " / "prs " or GitHub Inbox: the GitHub mode (grey chip; "gh " stays
   GitHub's search quicklink): Return opens (a notification is then read),
   ⌘Return copies the link, ⌘K (or ⇥) its actions (Open, the merge method,
@@ -3069,6 +3099,17 @@ re-investigating.
   least half of the windows open (`ArrangeOffer.offered`); alone, it shows
   with no saved layout too. ↩ runs Arrange Windows; ⌘K adds Never Arrange
   on These Displays. `selftest windows` (`displayPromptArrangesAsUsual`).
+  Usual places (`UsualPlaces`, `Preferences.usualPlaces`, off by default,
+  needs learning on): on an app's launch, `AXWait` for its first window
+  (4 s, nothing stays observed); one window only (several: left to
+  Arrange), its title waited for up to 1 s when empty, then placed when
+  `WindowPlacements.sure` (3 placements on these very displays, 70 % of
+  the weight, the last 3 of the windows most like it there; never from an
+  empty title unless the app's windows go by rank) and
+  `UsualPlace.untouched` (under 1.5 s old, no key or click since, mouse
+  up); `WindowManager.remember` keeps where it opened for ✦W R. A move
+  away is learned as usual and makes it unsure. `selftest windows`
+  (`usualPlacesOnLaunch`).
 - File search (`FileSearch`, `FileMeaning` in SkilliCore): Search Files
   or "f " / "file " / "fichier " turns the launcher into Spotlight's files
   (a green chip). Typing searches names (every word, case and accents
@@ -3373,7 +3414,11 @@ re-investigating.
   history by meaning on (default). Agents: `search_history`.
   `selftest history` (scratch Chrome, Zen and Safari histories).
 - Skillies (`ScriptLibrary`, `ScriptCommand` in SkilliCore, Settings →
-  Skillies, `MacAction.script`): skil.li's own commands, the
+  Skillies, `MacAction.script`; the reference for users and contributors
+  is `docs/skillies/`: header keys, how one runs, every tool `"$SKILLI_CLI"
+  call` reaches. Change it in the same pull request as the behaviour;
+  `SkillieDocsTests` fails on a header key, skillie variable or tool it
+  does not list): skil.li's own commands, the
   scripts of `~/Library/Application Support/skil.li/skillies` (one level
   of subfolders; hidden and `.template.` files left out) whose first 60
   lines say `# @skilli.…` or `// @skilli.…`: Raycast's Script Command
@@ -3423,7 +3468,10 @@ re-investigating.
   `run_skillie` is always allowed. Ask: skillies that need no argument
   join the command question as `script0`…; one that fits (≥ 60 %) beats
   the agent, asked first under 85 %. Shortcuts: Add Shortcut → Skillies
-  (`script:<path>`). Agents: `list_skillies`, `run_skillie` (arguments in
+  (`script:<path>`); one with a required argument opens the launcher on
+  its chip (`ActionRunner`, `run(fromLink:)`), never empty. Menu bar: an
+  emoji icon before the line, an image file as the item's image
+  (`ScriptCommand.emojiIcon`, `iconImagePath`). Agents: `list_skillies`, `run_skillie` (arguments in
   order; a missing one refused), `create_skillie`. `selftest scripts`
   (scratch folder; a real Haiku agent writes one).
 - Skillie files (docs/skillie-files.md; `SkillieFile`, `SkillieImportLink`
@@ -3442,7 +3490,8 @@ re-investigating.
   most, a shebang naming an absolute path, title and mode in the first
   8 KB, schemaVersion 1); what is not one says why, nothing to add.
   Added as the file's own name in hyphenated words, the extension from
-  the shebang (`sh`, `py`, `js`, `swift`, `rb`, else none), executable; a
+  the shebang (`sh`, `py`, `js` for node or `osascript -l JavaScript`,
+  `swift`, `rb`, `applescript`, else none), executable; a
   name taken becomes "name-2". The same title as one of the user's:
   Replace, written over that file in place (its path kept: keys, menu bar
   line, learning follow); exactly the same text: "Already in your
