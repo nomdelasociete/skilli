@@ -187,10 +187,31 @@ enum MeetingTranscriber {
         done.edited = nil
         done.speakers = MeetingVoices.keepingGiven(record.speakers, fresh: names.merging([Voice.me.rawValue: Speaker.me.title]) { a, _ in a })
         let file = MeetingTranscript.File(language: record.language, engine: engine.rawValue, lines: lines)
-        try file.encoded().write(to: folder.appendingPathComponent("transcript.json"), options: .atomic)
-        try markdown(done, lines: lines).write(to: folder.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)
+        try replaceTranscript(in: folder, json: file.encoded(), markdown: Data(markdown(done, lines: lines).utf8))
         Log.trace("Recorder: transcript of “\(record.title)” (\(engine.rawValue)): \(lines.count) lines, \(dropped) words heard again left out")
         return done
+    }
+
+    /// `transcript.json` and `transcript.md` both written, or neither: each
+    /// staged first, the ones there (a transcript made again over the
+    /// user's changes) replaced only once both are.
+    private static func replaceTranscript(in folder: URL, json: Data, markdown: Data) throws {
+        let files = [("transcript.json", json), ("transcript.md", markdown)].map { name, data in
+            (final: folder.appendingPathComponent(name), staged: folder.appendingPathComponent(".new-" + name), data: data)
+        }
+        do {
+            for file in files { try file.data.write(to: file.staged) }
+        } catch {
+            for file in files { try? FileManager.default.removeItem(at: file.staged) }
+            throw error
+        }
+        for file in files {
+            if FileManager.default.fileExists(atPath: file.final.path) {
+                _ = try FileManager.default.replaceItemAt(file.final, withItemAt: file.staged)
+            } else {
+                try FileManager.default.moveItem(at: file.staged, to: file.final)
+            }
+        }
     }
 
     /// The track whose voices are told apart: in a call, the Mac's sound
