@@ -213,7 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prompt.onEdit = { [weak self] layout in self?.layoutEditor.edit(layout) }
         prompt.onRecord = { [weak self] in self?.layoutEditor.capture(name: "") }
         prompt.onArrange = { [weak self] in self?.actions.perform(.mac(.system(.arrangeWindows)), triggeredAt: .now) }
-        prompt.onNeverArrange = { [weak self] _ in self?.neverArrangeHere() }
+        prompt.onNeverArrange = { [weak self] displays in self?.neverArrange(displays) }
         madeDisplayPrompt = prompt
         return prompt
     }
@@ -1480,18 +1480,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// them not ignored, these displays not refused, and at least half of
     /// the windows open with a learned place.
     private func arrangeOffer(for plugged: [DisplayFingerprint], connected: [LayoutDisplay]) -> DisplayPrompt.Offer? {
+        let here = ArrangeOffer.displaySet(connected.map(\.fingerprint))
         guard preferences.windowLearning,
               plugged.contains(where: { display in !display.builtIn && !preferences.ignoredMonitors.contains { $0.isSameDisplay(as: display) } }),
-              !ArrangeOffer.refused(ArrangeOffer.displaySet(connected.map(\.fingerprint)), in: preferences.neverArrangeDisplays) else { return nil }
+              !ArrangeOffer.refused(here, in: preferences.neverArrangeDisplays) else { return nil }
         let coverage = windowArrange.coverage()
         guard ArrangeOffer.offered(placed: coverage.placed, of: coverage.total) else { return nil }
-        return .arrange(placed: coverage.placed, of: coverage.total)
+        return .arrange(placed: coverage.placed, of: coverage.total, on: here)
     }
 
-    /// Never Arrange on These Displays: the displays connected now no longer
-    /// offer Arrange as Usual when one is plugged in.
-    private func neverArrangeHere() {
-        let here = ArrangeOffer.displaySet(Displays.current().map(\.fingerprint))
+    /// Never Arrange on These Displays: the displays the question was asked
+    /// for no longer offer Arrange as Usual when one is plugged in.
+    private func neverArrange(_ here: ArrangeOffer.DisplaySet) {
         if !ArrangeOffer.refused(here, in: preferences.neverArrangeDisplays) { preferences.neverArrangeDisplays.append(here) }
         aiActions.notify("Arrange as Usual is not offered any more with \(here.label) connected. Settings → Windows to change it.",
                          caller: "Arrange Windows", run: nil, seconds: 5)

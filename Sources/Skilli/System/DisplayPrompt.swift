@@ -16,12 +16,14 @@ final class DisplayPrompt {
         let layout: SavedWindowLayout?
         let certainty: DisplayFingerprint.Certainty
         let exact: Bool
-        /// Arrange as Usual: the windows with a learned place, of those open.
+        /// Arrange as Usual: the windows with a learned place, of those open,
+        /// and the displays connected when it was offered.
         var placed = 0
         var total = 0
+        var displays: ArrangeOffer.DisplaySet?
 
-        static func arrange(placed: Int, of total: Int) -> Offer {
-            Offer(layout: nil, certainty: .unit, exact: true, placed: placed, total: total)
+        static func arrange(placed: Int, of total: Int, on displays: ArrangeOffer.DisplaySet) -> Offer {
+            Offer(layout: nil, certainty: .unit, exact: true, placed: placed, total: total, displays: displays)
         }
 
         var id: String { layout?.id ?? "arrange" }
@@ -35,8 +37,8 @@ final class DisplayPrompt {
     var onRecord: (() -> Void)?
     /// Arrange as Usual: Arrange Windows, now.
     var onArrange: (() -> Void)?
-    /// Never Arrange on These Displays.
-    var onNeverArrange: (([DisplayFingerprint]) -> Void)?
+    /// Never Arrange on These Displays: the ones it was offered for.
+    var onNeverArrange: ((ArrangeOffer.DisplaySet) -> Void)?
 
     private(set) var offers: [Offer] = []
     /// The displays it asks about.
@@ -185,7 +187,7 @@ final class DisplayPrompt {
         guard offers.indices.contains(selected) else { return }
         let monitors = plugged.map(\.name).joined(separator: " and ")
         guard let chosen = offers[selected].layout else {
-            openArrangeActions(monitors: monitors)
+            if let displays = offers[selected].displays { openArrangeActions(monitors: monitors, displays: displays) }
             return
         }
         let sure = offers[selected].certainty == .unit
@@ -227,7 +229,7 @@ final class DisplayPrompt {
 
     /// Arrange as Usual's: run it, record a layout instead, ignore once,
     /// never on these displays, ignore the monitors.
-    private func openArrangeActions(monitors: String) {
+    private func openArrangeActions(monitors: String, displays: ArrangeOffer.DisplaySet) {
         let list = [
             LauncherAction(title: "Arrange as Usual", symbol: SystemCommand.arrangeWindows.symbol, key: .open) { [weak self] in self?.apply() },
             LauncherAction(title: "Record New Layout Here…", symbol: "record.circle") { [weak self] in
@@ -236,10 +238,8 @@ final class DisplayPrompt {
             },
             LauncherAction(title: "Ignore Once", symbol: "xmark", group: .remove) { [weak self] in self?.ignoreOnce() },
             LauncherAction(title: "Never Arrange on These Displays", symbol: "nosign", group: .remove) { [weak self] in
-                guard let self else { return }
-                let plugged = self.plugged
-                self.hide()
-                self.onNeverArrange?(plugged)
+                self?.hide()
+                self?.onNeverArrange?(displays)
             },
             LauncherAction(title: "Ignore \(monitors)", symbol: "display.trianglebadge.exclamationmark", group: .remove) { [weak self] in
                 guard let self else { return }
