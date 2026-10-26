@@ -4,6 +4,8 @@ import Foundation
 public struct RelayHTTPReply: Sendable {
     let status: Int
     let data: Data
+    /// The relay's `Retry-After`, in seconds (429, 503).
+    var retryAfter: TimeInterval? = nil
 }
 
 public struct RelayDeviceAPI: Sendable {
@@ -18,7 +20,9 @@ public struct RelayDeviceAPI: Sendable {
         defer { session.invalidateAndCancel() }
         let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        return RelayHTTPReply(status: response.statusCode, data: data)
+        guard data.count <= RelayInbox.maximumBody else { throw URLError(.dataLengthExceedsMaximum) }
+        return RelayHTTPReply(status: response.statusCode, data: data,
+                              retryAfter: RelayInbox.retryAfter(response.value(forHTTPHeaderField: "Retry-After")))
     }
 
     func post(_ path: String, body: [String: String]? = nil, access: String? = nil) async throws -> RelayHTTPReply {
@@ -85,6 +89,9 @@ public final class RelayDeviceSession: ObservableObject {
     public var githubToken: () -> String? = { nil }
     private var verifiedNativeToken: String?
     private var verifiedAccessToken: String?
+    /// The numeric GitHub id both GitHub (native token) and the authority
+    /// agreed on; server inbox snapshots must carry it.
+    public private(set) var verifiedSubject: String?
     private var identityGeneration = 0
     private var identityTask: Task<Void, Never>?
     private var identityTarget: String?
@@ -172,6 +179,16 @@ public final class RelayDeviceSession: ObservableObject {
         return nil // Legacy tokens carry no verifiable GitHub identity.
     }
 
+    /// What the server inbox needs, only once this Mac's relay access and
+    /// its GitHub identity are verified: the authority, the browser origin
+    /// its authorization page must be on, the access token, the subject.
+    public func inboxAccess(origin: String) -> RelayInboxAccess? {
+        guard let configuration = configuration(origin: origin), let subject = verifiedSubject,
+              let authority = Self.origin(credentials?.authorityOrigin ?? ""), authority == Self.origin(authorityOrigin()),
+              let browser = Self.origin(browserOrigin()) else { return nil }
+        return RelayInboxAccess(authority: authority, browser: browser, token: configuration.token, subject: subject, send: send)
+    }
+
     public static func origin(_ value: String) -> URL? {
         guard let config = RelayDeviceConfiguration(origin: value, token: "v2.validation") else { return nil }
         var components = URLComponents(url: config.origin, resolvingAgainstBaseURL: false)
@@ -194,6 +211,7 @@ public final class RelayDeviceSession: ObservableObject {
         identityTask = nil
         verifiedNativeToken = nil
         verifiedAccessToken = nil
+        verifiedSubject = nil
         timer?.cancel()
         timer = nil
         // Do not cancel a rotation that may already have consumed its token.
@@ -261,7 +279,8 @@ public final class RelayDeviceSession: ObservableObject {
                           installations.allSatisfy(Self.numericID) else { throw URLError(.badServerResponse) }
                     try Task.checkCancellation()
                     guard githubToken() == enrollmentToken,
-                          let native = await verifyIdentity(pair: pair, authority: authority) else { return }
+                          let verified = await verifyIdentity(pair: pair, authority: authority) else { return }
+                    let native = verified.native
                     try Task.checkCancellation()
                     guard identityGeneration == enrollmentGeneration, githubToken() == native else { return }
                     // One atomic Keychain item holds both tokens. Never overwrite the legacy item.
@@ -269,6 +288,7 @@ public final class RelayDeviceSession: ObservableObject {
                         expiresAt: Date().addingTimeInterval(pair.expires_in), authorityOrigin: authority.absoluteString))
                     verifiedNativeToken = native
                     verifiedAccessToken = pair.access_token
+                    verifiedSubject = verified.subject
                     rejectedAccess = false
                     retryNotBefore = nil
                     message = "This Mac is authorized for \(installations.count) GitHub account(s). Live access renews automatically."
@@ -303,12 +323,13 @@ public final class RelayDeviceSession: ObservableObject {
                 if self.identityGeneration == generation { self.identityTask = nil }
             }
             if let verified = await self.verifyIdentity(pair: current.pair, authority: authority),
-               !Task.isCancelled, self.active, self.githubToken() == verified,
+               !Task.isCancelled, self.active, self.githubToken() == verified.native,
                self.identityGeneration == generation,
                self.credentials?.pair.access_token == current.pair.access_token,
                self.credentials?.requiresEnrollment == false {
-                self.verifiedNativeToken = verified
+                self.verifiedNativeToken = verified.native
                 self.verifiedAccessToken = current.pair.access_token
+                self.verifiedSubject = verified.subject
                 self.message = "GitHub account verified for live updates."
                 self.onChange?()
             }
@@ -317,7 +338,7 @@ public final class RelayDeviceSession: ObservableObject {
 
     // Compare stable GitHub numeric IDs obtained independently from GitHub and
     // the authenticated authority. Never trust a browser login name or local ID.
-    private func verifyIdentity(pair: RelayTokenPair, authority: URL) async -> String? {
+    private func verifyIdentity(pair: RelayTokenPair, authority: URL) async -> (native: String, subject: String)? {
         guard let native = githubToken(), !native.isEmpty else { return nil }
         let generation = identityGeneration
         do {
@@ -340,7 +361,7 @@ public final class RelayDeviceSession: ObservableObject {
                 message = "Live updates use a different GitHub account. Authorize this Mac again using the same account as the app."
                 return nil
             }
-            return native
+            return (native, identity.subject)
         } catch {
             if !Task.isCancelled, generation == identityGeneration {
                 message = "Could not verify the GitHub account for live updates. Periodic GitHub checks continue; try authorizing again."

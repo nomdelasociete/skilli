@@ -70,6 +70,10 @@ final class PrivacyMapTests: XCTestCase {
         var withRules = everything
         withRules.rules = true
         placed.formUnion(PrivacyMap.sections(for: withRules).flatMap(\.rows).map(\.id))
+        // Server sync: GitHub only for actions, the relay reads.
+        var serverSync = everything
+        serverSync.githubServerSync = true
+        placed.formUnion(PrivacyMap.sections(for: serverSync).flatMap(\.rows).map(\.id))
         XCTAssertEqual(placed, Set(PrivacyMap.all.map(\.id)))
     }
 
@@ -331,6 +335,24 @@ final class PrivacyMapTests: XCTestCase {
         XCTAssertEqual(PrivacyMap.line(for: "github", everything)?.text,
                        "GitHub gets your sign-in with each read, every minute while the strip or “pr” shows, and what you do there: merge, "
                            + "update a branch, mark read; relay.example.com gets only its own token, never your GitHub sign-in.")
+    }
+
+    func testServerSyncSaysGitHubGetsTheSignInOnlyForActions() {
+        var setup = everything
+        setup.githubServerSync = true
+        XCTAssertEqual(PrivacyMap.line(for: "github", setup)?.text,
+                       "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read) and to check which "
+                           + "account this Mac uses for the relay; relay.example.com reads "
+                           + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.")
+        XCTAssertEqual(ids(.github, setup), ["githubActions", "serverSync"])
+        XCTAssertEqual(ids(.github, everything), ["github", "relay"])
+        // This Mac's relay access gone, server sync still on: said all the same.
+        setup.relayHost = nil
+        XCTAssertEqual(PrivacyMap.line(for: "github", setup)?.text,
+                       "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read) and to check which "
+                           + "account this Mac uses for the relay; the relay reads "
+                           + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.")
+        XCTAssertEqual(ids(.github, setup), ["githubActions", "serverSync"])
     }
 
     func testBackupSaysWhereBackupsGoAndWhoSyncsThem() {

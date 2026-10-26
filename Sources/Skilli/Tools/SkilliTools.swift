@@ -1666,6 +1666,11 @@ final class SkilliTools {
     private func githubTool(_ name: String, arguments: [String: Any], in github: GitHubBook, text: (String) throws -> String) async throws -> String {
         await github.refreshed()
         if let problem = github.problem, github.lastRefresh == nil { throw Failure(message: problem) }
+        // A list that could not be read again says so: never an empty or
+        // old list passed off as up to date.
+        func stale(notifications: Bool) -> String {
+            github.problem(notifications: notifications).map { "Not up to date: \($0)\n" } ?? ""
+        }
         let words = (arguments["query"] as? String ?? "").lowercased().split(separator: " ").map(String.init)
         func fits(_ fields: [String]) -> Bool {
             let haystack = fields.joined(separator: " ").lowercased()
@@ -1683,15 +1688,20 @@ final class SkilliTools {
         case "list_pull_requests":
             let group = (arguments["group"] as? String).flatMap(PullRequestGroup.init(rawValue:))
             let shown = github.pullRequests.filter { (group == nil || $0.group == group) && fits([$0.title, $0.repositoryFullName, $0.reason]) }
-            guard !shown.isEmpty else { return github.pullRequests.isEmpty ? "No open pull request." : "No pull request fits." }
-            return shown.map { pullRequest in
+            guard !shown.isEmpty else { return stale(notifications: false) + (github.pullRequests.isEmpty ? "No open pull request." : "No pull request fits.") }
+            return stale(notifications: false) + shown.map { pullRequest in
                 "\(pullRequest.group.rawValue) — \(pullRequest.repositoryFullName)#\(pullRequest.number) “\(pullRequest.title)” — \(pullRequest.reason)"
                     + (pullRequest.needsUserAction ? " (the user's turn)" : "") + (pullRequest.canMerge ? " — can merge" : "") + " — \(pullRequest.url.absoluteString)"
             }.joined(separator: "\n")
         case "list_github_notifications":
             let shown = github.unreadNotifications.filter { fits([$0.title, $0.repository, $0.reasonTitle]) }
-            guard !shown.isEmpty else { return "No unread notification." }
-            return shown.map { "\($0.id) — \($0.reasonTitle) — \($0.repository) “\($0.title)” — \($0.url.absoluteString)" }.joined(separator: "\n")
+            let more = github.notificationsComplete ? "" : "\nMore unread notifications than listed: https://github.com/notifications"
+            guard !shown.isEmpty else {
+                // A cut list cannot say there is none: only none among those read.
+                let none = github.notificationsComplete ? "No unread notification." : "None among the unread notifications read; GitHub has more."
+                return stale(notifications: true) + none + more
+            }
+            return stale(notifications: true) + shown.map { "\($0.id) — \($0.reasonTitle) — \($0.repository) “\($0.title)” — \($0.url.absoluteString)" }.joined(separator: "\n") + more
         case "merge_pull_request":
             let found = try pullRequest()
             guard found.canMerge else {

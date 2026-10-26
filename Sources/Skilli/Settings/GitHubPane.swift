@@ -5,8 +5,9 @@ import SwiftUI
 /// reached ("pr" in the launcher, its alias), the account (GitHub's device
 /// flow: a code to type on github.com) and what skil.li read last; the
 /// strip under the search field with its preview, drawn by the strip's own
-/// view; what leaves the Mac and to whom; then, under Advanced, closed, live
-/// updates from the user's own relay.
+/// view; what leaves the Mac and to whom; live updates (this Mac's relay
+/// access), then server sync (the relay reads GitHub for the user's Macs);
+/// then, under Advanced, closed, the relay's address and legacy token.
 struct GitHubPane: View {
     @Bindable var preferences: Preferences
     let context: SettingsContext
@@ -32,7 +33,9 @@ struct GitHubPane: View {
             } header: {
                 PaneHeader(pane: .github)
             } footer: {
-                Text("skil.li reads your pull requests (yours and those waiting for your review) and your notifications with your GitHub account. Merging asks you first.")
+                Text(preferences.githubServerSync
+                     ? "The relay reads your pull requests (yours and those waiting for your review) and your notifications for your Macs (Server sync, below); skil.li acts with your GitHub account. Merging asks you first."
+                     : "skil.li reads your pull requests (yours and those waiting for your review) and your notifications with your GitHub account. Merging asks you first.")
             }
 
             Section {
@@ -61,6 +64,9 @@ struct GitHubPane: View {
                     }
                     return preferences.relayPublicURL
                 })
+                if github.relayDevice.canRevoke || preferences.githubServerSync {
+                    ServerSyncControls(preferences: preferences, github: github)
+                }
             }
 
             AdvancedSection(summary: "Server address and legacy token", footer: Self.relayHelp,
@@ -100,7 +106,11 @@ struct GitHubPane: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { relayURL = preferences.relayPublicURL }
+        .onAppear {
+            relayURL = preferences.relayPublicURL
+            github?.showsSettings = true
+        }
+        .onDisappear { github?.showsSettings = false }
     }
 
     /// "pr", then GitHub Inbox's alias when it has one.
@@ -178,10 +188,10 @@ struct GitHubPane: View {
             HStack {
                 Text(github.problem ?? github.lastRefresh.map { $0.formatted(date: .omitted, time: .standard) } ?? "Not yet")
                     .foregroundStyle(github.problem == nil ? Color.secondary : Color.orange)
-                Button("Read Now") { github.refresh(force: true) }
+                Button("Read Now") { github.readNow() }
             }
         } label: {
-            LabelDetail("Last read", "\(summary(github)) · \(github.unreadNotifications.count) unread")
+            LabelDetail("Last read", "\(summary(github)) · \(github.unreadNotifications.count)\(github.notificationsComplete ? "" : "+") unread")
         }
     }
 
@@ -226,6 +236,100 @@ private struct RelayEnrollmentControls: View {
             Text("Live updates")
         } footer: {
             Text("Select all the GitHub accounts and organizations you want in your browser. Managing accounts replaces the selection only after authorization succeeds. This Mac renews its live access automatically. Your GitHub sign-in token stays on this Mac; GitHub is checked on a timer whenever live updates are unavailable.")
+        }
+    }
+}
+
+/// Server sync: the relay reads pull requests and notifications on GitHub
+/// with its own authorization, one copy for all the user's Macs. Turning it
+/// on says first what it reads and keeps; turning it off here is this Mac
+/// only; deleting is for every Mac.
+private struct ServerSyncControls: View {
+    @Bindable var preferences: Preferences
+    let github: GitHubBook
+    @State private var confirmOn = false
+    @State private var confirmDelete = false
+    @State private var working = false
+    @State private var note: String?
+
+    static let consent = "The relay reads your pull requests (yours and those waiting for your review) and your unread notifications "
+        + "on GitHub, with an authorization you give on GitHub in your browser (scopes repo and read:user; repo also allows changes, "
+        + "the relay only reads). It keeps one encrypted copy for your Macs authorized for live updates: titles, links, repositories, "
+        + "review states, checks, your permissions, notification titles and reasons; never code, descriptions or comments. The copy "
+        + "goes after 24 hours unused, the authorization after 90 days. Merging, updating a branch and marking read stay on this Mac, "
+        + "with your own sign-in. This Mac then reads GitHub only through the relay."
+
+    var body: some View {
+        Section {
+            if preferences.githubServerSync {
+                LabeledContent {
+                    Text(status).foregroundStyle(github.serverHold == nil ? Color.secondary : Color.orange)
+                } label: {
+                    LabelDetail("Read through the relay", "This Mac does not read GitHub itself while this is on.")
+                }
+                .settingAnchor("githubServerSync")
+                HStack {
+                    if github.serverHold == .authorizationRequired {
+                        Button("Authorize in Browser…") { run { try await github.authorizeServerSync() } }
+                            .disabled(working || !github.canAuthorizeServerSync)
+                    }
+                    Spacer()
+                    Button("Turn Off on This Mac") { preferences.githubServerSync = false; note = nil }
+                    Button("Delete for All Macs…", role: .destructive) { confirmDelete = true }
+                        .disabled(working || !github.canAuthorizeServerSync)
+                }
+            } else {
+                LabeledContent {
+                    Button("Turn On…") { confirmOn = true }
+                        .disabled(working || !github.canAuthorizeServerSync)
+                } label: {
+                    LabelDetail("Read through the relay", github.canAuthorizeServerSync
+                        ? "One read of GitHub for all your Macs, instead of one per Mac."
+                        : "First authorize this Mac for live updates, signed in to the same GitHub account.")
+                }
+                .settingAnchor("githubServerSync")
+            }
+            if let note { Text(note).font(.callout).foregroundStyle(.red) }
+        } header: {
+            Text("Server sync")
+        } footer: {
+            Text("Live updates only say when something changed; server sync also reads for you. Turn Off on This Mac goes back to reading "
+                 + "GitHub from this Mac; Delete for All Macs removes the relay's authorization and copy for all of them. GitHub keeps "
+                 + "listing the authorization under Settings → Applications until you revoke it there.")
+        }
+        .alert("Read GitHub through the relay?", isPresented: $confirmOn) {
+            Button("Continue") {
+                preferences.githubServerSync = true
+                run { try await github.startServerSync() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(Self.consent)
+        }
+        .confirmationDialog("Delete server sync for all your Macs?", isPresented: $confirmDelete) {
+            Button("Delete for All Macs", role: .destructive) {
+                run {
+                    try await github.deleteServerSync()
+                    preferences.githubServerSync = false
+                }
+            }
+        } message: {
+            Text("The relay forgets its authorization and its copy. Each Mac that uses server sync then needs a new authorization.")
+        }
+    }
+
+    private var status: String {
+        if let hold = github.serverHold { return hold.message }
+        guard let read = github.lastRefresh else { return "Reading…" }
+        return "Read \(read.formatted(date: .omitted, time: .standard))"
+    }
+
+    private func run(_ work: @escaping () async throws -> Void) {
+        working = true
+        note = nil
+        Task {
+            do { try await work() } catch { note = error.localizedDescription }
+            working = false
         }
     }
 }
