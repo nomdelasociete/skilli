@@ -48,8 +48,10 @@ enum RecordingImport {
 
     /// `file`'s sound into `folder` as `me.m4a`, a video's picture as
     /// `screen.mp4` (as it is, when MP4 can hold it; else left out);
-    /// `meeting.json` written with its length. A failure takes the folder
-    /// away.
+    /// `meeting.json` written with its length. Each is written under a
+    /// staging name and moved in once whole: the window opened meanwhile
+    /// never plays or draws a file still being written. A failure takes the
+    /// folder away.
     static func copy(_ file: URL, into folder: URL, record: MeetingRecord, progress: @escaping @Sendable (Double) -> Void) async throws -> MeetingRecord {
         do {
             let asset = AVURLAsset(url: file)
@@ -62,7 +64,6 @@ enum RecordingImport {
                     try await export(asset, preset: AVAssetExportPresetPassthrough, to: folder.appendingPathComponent(RecorderPictures.screenFile),
                                      as: .mp4) { done in progress(0.7 + done * 0.3) }
                 } catch {
-                    try? FileManager.default.removeItem(at: folder.appendingPathComponent(RecorderPictures.screenFile))
                     Log.trace("Recorder: the picture of “\(file.lastPathComponent)” left out (\(error.localizedDescription))")
                 }
             }
@@ -79,11 +80,15 @@ enum RecordingImport {
         }
     }
 
+    /// `asset` written to `url` through a staging file beside it (a
+    /// leading dot: no list shows it), moved in once whole.
     private static func export(_ asset: AVURLAsset, preset: String, to url: URL, as type: AVFileType,
                                progress: @escaping @Sendable (Double) -> Void) async throws {
         guard let session = AVAssetExportSession(asset: asset, presetName: preset) else {
             throw Failure(message: "“\(url.lastPathComponent)” cannot be written from this file.")
         }
+        let staging = url.deletingLastPathComponent().appendingPathComponent(".importing-" + url.lastPathComponent)
+        try? FileManager.default.removeItem(at: staging)
         let states = session.states(updateInterval: 0.2)
         let watch = Task {
             for await state in states {
@@ -91,6 +96,12 @@ enum RecordingImport {
             }
         }
         defer { watch.cancel() }
-        try await session.export(to: url, as: type)
+        do {
+            try await session.export(to: staging, as: type)
+            try FileManager.default.moveItem(at: staging, to: url)
+        } catch {
+            try? FileManager.default.removeItem(at: staging)
+            throw error
+        }
     }
 }

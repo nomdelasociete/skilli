@@ -209,8 +209,10 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     // MARK: - Playing
 
     private func loadPlayer() {
-        loadingPlayer = true
         let urls = Speaker.allCases.map { folder.appendingPathComponent($0.file) }
+        // An import still copying its sound: loaded once its file is in.
+        if record.imported != nil, !FileManager.default.fileExists(atPath: urls[0].path) { return }
+        loadingPlayer = true
         let composition = AVMutableComposition()
         Task { [weak self] in
             // Both tracks from 0, in one composition: they play in step.
@@ -222,11 +224,6 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
                 try? added.insertTimeRange(range, of: track, at: .zero)
             }
             guard let self else { return }
-            // An import still copying its sound: loaded once it is there.
-            guard composition.tracks.isEmpty == false || self.record.imported == nil else {
-                self.loadingPlayer = false
-                return
-            }
             let player = AVPlayer(playerItem: AVPlayerItem(asset: composition))
             player.automaticallyWaitsToMinimizeStalling = false
             self.player = player

@@ -943,7 +943,7 @@ transcription download, its engine, and the echo drop measured with it.
   40 %", in the language Settings → Recorder sets (As Ask: Ask's), with
   the default engine, voices told apart. The menu bar's ring shows it
   too, as after a Stop.
-- **About line**: "Imported from Board call.m4a · Sun 12 Oct 2026, 09:30
+- **About line**: "Imported from Board call.m4a · Mon 12 Oct 2026, 09:30
   · 48 min · English".
 - **Said**: a file with no sound ("“Holiday.mov” has no sound to
   transcribe."), one that cannot be read, a disk full: in the card, the
