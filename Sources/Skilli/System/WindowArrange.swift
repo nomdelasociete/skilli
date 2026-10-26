@@ -68,10 +68,7 @@ final class WindowArrange {
             return putBack(last.moved)
         }
         await learner.catchUp()
-        let leftOut = leftOut()
-        let open = arranger.windows(all: true).filter {
-            $0.state == .normal && !$0.app.isHidden && !leftOut.contains($0.app.bundleIdentifier ?? "")
-        }
+        let open = openWindows()
         let displays = Displays.current()
         var report = Report()
         let apps = Set(open.compactMap(\.app.bundleIdentifier))
@@ -86,26 +83,7 @@ final class WindowArrange {
             Log.trace("Arrange Windows: the layout “\(layout.name)”, \(applied.placed) windows, in \((ContinuousClock.now - start).compact)")
             return report
         }
-        let keyed = displays.map { WindowArrangement.Display(key: WindowPlacements.displayKey($0.fingerprint), visible: $0.visible) }
-        func display(of frame: CGRect) -> Int? {
-            let areas = displays.map { $0.frame.intersection(frame) }.map { $0.isNull ? 0 : $0.width * $0.height }
-            return areas.indices.max { areas[$0] < areas[$1] }.flatMap { areas[$0] > 0 ? $0 : nil }
-        }
-        let onDisplay = open.map { display(of: $0.frame) }
-        let items = open.indices.map { index in
-            let window = open[index]
-            let bundleID = window.app.bundleIdentifier ?? ""
-            let beside = open.indices.filter { $0 != index && onDisplay[$0] == onDisplay[index] && open[$0].app.bundleIdentifier != bundleID }
-                .compactMap { open[$0].app.bundleIdentifier }
-            // Its rank among its app's windows shown, as the learner counts.
-            let rank = open[..<index].filter { $0.app.processIdentifier == window.app.processIdentifier }.count
-            return WindowArrangement.Item(window: .init(bundleID: bundleID, title: window.title, document: window.document,
-                                                        rank: rank, with: beside),
-                                          frame: window.frame)
-        }
-        // Learning off: only the saved layouts, nothing learned is used.
-        let targets = WindowArrangement.targets(of: items, on: keyed, placements: learner.isOn() ? learner.placements : WindowPlacements(),
-                                                gap: gap())
+        let targets = targets(of: open, on: displays)
         var moved: [Moved] = []
         var lines: [String] = []
         for (window, target) in zip(open, targets) {
@@ -130,6 +108,48 @@ final class WindowArrange {
         last = moved.isEmpty ? nil : (.now, moved)
         Log.trace("Arrange Windows: \(report.placed) moved (\(lines.joined(separator: ", "))), \(report.unknown) unknown, \(report.refused.count) refused, of \(open.count), in \((ContinuousClock.now - start).compact)")
         return report
+    }
+
+    /// What Arrange as Usual would place now, for the display prompt:
+    /// how many of the windows open have a learned place. Nothing when
+    /// learning is off.
+    func coverage() -> (placed: Int, total: Int) {
+        guard learner.isOn() else { return (0, 0) }
+        let open = openWindows()
+        return (targets(of: open, on: Displays.current()).compactMap { $0 }.count, open.count)
+    }
+
+    /// The windows Arrange moves: shown, not minimized, not full screen,
+    /// of the apps not in Never place.
+    private func openWindows() -> [WindowArranger.OpenWindow] {
+        let leftOut = leftOut()
+        return arranger.windows(all: true).filter {
+            $0.state == .normal && !$0.app.isHidden && !leftOut.contains($0.app.bundleIdentifier ?? "")
+        }
+    }
+
+    /// Where each of `open` goes from what was learned; nil where nothing
+    /// was. Learning off: only the saved layouts, nothing learned is used.
+    private func targets(of open: [WindowArranger.OpenWindow], on displays: [LayoutDisplay]) -> [CGRect?] {
+        let keyed = displays.map { WindowArrangement.Display(key: WindowPlacements.displayKey($0.fingerprint), visible: $0.visible) }
+        func display(of frame: CGRect) -> Int? {
+            let areas = displays.map { $0.frame.intersection(frame) }.map { $0.isNull ? 0 : $0.width * $0.height }
+            return areas.indices.max { areas[$0] < areas[$1] }.flatMap { areas[$0] > 0 ? $0 : nil }
+        }
+        let onDisplay = open.map { display(of: $0.frame) }
+        let items = open.indices.map { index in
+            let window = open[index]
+            let bundleID = window.app.bundleIdentifier ?? ""
+            let beside = open.indices.filter { $0 != index && onDisplay[$0] == onDisplay[index] && open[$0].app.bundleIdentifier != bundleID }
+                .compactMap { open[$0].app.bundleIdentifier }
+            // Its rank among its app's windows shown, as the learner counts.
+            let rank = open[..<index].filter { $0.app.processIdentifier == window.app.processIdentifier }.count
+            return WindowArrangement.Item(window: .init(bundleID: bundleID, title: window.title, document: window.document,
+                                                        rank: rank, with: beside),
+                                          frame: window.frame)
+        }
+        return WindowArrangement.targets(of: items, on: keyed, placements: learner.isOn() ? learner.placements : WindowPlacements(),
+                                         gap: gap())
     }
 
     /// Every window back where it was before the last Arrange. One that

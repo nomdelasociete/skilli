@@ -308,7 +308,8 @@ using.
   app. Typing its name puts every window back, apps and files opened,
   displays known by who they are. Edited on the displays in an editor.
 - **A display plugged in** asks, in its middle, which of its layouts to
-  put back.
+  put back, or to Arrange as Usual when skil.li learned where at least
+  half of the windows open go (⌘K: Never Arrange on These Displays).
 - **Arrange Windows** (the launcher, Ask, ⌘K on a window, a shortcut you
   give it): every window where you usually put it, learned on this Mac
   from your own moves and ✦W (each app's place, its windows' titles and
@@ -321,7 +322,7 @@ using.
 Settings: Space between windows (with a preview) · Arrange Windows:
 Learn where you put windows · Forget What skil.li Learned · Layouts ·
 Never place · Always leave out of layouts · Monitors ignored when plugged
-in · Apps You Stopped Using: Quit apps you stopped using · Unused for ·
+in · Displays never arranged when plugged in · Apps You Stopped Using: Quit apps you stopped using · Unused for ·
 Never quit.
 
 <!-- pane: none -->

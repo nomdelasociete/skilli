@@ -212,6 +212,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prompt.onIgnoreMonitors = { [weak self] monitors in self?.ignoreMonitors(monitors) }
         prompt.onEdit = { [weak self] layout in self?.layoutEditor.edit(layout) }
         prompt.onRecord = { [weak self] in self?.layoutEditor.capture(name: "") }
+        prompt.onArrange = { [weak self] in self?.actions.perform(.mac(.system(.arrangeWindows)), triggeredAt: .now) }
+        prompt.onNeverArrange = { [weak self] displays in self?.neverArrange(displays) }
         madeDisplayPrompt = prompt
         return prompt
     }
@@ -1476,8 +1478,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Displays just plugged in: the layouts saved on them asked in the
     /// middle of the biggest (one already asked takes a dock's second
-    /// display in); the one set to always, on a display surely the one
-    /// saved, put back at once; a display no layout knows, nothing.
+    /// display in), then Arrange as Usual when what was learned places at
+    /// least half of the windows open; the layout set to always, on a
+    /// display surely the one saved, put back at once; displays no layout
+    /// and nothing learned know, nothing.
     private func displaysPlugged(_ plugged: [DisplayFingerprint]) {
         var all = madeDisplayPrompt.map { $0.isVisible ? $0.plugged : [] } ?? []
         for display in plugged where !all.contains(where: { $0.isSameDisplay(as: display) }) { all.append(display) }
@@ -1491,13 +1495,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             applyLayout(layout)
             return
         }
-        let offers = candidates.compactMap { candidate in
+        var offers = candidates.compactMap { candidate in
             layouts.first { $0.id == candidate.layoutID }.map { DisplayPrompt.Offer(layout: $0, certainty: candidate.certainty, exact: candidate.exact) }
         }
+        if let arrange = arrangeOffer(for: all, connected: connected) { offers.append(arrange) }
         let target = connected.filter { display in all.contains { $0.isSameDisplay(as: display.fingerprint) } }
             .max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
         guard !offers.isEmpty, let target else { return }
         displayPrompt.show(offers, plugged: all, centeredIn: WindowManager.bottomLeft(target.visible))
+    }
+
+    /// Arrange as Usual, for displays just plugged in: learning on, one of
+    /// them not ignored, these displays not refused, and at least half of
+    /// the windows open with a learned place.
+    private func arrangeOffer(for plugged: [DisplayFingerprint], connected: [LayoutDisplay]) -> DisplayPrompt.Offer? {
+        let here = ArrangeOffer.displaySet(connected.map(\.fingerprint))
+        guard preferences.windowLearning,
+              plugged.contains(where: { display in !display.builtIn && !preferences.ignoredMonitors.contains { $0.isSameDisplay(as: display) } }),
+              !ArrangeOffer.refused(here, in: preferences.neverArrangeDisplays) else { return nil }
+        let coverage = windowArrange.coverage()
+        guard ArrangeOffer.offered(placed: coverage.placed, of: coverage.total) else { return nil }
+        return .arrange(placed: coverage.placed, of: coverage.total, on: here)
+    }
+
+    /// Never Arrange on These Displays: the displays the question was asked
+    /// for no longer offer Arrange as Usual when one is plugged in.
+    private func neverArrange(_ here: ArrangeOffer.DisplaySet) {
+        if !ArrangeOffer.refused(here, in: preferences.neverArrangeDisplays) { preferences.neverArrangeDisplays.append(here) }
+        aiActions.notify("Arrange as Usual is not offered any more with \(here.label) connected. Settings → Windows to change it.",
+                         caller: "Arrange Windows", run: nil, seconds: 5)
     }
 
     /// A display asked about went away: asked again about those left, or

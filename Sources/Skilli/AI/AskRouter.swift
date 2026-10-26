@@ -212,6 +212,23 @@ enum AskRouter {
         AskValues.durationQuestions + AskValues.levelQuestions + [AskValues.labelQuestion(spans: AskValues.spans(of: instruction))]
     }
 
+    /// A menu item or an app this likely makes "Find it in the menus" or
+    /// "Open an app" an option when Ask is unsure: "masque le dock" offered
+    /// the menus for Hide Claude at 6 %, nothing else fitting but the agent.
+    static let offerBar = 0.25
+
+    /// Whether the decision has something `route` can do it with: a menu
+    /// item or an app from `bar`, a Mac command found. What the card offers
+    /// when Ask is unsure (whether the route can run here is the caller's).
+    static func fits(_ route: AskRoute, _ decision: Decision, bar: Double = offerBar) -> Bool {
+        switch route {
+        case .find: (decision.menu.first?.probability ?? 0) >= bar
+        case .open: (decision.apps.first?.probability ?? 0) >= bar
+        case .command: decision.command != nil || decision.appAction != nil
+        default: true
+        }
+    }
+
     /// A route this likely (its probability, not the answer's confidence)
     /// is sure of itself: what another question read (an app named, a
     /// quit) does not move it.
