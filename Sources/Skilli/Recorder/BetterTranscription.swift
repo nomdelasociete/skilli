@@ -347,12 +347,13 @@ final class BetterTranscription {
     // MARK: - Remove
 
     /// Remove: the files to the Trash at once (`UndoableDeletes` offers
-    /// them back); where each went, to put it back.
+    /// them back), with what a cancelled download kept (else the row would
+    /// offer Resume for files no longer there); where each went, to put it
+    /// back.
     func moveToTrash() throws -> [(from: URL, trashed: URL)] {
         var moved: [(from: URL, trashed: URL)] = []
         do {
-            for file in files {
-                let url = folder.appendingPathComponent(file.name)
+            for url in files.flatMap({ [folder.appendingPathComponent($0.name), resumeURL(for: $0)] }) {
                 guard FileManager.default.fileExists(atPath: url.path) else { continue }
                 var trashed: NSURL?
                 try FileManager.default.trashItem(at: url, resultingItemURL: &trashed)
@@ -364,9 +365,6 @@ final class BetterTranscription {
             try? putBack(moved)
             throw error
         }
-        // What a cancelled download kept goes too: the next Download starts
-        // afresh, not from data for files no longer there.
-        for file in files { dropResumeData(for: file) }
         state = .notDownloaded
         return moved
     }
