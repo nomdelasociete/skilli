@@ -675,9 +675,10 @@ Phase 3 changes none of the Moment's answers, checked one by one:
     sight: a minimized or hidden window gives no picture."
 - **⌘↩** opens the list of the permission a row says is missing (the
   camera, Screen Recording, Automation), the first one down the rows.
-- **↩**: the tab comes forward (selected, never reloaded, the browser
-  left where it is: the user's app keeps the keyboard), then everything
-  on records from that moment.
+- **↩**: everything on records from that moment, and the meeting's tab
+  comes forward (selected, never reloaded, the browser left where it is:
+  the user's app keeps the keyboard; a browser slow to answer never
+  delays the start).
 - Consent: phase 1's paragraph already says the others must agree, for
   the webcam and the screen as for the sound; nothing added.
 
@@ -747,13 +748,18 @@ Phase 3 changes none of the Moment's answers, checked one by one:
 From the screen's own pictures, on this Mac (Vision's text
 recognition), nothing kept but the text:
 
-- Twice a second the picture is compared with the one last read (its
-  brightness on a 32 × 20 grid); when it changed, its text is read, at
-  most once a second.
+- Four times a second the picture is compared with the one last read
+  (its brightness on a 32 × 20 grid); when it changed, its text is
+  read, at most once a second, less often while readings find nothing
+  new (a video moving: up to every 8 s), at once again for a change of
+  a quarter of the picture.
 - The lines new since the last reading are a slide, timed at the
-  change: the last picture before the reading that differed from the
-  one read before (so a slide shown at 1:15.4 is at 1:15.4 or 1:15.9,
-  never later; the check: within a second).
+  change: the picture that changed most from the one before since the
+  last reading (a slide, not a video moving around it; so a slide shown
+  at 1:15.4 is at 1:15.4 or a sample later; the check: within a
+  second). A still window gives no new picture: its last one is
+  compared again as time goes on, so a change seen while a reading
+  waited is read all the same.
 - Lines seen in most of the recording's readings (the browser's tabs,
   the call's own buttons, the people's names under their videos) are
   taken out of every slide at Stop; a slide left with no line goes.

@@ -70,6 +70,9 @@ final class WebcamTrack {
     private let queue = DispatchQueue(label: "com.nomdelasociete.Skilli.recorder.webcam", qos: .userInitiated)
     /// The file's size: the camera's, 1280 × 720 at most.
     private(set) var size = (width: 1280, height: 720)
+    /// Each start and stop: a start that finds another after macOS's
+    /// question gives up.
+    private var generation = 0
     var onChange: (() -> Void)?
     #if SKILLI_SELFTEST
     /// Self-test: pictures drawn here stand in for a camera (the test Mac
@@ -86,6 +89,8 @@ final class WebcamTrack {
     /// did.
     func start() async {
         guard !isOn else { return }
+        generation += 1
+        let mine = generation
         #if SKILLI_SELFTEST
         if let standIn {
             size = (standIn.width, standIn.height)
@@ -105,7 +110,10 @@ final class WebcamTrack {
         case .authorized:
             break
         case .notDetermined:
-            guard await AVCaptureDevice.requestAccess(for: .video) else {
+            let allowed = await AVCaptureDevice.requestAccess(for: .video)
+            // Turned off (or on again) while macOS asked.
+            guard mine == generation else { return }
+            guard allowed else {
                 state = .denied
                 onChange?()
                 return
@@ -149,6 +157,7 @@ final class WebcamTrack {
 
     /// The camera released.
     func stop() {
+        generation += 1
         #if SKILLI_SELFTEST
         standIn?.stop()
         #endif
