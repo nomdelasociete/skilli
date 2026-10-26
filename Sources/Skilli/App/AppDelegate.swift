@@ -258,10 +258,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var recordingLibrary: RecordingLibrary = {
         let index: URL
         if case .selftest = mode {
-            index = recordingsFolder.deletingLastPathComponent().appendingPathComponent("recordings-index.sqlite")
+            index = recordingsFolder.deletingLastPathComponent().appendingPathComponent(RecordingSearch.indexFile)
         } else {
             index = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("skil.li/recordings-index.sqlite")
+                .appendingPathComponent("skil.li", isDirectory: true).appendingPathComponent(RecordingSearch.indexFile)
         }
         return RecordingLibrary(root: recordingsFolder, index: index)
     }()
@@ -1177,7 +1177,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // System Settings quits skil.li so a permission takes effect, and on
         // macOS 26 does not open it again: skil.li does, once it has quit.
         if mode == .normal, Relaunch.quitBySystemSettings() { Relaunch.afterExit() }
-        return .terminateNow
+        // A recording on is closed first, its files whole (about a second);
+        // its transcript waits for the next launch. Nothing asked.
+        return madeRecorderCenter?.recorder.quitReply() ?? .terminateNow
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -1246,9 +1248,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if case .normal = mode {
                 systemCommands.restoreAwake()
                 autoQuitter.start()
-                // A recording never stopped (skil.li quit, the Mac lost
-                // power): offered once launched; the recorder made only for
-                // one.
+                // A recording never stopped (a crash, the Mac lost power):
+                // offered once launched; one closed as skil.li quit: its
+                // transcript made, nothing asked. The recorder made only
+                // for one.
                 if FileManager.default.fileExists(atPath: recordingsFolder.path) {
                     let root = recordingsFolder
                     Task { [weak self] in
@@ -1256,15 +1259,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         // The list for the launcher and the pane, then Delete
                         // after's first pass.
                         self?.recordingLibrary.reload()
-                        let found = await RecorderCenter.unfinished(in: root)
+                        let left = await RecorderCenter.left(in: root)
                         guard let self else { return }
                         if self.preferences.recorderRetention != .never {
                             try? await Task.sleep(for: .seconds(2))
                             self.pruneRecordings()
                         }
                         self.scheduleRecordingPrune()
-                        guard !found.isEmpty else { return }
-                        self.recorderCenter.offer(found)
+                        guard !left.isEmpty else { return }
+                        self.recorderCenter.pickUp(left)
                     }
                 }
                 preferences.onRecorderRetentionChange = { [weak self] in self?.scheduleRecordingPrune() }

@@ -82,6 +82,13 @@ final class MeetingRecorder {
     private(set) var resumeJumps: [Speaker: [Double]] = [:]
     /// Transcripts wait their turn: one at a time.
     private var queue: [(URL, MeetingRecord)] = []
+    /// A stop under way (`stopping`): told once its files are closed.
+    private var closedWaiters: [CheckedContinuation<Void, Never>] = []
+    /// skil.li quits: nothing starts any more, every transcript not made
+    /// is left for the next launch.
+    private(set) var quitting = false
+    /// The quit's close, once asked (macOS may ask twice).
+    private var quitClose: Task<Void, Never>?
 
     init(recordings: Recordings) {
         self.recordings = recordings
@@ -210,6 +217,7 @@ final class MeetingRecorder {
     }
 
     func begin(_ starting: Start) throws {
+        guard !quitting else { throw Failure(message: "skil.li is quitting.") }
         guard phase == .listening else { throw Failure(message: phase == .idle ? "The Record card is not open." : "A recording is on already.") }
         let started = Date.now
         let typed = starting.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -329,6 +337,66 @@ final class MeetingRecorder {
         phase = .idle
         Log.trace("Recorder: “\(record.title)” stopped, \(Int(record.seconds)) s (me \(lengths.first ?? 0), them \(lengths.last ?? 0))")
         transcribe(folder, record: record)
+        let waiting = closedWaiters
+        closedWaiters = []
+        waiting.forEach { $0.resume() }
+    }
+
+    // MARK: - Quitting
+
+    /// `applicationShouldTerminate`'s answer (docs/meeting-recorder.md,
+    /// "Quit and sleep"): at once when no recording is on (a transcript
+    /// being made or waiting is left for the next launch); else later,
+    /// once the recording is closed as Stop closes it, both files whole
+    /// (about a second), when the app is told it may quit. Nothing asked.
+    func quitReply() -> NSApplication.TerminateReply {
+        if quitClose != nil { return .terminateLater }
+        guard isRecording || phase == .stopping else {
+            closeForQuitNow()
+            return .terminateNow
+        }
+        quitClose = Task {
+            await closeForQuit()
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
+    /// skil.li quits: a recording on is stopped as Stop stops it (its files
+    /// closed, `meeting.json` written), a stop under way finishes, and every
+    /// transcript not made yet is left `stopped` for the next launch.
+    func closeForQuit() async {
+        quitting = true
+        if phase == .listening { stopListening() }
+        if isRecording {
+            await stop()
+        } else if phase == .stopping {
+            await withCheckedContinuation { closedWaiters.append($0) }
+        }
+        closeForQuitNow()
+    }
+
+    /// The part that does not wait: no recording on. The card's sources
+    /// stopped; the transcript being made and those waiting their turn
+    /// left for the next launch (one finishing meanwhile is written done).
+    private func closeForQuitNow() {
+        quitting = true
+        if phase == .listening { stopListening() }
+        var left = queue.map(\.0)
+        queue = []
+        if let transcribing { left.insert(transcribing.folder, at: 0) }
+        for folder in left {
+            if let record = recordings.read(folder) { leave(folder, record: record) }
+        }
+    }
+
+    /// Kept for the next launch's transcript: `stopped`, nobody's.
+    private func leave(_ folder: URL, record: MeetingRecord) {
+        var record = record
+        record.state = .stopped
+        record.recorder = nil
+        try? recordings.write(record, to: folder)
+        Log.trace("Recorder: “\(record.title)” left for the next launch's transcript")
     }
 
     /// A track could not be written (the disk full): what was recorded is
@@ -345,13 +413,14 @@ final class MeetingRecorder {
     /// language this Mac cannot transcribe, or a failure: kept without one
     /// (`pending`), its window says why.
     func transcribe(_ folder: URL, record: MeetingRecord) {
+        guard !quitting else { return leave(folder, record: record) }
         queue.append((folder, record))
         guard transcribing == nil else { return }
         Task { await transcribeNext() }
     }
 
     private func transcribeNext() async {
-        while !queue.isEmpty {
+        while !queue.isEmpty, !quitting {
             let (folder, record) = queue.removeFirst()
             transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0))
             var working = record
@@ -377,7 +446,8 @@ final class MeetingRecorder {
                 Log.actions.error("Recorder: no transcript for “\(record.title, privacy: .private)” (\(error.localizedDescription, privacy: .public))")
             }
             transcribing = nil
-            onFinished?(folder)
+            // Quitting: its window is not opened as skil.li goes.
+            if !quitting { onFinished?(folder) }
         }
     }
 

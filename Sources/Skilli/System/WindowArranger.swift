@@ -330,7 +330,7 @@ final class WindowArranger {
                 index = now.indices.first { free(now[$0]) && CFEqual(now[$0].element, front) }
             }
         }
-        Log.trace("Window layout: opened “\(LayoutOpening.name(of: opening))” in \(app.localizedName ?? "?"), \(index == nil ? "no window showed it" : "its window found")")
+        Log.trace("Window layout: opened “\(LayoutOpening.name(of: opening))” in \(app.localizedName ?? "?") (\(app.processIdentifier)), \(index == nil ? "no window showed it among \(now.count) windows" : "its window found")")
         return (now, index.map { now[$0].element })
     }
 

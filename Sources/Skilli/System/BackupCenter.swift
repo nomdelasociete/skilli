@@ -2,8 +2,9 @@ import AppKit
 import SkilliCore
 
 /// Backups of what skil.li keeps (Settings → Backup, "Back Up skil.li
-/// Now"): its folder in Application Support, minus the socket agents use
-/// and the clipboard history (never in a backup), plus its settings, zipped
+/// Now"): its folder in Application Support, minus the socket agents use,
+/// the clipboard history, the recordings and the words said in them (never
+/// in a backup: `BackupPlan.neverCopied`), plus its settings, zipped
 /// into the folder the user chose, on the schedule chosen. API keys and
 /// sensitive form fields stay in the Keychain: never in a backup.
 ///
@@ -259,9 +260,9 @@ final class BackupCenter {
         }
     }
 
-    /// skil.li's folder gets the backup's items; the socket and the
-    /// clipboard history stay as they are (an older backup's clipboard
-    /// history is left out).
+    /// skil.li's folder gets the backup's items; what is never copied (the
+    /// socket, the clipboard history, the recordings and their words) stays
+    /// as it is, and an older backup's is left out.
     nonisolated private static func replace(_ target: URL, with backup: URL) throws {
         let files = FileManager.default
         try files.createDirectory(at: target, withIntermediateDirectories: true)

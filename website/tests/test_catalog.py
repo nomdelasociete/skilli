@@ -25,7 +25,10 @@ class CatalogTests(unittest.TestCase):
         (target / 'files/removed.sh').write_text('old')
         entries = build.catalog(self.source)
         build.render(entries, build.ROOT / 'website/skillies/index.template.html', target)
-        self.assertEqual((target / 'files/week-number.sh').read_bytes(), self.path.read_bytes())
+        # Served as a .skilli file, byte for byte the script: skil.li adds it on a double-click.
+        self.assertEqual((target / 'files/week-number.skilli').read_bytes(), self.path.read_bytes())
+        self.assertEqual(entries[0]['download'], 'files/week-number.skilli')
+        self.assertIn('href="files/week-number.skilli" download="week-number.skilli"', (target / 'index.html').read_text())
         self.assertFalse((target / 'files/removed.sh').exists())
         self.assertIn(entries[0]['sha256'], (target / 'catalog.json').read_text())
         self.assertNotIn('{{', (target / 'index.html').read_text())

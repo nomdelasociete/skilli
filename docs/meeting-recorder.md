@@ -3,8 +3,10 @@
 Status: 2026-10-23, spec agreed, target raised: on par with omarchy's
 recorder, then better where skil.li knows the Mac. 2026-10-23: phase 1
 built (PR #35). 2026-10-24: phase 2, the Moment below, built (PR #38).
-2026-10-25: phase 3, the webcam and the screen, being built; the
-Moment checked again for them and their views and states in
+2026-10-25: skil.li quitting and the Mac sleeping during a recording
+(Quit and sleep below), and the words said kept out of backups (Where
+it lives). 2026-10-25: phase 3, the webcam and the screen, being built;
+the Moment checked again for them and their views and states in
 `docs/meeting-recorder-views.md` ("Phase 3").
 
 Asked for: a meeting recorder like omarchy-meeting-recorder (an
@@ -175,8 +177,77 @@ need a browser extension: not planned.
   change of the audio setup; the display kept on while recording.
 - The call ends (the meeting app leaves its call, or the event is over and
   the Mac's sound has been silent for a minute): a card offers Stop ↩.
-- Written as it comes: a crash, a logout or a power cut keeps what was
-  recorded, and the next launch offers Save, Later or Discard.
+- Written as it comes: a crash or a power cut keeps what was recorded,
+  and the next launch offers Save, Later or Discard. skil.li quitting (a
+  logout too) stops it as Stop does, and the Mac going to sleep pauses it:
+  see Quit and sleep.
+
+## Quit and sleep
+
+2026-10-25: two moments a recording meets that phase 1 left to the crash
+path. Each by the Moment rule (AGENTS.md → A feature's moment).
+
+**skil.li quits during a recording**: the user quits it (its menu,
+`pkill`), macOS quits it (a logout, a restart), an update is installed,
+or System Settings quits it to apply a permission (Quit & Reopen).
+
+1. **When**: mid-meeting or once it is over, the recording cannot go on
+   past the quit. Nothing about it is lost if it is closed properly.
+2. **The path**: none to add. The quit is the user's action (or macOS's)
+   and goes through at once: no question in its way (MANIFESTO 6: what is
+   kept needs no question).
+3. **Neither hint nor push**: the recording is stopped as Stop stops it,
+   both tracks closed at the same moment (whole files: about a second, the
+   last buffers), `meeting.json` written `stopped`. Its transcript is left
+   for the next launch, made then a few seconds in without asking, the
+   menu bar's ring showing it while it is made; done, no window opens (it
+   was not asked for at that moment): the recording is in the launcher
+   (`recs`) and Settings → Recorder. Never at the quit itself: a meeting's
+   transcript takes minutes, and a logout or a restart does not wait for
+   it. A transcript being made, or waiting its turn, as skil.li quits is
+   left the same way and made at the next launch.
+4. **Deterministic**: nothing to judge; macOS asks skil.li whether it
+   may quit (`applicationShouldTerminate`), and skil.li answers once the
+   files are closed.
+5. **Wrong**: a quit the user did not mean during a meeting ends the
+   recording there; the next launch never records again by itself
+   (recording others is always the user's key): ⌘R makes a second
+   recording. A crash or a power cut is not a quit: what was written is
+   kept and offered at the next launch (Save, Later or Discard), as
+   before.
+
+**The Mac goes to sleep during a recording**: the lid closed, Sleep in
+the Apple menu, the battery run out. A recording keeps the Mac and its
+display from sleeping when idle (During), so this sleep is always the
+user's act or the battery's.
+
+1. **When**: most often the meeting is over and the lid is closed
+   without Stop; or the user moves with the Mac shut (to another room,
+   in person) and the meeting goes on; or the battery runs out.
+2. **The path**: at wake, the card the call's end uses, in its place:
+   Resume ↩, Stop ⌘↩ (stops and transcribes), Keep Paused esc. Resume
+   and Stop are also where they always are, the red dot's menu.
+3. **Paused, then a push at wake**: as the Mac goes to sleep the
+   recording is paused, both tracks at the same moment, as Pause does
+   (the time asleep and the time paused after it are in neither track).
+   Nothing resumes by itself: whoever is in the room at wake has not
+   agreed to be recorded then. The card at wake is a push, because the
+   rest of a meeting that goes on is lost if missed and due now, and the
+   pause happened out of sight (MANIFESTO 8). Like the call's end card,
+   it never takes the keys from the app the user is typing in (the
+   password at the lock screen first): a click, or a second without a
+   key. A recording the user had paused before the sleep stays paused,
+   and nothing is shown at wake: it was their choice.
+4. **Deterministic**: macOS says when it sleeps and wakes
+   (`NSWorkspace.willSleepNotification`, `didWakeNotification`).
+5. **Wrong**: the meeting was over: ⌘↩ stops it, esc leaves it paused
+   (the call's end card follows if the meeting is over and quiet). The
+   meeting goes on and the card was missed: the hollow grey dot and the
+   still clock in the menu bar, Resume Recording in its menu. Not
+   measured: what a real sleep does to the sources after wake (the test
+   Mac cannot be woken without a person); the microphone's engine is
+   started again on the change of audio setup a wake brings, as for any
+   other.
 
 ## Transcription
 
@@ -268,6 +339,15 @@ The recording's window (a window, not a card: it is read and edited):
   expired recording goes to the Trash, not deleted for good.
 - Agents: `list_recordings` (titles, dates, lengths) and `get_transcript`
   (and the `$SKILLI_CLI call` equivalents).
+- The words said, for the launcher's search, are also in
+  `recordings-index.sqlite` beside the Recordings folder (with SQLite's
+  `-wal`, `-shm` and `-journal` files). Like the recordings, never in a
+  backup (Settings → Backup: "never what you copied or recorded"), and a
+  restore leaves it as it is, each of those four names by its exact name
+  (`BackupPlan.neverCopied`). It is only a copy: one out of step with the
+  recordings (a transcript made again, a recording renamed, deleted or
+  brought back) is caught up from the recordings before each search, and
+  one that is not a database it can read is made again from them.
 
 ## Privacy and consent
 
@@ -701,3 +781,11 @@ checked by its meter, the clock rules of During, the drop by word times.
    card (⌘↩ stays Calendar), taught once, then quiet; the five cases told
    apart by the event, Core Audio and the window list, no model; AI only
    after the meeting, on the user's action.
+
+2026-10-25:
+
+8. Quit and sleep above: a quit closes the recording whole, its
+   transcript made at the next launch without asking and without opening
+   its window; a sleep pauses it, never resumed by itself, a card at wake
+   offers Resume ↩. The words said (`recordings-index.sqlite`) are never
+   in a backup.

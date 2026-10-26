@@ -477,6 +477,15 @@ public struct RecordingSummary: Equatable, Sendable {
 /// Finding recordings by what the launcher keeps of them: title, date and
 /// attendees (the words said come from the index, `RecordingIndex`).
 public enum RecordingSearch {
+    /// The index of the words said, in skil.li's folder beside the
+    /// Recordings folder: a copy of every transcript's words, so never in a
+    /// backup (`BackupPlan.neverCopied`).
+    public static let indexFile = "recordings-index.sqlite"
+    /// The index and the files SQLite keeps beside it, each by its exact
+    /// name: the write-ahead log and its shared memory (the index is in WAL
+    /// mode), a rollback journal.
+    public static let indexFiles = [indexFile, indexFile + "-wal", indexFile + "-shm", indexFile + "-journal"]
+
     /// The words a recording is found by, besides its title: its
     /// attendees, its date as written ("wednesday wed 22 october oct
     /// 2026").

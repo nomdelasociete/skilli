@@ -7,14 +7,16 @@ import SkilliCore
 /// the two sources with their meters live, the language, and ↩. Nothing is
 /// recorded before ↩. While a meeting is on, the card is that meeting's
 /// (its attendees, its case's sources). The same card, at launch, offers a
-/// recording never stopped: Save ↩, Later esc, Discard ⌘⌫; and when the
-/// call being recorded ends: Stop ↩, Keep Recording esc.
+/// recording never stopped: Save ↩, Later esc, Discard ⌘⌫; when the
+/// call being recorded ends: Stop ↩, Keep Recording esc; and at wake, a
+/// recording the Mac's sleep paused: Resume ↩, Stop ⌘↩, Keep Paused esc.
 @MainActor
 final class RecordCard {
     enum Content: Equatable {
         case record
         case unfinished(URL, MeetingRecord)
         case callEnded(CallEndWatch.Reason)
+        case slept
     }
 
     /// The meeting the card records: its case, and whether ↩ joins its
@@ -28,9 +30,11 @@ final class RecordCard {
     var onRecord: ((_ title: String, _ language: String, _ meeting: Meeting?) -> Void)?
     /// esc, or closed: nothing recorded.
     var onCancel: (() -> Void)?
-    /// Stop ↩ as the call ended; Keep Recording esc.
-    var onStopCall: (() -> Void)?
+    /// Stop ↩ as the call ended (⌘↩ after a sleep); Keep Recording esc.
+    var onStop: (() -> Void)?
     var onKeepRecording: ((CallEndWatch.Reason) -> Void)?
+    /// Resume ↩ at wake.
+    var onResume: (() -> Void)?
     /// A source's row clicked: on or off.
     var onToggleSource: ((Speaker) -> Void)?
     var onSave: ((URL, MeetingRecord) -> Void)?
@@ -123,6 +127,17 @@ final class RecordCard {
     func showCallEnded(title: String, elapsed: Double, line: String, reason: CallEndWatch.Reason) {
         content = .callEnded(reason)
         view.showCallEnded(title: title, elapsed: MeetingTranscript.clock(elapsed), line: line)
+        let typing = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < 1
+        show(takingKeys: !typing)
+        keysFrom = typing ? .now + MeetingCard.typingGrace : nil
+    }
+
+    /// At wake, the recording the Mac's sleep paused: Resume ↩, Stop ⌘↩,
+    /// Keep Paused esc. It never takes keys from the app the user is
+    /// typing in (the password, first).
+    func showSlept(title: String, elapsed: Double, line: String) {
+        content = .slept
+        view.showSlept(title: title, elapsed: MeetingTranscript.clock(elapsed), line: line)
         let typing = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < 1
         show(takingKeys: !typing)
         keysFrom = typing ? .now + MeetingCard.typingGrace : nil
@@ -283,7 +298,10 @@ final class RecordCard {
             onSave?(folder, record)
         case .callEnded:
             dismiss()
-            onStopCall?()
+            onStop?()
+        case .slept:
+            dismiss()
+            onResume?()
         case nil:
             break
         }
@@ -301,6 +319,9 @@ final class RecordCard {
             // Keep Recording: nothing asked again for the same reason.
             dismiss()
             onKeepRecording?(reason)
+        case .slept:
+            // Keep Paused: the menu bar resumes it.
+            dismiss()
         case nil:
             break
         }
@@ -322,6 +343,9 @@ final class RecordCard {
             } else if view.missingAutomation {
                 NSWorkspace.shared.open(AutomationAccess.settingsURL)
             }
+        case (.slept, _) where isReturn && flags == .command:
+            dismiss()
+            onStop?()
         case (.unfinished(let folder, let record), kVK_Delete) where flags == .command:
             dismiss()
             onDiscard?(folder, record)
@@ -642,6 +666,31 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         button.title = "Stop"
         button.alphaValue = 1
         leftHints.setHints([("Keep Recording", "esc")])
+        layoutContent()
+    }
+
+    /// At wake, the recording the Mac's sleep paused: its name, when it
+    /// paused, Resume ↩.
+    func showSlept(title: String, elapsed: String, line: String) {
+        isRecordCard = false
+        window?.makeFirstResponder(nil)
+        setEyebrow("RECORDING PAUSED", dot: .secondaryLabelColor, hollow: true)
+        clock.stringValue = elapsed
+        clock.isHidden = false
+        nameField.stringValue = title
+        nameField.isSelectable = false
+        nameField.isEditable = false
+        languageMenu.isHidden = true
+        detail.isHidden = false
+        detail.stringValue = line
+        for row in [microphoneRow, macRow, webcamRow, screenRow] { row.isHidden = true }
+        consent.isHidden = true
+        inPersonNote = nil
+        note.isHidden = true
+        soundMissing = nil
+        button.title = "Resume"
+        button.alphaValue = 1
+        leftHints.setHints([("Keep Paused", "esc"), ("Stop", "⌘↩")])
         layoutContent()
     }
 
