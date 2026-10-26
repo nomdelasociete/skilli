@@ -1012,15 +1012,16 @@ final class SettingTools {
         bindings["ignoredMonitors"] = monitors
         var neverArranged = Binding(get: { [unowned self] in .list(self.neverArrangedItems().map(\.item)) })
         neverArranged.remove = { [unowned self] text in
-            // By its names, or, when two sets have the same names, as listed
-            // (the names, then its key in brackets).
+            // By its key (unique), as listed (the names, then its key in
+            // brackets when two sets have the same names), or by its names.
             let items = self.neverArrangedItems()
-            let found = items.filter { Self.folded($0.item) == Self.folded(text) }
+            let byKey = items.filter { $0.set.key == text || "[\($0.set.key)]" == text }
+            let found = byKey.isEmpty ? items.filter { Self.folded($0.item) == Self.folded(text) } : byKey
             let named = found.isEmpty ? items.filter { Self.folded($0.set.label) == Self.folded(text) } : found
             guard named.count == 1, let set = named.first?.set else {
                 throw Failure(named.isEmpty
                               ? "No displays named “\(text)” are left out. Left out: \(items.map(\.item).joined(separator: ", "))."
-                              : "Several sets are named “\(text)”: name one as listed: \(named.map(\.item).joined(separator: ", ")).")
+                              : "Several sets are named “\(text)”: name one by its key: \(named.map(\.set.key).joined(separator: ", ")).")
             }
             return ListChange(item: set.label) { [unowned self] in
                 self.preferences.neverArrangeDisplays.removeAll { $0.key == set.key }
