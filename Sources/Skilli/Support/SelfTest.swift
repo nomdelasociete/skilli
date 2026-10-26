@@ -325,6 +325,10 @@ final class SelfTest {
         /// taught once in a window; whisper on the played-back calls; the
         /// echo drop with its times on the recording's clock (~25 min).
         case whisper
+        /// Only Better transcription's real download: 1.6 GB from
+        /// huggingface.co through the app's own download, checked, into the
+        /// self-test's scratch (no keys; run once, the network's time).
+        case whisperdownload
     }
 
     /// Extra trigger only the self-test registers. No Hyper tool listens to
@@ -728,6 +732,9 @@ final class SelfTest {
         if scope == .whisper {
             window.center()
             return await finish(after: [whisperChecks])
+        }
+        if scope == .whisperdownload {
+            return await finish(after: [betterTranscriptionRealDownload])
         }
         if scope == .emoji {
             window.center()
@@ -23975,6 +23982,29 @@ final class SelfTest {
                "window lines \(hints.map { $0 ?? "none" }); a wrong file refused \(refused), nothing kept \(nothingKept); row not downloaded \(notDownloaded); a third downloaded \(third) (“\(downloadingLine)”), cancelled \(cancelled), what came kept \(resumeKept); downloaded again \(done) from where it stopped \(ranged) (ranges asked \(server.ranges)), checked \(sawChecking); ready \(ready)",
                nil)
         return ready
+    }
+
+    /// The real download, once: the files from huggingface.co at their
+    /// fixed revisions through `BetterTranscription`, each checked by its
+    /// SHA-256, into the self-test's scratch; how long it took.
+    private func betterTranscriptionRealDownload() async {
+        let name = "Recorder phase 4: Better transcription's real download from huggingface.co (1.6 GB), each file's SHA-256 checked"
+        BetterTranscription.testFiles = nil
+        let folder = recorderScratch.appendingPathComponent("real-models", isDirectory: true)
+        let store = BetterTranscription(folder: folder, files: BetterTranscription.files)
+        let start = ContinuousClock.now
+        var lines: [String] = []
+        store.download()
+        let done = await waitUntil(timeout: 1800) {
+            if case .downloading(_, _, let line) = store.state, lines.last != line, lines.count < 400 { lines.append(line) }
+            if case .stopped = store.state { return true }
+            return store.state == .downloaded || store.state == .wrongFile
+        } != nil
+        let minutes = (ContinuousClock.now - start).milliseconds / 60_000
+        let ready = BetterTranscription.isReady(in: folder, files: BetterTranscription.files)
+        record(name, done && ready && store.state == .downloaded,
+               String(format: "%@ in %.1f min; lines said: %@ … %@", store.line, minutes, lines.dropFirst(5).first ?? "", lines.last ?? ""), nil)
+        try? FileManager.default.removeItem(at: folder)
     }
 
     /// whisper (Better transcription, the default once downloaded) on
