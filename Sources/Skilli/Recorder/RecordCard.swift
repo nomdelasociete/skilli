@@ -283,7 +283,7 @@ final class RecordCard {
     }
 
     private func updateLanguageNote() {
-        let known = languages.contains { $0.id == language }
+        let known = MeetingTranscriber.canTranscribe(language, in: languages)
         view.setLanguageNote(known || languages.isEmpty ? nil
                              : "\(MeetingTranscriber.shortName(of: language)) can't be transcribed on this Mac yet: the recording is kept, its transcript waits.")
     }

@@ -32,6 +32,17 @@ enum TranscriberHelper {
         return try JSONDecoder().decode([MeetingVoices.Stretch].self, from: Data(contentsOf: out))
     }
 
+    /// One track's words by Better transcription's whisper (its model and
+    /// VAD as downloaded); nil when this build has no helper.
+    static func whisper(of audio: URL, language: String, prompt: String,
+                        progress: @escaping @Sendable (Double) -> Void) async throws -> WhisperTranscript.Run? {
+        guard let paths = BetterTranscription.paths() else { throw Failure(message: "Better transcription isn't downloaded: Settings → Recorder offers it.") }
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-whisper-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: out) }
+        guard try await run(["whisper", audio.path, paths.model.path, paths.vad.path, language, prompt, out.path], progress: progress) else { return nil }
+        return try JSONDecoder().decode(WhisperTranscript.Run.self, from: Data(contentsOf: out))
+    }
+
     /// Runs the helper with `arguments` until it ends, its "progress 0.42"
     /// lines to `progress`. False when it is not in this build; a failure
     /// throws its last line. Cancelled, the helper is stopped.

@@ -1029,6 +1029,13 @@ final class SettingTools {
         bindings["recorderLanguage"] = string(\.recorderLanguage) {
             [SettingOption("", "As Ask")] + (await MeetingTranscriber.languages()).map { SettingOption($0.id, $0.name) }
         }
+        bindings["recorderEngine"] = Binding(get: { [unowned self] in
+            .text(TranscriptEngine.standard(preferred: TranscriptEngine(stored: self.preferences.recorderEngine),
+                                            whisperReady: BetterTranscription.isReady()).rawValue)
+        }, set: { [unowned self] value in
+            guard case .text(let raw) = value else { return }
+            self.preferences.recorderEngine = raw
+        })
         var recordingsFolder = Binding(get: { [unowned self] in .text(self.preferences.recorderFolderPath) })
         recordingsFolder.setAsync = { [unowned self] value in
             guard case .text(let path) = value else { return }

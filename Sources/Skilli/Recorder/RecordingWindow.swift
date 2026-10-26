@@ -55,6 +55,15 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var engines: () -> [(engine: TranscriptEngine, unusable: String?)] = { [(.macOS, nil)] }
     /// The languages an engine transcribes on this Mac, by name.
     var languages: (TranscriptEngine) async -> [(id: String, name: String)] = { _ in await MeetingTranscriber.languages() }
+    /// Settings → Recorder (Better transcription's line, a click).
+    var onOpenSettings: (() -> Void)?
+    /// Whether this window says once what Better transcription does (the
+    /// record's transcript made by macOS's engine, never said before);
+    /// asked once per window, when it shows a transcript.
+    var betterHint: ((MeetingRecord) -> Bool)? {
+        didSet { considerBetterHint() }
+    }
+    private var betterHintAsked = false
 
     init(folder: URL, record: MeetingRecord, transcript: MeetingTranscript.File?, ownName: (() async -> String?)? = nil) {
         self.folder = folder
@@ -83,6 +92,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         view.onSelect = { [weak self] _ in self?.updateHints() }
         view.onTranscribeAgain = { [weak self] in self?.showTranscribeAgain() }
         view.onDrop = { [weak self] urls in self?.onImport?(urls) }
+        view.onHint = { [weak self] in self?.onOpenSettings?() }
         if let ownName {
             Task { [weak self] in
                 let name = await ownName()
@@ -109,6 +119,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var shownSlides: [SlideLog.Slide] { view.slides }
     var shownPictures: Int { view.pictureCount }
     var isEditingLine: Bool { view.editingLine != nil }
+    var shownHint: String? { view.hintText }
     /// Where the screen's and the webcam's players are, and the sound's.
     var pictureTimes: [Double] { pictures.map { $0.currentTime().seconds } }
     /// Where a line is on screen (AppKit's coordinates), to click it.
@@ -140,6 +151,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             }
             made = (transcript.language, transcript.engine)
             view.showLines(fresh.lines, names: fresh.names, slides: Self.slides(in: folder))
+            considerBetterHint()
         } else if record.state == .transcribing || record.state == .stopped {
             // Its turn not come yet (another being made, or the launch's).
             view.showWaiting()
@@ -149,6 +161,16 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         view.canTranscribeAgain = transcribing == nil && transcript != nil
         updateHints()
         if player == nil, !loadingPlayer { loadPlayer() }
+    }
+
+    /// Better transcription taught once: the line at the bottom of the
+    /// lines, in this window only.
+    private func considerBetterHint() {
+        guard !betterHintAsked, draft != nil, let betterHint else { return }
+        betterHintAsked = true
+        if betterHint(record) {
+            view.setHint("Names heard wrong? Better transcription gets two in three right, on this Mac: Settings → Recorder (1.6 GB download).")
+        }
     }
 
     /// An import being made (its sound copied): "Importing… 30 %".
@@ -656,6 +678,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     var onSelect: ((Int?) -> Void)?
     var onTranscribeAgain: (() -> Void)?
     var onDrop: (([URL]) -> Void)?
+    var onHint: (() -> Void)?
 
     private let title = NSTextField(labelWithString: "")
     private let about = NSTextField(labelWithString: "")
@@ -672,6 +695,10 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     private let transcribeButton = NSButton(title: "Transcribe", target: nil, action: nil)
     private let hints = HintBar()
     private let dropRing = DropRing()
+    /// A line taught once at the bottom of the lines (Better
+    /// transcription); a click acts on it.
+    private let hintLine = NSButton(title: "", target: nil, action: nil)
+    var hintText: String? { hintLine.isHidden ? nil : hintLine.title }
     private(set) var lines: [TranscriptLine] = []
     private(set) var names: [String: String] = [:]
     /// What the table shows: the lines said and the slides read, by time.
@@ -784,8 +811,13 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         transcribeButton.target = self
         transcribeButton.action = #selector(transcribePressed)
         dropRing.isHidden = true
+        hintLine.isBordered = false
+        hintLine.isHidden = true
+        hintLine.alignment = .left
+        hintLine.target = self
+        hintLine.action = #selector(hintPressed)
         for subview in [title, about, transcribeAgainButton, playButton, time, waveform, topLine, scroll, picturesColumn, state, languageMenu,
-                        transcribeButton, bottomLine, hints, dropRing] as [NSView] {
+                        transcribeButton, hintLine, bottomLine, hints, dropRing] as [NSView] {
             addSubview(subview)
         }
         registerForDraggedTypes([.fileURL])
@@ -993,6 +1025,16 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     @objc private func playPressed() { onPlay?() }
 
     @objc private func transcribeAgainPressed() { onTranscribeAgain?() }
+
+    @objc private func hintPressed() { onHint?() }
+
+    func setHint(_ text: String?) {
+        hintLine.isHidden = text == nil
+        hintLine.attributedTitle = NSAttributedString(string: text ?? "", attributes: [
+            .font: NSFont.systemFont(ofSize: 12), .foregroundColor: NSColor.secondaryLabelColor,
+        ])
+        needsLayout = true
+    }
 
     @objc private func scrolled() { scrolledAt = .now }
 
@@ -1254,7 +1296,9 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         picturesColumn.isHidden = columnWidth == 0
         picturesColumn.frame = NSRect(x: width - inset - columnWidth, y: y + 16, width: columnWidth, height: max(0, bottom - y - 32))
         let linesInner = columnWidth > 0 ? inner - columnWidth - 20 : inner
-        scroll.frame = NSRect(x: inset - 12, y: y + 1, width: linesInner + 24, height: max(0, bottom - y - 1))
+        let hintHeight: CGFloat = hintLine.isHidden ? 0 : 30
+        hintLine.frame = NSRect(x: inset, y: bottom - hintHeight + 6, width: linesInner, height: 18)
+        scroll.frame = NSRect(x: inset - 12, y: y + 1, width: linesInner + 24, height: max(0, bottom - y - 1 - hintHeight))
         let tableWidth = scroll.contentSize.width
         if tableWidth != linesWidth {
             linesWidth = tableWidth

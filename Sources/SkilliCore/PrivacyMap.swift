@@ -9,7 +9,7 @@ import Foundation
 public enum PrivacyMap {
     /// Where it goes, in the pane's order.
     public enum Destination: String, CaseIterable, Sendable {
-        case claude, chatGPT, openAI, typeSafe, github, klipy, websites, yours, apple
+        case claude, chatGPT, openAI, typeSafe, github, klipy, huggingFace, websites, yours, apple
 
         public var title: String {
             switch self {
@@ -19,6 +19,7 @@ public enum PrivacyMap {
             case .typeSafe: "TypeSafe Jev"
             case .github: "GitHub"
             case .klipy: "Klipy"
+            case .huggingFace: "Hugging Face"
             case .websites: "Websites"
             case .yours: "Your Servers and Agents"
             case .apple: "Apple"
@@ -253,6 +254,13 @@ public enum PrivacyMap {
         when: "When an app you connected to skil.li, such as Claude Code or Codex, calls one of its tools.",
         pane: "tools")
 
+    // Hugging Face: BetterTranscription (Settings → Recorder's Download).
+    public static let betterTranscription = Flow(
+        "betterTranscription", "Better transcription's download",
+        sends: "A request for two files (whisper large-v3-turbo and its voice detector), nothing of yours; 1.6 GB come back, checked, and stay on this Mac.",
+        when: "Only when you click Download or Resume in Settings → Recorder.",
+        pane: "recorder")
+
     // Apple: RemindersPane (MKGeocodingRequest), SystemCommands
     // (networkQuality).
     public static let places = Flow(
@@ -271,7 +279,8 @@ public enum PrivacyMap {
 
     /// Every flow, once.
     public static let all: [Flow] = [ask, commands, followUps, mail, fieldWords, plannedSteps, agent, scheduled, continueIn, rightsHelp]
-        + deciding + [fallback, imagesCopied, imagesFolder, linkPreviews, github, relay, gifs, servers, webhooks, agents, places, speedTest]
+        + deciding + [fallback, imagesCopied, imagesFolder, linkPreviews, github, relay, gifs, betterTranscription, servers, webhooks, agents, places,
+                      speedTest]
 
     /// Said once, above the list: the promise, then what it means.
     public static let statement = "Only what is listed below, only when it says, only to these places."
@@ -435,6 +444,8 @@ public enum PrivacyMap {
             }
         case .klipy:
             rows.append(Row(gifs, isOn: setup.gifSearch))
+        case .huggingFace:
+            rows.append(Row(betterTranscription))
         case .websites:
             rows.append(Row(linkPreviews, isOn: setup.clipboardHistory && setup.linkPreviews))
         case .yours:
@@ -491,7 +502,7 @@ public enum PrivacyMap {
         case .typeSafe: setup.typeSafeKey
         case .github: setup.githubLogin != nil
         case .klipy: setup.gifSearch
-        case .websites, .yours, .apple: true
+        case .huggingFace, .websites, .yours, .apple: true
         }
     }
 
@@ -519,6 +530,8 @@ public enum PrivacyMap {
             }
         case .klipy:
             setup.gifSearch ? "Klipy's GIFs, searched from the GIF mode" : "GIF search off or no Klipy key: nothing goes to Klipy"
+        case .huggingFace:
+            "Better transcription's download, only when you click it"
         case .websites:
             setup.clipboardHistory && setup.linkPreviews
                 ? "The sites of the links you look at in Clipboard History"

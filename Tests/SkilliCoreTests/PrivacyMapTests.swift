@@ -43,7 +43,8 @@ final class PrivacyMapTests: XCTestCase {
         XCTAssertEqual(Set(PrivacyMap.all.map(\.id)).count, PrivacyMap.all.count, "ids are unique")
         XCTAssertEqual(Set(PrivacyMap.all.map(\.title)).count, PrivacyMap.all.count, "titles are unique")
         // The panes rows may point to (`SettingsPane` raw values).
-        let panes: Set<String> = ["ask", "commands", "tools", "aiAccounts", "clipboard", "snippets", "emoji", "gifs", "launcher", "github", "reminders", "windows"]
+        let panes: Set<String> = ["ask", "commands", "tools", "aiAccounts", "clipboard", "snippets", "emoji", "gifs", "launcher", "github", "reminders", "windows",
+                                   "recorder"]
         for flow in PrivacyMap.all {
             XCTAssertFalse(flow.sends.isEmpty, flow.title)
             XCTAssertFalse(flow.when.isEmpty, flow.title)
@@ -428,6 +429,16 @@ final class PrivacyMapTests: XCTestCase {
 
     /// A link looked at in the history goes to its own site, nowhere else;
     /// off, nothing goes to websites.
+    /// Better transcription's download: Hugging Face, a request for two
+    /// files and nothing else, only on the user's click.
+    func testBetterTranscriptionsDownloadIsListed() {
+        let section = section(.huggingFace, PrivacyMap.Setup())
+        XCTAssertEqual(section.rows.map(\.id), ["betterTranscription"])
+        XCTAssertEqual(section.status, "Better transcription's download, only when you click it")
+        XCTAssertEqual(section.rows.first?.flow.pane, "recorder")
+        XCTAssertTrue(PrivacyMap.betterTranscription.sends.contains("nothing of yours"))
+    }
+
     func testLinkPreviewsGoToTheirSites() {
         let on = section(.websites, PrivacyMap.Setup())
         XCTAssertEqual(on.rows.map(\.id), ["linkPreviews"])

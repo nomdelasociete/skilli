@@ -125,6 +125,8 @@ final class Preferences {
         static let recorderWebcam = "Preferences.recorderWebcam"
         static let recorderScreen = "Preferences.recorderScreen"
         static let recorderLanguage = "Preferences.recorderLanguage"
+        static let recorderEngine = "Preferences.recorderEngine"
+        static let recorderBetterHintShown = "Preferences.recorderBetterHintShown"
         static let recorderFolderPath = "Preferences.recorderFolderPath"
         static let recorderRetention = "Preferences.recorderRetention"
         static let clipboardHistory = "Preferences.clipboardHistory"
@@ -292,6 +294,19 @@ final class Preferences {
     /// else the keyboard's).
     var recorderLanguage: String {
         didSet { save(recorderLanguage, Key.recorderLanguage) }
+    }
+
+    /// The engine transcripts are made with (`TranscriptEngine`'s raw
+    /// value); empty: Better transcription once downloaded, macOS's until
+    /// then.
+    var recorderEngine: String {
+        didSet { save(recorderEngine, Key.recorderEngine) }
+    }
+
+    /// The recording's window said once what Better transcription does
+    /// (taught once, then quiet).
+    var recorderBetterHintShown: Bool {
+        didSet { save(recorderBetterHintShown, Key.recorderBetterHintShown) }
     }
 
     /// Where recordings are kept; empty: Application Support's
@@ -682,6 +697,8 @@ final class Preferences {
         recorderWebcam = defaults.object(forKey: Key.recorderWebcam) as? Bool ?? false
         recorderScreen = defaults.object(forKey: Key.recorderScreen) as? Bool ?? false
         recorderLanguage = defaults.string(forKey: Key.recorderLanguage) ?? ""
+        recorderEngine = defaults.string(forKey: Key.recorderEngine) ?? ""
+        recorderBetterHintShown = defaults.bool(forKey: Key.recorderBetterHintShown)
         recorderFolderPath = defaults.string(forKey: Key.recorderFolderPath) ?? ""
         recorderRetention = RecordingRetention(rawValue: defaults.string(forKey: Key.recorderRetention) ?? "never")
         clipboardHistory = defaults.object(forKey: Key.clipboardHistory) as? Bool ?? true

@@ -90,8 +90,11 @@ final class MeetingRecorder {
     private(set) var resumeJumps: [Speaker: [Double]] = [:]
     /// Transcripts wait their turn: one at a time.
     /// Transcripts waiting their turn; `again`: Transcribe Again, the
-    /// transcript before kept when it fails.
-    private var queue: [(URL, MeetingRecord, again: Bool)] = []
+    /// transcript before kept when it fails; `engine`: the one picked.
+    private var queue: [(URL, MeetingRecord, again: Bool, engine: TranscriptEngine?)] = []
+    /// The default engine, whether Better transcription is downloaded,
+    /// the contacts' names for its prompt: read as each transcript starts.
+    var transcriptSetup: () async -> MeetingTranscriber.Setup = { MeetingTranscriber.Setup() }
     /// A stop under way (`stopping`): told once its files are closed.
     private var closedWaiters: [CheckedContinuation<Void, Never>] = []
     /// skil.li quits: nothing starts any more, every transcript not made
@@ -466,16 +469,17 @@ final class MeetingRecorder {
     /// Makes `folder`'s transcript (one at a time), then opens it. A
     /// language this Mac cannot transcribe, or a failure: kept without one
     /// (`pending`), its window says why.
-    func transcribe(_ folder: URL, record: MeetingRecord, again: Bool = false) {
+    func transcribe(_ folder: URL, record: MeetingRecord, again: Bool = false, engine: TranscriptEngine? = nil) {
         guard !quitting else { return leave(folder, record: record) }
-        queue.append((folder, record, again))
+        queue.append((folder, record, again, engine))
         guard transcribing == nil else { return }
         Task { await transcribeNext() }
     }
 
     private func transcribeNext() async {
         while !queue.isEmpty, !quitting {
-            let (folder, record, again) = queue.removeFirst()
+            let (folder, record, again, engine) = queue.removeFirst()
+            let setup = await transcriptSetup()
             // Made again: the record as it is before, put back if it fails.
             let before = again ? recordings.read(folder) : nil
             transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0))
@@ -484,7 +488,7 @@ final class MeetingRecorder {
             working.recorder = Recordings.ownProcess
             try? recordings.write(working, to: folder)
             do {
-                let done = try await MeetingTranscriber.transcribe(folder, record: working) { [weak self] step in
+                let done = try await MeetingTranscriber.transcribe(folder, record: working, picked: engine, setup: setup) { [weak self] step in
                     DispatchQueue.main.async {
                         MainActor.assumeIsolated {
                             guard let self, self.transcribing?.folder == folder else { return }

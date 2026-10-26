@@ -142,6 +142,7 @@ public enum SettingsTable {
         "didCompleteSetup": "The setup window's own state: closed once (Done, Later or ✕), it no longer opens by itself.",
         "recorderConsentShown": "The Record card's own state: it said once that the others in a call must agree to be recorded.",
         "recorderCardHintShown": "The meeting card's own state: its first Record ⌘R said once what it does (taught once, then quiet).",
+        "recorderBetterHintShown": "The recording's window's own state: it said once what Better transcription does (taught once, then quiet).",
         "launcherPins": "Pinned in the launcher itself (⌘K → Pin, Unpin), not in a pane; the user's own list: no tool reads or changes it."
     ]
 
@@ -327,6 +328,9 @@ public enum SettingsTable {
                 note: "Off by default; on, every call's recording starts with the meeting's window (screen.mp4, its text read into slides.json); never in person."),
         setting("recorder", "recorderLanguage", "Language", .choiceOnThisMac,
                 note: "A language this Mac transcribes (“en-US”), or “” to follow Ask's (else the keyboard's)."),
+        setting("recorder", "recorderEngine", "Engine",
+                .choice([SettingOption(TranscriptEngine.whisper.rawValue, "Better transcription"), SettingOption(TranscriptEngine.macOS.rawValue, "macOS")]),
+                note: "Better transcription (whisper, once its 1.6 GB is downloaded in the pane: the user's click only) is the default from then on; macOS's own engine until then. A language one engine lacks goes to the other."),
         setting("recorder", "recorderFolderPath", "Keep recordings in", .folder(empty: "Application Support's skil.li/Recordings"),
                 note: "Changing it moves the recordings there, one by one; refused while one is recorded or transcribed. “default” for the standard folder."),
         setting("recorder", "recorderRetention", "Delete after",

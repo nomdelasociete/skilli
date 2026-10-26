@@ -276,8 +276,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         center.appJoining = { [weak self] event in self?.calendarBook.appJoining(event) }
         center.join = { [weak self] event in self?.calendarBook.join(event) }
         center.recordingsMoving = { [weak self] in self?.recordingLibrary.moving }
+        center.ownName = { [contactBook] in
+            guard contactBook.isAllowed, let me = await contactBook.me() else { return nil }
+            let name = [me.givenName, me.familyName].filter { !$0.isEmpty }.joined(separator: " ")
+            return name.isEmpty ? nil : name
+        }
+        center.contactNames = { [weak self] in await self?.aiActions.dictationVocabulary?().phrases ?? [] }
+        center.openSettings = { [weak self] pane in self?.settings.show(pane: pane) }
         madeRecorderCenter = center
         return center
+    }
+    /// Better transcription's download (Settings → Recorder): made when its
+    /// pane or a recording's window first needs it.
+    private var madeBetterTranscription: BetterTranscription?
+    private var betterTranscription: BetterTranscription {
+        if let madeBetterTranscription { return madeBetterTranscription }
+        let store = BetterTranscription()
+        store.onFailureOutOfSight = { [weak self] line in self?.aiActions.notify(line, caller: "Recorder", run: nil, seconds: 8) }
+        madeBetterTranscription = store
+        return store
     }
     /// The recordings as the launcher and Settings → Recorder list them;
     /// read at launch (4 s in) when there is a Recordings folder, and again
@@ -593,6 +610,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenu.install()
         routeTerminationSignal()
+        #if SKILLI_SELFTEST
+        // The self-test's own Better transcription, the Mac's left alone.
+        if case .selftest = mode {
+            BetterTranscription.testFolder = recordingsFolder.deletingLastPathComponent().appendingPathComponent(BackupPlan.modelsFolder, isDirectory: true)
+        }
+        #endif
         // LaunchServices' first answer (~15 ms) off the main thread, before
         // the launcher's rows ask for CleanShot X; the user's shortcuts with
         // it (Apple's tool, a process).
@@ -1211,6 +1234,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Better transcription's download: what came is kept to resume.
+        madeBetterTranscription?.keepForQuit()
         remapper.deactivate()
         if case .benchmark = mode {} else { windowLearner.stop() }
         // The user's own input source, if the launcher had switched it.
@@ -1903,6 +1928,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         context.moveRecordings = { [weak self] folder in await self?.moveRecordings(to: folder) }
         context.deleteRecording = { [weak self] summary in self?.deleteRecording(summary) }
+        context.betterTranscription = { [weak self] in self?.betterTranscription }
         context.hasImageKey = { [ai] in ai.decisionKey(for: .typeSafe) != nil }
         context.reopen = { [weak self] in
             guard case .normal = self?.mode else { return }

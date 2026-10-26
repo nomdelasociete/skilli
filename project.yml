@@ -20,6 +20,10 @@ packages:
   ArgmaxOSS:
     url: https://github.com/argmaxinc/argmax-oss-swift
     exactVersion: 1.1.1
+  # Better transcription's engine (whisper.cpp 1.9.5's XCFramework, MIT):
+  # linked by skil.li Transcriber, embedded in the app's Frameworks for it.
+  WhisperCpp:
+    path: Packages/WhisperCpp
 
 settings:
   base:
@@ -69,6 +73,12 @@ targets:
         embed: true
         copy:
           destination: executables
+      # whisper.framework, as the helper's build puts it in the products:
+      # embedded for the helper, never linked by the app.
+      - framework: whisper.framework
+        implicit: true
+        link: false
+        embed: true
     settings:
       base:
         PRODUCT_NAME: Skilli
@@ -134,6 +144,9 @@ targets:
         embed: false
       - package: ArgmaxOSS
         product: SpeakerKit
+      - package: WhisperCpp
+        product: WhisperCpp
+        embed: false
     settings:
       base:
         PRODUCT_NAME: "skil.li Transcriber"
