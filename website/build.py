@@ -7,6 +7,11 @@ import json
 from pathlib import Path
 import re
 import shutil
+import sys
+
+# The renderer beside this file, also when the build is loaded by the tests.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from markdown_pages import Page  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUG = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*')
@@ -154,6 +159,73 @@ def render(entries, template, target):
     (target / 'catalog.json').write_text(json.dumps({'schemaVersion': 1, 'skillies': public}, ensure_ascii=False, indent=2) + '\n')
 
 
+REPOSITORY = 'https://github.com/nomdelasociete/skilli'
+# The skillies docs, in their reading order: source file, page, short name in the menu.
+DOCS = [('README.md', 'index.html', 'Overview'), ('header.md', 'header.html', 'Header'),
+        ('running.md', 'running.html', 'How it runs'), ('calling-skilli.md', 'calling-skilli.html', 'Calling skil.li')]
+
+
+def page_address(page):
+    """A doc page's address from another one: the overview is the folder itself."""
+    return './' if page == 'index.html' else page
+
+
+def docs_link(href):
+    """A link written in skillies/docs/*.md, as the page uses it: another doc → its page,
+    the rest of the repository → GitHub, web addresses and anchors as they are."""
+    if href.startswith(('#', 'http://', 'https://', 'mailto:')):
+        return href
+    path, _, anchor = href.partition('#')
+    anchor = f'#{anchor}' if anchor else ''
+    resolved = (ROOT / 'skillies/docs' / path).resolve()
+    pages = {source: page for source, page, _ in DOCS}
+    if resolved.parent == ROOT / 'skillies/docs' and resolved.name in pages:
+        return page_address(pages[resolved.name]) + anchor
+    relative = resolved.relative_to(ROOT).as_posix()
+    if resolved.name == 'README.md':
+        return f'{REPOSITORY}/tree/main/{resolved.parent.relative_to(ROOT).as_posix()}{anchor}'
+    kind = 'tree' if resolved.is_dir() else 'blob'
+    return f'{REPOSITORY}/{kind}/main/{relative}{anchor}'
+
+
+def render_docs(template, target):
+    """skillies/docs/*.md as pages: one per file, the menu of all, this page's sections."""
+    esc = html.escape
+    target.mkdir(parents=True, exist_ok=True)
+    for index, (source, name, short) in enumerate(DOCS):
+        text = (ROOT / 'skillies/docs' / source).read_text()
+        page = Page(docs_link)
+        content = page.render(text)
+        h1 = next((h for h in page.headings if h[0] == 1), None)
+        if h1 is None:
+            raise ValueError(f'skillies/docs/{source}: missing # title')
+        # The overview's own title is the section's ("Skillies"): its menu name says which page.
+        title = short if name == 'index.html' else html.unescape(re.sub(r'<[^>]+>', '', h1[2]))
+        first = re.search(r'<p>(.*?)</p>', content, re.S)
+        description = re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', '', first.group(1)))).strip() if first else title
+        if len(description) > 160:
+            description = description[:157].rsplit(' ', 1)[0] + '…'
+        current = ' aria-current="page"'
+        menu = ''.join(f'<li><a href="{page_address(other)}"{current if other == name else ""}>{esc(label)}</a></li>'
+                       for _, other, label in DOCS)
+        sections = ''.join(f'<li class="level-{level}"><a href="#{anchor}">{label}</a></li>' for level, anchor, label in page.headings if level in (2, 3))
+        steps = []
+        if index > 0:
+            _, before, label = DOCS[index - 1]
+            steps.append(f'<a class="docs-prev" href="{page_address(before)}"><span>Previous</span>{esc(label)}</a>')
+        if index + 1 < len(DOCS):
+            _, after, label = DOCS[index + 1]
+            steps.append(f'<a class="docs-next" href="{page_address(after)}"><span>Next</span>{esc(label)}</a>')
+        canonical = 'https://skil.li/skillies/docs/' + ('' if name == 'index.html' else name)
+        values = {'{{TITLE}}': esc(title), '{{DESCRIPTION}}': esc(description), '{{CANONICAL}}': canonical,
+                  '{{MENU}}': menu, '{{SECTIONS}}': sections, '{{CONTENT}}': content, '{{STEPS}}': ''.join(steps),
+                  '{{SOURCE}}': f'{REPOSITORY}/blob/main/skillies/docs/{source}'}
+        result = template.read_text()
+        for key, value in values.items():
+            result = result.replace(key, value)
+        (target / name).write_text(result)
+
+
 def build(preview=False):
     entries = catalog(ROOT / 'skillies')
     if preview:
@@ -176,6 +248,7 @@ def build(preview=False):
             shutil.copyfile(ROOT / 'website' / name, output / name)
         target = output / 'skillies'
     render(entries, ROOT / 'website/skillies/index.template.html', target)
+    render_docs(ROOT / 'website/skillies/docs.template.html', target / 'docs')
     if not preview:
         (output / '_headers').write_text(
             "/*\n"
@@ -185,7 +258,7 @@ def build(preview=False):
             "  Cache-Control: public, max-age=0, must-revalidate\n"
             "  Content-Disposition: attachment\n"
         )
-    print(f'Built {len(entries)} skillies → {target}')
+    print(f'Built {len(entries)} skillies and {len(DOCS)} doc pages → {target}')
 
 
 if __name__ == '__main__':

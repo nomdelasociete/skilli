@@ -1,0 +1,89 @@
+"""The skillies docs on the site: skillies/docs/*.md, each as a page, every
+link between them landing on a page and a heading that exist."""
+import importlib.util
+from pathlib import Path
+import re
+import tempfile
+import unittest
+
+spec = importlib.util.spec_from_file_location('site_build', Path(__file__).parents[1] / 'build.py')
+build = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(build)
+Page = build.Page
+
+
+def render(text):
+    return Page(lambda href: href).render(text)
+
+
+class DocsPages(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        scratch = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(scratch.cleanup)
+        cls.target = Path(scratch.name)
+        build.render_docs(build.ROOT / 'website/skillies/docs.template.html', cls.target)
+        cls.pages = {path.name: path.read_text() for path in cls.target.glob('*.html')}
+
+    def test_every_markdown_file_has_its_page(self):
+        sources = sorted(path.name for path in (build.ROOT / 'skillies/docs').glob('*.md'))
+        self.assertEqual(sorted(source for source, _, _ in build.DOCS), sources, 'add each file to DOCS in website/build.py')
+        self.assertEqual(sorted(self.pages), sorted(page for _, page, _ in build.DOCS))
+
+    def test_links_between_pages_land_on_a_heading(self):
+        ids = {name: set(re.findall(r'id="([^"]+)"', html)) for name, html in self.pages.items()}
+        for name, html in self.pages.items():
+            article = html[html.index('<article'):html.index('</article>')]
+            for href in re.findall(r'href="([^"]+)"', article):
+                if href.startswith(('http', 'mailto:')):
+                    continue
+                page, _, anchor = href.partition('#')
+                page = 'index.html' if page == './' else page or name
+                self.assertIn(page, self.pages, f'{name}: {href}')
+                if anchor:
+                    self.assertIn(anchor, ids[page], f'{name}: {href}')
+
+    def test_repository_links_go_to_github(self):
+        index = self.pages['index.html']
+        self.assertIn('href="https://github.com/nomdelasociete/skilli/tree/main/skillies"', index)
+        relative = [href for html in self.pages.values() for href in re.findall(r'href="([^"]+)"', html) if not href.startswith('http')]
+        self.assertEqual([href for href in relative if '.md' in href], [])
+
+    def test_each_page_names_itself_and_marks_where_it_is(self):
+        for _, page, label in build.DOCS:
+            html = self.pages[page]
+            self.assertRegex(html, r'<title>[^<|]+ \| Skillies docs \| skil.li</title>')
+            self.assertIn(f' aria-current="page">{label}</a>', html)
+            self.assertNotIn('{{', html)
+
+    def test_no_em_dashes(self):
+        for name, html in self.pages.items():
+            self.assertNotIn('—', html, name)
+
+
+class Markdown(unittest.TestCase):
+    def test_nested_lists_and_code_inside_items(self):
+        html = render('1. **One.**\n   - a\n   - b\n2. Two:\n\n   ```bash\n   echo "<hi>"\n   ```\n')
+        self.assertEqual(html, '<ol><li><strong>One.</strong>\n<ul><li>a</li><li>b</li></ul></li>'
+                               '<li><p>Two:</p>\n<pre data-language="bash"><code>echo &quot;&lt;hi&gt;&quot;</code></pre></li></ol>')
+
+    def test_tables_keep_pipes_inside_code(self):
+        html = render('| Key | Value |\n| --- | --- |\n| `a|b` | **x** |\n')
+        self.assertIn('<td><code>a|b</code></td><td><strong>x</strong></td>', html)
+
+    def test_headings_get_githubs_ids(self):
+        page = Page(lambda href: href)
+        page.render("## Use skil.li's other features\n## `\"$SKILLI_CLI\" call`\n## Modes\n## Modes\n")
+        self.assertEqual([anchor for _, anchor, _ in page.headings],
+                         ['use-skillis-other-features', 'skilli_cli-call', 'modes', 'modes-1'])
+
+    def test_notes_for_maintainers_stay_out(self):
+        self.assertEqual(render('Before.\n\n<!-- Maintainers: change\nthis too. -->\n\nAfter.'), '<p>Before.</p>\n<p>After.</p>')
+
+    def test_text_is_escaped_and_links_rewritten(self):
+        html = Page(lambda href: href.replace('.md', '.html')).render('See [the <header>](header.md#keys) & `<tool>`.')
+        self.assertEqual(html, '<p>See <a href="header.html#keys">the &lt;header&gt;</a> &amp; <code>&lt;tool&gt;</code>.</p>')
+
+
+if __name__ == '__main__':
+    unittest.main()

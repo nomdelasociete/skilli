@@ -3316,7 +3316,7 @@ re-investigating.
   `selftest history` (scratch Chrome, Zen and Safari histories).
 - Skillies (`ScriptLibrary`, `ScriptCommand` in SkilliCore, Settings →
   Skillies, `MacAction.script`; the reference for users and contributors
-  is `docs/skillies/`: header keys, how one runs, every tool `"$SKILLI_CLI"
+  is `skillies/docs/`: header keys, how one runs, every tool `"$SKILLI_CLI"
   call` reaches. Change it in the same pull request as the behaviour;
   `SkillieDocsTests` fails on a header key, skillie variable or tool it
   does not list): skil.li's own commands, the
