@@ -496,11 +496,11 @@ final class AIActionController {
                     guard let picked = await ask(prompt, position: (1, 1)), let index = options.firstIndex(of: picked) else { return }
                     route = shown[index]
                     Log.trace("Ask \(challenged ? "named \(decision.services)" : "was unsure (\(Int(decision.confidence * 100))%)"); the user chose \(route.rawValue)")
-                } else if !AskRouter.fits(route, decision) {
-                    // The menus or an app under the bar: the one route left
-                    // runs, not an app at 10 % opened.
-                    route = possible.first ?? .act
                 }
+                // A route decided under the bar still runs when the card does
+                // not ask: switching to the one left lost on volume (Jev's
+                // held-out half 150 → 146), the app lists split in chunks
+                // keeping the right app's probability low.
             }
             if route == .rewrite, read == nil { route = .answer }
             // No menu item fits: the agent looks further.
