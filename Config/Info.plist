@@ -43,8 +43,9 @@
 	<!-- A skillie as a file (docs/skillie-files.md): the script itself, as
 	     text, so Quick Look shows it; opened, Settings → Skillies shows it
 	     whole before Add. Its icon: macOS's document sheet with skil.li's
-	     icon and "SKILLI" (UTTypeIcons; CFBundleTypeIconSystemGenerated is
-	     ignored for a type that is plain text). -->
+	     icon, no text (UTTypeIcons; CFBundleTypeIconSystemGenerated is
+	     ignored for a type that is plain text, and UTTypeIconText is drawn
+	     in capitals, never skil.li as the brand writes it). -->
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
@@ -60,8 +61,6 @@
 			<dict>
 				<key>UTTypeIconBadgeName</key>
 				<string>AppIcon</string>
-				<key>UTTypeIconText</key>
-				<string>skilli</string>
 			</dict>
 			<key>UTTypeTagSpecification</key>
 			<dict>

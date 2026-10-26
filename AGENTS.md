@@ -3412,9 +3412,10 @@ re-investigating.
   file is a skillie renamed, plain text (type
   `com.nomdelasociete.skilli.skillie`, exported in `Config/Info.plist`,
   conforming to `public.plain-text`; skil.li its owner, role Viewer; its
-  icon the document sheet with skil.li's icon and "SKILLI", `UTTypeIcons`
-  badge AppIcon and text: `CFBundleTypeIconSystemGenerated` is ignored for
-  a plain-text type).
+  icon the document sheet with skil.li's icon, no text, `UTTypeIcons`
+  badge AppIcon: `UTTypeIconText` is drawn in capitals, never the brand's
+  skil.li, and `CFBundleTypeIconSystemGenerated` is ignored for a
+  plain-text type).
   Opened (Finder, the Dock, Open With: `application(_:open:)`, every file
   of one open in one sheet) or `skilli://skillies/import?url=https://…`
   (repeatable; `SmallDownload`, as `apps/import`): Settings → Skillies'
