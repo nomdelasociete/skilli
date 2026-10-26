@@ -373,23 +373,24 @@ final class MeetingRecorder {
     }
 
     /// Stops as `stop()` does (a stop under way too), holding the main
-    /// thread until both files are closed: a second at most for the
-    /// sources' last buffers, then what is left encoded and the files
-    /// finished, 5 s at most for both (the encoder or the disk may never
-    /// answer). A file not whole and finished by then: `meeting.json` stays
+    /// thread until both files are closed: the sources' last buffers (a
+    /// second at most), what is left encoded and the files finished, 5 s at
+    /// most for all of it (the encoder or the disk may never answer). A file not whole and finished by then: `meeting.json` stays
     /// as it was while recording (`recording` or `paused`), no transcript,
     /// so the next launch offers it as never stopped (Save, Later, Discard;
     /// its length read from its files) instead of transcribing a file that
     /// may lack its end.
     private func stopNow() {
         guard let stopping = self.stopping ?? beginStopping() else { return }
+        // One deadline for all of it: the last buffers, what is left to
+        // encode, the files finished.
+        let deadline = DispatchTime.now() + TrackWriter.closingTime
         let tracks = Speaker.allCases.compactMap { speaker in writers[speaker].map { (speaker, $0) } }
         for (_, writer) in tracks { writer.markStop(at: stopping.at) }
         let arrival = ContinuousClock.now + .seconds(1)
-        while ContinuousClock.now < arrival, !tracks.allSatisfy({ !isOn($0.0) || $0.1.hasArrived(upTo: stopping.at) }) {
+        while ContinuousClock.now < arrival, !tracks.allSatisfy({ !isOn($0.0) || $0.1.hasArrived(upTo: stopping.at, until: deadline) }) {
             Thread.sleep(forTimeInterval: 0.05)
         }
-        let deadline = DispatchTime.now() + TrackWriter.closingTime
         let lengths = tracks.map { $0.1.closeNow(until: deadline) }
         guard lengths.allSatisfy({ $0 != nil }) else {
             Log.actions.error("Recorder: a track was not finished as skil.li quit; offered at the next launch")

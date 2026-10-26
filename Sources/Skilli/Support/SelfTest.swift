@@ -23884,7 +23884,7 @@ final class SelfTest {
             let next = await RecorderCenter.left(in: root)
             let offeredAgain = next.unfinished.contains { $0.0.standardizedFileURL == stuck.folder.standardizedFileURL }
             let madeUnasked = next.toTranscribe.contains { $0.0.standardizedFileURL == stuck.folder.standardizedFileURL }
-            stallPassed = stallPassed && stuck.reason == .exit && stuck.status == 0 && (stuck.ended ?? 99) < TrackWriter.closingTime + 3
+            stallPassed = stallPassed && stuck.reason == .exit && stuck.status == 0 && (stuck.ended ?? 99) < TrackWriter.closingTime + 1.5
                 && leftAs?.state == .recording && offeredAgain && !madeUnasked
             stalls.append(String(format: "%@ stuck: exit %@, meeting.json “%@”, offered as never stopped %@, transcribed unasked %@", kind.rawValue,
                                  stuck.ended.map { String(format: "%.2f s", $0) } ?? "never", leftAs?.state.rawValue ?? "nothing", "\(offeredAgain)",

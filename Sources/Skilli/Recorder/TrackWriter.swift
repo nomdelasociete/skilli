@@ -143,9 +143,10 @@ final class TrackWriter: @unchecked Sendable {
         queue.sync { timeline.finish(at: stop) }
     }
 
-    /// Whether what the source handed over reaches `stop`.
-    func hasArrived(upTo stop: Double) -> Bool {
-        queue.sync { drained(upTo: stop) }
+    /// Whether what the source handed over reaches `stop` (what came is
+    /// encoded until `deadline` at most).
+    func hasArrived(upTo stop: Double, until deadline: DispatchTime) -> Bool {
+        queue.sync { drained(upTo: stop, until: deadline) }
     }
 
     /// Closes the file and waits until it is finished, until `deadline` at
@@ -188,8 +189,8 @@ final class TrackWriter: @unchecked Sendable {
         await withCheckedContinuation { done in queue.async { done.resume(returning: work()) } }
     }
 
-    private func drained(upTo stop: Double) -> Bool {
-        drain()
+    private func drained(upTo stop: Double, until deadline: DispatchTime = .distantFuture) -> Bool {
+        drain(until: deadline)
         return newest >= stop
     }
 
@@ -200,7 +201,7 @@ final class TrackWriter: @unchecked Sendable {
         timer?.cancel()
         timer = nil
         closingStarted = true
-        drain()
+        drain(until: deadline)
         let over = timeline.overshoot()
         if over > 0 { pending.removeLast(min(over, pending.count)) }
         if let tail = timeline.tail() { apply([tail], from: []) }
@@ -227,7 +228,9 @@ final class TrackWriter: @unchecked Sendable {
         return closed
     }
 
-    private func drain() {
+    /// What the source handed over placed on the track's clock, then to the
+    /// encoder (until `deadline`: what is left stays pending).
+    private func drain(until deadline: DispatchTime = .distantFuture) {
         guard !failed else { return }
         let (samples, chunks) = inbox.take()
         for chunk in chunks {
@@ -266,7 +269,7 @@ final class TrackWriter: @unchecked Sendable {
                 outNext += Double(out.count)
             }
         }
-        flush(all: false)
+        flush(all: false, until: deadline)
     }
 
     /// Debug builds: where a run starts again (a gap filled, frames left
@@ -290,17 +293,17 @@ final class TrackWriter: @unchecked Sendable {
     /// What is pending to the encoder, 100 ms at a time (`all`: the rest
     /// too, at the end).
     /// What is pending to the encoder, 100 ms at a time (`all`: the rest
-    /// too, at the end, until `deadline`: a backlog the encoder takes too
-    /// slowly, or not at all, is left there). Whether all that was due went.
+    /// too, at the end), until `deadline`: a backlog the encoder takes too
+    /// slowly, or not at all, is left there. Whether all that was due went.
     @discardableResult
     private func flush(all: Bool, until deadline: DispatchTime = .distantFuture) -> Bool {
         var start = 0
         // What went is taken off once, after (a long silence is many pieces).
         defer { pending.removeFirst(start) }
         while pending.count - start >= Self.piece + (all ? 0 : Self.heldBack) || (all && start < pending.count) {
-            // At the end, never past the deadline: the rest is left out, as
+            // Never past the deadline (the quit's): the rest is left out, as
             // after a crash.
-            if all, DispatchTime.now() >= deadline { return false }
+            if DispatchTime.now() >= deadline { return false }
             guard writer.status == .writing else {
                 fail()
                 return false
