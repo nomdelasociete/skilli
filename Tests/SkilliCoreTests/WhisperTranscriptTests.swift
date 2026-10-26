@@ -31,6 +31,17 @@ final class WhisperTranscriptTests: XCTestCase {
         XCTAssertEqual(phrases.map(MeetingTranscript.joined), ["Thank you.", "Bye.", "Thank you."])
     }
 
+    func testASegmentIsCutWhereItsTimesJump() {
+        // One segment over words said 15 s apart (the other side spoke
+        // between them): two phrases, so the lines interleave by time.
+        let segment = WhisperTranscript.Segment(tokens: [token(" Hello", 1, 1.4), token(" everyone.", 1.4, 2), token(" That's", 16, 16.3),
+                                                         token(" fine.", 16.3, 16.8), token(" Thanks", 17.2, 17.6)])
+        let phrases = WhisperTranscript.phrases(of: WhisperTranscript.Run(segments: [segment]), attendees: [])
+        XCTAssertEqual(phrases.map(MeetingTranscript.joined), ["Hello everyone.", "That's fine. Thanks"])
+        let lines = MeetingTranscript.lines(me: phrases, them: [[TranscriptWord("Hi", start: 4, end: 4.5)]])
+        XCTAssertEqual(lines.map(\.speaker), [.me, .them, .me])
+    }
+
     func testAnAttendeesNameWrittenAsASpeakerLabelGoes() {
         let attendees = ["Camille Kerjean", "Paul Arnaud"]
         let segment = WhisperTranscript.Segment(tokens: [token(" Camille", 0, 0.3), token(" Ker", 0.3, 0.5), token("jean", 0.5, 0.6),
@@ -38,7 +49,8 @@ final class WhisperTranscriptTests: XCTestCase {
                                                          token(" va.", 1, 1.2), token(" Paul", 2, 2.2), token(" Arnaud:", 2.2, 2.6),
                                                          token(" Oui.", 2.7, 3)])
         let kept = WhisperTranscript.phrases(of: WhisperTranscript.Run(segments: [segment]), attendees: attendees)
-        XCTAssertEqual(kept.map(MeetingTranscript.joined), ["On y va. Oui."])
+        // The label's words gone; the pause where it was (1.5 s) cuts the phrase.
+        XCTAssertEqual(kept.map(MeetingTranscript.joined), ["On y va.", "Oui."])
         // A name said, not a label, stays.
         let said = WhisperTranscript.withoutLabels(WhisperTranscript.words(of: .init(tokens: [token(" Merci", 0, 1), token(" Camille", 1, 2),
                                                                                                 token(" Kerjean.", 2, 3)])), attendees: attendees)

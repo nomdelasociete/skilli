@@ -70,12 +70,16 @@ public enum WhisperTranscript {
         return words
     }
 
-    /// The run as phrases (a segment each, its words), whisper's two
-    /// measured failures taken out (Measured: 10.8 → 10.4 errors per
-    /// hundred words): a segment the same as the one before it (whisper
-    /// looping, up to 52 times in a track), and an attendee's name written
-    /// as a speaker label ("Camille Kerjean : …").
-    public static func phrases(of run: Run, attendees: [String]) -> [[TranscriptWord]] {
+    /// The run as phrases, whisper's two measured failures taken out
+    /// (Measured: 10.8 → 10.4 errors per hundred words): a segment the
+    /// same as the one before it (whisper looping, up to 52 times in a
+    /// track), and an attendee's name written as a speaker label
+    /// ("Camille Kerjean : …"). A segment is cut where its words' times
+    /// jump more than `pause` s: whisper's segments follow its 30 s windows
+    /// over the audio its VAD kept, so one may hold what was said a minute
+    /// apart while the other side talked (its times, on the recording's
+    /// clock, say so); the lines then interleave by time.
+    public static func phrases(of run: Run, attendees: [String], pause: Double = 1.0) -> [[TranscriptWord]] {
         var phrases: [[TranscriptWord]] = []
         var before: String?
         for segment in run.segments {
@@ -84,7 +88,15 @@ public enum WhisperTranscript {
             defer { before = text }
             guard text != before else { continue }
             let kept = withoutLabels(words, attendees: attendees)
-            if kept.contains(where: { !MeetingTranscript.folded($0.text).isEmpty }) { phrases.append(kept) }
+            var phrase: [TranscriptWord] = []
+            for word in kept {
+                if let last = phrase.last, word.start - last.end > pause {
+                    if phrase.contains(where: { !MeetingTranscript.folded($0.text).isEmpty }) { phrases.append(phrase) }
+                    phrase = []
+                }
+                phrase.append(word)
+            }
+            if phrase.contains(where: { !MeetingTranscript.folded($0.text).isEmpty }) { phrases.append(phrase) }
         }
         return phrases
     }
