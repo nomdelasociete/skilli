@@ -79,7 +79,7 @@ Add); skillies join them.
   by skil.li (`UTExportedTypeDeclarations`), conforming to
   `public.plain-text` so Quick Look shows the code; skil.li is its owner
   (`CFBundleDocumentTypes`, `LSHandlerRank` Owner, role Viewer).
-- Content: a skillie as the folder takes it (docs/skillies/header.md). Checked
+- Content: a skillie as the folder takes it (skillies/docs/header.md). Checked
   as the folder will read it: UTF-8, 256 KB at most, a `#!` line naming an
   absolute interpreter (skil.li runs a skillie by its shebang when it is
   not executable), title and mode in the first 60 lines within 8 KB,

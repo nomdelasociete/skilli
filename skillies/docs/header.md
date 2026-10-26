@@ -1,8 +1,10 @@
 # Skillie header reference
 
-The header is a block of comments near the top of the script. skil.li reads
-it with `ScriptCommand.parse` (`Sources/SkilliCore/ScriptCommand.swift`):
-change this page when that function changes.
+The header is a block of comments near the top of the script.
+
+<!-- Maintainers: skil.li reads it with `ScriptCommand.parse`
+(Sources/SkilliCore/ScriptCommand.swift). Change this page when that function
+changes; SkillieDocsTests checks every key it reads has its row here. -->
 
 ```python
 #!/usr/bin/env python3
@@ -58,7 +60,7 @@ change this page when that function changes.
 | `silent` | "Running…" card | Its last non-empty line, for 2 seconds. |
 | `compact` | "Running…" card | Its last non-empty line, about 4 seconds. |
 | `fullOutput` | "Running…" card | All of its output in the card (scrolls), about 20 seconds. |
-| `inline` | — | Its last non-empty line is shown in its launcher row, and in the menu bar if you put it there. Run with ↩ it behaves like `compact`. |
+| `inline` | Nothing shown | Its last non-empty line is shown in its launcher row, and in the menu bar if you put it there. Run with ↩ it behaves like `compact`. |
 
 In every mode: a run that prints nothing closes the card with nothing said;
 a run that exits with a non-zero status shows its last line (all of it in
@@ -111,11 +113,11 @@ Each argument is one JSON object on one line:
 
 What each interpreter needs installed (nothing, Xcode's Command Line Tools,
 Homebrew) is in the collection's guide:
-[What runs on every Mac](../../skillies/README.md#what-runs-on-every-mac).
+[What runs on every Mac](../README.md#what-runs-on-every-mac).
 
 ## Website-only keys
 
 The community collection's build (`website/build.py`) also reads
 `@skilli.requires` (`xcode-tools`, `homebrew:<formula>`), to say on the
 website what a skillie needs. The app ignores it. See
-[`skillies/README.md`](../../skillies/README.md).
+[`skillies/README.md`](../README.md).
