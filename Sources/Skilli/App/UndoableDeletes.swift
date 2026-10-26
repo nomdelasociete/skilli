@@ -92,6 +92,20 @@ final class UndoableDeletes {
         }
     }
 
+    /// Settings → Windows → Forget What skil.li Learned: every place
+    /// learned gone at once; ⌘Z brings them back.
+    func placements(in learner: WindowLearner) {
+        let count = learner.placements.apps.count
+        guard count > 0 else { return }
+        let forgotten = learner.forget()
+        Log.trace("Windows learned: forgotten")
+        offer("Window Places Forgotten", UndoDelete.details(count == 1 ? "1 app's places" : "\(count) apps' places",
+                                                            ": Arrange Windows learns again from where you put them.")) {
+            learner.restore(forgotten)
+            Log.trace("Windows learned: put back")
+        }
+    }
+
     /// ⌘K → Remove Alias, and an alias removed in Settings → Catalog.
     func alias(of id: String, in preferences: Preferences, shown: @escaping @MainActor () -> Void = {}) {
         guard let removed = RemovedElement.take(from: &preferences.launcherAliases, where: { $0.id == id }) else { return }

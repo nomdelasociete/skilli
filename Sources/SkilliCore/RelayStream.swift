@@ -161,13 +161,16 @@ public enum RelayRetry {
 
 public enum RelayRequest {
     /// Bearer is the sealed token only. No cookies, no GitHub credential.
-    public static func stream(origin: URL, relayToken: String) -> URLRequest? {
+    /// `inbox`: server sync's stream, which wakes only when the relay's copy
+    /// changed (`X-Relay-Inbox: 1`).
+    public static func stream(origin: URL, relayToken: String, inbox: Bool = false) -> URLRequest? {
         guard RelayToken.accepts(relayToken) else { return nil }
         var request = URLRequest(url: RelayAddress.stream(origin))
         request.httpMethod = "GET"
         request.setValue("Bearer \(relayToken)", forHTTPHeaderField: "Authorization")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        if inbox { request.setValue("1", forHTTPHeaderField: "X-Relay-Inbox") }
         return request
     }
 }
@@ -207,9 +210,9 @@ public final class RelayConnection {
 
     public var isRunning: Bool { task != nil }
 
-    public func start(origin: URL, token: String) {
+    public func start(origin: URL, token: String, inbox: Bool = false) {
         stop()
-        guard let request = RelayRequest.stream(origin: origin, relayToken: token) else { return }
+        guard let request = RelayRequest.stream(origin: origin, relayToken: token, inbox: inbox) else { return }
         let generation = generation
         let redirectStop = RelayNoRedirect()
         let session = URLSession(configuration: Self.configuration, delegate: redirectStop, delegateQueue: nil)

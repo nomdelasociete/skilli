@@ -42,7 +42,8 @@ public enum SkillieFile {
         guard let command = ScriptCommand.parse(String(decoding: data.prefix(8_192), as: UTF8.self), path: "") else {
             throw Problem(message: "Its first lines do not say “@skilli.title” and “@skilli.mode”: not a skillie.")
         }
-        return Checked(command: command, text: text, fileName: fileName(name, title: command.title, program: program))
+        return Checked(command: command, text: text,
+                       fileName: fileName(name, title: command.title, program: program, language: language(of: text)))
     }
 
     /// The installed skillie a new one replaces: the one with its title,
@@ -64,10 +65,19 @@ public enum SkillieFile {
         return parts.dropFirst().first { !$0.hasPrefix("-") && !$0.contains("=") }.map { ($0 as NSString).lastPathComponent }
     }
 
+    /// The language its shebang asks of the program: `#!/usr/bin/osascript
+    /// -l JavaScript` → "JavaScript". Nil when it names none.
+    static func language(of text: String) -> String? {
+        guard text.hasPrefix("#!"), let line = text.dropFirst(2).split(whereSeparator: \.isNewline).first else { return nil }
+        let parts = line.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard let flag = parts.firstIndex(of: "-l"), flag + 1 < parts.count else { return nil }
+        return parts[flag + 1]
+    }
+
     /// "Week Number.skilli" → "week-number.sh": the file's name without
     /// `.skilli` (or the title's when it has none), the extension its
     /// program's scripts have.
-    static func fileName(_ name: String, title: String, program: String) -> String {
+    static func fileName(_ name: String, title: String, program: String, language: String? = nil) -> String {
         var base = (name as NSString).lastPathComponent
         // ".skilli" alone: an extension, no name (NSString sees a hidden file).
         if base.hasPrefix("."), scriptExtensions.contains(base.dropFirst().lowercased()) { base = "" }
@@ -75,19 +85,21 @@ public enum SkillieFile {
             base = (base as NSString).deletingPathExtension
         }
         let slug = ScriptCommand.slug(base).isEmpty ? ScriptCommand.slug(title) : ScriptCommand.slug(base)
-        let ext = fileExtension(for: program)
+        let ext = fileExtension(for: program, language: language)
         return (slug.isEmpty ? "skillie" : slug) + (ext.isEmpty ? "" : ".\(ext)")
     }
 
     /// Extensions taken off a name before its own is put back.
-    private static let scriptExtensions: Set<String> = [fileExtension, "sh", "bash", "zsh", "py", "js", "mjs", "rb", "swift", "txt"]
+    private static let scriptExtensions: Set<String> = [fileExtension, "sh", "bash", "zsh", "py", "js", "mjs", "rb", "swift", "applescript", "txt"]
 
     /// bash, sh, zsh → "sh"; python3 → "py"; node → "js"; swift; ruby →
-    /// "rb"; another program: none.
-    static func fileExtension(for program: String) -> String {
+    /// "rb"; osascript → "js" for JavaScript, "applescript" otherwise;
+    /// another program: none.
+    static func fileExtension(for program: String, language: String? = nil) -> String {
         switch program {
         case "bash", "sh", "zsh", "dash": "sh"
         case "node": "js"
+        case "osascript": language == "JavaScript" ? "js" : "applescript"
         case "swift": "swift"
         case "ruby": "rb"
         default: program.hasPrefix("python") ? "py" : ""

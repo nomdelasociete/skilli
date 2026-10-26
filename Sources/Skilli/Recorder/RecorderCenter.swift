@@ -66,7 +66,12 @@ final class RecorderCenter {
     /// ⌘R's recording is being started (its language read, its sources
     /// started): another ⌘R meanwhile asks the same.
     private var starting = false {
-        didSet { holdMenuBar() }
+        didSet {
+            holdMenuBar()
+            // Started or failed to: one never stopped, asked meanwhile, is
+            // offered once nothing records (`offerNext` checks).
+            if !starting { offerNext() }
+        }
     }
     private lazy var card: RecordCard = {
         let card = RecordCard(recorder: recorder)
@@ -457,6 +462,9 @@ final class RecorderCenter {
         Task { [weak self] in
             guard let self else { return }
             let language = await MeetingTranscriber.defaultLanguage(asked: self.askedLanguage)
+            #if SKILLI_SELFTEST
+            if self.startDelay > .zero { try? await Task.sleep(for: self.startDelay) }
+            #endif
             self.start(reading, title: reading.title ?? "", language: language, sources: reading.sources, joining: joining)
         }
     }
@@ -469,6 +477,12 @@ final class RecorderCenter {
             // after (Automation's question, a browser slow to answer: seconds
             // the call would lose), the screen joining once it is found.
             do {
+                #if SKILLI_SELFTEST
+                if self.startFails {
+                    self.startFails = false
+                    throw MeetingRecorder.Failure(message: "the self-test's start failed.")
+                }
+                #endif
                 try await self.recorder.record(start)
             } catch {
                 self.starting = false
@@ -794,8 +808,11 @@ final class RecorderCenter {
         }
     }
 
+    /// The next one never stopped, in the card: only while nothing records
+    /// or starts to (a ⌘R start under way included); else `changed()`
+    /// offers it once the recorder is idle.
     private func offerNext() {
-        guard !card.isVisible, !recorder.isRecording, !unfinished.isEmpty else { return }
+        guard !card.isVisible, recorder.phase == .idle, !starting, !unfinished.isEmpty else { return }
         let (folder, record) = unfinished.removeFirst()
         Log.trace("Recorder: “\(record.title)” was never stopped: offered")
         card.showUnfinished(folder, record: record)
@@ -841,6 +858,12 @@ final class RecorderCenter {
 
     /// Self-test: what the card shows now.
     var cardContent: RecordCard.Content? { card.content }
+
+    /// Self-test: ⌘R's recording takes this long to start (an unfinished
+    /// one found meanwhile).
+    var startDelay: Duration = .zero
+    /// Self-test: ⌘R's next recording fails to start.
+    var startFails = false
 
     /// Self-test: a Stop that could not finish `folder`'s files, as the
     /// recorder reports it.

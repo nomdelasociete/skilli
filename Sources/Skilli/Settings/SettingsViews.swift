@@ -68,6 +68,8 @@ struct SettingsContext {
     var setLayoutAutomatic: @MainActor (SavedWindowLayout, SavedWindowLayout.Automatic) -> Void = { _, _ in }
     var applyLayout: @MainActor (SavedWindowLayout) -> Void = { _ in }
     var deleteLayout: @MainActor (SavedWindowLayout) -> Void = { _ in }
+    /// Settings → Windows → Forget What skil.li Learned (⌘Z for 10 s).
+    var forgetPlacements: @MainActor () -> Void = {}
     /// Every delete of the user's data: at once, Undo ⌘Z in the card for
     /// 10 s (rule 2). Without the app (previews): no card.
     var deletes = UndoableDeletes { _, _, _ in }

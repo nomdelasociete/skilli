@@ -152,6 +152,7 @@ public enum SettingsTable {
         public static let macOS = "macOS owns permissions: the user turns them on in System Settings (Settings → Privacy opens the right list)."
         public static let signIn = "Signing in is the user's, in the app's own sign-in: skil.li never handles it."
         public static let relay = "It says where skil.li sends the relay's stream token: the user sets it in the pane."
+        public static let consent = "It sends the user's pull requests and notifications through a server: only the user turns it on, after reading what it keeps."
     }
 
     private static let set = SettingEntry.Access.tools([Tool.setSetting])
@@ -267,6 +268,12 @@ public enum SettingsTable {
                 .choice([SettingOption("0", "None"), SettingOption("4", "4 points"), SettingOption("8", "8 points"),
                          SettingOption("12", "12 points"), SettingOption("16", "16 points")]),
                 note: "Between windows side by side and at the screen's edges, for every place ✦W, the launcher or Ask puts the front window in (halves, thirds, quarters, Maximize), and for windows placed in the layout editor."),
+        setting("windows", "windowLearning", "Learn where you put windows", .toggle,
+                note: "On by default. Arrange Windows puts every window where the user usually puts it, learned on this Mac from their own moves and ✦W (each app's place, its windows' titles and files, the displays, the apps beside it); off, nothing new is read or learned and Arrange uses only saved layouts; what was learned before stays until Forget What skil.li Learned."),
+        setting("windows", "usualPlaces", "Place new windows where you usually put them", .toggle,
+                note: "Off by default. On, an app opened gets its first window put where the user put it the last times (at least 3, most of the weight, the last 3 there), only before they touch it; an app reopening several windows is left as it is. Needs Learn where you put windows."),
+        setting("windows", "windowNeverPlace", "Never place", .list(item: "an app, by its name or bundle id", adds: true),
+                note: "Arrange Windows leaves these apps' windows where they are, and learns nothing more from them; what it learned before stays until Forget What skil.li Learned, used again if the app leaves this list."),
         setting("windows", "autoQuit", "Quit apps you stopped using", .toggle,
                 note: "Off by default. Never the app in front, one with unsaved work, sound or a call going on, or one busy; with a deciding key, Jev reads the windows' titles first."),
         setting("windows", "autoQuitMinutes", "Unused for",
@@ -275,6 +282,8 @@ public enum SettingsTable {
         setting("windows", "autoQuitNever", "Never quit", .list(item: "an app, by its name or bundle id", adds: true),
                 note: "Shown when Quit apps you stopped using is on."),
         setting("windows", "windowLayoutIgnoredApps", "Always leave out of layouts", .list(item: "an app, by its name or bundle id", adds: true)),
+        setting("windows", "neverArrangeDisplays", "Displays never arranged when plugged in", .list(item: "a set of displays, by their names", adds: false),
+                note: "Added from the question a display asks when it is plugged in (Never Arrange on These Displays): Arrange as Usual is not offered with them; tools only take one off."),
         setting("windows", "ignoredMonitors", "Monitors ignored when plugged in", .list(item: "a monitor, by its name", adds: false),
                 note: "A monitor is ignored from the question shown when it is plugged in (Ignore This Monitor); tools only take one off."),
         setting("windows", "windowLayouts", "Layouts", .list(item: "a saved window layout", adds: false),
@@ -342,6 +351,8 @@ public enum SettingsTable {
         setting("github", "githubUnderSearch", "Show under the search field", .toggle),
         setting("github", "relayPublicURL", "Live updates from", .text(maxLength: 300), access: .paneOnly(Why.relay),
                 note: "Under Advanced. The address of the user's own relay, which says when a pull request changes; empty reads GitHub on a timer."),
+        setting("github", "githubServerSync", "Server sync", .toggle, access: .paneOnly(Why.consent),
+                note: "Pull requests and notifications read by the relay with its own GitHub authorization, one copy for all the user's Macs; merging and marking read stay on this Mac."),
         setting("github", "githubAccount", "GitHub", .text(maxLength: 0), access: .paneOnly(Why.signIn), preference: .some(nil)),
         setting("github", "relayToken", "Live updates token", .text(maxLength: 0), access: .paneOnly(Why.secret), preference: .some(nil),
                 secret: true, note: "Under Advanced, with Live updates from."),

@@ -61,7 +61,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Settings → Windows → Space between windows, read at each press.
         commands.windows.gap = { [preferences] in CGFloat(preferences.windowGap) }
+        // A place given with ✦W, the launcher or Ask is learned; any move
+        // skil.li makes is not the user's.
+        commands.windows.placedByUser = { [weak self] window, frame in self?.windowLearner.placedWithKey(window, at: frame) }
+        WindowManager.didPlace = { [weak self] window, frame in self?.windowLearner.placed(window, at: frame) }
+        commands.arrange = { [weak self] in await self?.windowArrange.run() ?? WindowArrange.Report() }
         return commands
+    }()
+    /// Where the user puts windows (Arrange Windows); the self-test keeps its own.
+    private lazy var windowLearner: WindowLearner = {
+        let learner = WindowLearner(file: {
+            switch mode {
+            case .normal: WindowLearner.defaultFile
+            case .selftest: FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/placements.json")
+            case .benchmark: nil
+            }
+        }())
+        learner.isOn = { [preferences] in preferences.windowLearning }
+        learner.leftOut = { [preferences] in Set(preferences.windowNeverPlace) }
+        learner.gap = { [preferences] in CGFloat(preferences.windowGap) }
+        return learner
+    }()
+    /// Usual places: an app's first window where the user usually puts it,
+    /// when they turned it on.
+    private lazy var usualPlaces: UsualPlaces = {
+        let usual = UsualPlaces(learner: windowLearner, manager: systemCommands.windows)
+        usual.isOn = { [preferences] in preferences.usualPlaces }
+        usual.leftOut = { [preferences] in Set(preferences.windowNeverPlace) }
+        usual.gap = { [preferences] in CGFloat(preferences.windowGap) }
+        return usual
+    }()
+    /// Arrange Windows: a saved layout for what is open, else every window
+    /// where the user usually puts it.
+    private lazy var windowArrange: WindowArrange = {
+        let arrange = WindowArrange(arranger: arranger, learner: windowLearner, manager: systemCommands.windows)
+        arrange.leftOut = { [preferences] in Set(preferences.windowNeverPlace) }
+        arrange.gap = { [preferences] in CGFloat(preferences.windowGap) }
+        return arrange
     }()
     private lazy var setup: SetupWindowController = {
         let setup = SetupWindowController(permissions: permissions, ai: ai, preferences: preferences)
@@ -185,6 +221,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prompt.onIgnoreMonitors = { [weak self] monitors in self?.ignoreMonitors(monitors) }
         prompt.onEdit = { [weak self] layout in self?.layoutEditor.edit(layout) }
         prompt.onRecord = { [weak self] in self?.layoutEditor.capture(name: "") }
+        prompt.onArrange = { [weak self] in self?.actions.perform(.mac(.system(.arrangeWindows)), triggeredAt: .now) }
+        prompt.onNeverArrange = { [weak self] displays in self?.neverArrange(displays) }
         madeDisplayPrompt = prompt
         return prompt
     }
@@ -1186,6 +1224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         remapper.deactivate()
+        if case .benchmark = mode {} else { windowLearner.stop() }
         // The user's own input source, if the launcher had switched it.
         englishTyping.launcherClosed()
         ai.subscription.dropSpare()
@@ -1247,6 +1286,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             snippetExpander.start()
             timers.restore()
             scheduler.start()
+            if case .benchmark = mode {} else {
+                windowLearner.start()
+                usualPlaces.start()
+            }
             if case .normal = mode {
                 systemCommands.restoreAwake()
                 autoQuitter.start()
@@ -1423,8 +1466,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Displays just plugged in: the layouts saved on them asked in the
     /// middle of the biggest (one already asked takes a dock's second
-    /// display in); the one set to always, on a display surely the one
-    /// saved, put back at once; a display no layout knows, nothing.
+    /// display in), then Arrange as Usual when what was learned places at
+    /// least half of the windows open; the layout set to always, on a
+    /// display surely the one saved, put back at once; displays no layout
+    /// and nothing learned know, nothing.
     private func displaysPlugged(_ plugged: [DisplayFingerprint]) {
         var all = madeDisplayPrompt.map { $0.isVisible ? $0.plugged : [] } ?? []
         for display in plugged where !all.contains(where: { $0.isSameDisplay(as: display) }) { all.append(display) }
@@ -1438,13 +1483,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             applyLayout(layout)
             return
         }
-        let offers = candidates.compactMap { candidate in
+        var offers = candidates.compactMap { candidate in
             layouts.first { $0.id == candidate.layoutID }.map { DisplayPrompt.Offer(layout: $0, certainty: candidate.certainty, exact: candidate.exact) }
         }
+        if let arrange = arrangeOffer(for: all, connected: connected) { offers.append(arrange) }
         let target = connected.filter { display in all.contains { $0.isSameDisplay(as: display.fingerprint) } }
             .max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
         guard !offers.isEmpty, let target else { return }
         displayPrompt.show(offers, plugged: all, centeredIn: WindowManager.bottomLeft(target.visible))
+    }
+
+    /// Arrange as Usual, for displays just plugged in: learning on, one of
+    /// them not ignored, these displays not refused, and at least half of
+    /// the windows open with a learned place.
+    private func arrangeOffer(for plugged: [DisplayFingerprint], connected: [LayoutDisplay]) -> DisplayPrompt.Offer? {
+        let here = ArrangeOffer.displaySet(connected.map(\.fingerprint))
+        guard preferences.windowLearning,
+              plugged.contains(where: { display in !display.builtIn && !preferences.ignoredMonitors.contains { $0.isSameDisplay(as: display) } }),
+              !ArrangeOffer.refused(here, in: preferences.neverArrangeDisplays) else { return nil }
+        let coverage = windowArrange.coverage()
+        guard ArrangeOffer.offered(placed: coverage.placed, of: coverage.total) else { return nil }
+        return .arrange(placed: coverage.placed, of: coverage.total, on: here)
+    }
+
+    /// Never Arrange on These Displays: the displays the question was asked
+    /// for no longer offer Arrange as Usual when one is plugged in.
+    private func neverArrange(_ here: ArrangeOffer.DisplaySet) {
+        if !ArrangeOffer.refused(here, in: preferences.neverArrangeDisplays) { preferences.neverArrangeDisplays.append(here) }
+        aiActions.notify("Arrange as Usual is not offered any more with \(here.label) connected. Settings → Windows to change it.",
+                         caller: "Arrange Windows", run: nil, seconds: 5)
     }
 
     /// A display asked about went away: asked again about those left, or
@@ -1809,6 +1876,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return place
         }
         reminderWatch.refresh()
+        // Before the strip asks: its first read goes the chosen way.
+        githubBook.serverSync = preferences.githubServerSync
         githubBook.relayPublicURL = preferences.relayPublicURL
         githubBook.keepsFresh = preferences.githubUnderSearch
         menuBarSkillies.apply()
@@ -1891,6 +1960,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         context.applyLayout = { [weak self] layout in self?.applyLayout(layout) }
         context.deleteLayout = { [weak self] layout in self?.deleteLayout(layout) }
+        context.forgetPlacements = { [weak self] in
+            guard let self else { return }
+            deletes.placements(in: windowLearner)
+        }
         context.deletes = deletes
         context.rightsHelpers = { [handoff] in handoff.targets }
         context.openRightsHelper = { [handoff, preferences] server in
@@ -2004,7 +2077,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 reportPath: outputPath,
                 recorder: { [weak self] in self?.recorderCenter },
                 recordings: { [weak self] in self?.recordingLibrary },
-                moveRecordings: { [weak self] folder in await self?.moveRecordings(to: folder) }
+                moveRecordings: { [weak self] folder in await self?.moveRecordings(to: folder) },
+                windowLearner: windowLearner
             ))
             SelfTest.emit(await test.run(scope: scope), to: outputPath)
             NSApp.terminate(nil)

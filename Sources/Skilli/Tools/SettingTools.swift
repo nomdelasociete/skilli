@@ -409,6 +409,16 @@ final class SettingTools {
 
     private static func folded(_ text: String) -> String { SettingsTable.folded(text) }
 
+    /// Never Arrange's display sets as tools list them: their names, and
+    /// their key in brackets when two have the same names.
+    private func neverArrangedItems() -> [(item: String, set: ArrangeOffer.DisplaySet)] {
+        let sets = preferences.neverArrangeDisplays
+        return sets.map { set in
+            let twins = sets.filter { $0.label == set.label }.count > 1
+            return (twins ? "\(set.label) [\(set.key)]" : set.label, set)
+        }
+    }
+
     // MARK: - Aliases
 
     private func prepareAlias(_ arguments: [String: Any]) throws -> Plan {
@@ -987,6 +997,9 @@ final class SettingTools {
         bindings["autoQuit"] = toggle(\.autoQuit)
         bindings["autoQuitMinutes"] = number(\.autoQuitMinutes)
         bindings["autoQuitNever"] = apps(\.autoQuitNever)
+        bindings["windowLearning"] = toggle(\.windowLearning)
+        bindings["usualPlaces"] = toggle(\.usualPlaces)
+        bindings["windowNeverPlace"] = apps(\.windowNeverPlace)
         bindings["windowLayoutIgnoredApps"] = apps(\.windowLayoutIgnoredApps)
         var monitors = Binding(get: { [unowned self] in .list(self.preferences.ignoredMonitors.map(\.name)) })
         monitors.remove = { [unowned self] text in
@@ -998,6 +1011,24 @@ final class SettingTools {
             }
         }
         bindings["ignoredMonitors"] = monitors
+        var neverArranged = Binding(get: { [unowned self] in .list(self.neverArrangedItems().map(\.item)) })
+        neverArranged.remove = { [unowned self] text in
+            // By its key (unique), as listed (the names, then its key in
+            // brackets when two sets have the same names), or by its names.
+            let items = self.neverArrangedItems()
+            let byKey = items.filter { $0.set.key == text || "[\($0.set.key)]" == text }
+            let found = byKey.isEmpty ? items.filter { Self.folded($0.item) == Self.folded(text) } : byKey
+            let named = found.isEmpty ? items.filter { Self.folded($0.set.label) == Self.folded(text) } : found
+            guard named.count == 1, let set = named.first?.set else {
+                throw Failure(named.isEmpty
+                              ? "No displays named “\(text)” are left out. Left out: \(items.map(\.item).joined(separator: ", "))."
+                              : "Several sets are named “\(text)”: name one by its key: \(named.map(\.set.key).joined(separator: ", ")).")
+            }
+            return ListChange(item: set.label) { [unowned self] in
+                self.preferences.neverArrangeDisplays.removeAll { $0.key == set.key }
+            }
+        }
+        bindings["neverArrangeDisplays"] = neverArranged
         bindings["windowLayouts"] = Binding(get: { [unowned self] in .list(self.windowLayouts()) })
 
         // Calendar
@@ -1053,6 +1084,7 @@ final class SettingTools {
         // GitHub
         bindings["githubUnderSearch"] = toggle(\.githubUnderSearch)
         bindings["relayPublicURL"] = string(\.relayPublicURL)
+        bindings["githubServerSync"] = toggle(\.githubServerSync)
         bindings["githubAccount"] = Binding(get: { [unowned self] in
             // Signed in or not: who is the user's own.
             .text(self.github?.isSignedIn == true ? "Signed in" : "Not signed in")

@@ -116,6 +116,9 @@ final class SelfTest {
         /// Keep recordings in's move (nil, or why it was refused).
         var recordings: @MainActor () -> RecordingLibrary? = { nil }
         var moveRecordings: @MainActor (URL) async -> String? = { _ in nil }
+        /// Where the user puts windows (Arrange Windows), in the
+        /// self-test's own placements.json.
+        var windowLearner: WindowLearner?
     }
 
     enum Scope: String, Sendable {
@@ -497,7 +500,10 @@ final class SelfTest {
             window.center()
             return await finish(after: [
                 windowsPlaceTheFrontWindow,
+                arrangeWindowsLearnsAndPutsBack,
                 windowLayoutsAndSwitching,
+                displayPromptArrangesAsUsual,
+                usualPlacesOnLaunch,
                 layoutOpensAFileAndALink,
                 layoutDeleteUndoes
             ])
@@ -5159,7 +5165,10 @@ final class SelfTest {
         await clipboardPreviewAndMeaning()
         await clipboardPreviewsShowEachKind()
         await windowsPlaceTheFrontWindow()
+        await arrangeWindowsLearnsAndPutsBack()
         await windowLayoutsAndSwitching()
+        await displayPromptArrangesAsUsual()
+        await usualPlacesOnLaunch()
         await layoutOpensAFileAndALink()
         await browserTabsAreFound()
         await filesGatheredBySpotlight()
@@ -15716,6 +15725,8 @@ final class SelfTest {
                 } != nil
                 guard settled, popover.phase == .approving else { break }
                 approvals += 1
+                await pause(250)
+                await saveScreenshot(of: popover.window, as: capture.replacingOccurrences(of: ".png", with: "-approval-\(approvals).png"))
                 await pressKey(nil, code: CGKeyCode(kVK_Return))
                 await pause(500)
             }
@@ -17546,6 +17557,455 @@ final class SelfTest {
         "\(Int(rect.minX)),\(Int(rect.minY)) \(Int(rect.width))×\(Int(rect.height))"
     }
 
+    /// Usual places (docs/smart-layout.md, phase 3): with three learned
+    /// placements of TextEdit's window on the left half and the setting
+    /// on, TextEdit launched puts its window there before anyone touches
+    /// it; the setting off, the next launch is left where it opens.
+    private func usualPlacesOnLaunch() async {
+        let name = "Usual places: on, an app launched gets its window where it was put the last 3 times (the bottom right quarter); off, it is left where it opens"
+        guard let learner = context.windowLearner else {
+            record(name, false, "no window learner", nil)
+            return
+        }
+        let bundleID = "com.apple.TextEdit"
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            record(name, false, "TextEdit not installed", nil)
+            return
+        }
+        // The check needs to launch TextEdit: one left open with no window
+        // (nothing in it to lose) is quit first; one with windows is the
+        // user's, and the check is skipped.
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        if !running.isEmpty {
+            // Read for sure, every instance: a read that fails is never taken
+            // for "no window".
+            let counts: [Int?] = running.map { app in
+                var value: CFTypeRef?
+                guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute as CFString, &value)
+                    == .success, let list = value as? [AXUIElement] else { return nil }
+                return list.count
+            }
+            guard counts.allSatisfy({ $0 == 0 }) else {
+                let detail = counts.contains(nil) ? "TextEdit is open and its windows could not be read" : "TextEdit is open with windows"
+                checks.append(Check(name: name, passed: true, skipped: true, detail: "\(detail) (the test needs to launch it)", latencyMs: nil))
+                return
+            }
+            for app in running { app.terminate() }
+            guard await waitUntil(timeout: 4, { running.allSatisfy(\.isTerminated) }) != nil else {
+                record(name, false, "TextEdit, open with no window, did not quit", nil)
+                return
+            }
+        }
+        let preferences = context.preferences
+        let learned = learner.placements
+        let (gap, learning, usual, never) = (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces, preferences.windowNeverPlace)
+        let marker = Int.random(in: 1000...9999)
+        let files = ["on", "off"].map { FileManager.default.temporaryDirectory.appendingPathComponent("skilli-usual-\($0)-\(marker).txt") }
+        // Put back on every way out, early returns included.
+        defer {
+            for file in files { try? FileManager.default.removeItem(at: file) }
+            learner.restore(learned)
+            (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces, preferences.windowNeverPlace) = (gap, learning, usual, never)
+        }
+        preferences.windowGap = 0
+        preferences.windowLearning = true
+        // Never place would rightly leave TextEdit alone.
+        preferences.windowNeverPlace.removeAll { $0 == bundleID }
+        for file in files { try? "usual".write(to: file, atomically: true, encoding: .utf8) }
+        func window(_ file: URL) -> AXUIElement? {
+            guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return nil }
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute as CFString, &value) == .success,
+                  let list = value as? [AXUIElement] else { return nil }
+            return list.first { element in
+                var title: CFTypeRef?
+                AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &title)
+                return (title as? String)?.contains(file.deletingPathExtension().lastPathComponent) == true
+            }
+        }
+        func frame(_ element: AXUIElement) -> CGRect? {
+            var position: CFTypeRef?
+            var size: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &position) == .success,
+                  AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &size) == .success, let position, let size else { return nil }
+            var point = CGPoint.zero
+            var extent = CGSize.zero
+            AXValueGetValue(position as! AXValue, .cgPoint, &point)
+            AXValueGetValue(size as! AXValue, .cgSize, &extent)
+            return CGRect(origin: point, size: extent)
+        }
+        /// TextEdit quit (the test opened it), its windows with it.
+        func quit() async {
+            let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            for app in apps { app.terminate() }
+            _ = await waitUntil(timeout: 4) { apps.allSatisfy(\.isTerminated) }
+        }
+        func launch(_ file: URL) async {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            _ = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration)
+        }
+        // Learned: TextEdit's window in the bottom right quarter of the menu
+        // bar's display, three times, on the displays there are now: where
+        // TextEdit never opens a window, so a move there is seen.
+        let displays = Displays.current()
+        guard let main = displays.first, let spot = WindowLayout.bottomRight.frame(in: main.visible) else {
+            record(name, false, "no display", nil)
+            return
+        }
+        let keys = displays.map { WindowPlacements.displayKey($0.fingerprint) }
+        var seeded = WindowPlacements()
+        for day in 1...3 {
+            seeded.record(.init(place: .of(spot, in: main.visible), display: keys[0], title: files[0].lastPathComponent, how: .key,
+                                at: Date.now.addingTimeInterval(-Double(day) * 3_600)),
+                          bundleID: bundleID, displays: keys)
+        }
+        learner.restore(seeded)
+
+        preferences.usualPlaces = true
+        await launch(files[0])
+        let placed = await waitUntil(timeout: 6) { window(files[0]).flatMap(frame).map { WindowLayout.matches($0, spot) } ?? false } != nil
+        let placedFrame = window(files[0]).flatMap(frame)
+        await quit()
+
+        preferences.usualPlaces = false
+        await launch(files[1])
+        let opened = await waitUntil(timeout: 6) { window(files[1]).flatMap(frame) != nil } != nil
+        await pause(1_500)
+        let offFrame = window(files[1]).flatMap(frame)
+        let leftAlone = opened && offFrame.map { !WindowLayout.matches($0, spot) } ?? false
+        await quit()
+
+        record(name, placed && leftAlone,
+               "on: placed in the bottom right quarter: \(placed) (\(placedFrame.map(Self.describe) ?? "?")); off: opened \(opened), left where it opened: \(leftAlone) (\(offFrame.map(Self.describe) ?? "?"))",
+               nil)
+    }
+
+    /// Arrange as Usual (docs/smart-layout.md, phase 2): with a learned
+    /// place for every window open (where it is, so only the test's own
+    /// moves) and TextEdit's on the left half, a display offered as plugged
+    /// in asks with Arrange as Usual last; ⌘K lists Never Arrange on These
+    /// Displays; ↩ puts TextEdit's window on the left half. Never Arrange
+    /// on These Displays from ⌘K keeps them in Settings and the next plug
+    /// asks nothing.
+    private func displayPromptArrangesAsUsual() async {
+        let name = "Display plugged in: Arrange as Usual offered last when windows have learned places; ↩ arranges; ⌘K → Never Arrange on These Displays asks nothing next time"
+        guard let learner = context.windowLearner else {
+            record(name, false, "no window learner", nil)
+            return
+        }
+        let prompt = context.displayPrompt
+        let preferences = context.preferences
+        let displays = Displays.current()
+        guard let external = displays.first(where: { !$0.fingerprint.builtIn }) else {
+            record(name, true, "skipped: no display other than the built-in one", nil)
+            return
+        }
+        let bundleID = "com.apple.TextEdit"
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            record(name, false, "TextEdit not installed", nil)
+            return
+        }
+        let learned = learner.placements
+        let (gap, learning, never) = (preferences.windowGap, preferences.windowLearning, preferences.neverArrangeDisplays)
+        preferences.windowGap = 0
+        preferences.windowLearning = true
+        preferences.neverArrangeDisplays = []
+        let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-usual-\(Int.random(in: 1000...9999)).txt")
+        try? "usual".write(to: file, atomically: true, encoding: .utf8)
+        let marker = file.deletingPathExtension().lastPathComponent
+        func ours() -> WindowArranger.OpenWindow? { context.arranger.windows().first { $0.title.contains(marker) } }
+        func cleanUp() async {
+            prompt.hide()
+            if let window = ours() {
+                var button: CFTypeRef?
+                if AXUIElementCopyAttributeValue(window.element, kAXCloseButtonAttribute as CFString, &button) == .success, let button,
+                   CFGetTypeID(button) == AXUIElementGetTypeID() {
+                    AXUIElementPerformAction(unsafeDowncast(button, to: AXUIElement.self), kAXPressAction as CFString)
+                }
+                _ = await waitUntil(timeout: 2) { ours() == nil }
+            }
+            if !wasRunning {
+                let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+                for app in apps { app.terminate() }
+                _ = await waitUntil(timeout: 3) { apps.allSatisfy(\.isTerminated) }
+            }
+            try? FileManager.default.removeItem(at: file)
+            learner.restore(learned)
+            (preferences.windowGap, preferences.windowLearning, preferences.neverArrangeDisplays) = (gap, learning, never)
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        _ = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration)
+        guard await waitUntil(timeout: 6, { ours() != nil }) != nil, let window = ours() else {
+            record(name, false, "TextEdit's window never came", nil)
+            await cleanUp()
+            return
+        }
+        let visible = displays.first { $0.frame.contains(CGPoint(x: window.frame.midX, y: window.frame.midY)) }?.visible ?? external.visible
+        guard let left = WindowLayout.leftHalf.frame(in: visible), let right = WindowLayout.rightHalf.frame(in: visible) else {
+            record(name, false, "no halves in \(Self.describe(visible))", nil)
+            await cleanUp()
+            return
+        }
+        // Moved as a hand would, not by skil.li.
+        var origin = right.origin
+        var size = right.size
+        if let originValue = AXValueCreate(.cgPoint, &origin), let sizeValue = AXValueCreate(.cgSize, &size) {
+            AXUIElementSetAttributeValue(window.element, kAXSizeAttribute as CFString, sizeValue)
+            AXUIElementSetAttributeValue(window.element, kAXPositionAttribute as CFString, originValue)
+            AXUIElementSetAttributeValue(window.element, kAXSizeAttribute as CFString, sizeValue)
+        }
+        _ = await waitUntil(timeout: 2) { ours().map { WindowLayout.matches($0.frame, right) } ?? false }
+        // Learned: every window where it is now, TextEdit's on the left half.
+        let keys = displays.map { WindowPlacements.displayKey($0.fingerprint) }
+        var seeded = WindowPlacements()
+        for open in context.arranger.windows(all: true) where open.state == .normal && !open.app.isHidden {
+            guard let index = displays.indices.max(by: {
+                displays[$0].frame.intersection(open.frame).width * displays[$0].frame.intersection(open.frame).height
+                    < displays[$1].frame.intersection(open.frame).width * displays[$1].frame.intersection(open.frame).height
+            }) else { continue }
+            let mine = open.title.contains(marker)
+            let place = mine ? WindowPlacements.Place.of(left, in: displays[index].visible) : {
+                let v = displays[index].visible
+                return WindowPlacements.Place(fraction: CGRect(x: (open.frame.minX - v.minX) / v.width, y: (open.frame.minY - v.minY) / v.height,
+                                                               width: open.frame.width / v.width, height: open.frame.height / v.height))
+            }()
+            seeded.record(.init(place: place, display: keys[index], title: open.title, document: open.document, rank: open.index, how: .key, at: .now),
+                          bundleID: open.app.bundleIdentifier ?? "", displays: keys)
+        }
+        learner.restore(seeded)
+        func quiet() async { _ = await waitUntil(timeout: 3) { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) > 1.1 } }
+        func pickArrange() async -> Bool {
+            for _ in 0..<6 where prompt.isKey && prompt.selected < prompt.offers.count - 1 {
+                await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
+            }
+            return prompt.offers.indices.contains(prompt.selected) && prompt.offers[prompt.selected].layout == nil
+        }
+
+        guard await focusTestWindow() else {
+            await cleanUp()
+            return
+        }
+        await quiet()
+        context.offerDisplays([external.fingerprint])
+        let asked = await waitUntil(timeout: 2) { prompt.isVisible && prompt.isKey } != nil
+        let last = prompt.offers.last.map { $0.layout == nil } ?? false
+        let picked = asked ? await pickArrange() : false
+        if let directory = context.snapshotDirectory, let png = await prompt.snapshotPNG() {
+            try? png.write(to: directory.appendingPathComponent("display-prompt-arrange.png"))
+        }
+        var listed = false
+        if prompt.isKey {
+            await pressKey("k", flags: .maskCommand)
+            listed = await waitUntil(timeout: 1) { prompt.isShowingActions } != nil
+            if let directory = context.snapshotDirectory, let png = await prompt.snapshotPNG() {
+                try? png.write(to: directory.appendingPathComponent("display-prompt-arrange-actions.png"))
+            }
+            if prompt.isKey { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+            listed = listed && !prompt.isShowingActions && prompt.isVisible
+        }
+        var arranged = false
+        if prompt.isKey, await pickArrange() {
+            await pressKey(nil, code: CGKeyCode(kVK_Return))
+            arranged = await waitUntil(timeout: 5) { !prompt.isVisible && (ours().map { WindowLayout.matches($0.frame, left) } ?? false) } != nil
+        }
+        prompt.hide()
+
+        // Never Arrange on These Displays, from ⌘K: kept, and asked no more.
+        await quiet()
+        context.offerDisplays([external.fingerprint])
+        var refused = false
+        if await waitUntil(timeout: 2, { prompt.isKey }) != nil, await pickArrange() {
+            await pressKey("k", flags: .maskCommand)
+            _ = await waitUntil(timeout: 1) { prompt.isShowingActions }
+            for character in "never arrange" { await pressKey(character) }
+            await pressKey(nil, code: CGKeyCode(kVK_Return))
+            refused = await waitUntil(timeout: 2) {
+                !prompt.isVisible && ArrangeOffer.refused(ArrangeOffer.displaySet(displays.map(\.fingerprint)), in: preferences.neverArrangeDisplays)
+            } != nil
+        }
+        prompt.hide()
+        await quiet()
+        context.offerDisplays([external.fingerprint])
+        await pause(500)
+        let quietAfter = !prompt.isVisible || !prompt.offers.contains { $0.layout == nil }
+        await cleanUp()
+        record(name, asked && last && picked && listed && arranged && refused && quietAfter,
+               "on \(external.fingerprint.name): asked: \(asked), Arrange as Usual last: \(last), picked: \(picked), ⌘K list and back: \(listed), ↩ puts TextEdit on the left half: \(arranged); Never Arrange on These Displays kept: \(refused), not offered after: \(quietAfter)",
+               nil)
+    }
+
+    /// Arrange Windows (docs/smart-layout.md): two TextEdit windows put
+    /// by hand on the left and right halves (Accessibility, not skil.li's
+    /// own moves), learned as TextEdit leaves the front; moved away; then
+    /// "arrange windows" in the launcher puts each back on its own half,
+    /// told apart by its title and file, and Arrange again within 10 s
+    /// puts both where they were.
+    private func arrangeWindowsLearnsAndPutsBack() async {
+        let name = "Arrange Windows: two windows of one app placed by hand are learned as it leaves the front; “arrange windows” puts each on its own half, again puts them back"
+        guard let learner = context.windowLearner else {
+            record(name, false, "no window learner", nil)
+            return
+        }
+        let gapBefore = context.preferences.windowGap
+        context.preferences.windowGap = 0
+        defer { context.preferences.windowGap = gapBefore }
+        let bundleID = "com.apple.TextEdit"
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            record(name, false, "TextEdit not installed", nil)
+            return
+        }
+        let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        let marker = Int.random(in: 1000...9999)
+        let files = ["alpha", "beta"].map { FileManager.default.temporaryDirectory.appendingPathComponent("skilli-arrange-\($0)-\(marker).txt") }
+        for file in files { try? "arrange".write(to: file, atomically: true, encoding: .utf8) }
+        defer { for file in files { try? FileManager.default.removeItem(at: file) } }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        guard let pid = (try? await NSWorkspace.shared.open(files, withApplicationAt: appURL, configuration: configuration))?.processIdentifier else {
+            record(name, false, "could not open TextEdit", nil)
+            return
+        }
+        /// TextEdit's window showing `file`, read through Accessibility.
+        func window(_ file: URL) -> AXUIElement? {
+            let app = AXUIElementCreateApplication(pid)
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success, let list = value as? [AXUIElement] else { return nil }
+            return list.first { element in
+                var title: CFTypeRef?
+                AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &title)
+                return (title as? String)?.contains(file.deletingPathExtension().lastPathComponent) == true
+            }
+        }
+        func frame(_ element: AXUIElement) -> CGRect? {
+            var position: CFTypeRef?
+            var size: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &position) == .success,
+                  AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &size) == .success,
+                  let position, let size else { return nil }
+            var point = CGPoint.zero
+            var extent = CGSize.zero
+            AXValueGetValue(position as! AXValue, .cgPoint, &point)
+            AXValueGetValue(size as! AXValue, .cgSize, &extent)
+            return CGRect(origin: point, size: extent)
+        }
+        /// As a hand would: straight through Accessibility, not skil.li's
+        /// own placing (which marks the window as moved by skil.li).
+        func move(_ element: AXUIElement, to target: CGRect) {
+            var origin = target.origin
+            var size = target.size
+            guard let originValue = AXValueCreate(.cgPoint, &origin), let sizeValue = AXValueCreate(.cgSize, &size) else { return }
+            AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, sizeValue)
+            AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, originValue)
+            AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, sizeValue)
+        }
+        func at(_ element: AXUIElement, _ target: CGRect) async -> Bool {
+            await waitUntil(timeout: 2) { frame(element).map { WindowLayout.matches($0, target) } ?? false } != nil
+        }
+        /// The test's own two windows closed by their close buttons (never
+        /// ⌘W: TextEdit may have the user's windows too), TextEdit quit
+        /// only when the test opened it.
+        func closeTestWindows() async {
+            for file in files {
+                guard let element = window(file) else { continue }
+                var button: CFTypeRef?
+                if AXUIElementCopyAttributeValue(element, kAXCloseButtonAttribute as CFString, &button) == .success, let button,
+                   CFGetTypeID(button) == AXUIElementGetTypeID() {
+                    AXUIElementPerformAction(unsafeDowncast(button, to: AXUIElement.self), kAXPressAction as CFString)
+                }
+            }
+            _ = await waitUntil(timeout: 2) { files.allSatisfy { window($0) == nil } }
+            if !wasRunning {
+                let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+                for app in apps { app.terminate() }
+                _ = await waitUntil(timeout: 3) { apps.allSatisfy(\.isTerminated) }
+            }
+        }
+        await pause(300)
+        Self.makeFrontmost(pid: pid)
+        guard await waitUntil(timeout: 6, { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid && window(files[0]) != nil && window(files[1]) != nil }) != nil,
+              let alpha = window(files[0]), let beta = window(files[1]), let start = frame(alpha) else {
+            record(name, false, "TextEdit's two windows never came", nil)
+            await closeTestWindows()
+            return
+        }
+        // The usable area of the screen showing the first window.
+        let visible = NSScreen.screens
+            .map { (frame: WindowManager.topLeft($0.frame), visible: WindowManager.topLeft($0.visibleFrame)) }
+            .max { $0.frame.intersection(start).width * $0.frame.intersection(start).height
+                < $1.frame.intersection(start).width * $1.frame.intersection(start).height }?.visible ?? .zero
+        guard let left = WindowLayout.leftHalf.frame(in: visible), let right = WindowLayout.rightHalf.frame(in: visible) else {
+            record(name, false, "no left or right half in the visible area \(Self.describe(visible))", nil)
+            await closeTestWindows()
+            return
+        }
+        // Read as TextEdit came to the front: the moves from here count.
+        await pause(600)
+        move(alpha, to: left)
+        move(beta, to: right)
+        let alphaLeft = await at(alpha, left)
+        let placedByHand = await at(beta, right) && alphaLeft
+        /// A placement of the window showing `file` at `layout`, learned.
+        func learnedAt(_ file: URL, _ layout: WindowLayout) -> Bool {
+            let title = file.deletingPathExtension().lastPathComponent
+            return learner.placements.entries.filter { $0.key.hasPrefix(bundleID + "\n") }.flatMap(\.value).contains {
+                $0.title.contains(title) && $0.place.layout == layout.rawValue
+            }
+        }
+        // TextEdit leaves the front: both placements learned.
+        guard await focusTestWindow() else {
+            await closeTestWindows()
+            return
+        }
+        let learned = await waitUntil(timeout: 3) { learnedAt(files[0], .leftHalf) && learnedAt(files[1], .rightHalf) } != nil
+        // Somewhere else, both of them.
+        let away = CGRect(x: visible.minX + 80, y: visible.minY + 60, width: min(640, visible.width / 2), height: min(480, visible.height / 2))
+        let awayBeta = away.offsetBy(dx: 60, dy: 40)
+        move(alpha, to: away)
+        move(beta, to: awayBeta)
+        let alphaAway = await at(alpha, away)
+        let movedAway = await at(beta, awayBeta) && alphaAway
+
+        // From the launcher over TextEdit.
+        Self.makeFrontmost(pid: pid)
+        guard await waitUntil(timeout: 3, { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }) != nil else {
+            record(name, false, "TextEdit did not come back in front before “arrange windows” (learned: \(learned))", nil)
+            await closeTestWindows()
+            return
+        }
+        // Lost focus: the run stops (ensureFrontmost records it); its windows still go.
+        guard ensureFrontmost(bundleID, before: "arrange windows") else {
+            await closeTestWindows()
+            return
+        }
+        await pause(400)
+        func arrange() async -> Bool {
+            _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+            for character in "arrange windows" { await pressKey(character) }
+            let listed = await waitUntil(timeout: 1) { self.context.launcher.resultTitles.first == SystemCommand.arrangeWindows.title } != nil
+            await pressKey(nil, code: CGKeyCode(listed ? kVK_Return : kVK_Escape))
+            return listed
+        }
+        let listed = await arrange()
+        let alphaArranged = await at(alpha, left)
+        let arranged = await at(beta, right) && alphaArranged
+        let arrangedFrames = "\(frame(alpha).map(Self.describe) ?? "?"), \(frame(beta).map(Self.describe) ?? "?")"
+        guard ensureFrontmost(bundleID, before: "arrange windows again") else {
+            record(name, false, "TextEdit lost the front before “arrange windows” again (arranged: \(arranged))", nil)
+            await closeTestWindows()
+            return
+        }
+        let listedAgain = await arrange()
+        let alphaBack = await at(alpha, away)
+        let putBack = await at(beta, awayBeta) && alphaBack
+        await closeTestWindows()
+        record(name, placedByHand && learned && movedAway && listed && arranged && listedAgain && putBack,
+               "put by hand: \(placedByHand), learned as TextEdit left the front: \(learned), moved away: \(movedAway); “arrange windows” listed: \(listed), each on its half: \(arranged) (\(arrangedFrames)); again listed: \(listedAgain), put back: \(putBack)",
+               nil)
+    }
+
     /// A TextEdit window on the left half saved as a layout from the
     /// launcher, through the editor (every other window left out, Return
     /// saves; with its display and its file), moved right, put back by
@@ -17865,10 +18325,10 @@ final class SelfTest {
         func quiet() async { _ = await waitUntil(timeout: 3) { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) > 1.1 } }
         func ours() async -> Bool {
             for _ in 0..<6 where prompt.isKey {
-                if prompt.offers.indices.contains(prompt.selected), prompt.offers[prompt.selected].layout.id == made.id { return true }
+                if prompt.offers.indices.contains(prompt.selected), prompt.offers[prompt.selected].id == made.id { return true }
                 await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
             }
-            return prompt.offers.indices.contains(prompt.selected) && prompt.offers[prompt.selected].layout.id == made.id
+            return prompt.offers.indices.contains(prompt.selected) && prompt.offers[prompt.selected].id == made.id
         }
 
         // Right after a key: shown, the keyboard left where it is.
@@ -17885,7 +18345,7 @@ final class SelfTest {
         context.offerDisplays([external.fingerprint])
         let asked = await waitUntil(timeout: 2) { prompt.isVisible && prompt.isKey } != nil
         let middle = prompt.frame.map { WindowManager.bottomLeft(external.frame).contains(NSPoint(x: $0.midX, y: $0.midY)) } ?? false
-        let offered = prompt.offers.contains { $0.layout.id == made.id }
+        let offered = prompt.offers.contains { $0.id == made.id }
         let picked = asked ? await ours() : false
         if let directory = context.snapshotDirectory, let png = await prompt.snapshotPNG() {
             try? png.write(to: directory.appendingPathComponent("display-prompt.png"))
@@ -19549,12 +20009,15 @@ final class SelfTest {
 
     /// Skillies from the self-test's own folder: listed with their
     /// metadata; "say hello" + Return shows the last line; a text and a
-    /// dropdown argument filled in the launcher reach the script; inline
-    /// shows its line in the row; a failure says its last line; a script
-    /// without the executable bit runs through its shebang; a Raycast
-    /// Script Command imported becomes one; agents list, create and run.
+    /// dropdown argument filled in the launcher reach the script; a key
+    /// bound to one with arguments asks them in the launcher, one with
+    /// none runs; inline shows its line in the row, and in the menu bar
+    /// its image icon as an image, never its file name; a failure says its
+    /// last line; a script without the executable bit runs through its
+    /// shebang; a Raycast Script Command imported becomes one; agents
+    /// list, create and run.
     private func scriptCommandsRun() async {
-        let name = "Skillies: listed, run from the launcher (last line, arguments with a dropdown, inline line), failures and shebang, the Running… card unless showsRunning false; Raycast import; agents create, list and run"
+        let name = "Skillies: listed, run from the launcher (last line, arguments with a dropdown, inline line) and by key (arguments asked in the launcher), the menu bar's image icon, failures and shebang, the Running… card unless showsRunning false; Raycast import; agents create, list and run"
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/skillies", isDirectory: true)
         let raycast = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/raycast", isDirectory: true)
         for url in [folder, raycast] { try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true) }
@@ -19567,7 +20030,12 @@ final class SelfTest {
         }
         write("hello.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Say Hello Selftest\n# @skilli.mode compact\n# @skilli.icon 👋\necho first line\necho \"Hello from a script\"\n")
         write("greet.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Greet Someone Selftest\n# @skilli.mode fullOutput\n# @skilli.argument1 { \"type\": \"text\", \"placeholder\": \"Name\" }\n# @skilli.argument2 { \"type\": \"dropdown\", \"placeholder\": \"Mood\", \"data\": [{\"title\": \"Happy\", \"value\": \"happy\"}, {\"title\": \"Calm\", \"value\": \"calm\"}] }\necho \"Hi $1, you look $2\"\n")
-        write("clock.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Selftest Clock\n# @skilli.mode inline\n# @skilli.refreshTime 10s\necho tick-\(marker)\n")
+        write("clock.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Selftest Clock\n# @skilli.mode inline\n# @skilli.refreshTime 10s\n# @skilli.icon clock.png\necho tick-\(marker)\n")
+        // Its image icon, beside it: the menu bar draws it, never its name.
+        if let tiff = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)?.tiffRepresentation,
+           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+            try? png.write(to: folder.appendingPathComponent("clock.png"))
+        }
         write("fail.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Failing Selftest\n# @skilli.mode compact\necho \"Something broke\"\nexit 3\n")
         write("plain.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Not Executable Selftest\n# @skilli.mode silent\necho shebang-\(marker)\n", executable: false)
         write("slow.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Slow Selftest\n# @skilli.mode compact\nsleep 1.5\necho slow-\(marker)\n")
@@ -19624,6 +20092,27 @@ final class SelfTest {
         details.append("arguments asked: \(asked), ↩ without one said so: \(missingSaid), footer \(argumentFooter), ⇥ its actions, no Ask: \(tabActions), dropdown: \(dropdown), output: \(greeted)")
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
 
+        // A key bound to it (`script:<path>`): the launcher asks its
+        // arguments; one with none runs at once.
+        guard await focusTestWindow() else { return }
+        _ = await waitUntil(timeout: 1) { !popover.isVisible }
+        var keyAsks = false
+        if let greet = library.all().first(where: { $0.title == "Greet Someone Selftest" }) {
+            context.actions.perform(.mac(.script(greet)), triggeredAt: .now)
+            keyAsks = await waitUntil(timeout: 1) { launcher.isVisible && launcher.isInScript } != nil && !popover.isVisible
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            _ = await waitUntil(timeout: 1) { !launcher.isInScript }
+            if launcher.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        }
+        var keyRuns = false
+        if let sayHello = library.all().first(where: { $0.title == "Say Hello Selftest" }) {
+            guard await focusTestWindow() else { return }
+            context.actions.perform(.mac(.script(sayHello)), triggeredAt: .now)
+            keyRuns = await waitUntil(timeout: 4) { popover.isVisible && popover.shownText == "Hello from a script" } != nil && !launcher.isVisible
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        }
+        details.append("key: arguments asked in the launcher \(keyAsks), none: ran \(keyRuns)")
+
         // Inline: the row shows its line once read.
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
@@ -19640,7 +20129,7 @@ final class SelfTest {
         if let clock { preferences.skilliesInMenuBar = [clock.path] }
         let shownInMenuBar = await waitUntil(timeout: 4) {
             clock.flatMap { self.context.menuBarSkillies.shown[$0.path] } == "tick-\(marker)"
-        } != nil
+        } != nil && clock.map { self.context.menuBarSkillies.withImage.contains($0.path) } == true
         // Settings → Skillies with them listed: the inline one's switch is on.
         context.settings.show(pane: .skillies)
         let switchOn = await waitUntil(timeout: 2) { self.context.settings.switchStates().contains(true) } != nil
@@ -19714,7 +20203,7 @@ final class SelfTest {
         }
         await closeSettings()
 
-        record(name, listed && hello && lastLine && asked && missingSaid && argumentFooter == ["Next ↩", "Actions ⌘K"] && tabActions && dropdown && greeted && inline && inlineRow && shownInMenuBar && switchOn && goneFromMenuBar && failed && shebang && runningCard && importOK
+        record(name, listed && hello && lastLine && asked && missingSaid && argumentFooter == ["Next ↩", "Actions ⌘K"] && tabActions && dropdown && greeted && keyAsks && keyRuns && inline && inlineRow && shownInMenuBar && switchOn && goneFromMenuBar && failed && shebang && runningCard && importOK
                && created.hasPrefix("Created the skillie “Selftest Echo”") && duplicate && toolListed && toolRun == "Hi Max, you look calm"
                && echoed == "made-zebra" && missing, details.joined(separator: "; "), nil)
     }
@@ -20405,6 +20894,11 @@ final class SelfTest {
                 var right: [AskRoute: Int] = [:], total: [AskRoute: Int] = [:]
                 var misses: [String] = []
                 var slowest: Duration = .zero
+                // When the card asks "What should I do?" (as Ask does: under
+                // 50 %, more than one route that fits), by how likely a menu
+                // item or an app must be to be offered; the old bar is any.
+                let bars: [(String, Double)] = [("any", .leastNonzeroMagnitude), ("10 %", 0.1), ("25 %", 0.25), ("50 %", 0.5)]
+                var asked = Array(repeating: 0, count: bars.count), reached = Array(repeating: 0, count: bars.count)
                 for request in cases {
                     let start = ContinuousClock.now
                     let decision = await AskRouter.decide(request.text, hasSelection: request.selected, app: "Finder", menu: menu, apps: apps,
@@ -20412,6 +20906,17 @@ final class SelfTest {
                                                           services: services, keys: [provider: key])
                     slowest = max(slowest, .now - start)
                     total[request.route, default: 0] += 1
+                    if let decision {
+                        for (index, bar) in bars.enumerated() {
+                            let possible = decision.routes.map(\.route).filter { route in
+                                AskRouter.fits(route, decision, bar: bar.1) && (route != .rewrite || request.selected)
+                            }
+                            let asks = decision.confidence < 0.5 && decision.routes.first?.route == decision.route && possible.count > 1
+                            if asks { asked[index] += 1 }
+                            // Not asked: the route decided runs (`AIActionController`).
+                            if asks ? possible.prefix(3).contains(request.route) : decision.route == request.route { reached[index] += 1 }
+                        }
+                    }
                     if decision?.route == request.route, request.item == nil || item(decision) == request.item {
                         right[request.route, default: 0] += 1
                     } else {
@@ -20424,6 +20929,7 @@ final class SelfTest {
                 let perRoute = AskRoute.allCases.compactMap { route in total[route].map { "\(route.rawValue) \(right[route] ?? 0)/\($0)" } }
                 record(name, Double(count) >= 0.9 * Double(cases.count),
                        "\(count)/\(cases.count) (\(count * 100 / max(cases.count, 1)) %): " + perRoute.joined(separator: ", ")
+                           + "; the card asks, by bar: " + bars.indices.map { "\(bars[$0].0) \(asked[$0]) (wanted route reached \(reached[$0]))" }.joined(separator: ", ")
                            + (listsMisses && !misses.isEmpty ? "; missed: " + misses.joined(separator: "; ") : "")
                            + "; slowest \(Int(slowest.milliseconds)) ms",
                        slowest.milliseconds)
@@ -24719,6 +25225,7 @@ final class SelfTest {
         if !aborted { await momentMenuBarRecords(center, book) }
         if !aborted { await momentRedDotSwitchesSources(center, book) }
         if !aborted { await momentCallEndOffersStop(center, book) }
+        if !aborted { await momentUnfinishedWaitsForTheStart(center, book) }
         if !aborted { await momentBrowserCallsMicrophone(center, book) }
         if !aborted { await momentSearchRecordings(center) }
         if !aborted { await momentRecorderPane(center) }
@@ -24727,6 +25234,66 @@ final class SelfTest {
 
     /// The links a Join would have opened.
     private var momentOpened: [URL] = []
+
+    /// A recording left unfinished (a Stop that could not finish its
+    /// files) while ⌘R starts another: no card while that one starts or
+    /// records; offered once it stops.
+    private func momentUnfinishedWaitsForTheStart(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: an unfinished recording found while ⌘R starts one shows no card while it starts or records, and is offered once it stops, or at once when the start fails"
+        let consent = context.preferences.recorderConsentShown
+        defer {
+            context.preferences.recorderConsentShown = consent
+            center.startDelay = .zero
+            center.startFails = false
+        }
+        context.preferences.recorderConsentShown = true
+        let event = momentEvent("st-moment-unfinished", "Starting sync", in: -60, link: false, location: "Online")
+        book.testEvents = [event]
+        guard let folder = try? center.recordings.makeFolder(title: "Found while starting", started: .now) else {
+            record(name, false, "no folder", nil)
+            return
+        }
+        var left = MeetingRecord(title: "Found while starting", started: .now, language: "en-US", recorder: Recordings.ownProcess)
+        try? center.recordings.write(left, to: folder)
+        center.startDelay = .seconds(2)
+        center.recordMeeting(event, joining: false)
+        center.offerAtOnceForTest(folder, record: left)
+        await pause(1000)
+        let heldWhileStarting = !center.isCardVisible && !center.recorder.isRecording
+        let recording = await waitUntil(timeout: 6) { center.recorder.isRecording } != nil
+        await pause(1000)
+        let heldWhileRecording = !center.isCardVisible
+        _ = await momentStop(center)
+        let offered = await waitUntil(timeout: 5) { center.isCardVisible && center.cardView.eyebrowText == "UNFINISHED RECORDING" } != nil
+        let named = center.cardView.name
+        if offered { center.closeCardWithoutKeys() }
+        center.openWindows.forEach { $0.close() }
+        left.state = .pending
+        try? center.recordings.write(left, to: folder)
+
+        // The start fails: offered right after, nothing recording.
+        var failedOffered = false, heldWhileFailing = false, failedNamed = ""
+        if let other = try? center.recordings.makeFolder(title: "Found while failing", started: .now) {
+            var second = MeetingRecord(title: "Found while failing", started: .now, language: "en-US", recorder: Recordings.ownProcess)
+            try? center.recordings.write(second, to: other)
+            center.startFails = true
+            center.recordMeeting(event, joining: false)
+            center.offerAtOnceForTest(other, record: second)
+            await pause(1000)
+            heldWhileFailing = !center.isCardVisible
+            failedOffered = await waitUntil(timeout: 4) { center.isCardVisible && center.cardView.eyebrowText == "UNFINISHED RECORDING" } != nil
+                && !center.recorder.isRecording
+            failedNamed = center.cardView.name
+            if failedOffered { center.closeCardWithoutKeys() }
+            second.state = .pending
+            try? center.recordings.write(second, to: other)
+        }
+        book.testEvents = []
+        record(name, heldWhileStarting && recording && heldWhileRecording && offered && named == "Found while starting"
+               && heldWhileFailing && failedOffered && failedNamed == "Found while failing",
+               "while starting: no card \(heldWhileStarting); recording \(recording), no card \(heldWhileRecording); once stopped: offered \(offered) “\(named)”; a start that fails: no card while it starts \(heldWhileFailing), offered right after \(failedOffered) “\(failedNamed)”",
+               nil)
+    }
 
     /// A stand-in meeting: `seconds` from now (before: negative), a Meet
     /// link or `location`, two invented people.

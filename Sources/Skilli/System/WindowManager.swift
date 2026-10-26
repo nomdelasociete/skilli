@@ -33,6 +33,11 @@ final class WindowManager {
     /// Points between windows and at the screen's edges (Settings →
     /// Windows), read at each press.
     var gap: () -> CGFloat = { 0 }
+    /// Another app's window just given a place by the user (✦W, the
+    /// launcher, Ask): learned (`WindowLearner`).
+    var placedByUser: ((AXUIElement, CGRect) -> Void)?
+    /// Every window skil.li moves, whoever asked: not the user's own move.
+    static var didPlace: ((AXUIElement, CGRect) -> Void)?
 
     /// The front window, as skil.li can move it.
     private enum Handle {
@@ -111,12 +116,19 @@ final class WindowManager {
 
         try setFrame(target, of: handle)
         let placed = (try? frame(of: handle)) ?? target
+        if case .other(_, let window, _, _) = handle, layout != .restore { placedByUser?(window, placed) }
         // Pressed again from now: where it ended, as the app keeps it.
         cycle?.placed = placed
         cycle?.at = .now
         memory[key] = layout == .restore ? nil : Memory(placed: placed, before: before, cycle: cycle)
         Log.trace("Window: \(layout.rawValue)\(cycle.map { " size \($0.size + 1)" } ?? "") for \(handle.name), \(Self.describe(current)) → \(Self.describe(placed)), gap \(Int(gap)), in \((ContinuousClock.now - start).compact)")
         return layout.title
+    }
+
+    /// A window skil.li moved from `before` to `placed` some other way
+    /// (Arrange Windows): Restore Window puts it back.
+    func remember(_ window: AXUIElement, pid: pid_t, placed: CGRect, before: CGRect) {
+        memory[Key(pid: pid, window: Int(CFHash(window)))] = Memory(placed: placed, before: before, cycle: nil)
     }
 
     // MARK: - The front window
@@ -195,6 +207,7 @@ final class WindowManager {
         let moved = AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, originValue)
         AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeValue)
         guard moved == .success else { throw Failure(message: "The window did not move (\(moved.rawValue)).") }
+        didPlace?(window, frame)
     }
 
     // MARK: - Helpers

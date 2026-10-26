@@ -156,6 +156,10 @@ final class AgentContext {
     /// Runs out of sight (an ask on a schedule): its questions and
     /// approvals take the card as an agent outside a command does.
     let background: Bool
+    /// The user allowed a step on the screen in this run: its other steps
+    /// there run without asking, except what may not be taken back
+    /// (`SkilliTools.mayNotBeUndone`).
+    var screenAllowed = false
 
     init(title: String, groups: Set<ToolGroup>, read: SelectionService.Read?, targetPID: pid_t?, background: Bool = false) {
         self.title = title
@@ -485,7 +489,7 @@ final class SkilliTools {
                        group: .apps, risk: .read, parameters: []),
         ToolDefinition(name: "focus_window", title: "Bring a window forward",
                        description: "Brings the window whose app or title matches to the front.",
-                       group: .apps, risk: .changes,
+                       group: .apps, risk: .harmless,
                        parameters: [.init(name: "window", description: "Its app or title, as list_windows gives them.")]),
         ToolDefinition(name: "save_window_layout", title: "Save the window layout",
                        description: "Saves where every window is now, under a name (the same name replaces it).",
@@ -671,7 +675,7 @@ final class SkilliTools {
     /// `open_url` with an unusual scheme can do more than open a page.
     static func risk(of definition: ToolDefinition, arguments: [String: Any]) -> ToolRisk {
         if definition.name == "open_url", let url = (arguments["url"] as? String).flatMap(URL.init(string:)),
-           !["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") {
+           !["http", "https", "mailto", "x-apple.systempreferences"].contains(url.scheme?.lowercased() ?? "") {
             return .changes
         }
         return definition.risk
@@ -692,6 +696,40 @@ final class SkilliTools {
         }
         let text = values.joined(separator: "\n")
         return text.count > 400 ? String(text.prefix(400)) + "…" : text
+    }
+
+    /// What the card shows for a call: the screen tools' element by its
+    /// name ("button “Desktop & Dock” in System Settings"), never its id.
+    func cardSummary(of definition: ToolDefinition, arguments: [String: Any]) -> String {
+        guard ["press_ui", "set_ui_value"].contains(definition.name), let id = arguments["id"] as? String,
+              let element = ui.describe(id) else {
+            return Self.summary(of: definition, arguments: arguments)
+        }
+        let named = element.prefix(1).uppercased() + element.dropFirst()
+        guard definition.name == "set_ui_value" else { return named }
+        let text = (arguments["text"] as? String) ?? ""
+        return named + "\n" + (text.count > 300 ? String(text.prefix(300)) + "…" : text)
+    }
+
+    /// A step on the screen that may not be taken back: a button that
+    /// sends, deletes, pays or overwrites (`ScreenControl.isRisky`), a field
+    /// that has text (or cannot be read) filled over, or Return, Enter,
+    /// Delete or ⌘S (a save over a file) pressed. It asks even once the run
+    /// was allowed.
+    func mayNotBeUndone(_ name: String, arguments: [String: Any]) -> Bool {
+        let element = (arguments["id"] as? String).flatMap(ui.label)
+        switch name {
+        case "press_ui":
+            return element.map { ScreenControl.isRisky($0.label) } ?? true
+        case "set_ui_value":
+            // A value that cannot be read may be text: it asks.
+            return element.map { ScreenControl.isRisky($0.label) || $0.value?.isEmpty != true } ?? true
+        case "press_keys":
+            let keys = ((arguments["keys"] as? String) ?? "").lowercased()
+            return ["return", "enter", "delete", "backspace", "cmd+s"].contains { keys.contains($0) }
+        default:
+            return false
+        }
     }
 
     // MARK: - Running
@@ -1637,6 +1675,11 @@ final class SkilliTools {
     private func githubTool(_ name: String, arguments: [String: Any], in github: GitHubBook, text: (String) throws -> String) async throws -> String {
         await github.refreshed()
         if let problem = github.problem, github.lastRefresh == nil { throw Failure(message: problem) }
+        // A list that could not be read again says so: never an empty or
+        // old list passed off as up to date.
+        func stale(notifications: Bool) -> String {
+            github.problem(notifications: notifications).map { "Not up to date: \($0)\n" } ?? ""
+        }
         let words = (arguments["query"] as? String ?? "").lowercased().split(separator: " ").map(String.init)
         func fits(_ fields: [String]) -> Bool {
             let haystack = fields.joined(separator: " ").lowercased()
@@ -1654,15 +1697,20 @@ final class SkilliTools {
         case "list_pull_requests":
             let group = (arguments["group"] as? String).flatMap(PullRequestGroup.init(rawValue:))
             let shown = github.pullRequests.filter { (group == nil || $0.group == group) && fits([$0.title, $0.repositoryFullName, $0.reason]) }
-            guard !shown.isEmpty else { return github.pullRequests.isEmpty ? "No open pull request." : "No pull request fits." }
-            return shown.map { pullRequest in
+            guard !shown.isEmpty else { return stale(notifications: false) + (github.pullRequests.isEmpty ? "No open pull request." : "No pull request fits.") }
+            return stale(notifications: false) + shown.map { pullRequest in
                 "\(pullRequest.group.rawValue) — \(pullRequest.repositoryFullName)#\(pullRequest.number) “\(pullRequest.title)” — \(pullRequest.reason)"
                     + (pullRequest.needsUserAction ? " (the user's turn)" : "") + (pullRequest.canMerge ? " — can merge" : "") + " — \(pullRequest.url.absoluteString)"
             }.joined(separator: "\n")
         case "list_github_notifications":
             let shown = github.unreadNotifications.filter { fits([$0.title, $0.repository, $0.reasonTitle]) }
-            guard !shown.isEmpty else { return "No unread notification." }
-            return shown.map { "\($0.id) — \($0.reasonTitle) — \($0.repository) “\($0.title)” — \($0.url.absoluteString)" }.joined(separator: "\n")
+            let more = github.notificationsComplete ? "" : "\nMore unread notifications than listed: https://github.com/notifications"
+            guard !shown.isEmpty else {
+                // A cut list cannot say there is none: only none among those read.
+                let none = github.notificationsComplete ? "No unread notification." : "None among the unread notifications read; GitHub has more."
+                return stale(notifications: true) + none + more
+            }
+            return stale(notifications: true) + shown.map { "\($0.id) — \($0.reasonTitle) — \($0.repository) “\($0.title)” — \($0.url.absoluteString)" }.joined(separator: "\n") + more
         case "merge_pull_request":
             let found = try pullRequest()
             guard found.canMerge else {

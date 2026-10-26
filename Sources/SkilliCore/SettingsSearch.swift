@@ -136,6 +136,8 @@ public enum SettingsSearch {
         ("backup", "section.backups", "Backups"),
         ("clipboard", "section.clearHistory", "Clear History"),
         ("emoji", "section.wordsLearned", "Words Learned"),
+        ("windows", "section.arrangeWindows", "Arrange Windows"),
+        ("windows", "section.forgetPlaces", "Forget What skil.li Learned"),
         ("windows", "section.appsStoppedUsing", "Apps You Stopped Using"),
         ("ask", "section.whenItActs", "When It Acts"),
         ("commands", "section.builtIn", "Built In"),

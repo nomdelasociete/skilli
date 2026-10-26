@@ -50,6 +50,30 @@ public struct ScriptCommand: Hashable, Sendable {
     /// Stable id: its path.
     public var id: String { path }
 
+    /// Its icon when it is an emoji, drawn as text; nil for an image or none.
+    public var emojiIcon: String? {
+        let scalars = icon.unicodeScalars
+        guard !icon.isEmpty, icon.count <= 2,
+              scalars.contains(where: { $0.properties.isEmojiPresentation || $0.properties.isEmoji && $0.value > 0xFF })
+                // "©️", "1️⃣": a text character asked to draw as an emoji.
+                || scalars.first?.properties.isEmoji == true && scalars.contains(where: { $0 == "\u{FE0F}" || $0 == "\u{20E3}" })
+        else { return nil }
+        return icon
+    }
+
+    /// The image file its icon names, beside the script or by its full
+    /// path; nil for an emoji, a web address or none.
+    public var iconImagePath: String? {
+        guard !icon.isEmpty, emojiIcon == nil, !icon.hasPrefix("http") else { return nil }
+        return icon.hasPrefix("/") ? icon : ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(icon)
+    }
+
+    /// An argument it cannot run without: a key or a link then asks it in
+    /// the launcher instead of running it with an empty one.
+    public var needsArguments: Bool {
+        arguments.contains { !$0.optional }
+    }
+
     public func hash(into hasher: inout Hasher) {
         hasher.combine(path)
     }
