@@ -10,8 +10,8 @@ already recording.
 ## Short answer
 
 - **Where the thing is, its shortcut is.** Settings → Skillies shows a
-  shortcut field on each skillie, as Apps and Catalog already do for their
-  rows: "Record Shortcut" until it has keys. A click records there, under
+  shortcut field on each skillie (one that needs an argument opens the
+  launcher on it), as Apps and Catalog already do for their rows: "Record Shortcut" until it has keys. A click records there, under
   the pointer; ⎋ leaves nothing behind. Keys stays the index of every
   shortcut (one feature, one pane).
 - **Keys → Add Shortcut… finds by typing.** A sheet with a search field,

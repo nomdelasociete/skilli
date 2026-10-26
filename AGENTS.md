@@ -3321,7 +3321,11 @@ re-investigating.
   history by meaning on (default). Agents: `search_history`.
   `selftest history` (scratch Chrome, Zen and Safari histories).
 - Skillies (`ScriptLibrary`, `ScriptCommand` in SkilliCore, Settings →
-  Skillies, `MacAction.script`): skil.li's own commands, the
+  Skillies, `MacAction.script`; the reference for users and contributors
+  is `docs/skillies/`: header keys, how one runs, every tool `"$SKILLI_CLI"
+  call` reaches. Change it in the same pull request as the behaviour;
+  `SkillieDocsTests` fails on a header key, skillie variable or tool it
+  does not list): skil.li's own commands, the
   scripts of `~/Library/Application Support/skil.li/skillies` (one level
   of subfolders; hidden and `.template.` files left out) whose first 60
   lines say `# @skilli.…` or `// @skilli.…`: Raycast's Script Command
@@ -3371,9 +3375,12 @@ re-investigating.
   `run_skillie` is always allowed. Ask: skillies that need no argument
   join the command question as `script0`…; one that fits (≥ 60 %) beats
   the agent, asked first under 85 %. Shortcuts: on its row in Settings →
-  Skillies (a `ShortcutField` reading "Record Shortcut", one that needs no
-  argument typed; a click records there, `NewShortcut`, ⎋ leaves none), or
-  Keys → Add Shortcut… (`script:<path>`). Agents: `list_skillies`, `run_skillie` (arguments in
+  Skillies (a `ShortcutField` reading "Record Shortcut"; a click records
+  there, `NewShortcut`, ⎋ leaves none), or Keys → Add Shortcut…
+  (`script:<path>`); one with a required argument opens the launcher on
+  its chip (`ActionRunner`, `run(fromLink:)`), never empty. Menu bar: an
+  emoji icon before the line, an image file as the item's image
+  (`ScriptCommand.emojiIcon`, `iconImagePath`). Agents: `list_skillies`, `run_skillie` (arguments in
   order; a missing one refused), `create_skillie`. `selftest scripts`
   (scratch folder; a real Haiku agent writes one).
 - Skillie files (docs/skillie-files.md; `SkillieFile`, `SkillieImportLink`

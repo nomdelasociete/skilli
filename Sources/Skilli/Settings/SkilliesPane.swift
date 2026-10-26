@@ -262,10 +262,9 @@ private struct SkillieRow: View {
     @Bindable var store: ShortcutStore
     let newShortcut: NewShortcut
 
-    /// What a key runs; none for a skillie that needs an argument typed.
-    private var action: SkilliAction? {
-        skillie.arguments.allSatisfy(\.optional) ? .mac(.script(skillie)) : nil
-    }
+    /// What its key does: runs it, or opens the launcher on its argument
+    /// when it needs one (`ActionRunner`).
+    private var action: SkilliAction? { .mac(.script(skillie)) }
 
     var body: some View {
         LabeledContent {
@@ -330,10 +329,8 @@ private struct SkillieIcon: View {
     let skillie: ScriptCommand
 
     var body: some View {
-        let icon = skillie.icon
-        if !icon.isEmpty, icon.count <= 2,
-           icon.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation || $0.properties.isEmoji && $0.value > 0xFF }) {
-            Text(icon)
+        if let emoji = skillie.emojiIcon {
+            Text(emoji)
                 .font(.system(size: 17))
                 .frame(width: 22, height: 22)
         } else if let image = imageFile {
@@ -348,10 +345,7 @@ private struct SkillieIcon: View {
 
     /// An image named by the header, beside the script or by its path.
     private var imageFile: NSImage? {
-        let icon = skillie.icon
-        guard !icon.isEmpty, !icon.hasPrefix("http") else { return nil }
-        let path = icon.hasPrefix("/") ? icon : ((skillie.path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(icon)
-        return NSImage(contentsOfFile: path)
+        skillie.iconImagePath.flatMap(NSImage.init(contentsOfFile:))
     }
 }
 

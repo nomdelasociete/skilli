@@ -19971,12 +19971,15 @@ final class SelfTest {
 
     /// Skillies from the self-test's own folder: listed with their
     /// metadata; "say hello" + Return shows the last line; a text and a
-    /// dropdown argument filled in the launcher reach the script; inline
-    /// shows its line in the row; a failure says its last line; a script
-    /// without the executable bit runs through its shebang; a Raycast
-    /// Script Command imported becomes one; agents list, create and run.
+    /// dropdown argument filled in the launcher reach the script; a key
+    /// bound to one with arguments asks them in the launcher, one with
+    /// none runs; inline shows its line in the row, and in the menu bar
+    /// its image icon as an image, never its file name; a failure says its
+    /// last line; a script without the executable bit runs through its
+    /// shebang; a Raycast Script Command imported becomes one; agents
+    /// list, create and run.
     private func scriptCommandsRun() async {
-        let name = "Skillies: listed, run from the launcher (last line, arguments with a dropdown, inline line), failures and shebang, the Running… card unless showsRunning false; Raycast import; agents create, list and run"
+        let name = "Skillies: listed, run from the launcher (last line, arguments with a dropdown, inline line) and by key (arguments asked in the launcher), the menu bar's image icon, failures and shebang, the Running… card unless showsRunning false; Raycast import; agents create, list and run"
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/skillies", isDirectory: true)
         let raycast = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/raycast", isDirectory: true)
         for url in [folder, raycast] { try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true) }
@@ -19989,7 +19992,12 @@ final class SelfTest {
         }
         write("hello.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Say Hello Selftest\n# @skilli.mode compact\n# @skilli.icon 👋\necho first line\necho \"Hello from a script\"\n")
         write("greet.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Greet Someone Selftest\n# @skilli.mode fullOutput\n# @skilli.argument1 { \"type\": \"text\", \"placeholder\": \"Name\" }\n# @skilli.argument2 { \"type\": \"dropdown\", \"placeholder\": \"Mood\", \"data\": [{\"title\": \"Happy\", \"value\": \"happy\"}, {\"title\": \"Calm\", \"value\": \"calm\"}] }\necho \"Hi $1, you look $2\"\n")
-        write("clock.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Selftest Clock\n# @skilli.mode inline\n# @skilli.refreshTime 10s\necho tick-\(marker)\n")
+        write("clock.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Selftest Clock\n# @skilli.mode inline\n# @skilli.refreshTime 10s\n# @skilli.icon clock.png\necho tick-\(marker)\n")
+        // Its image icon, beside it: the menu bar draws it, never its name.
+        if let tiff = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)?.tiffRepresentation,
+           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+            try? png.write(to: folder.appendingPathComponent("clock.png"))
+        }
         write("fail.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Failing Selftest\n# @skilli.mode compact\necho \"Something broke\"\nexit 3\n")
         write("plain.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Not Executable Selftest\n# @skilli.mode silent\necho shebang-\(marker)\n", executable: false)
         write("slow.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Slow Selftest\n# @skilli.mode compact\nsleep 1.5\necho slow-\(marker)\n")
@@ -20046,6 +20054,27 @@ final class SelfTest {
         details.append("arguments asked: \(asked), ↩ without one said so: \(missingSaid), footer \(argumentFooter), ⇥ its actions, no Ask: \(tabActions), dropdown: \(dropdown), output: \(greeted)")
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
 
+        // A key bound to it (`script:<path>`): the launcher asks its
+        // arguments; one with none runs at once.
+        guard await focusTestWindow() else { return }
+        _ = await waitUntil(timeout: 1) { !popover.isVisible }
+        var keyAsks = false
+        if let greet = library.all().first(where: { $0.title == "Greet Someone Selftest" }) {
+            context.actions.perform(.mac(.script(greet)), triggeredAt: .now)
+            keyAsks = await waitUntil(timeout: 1) { launcher.isVisible && launcher.isInScript } != nil && !popover.isVisible
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            _ = await waitUntil(timeout: 1) { !launcher.isInScript }
+            if launcher.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        }
+        var keyRuns = false
+        if let sayHello = library.all().first(where: { $0.title == "Say Hello Selftest" }) {
+            guard await focusTestWindow() else { return }
+            context.actions.perform(.mac(.script(sayHello)), triggeredAt: .now)
+            keyRuns = await waitUntil(timeout: 4) { popover.isVisible && popover.shownText == "Hello from a script" } != nil && !launcher.isVisible
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        }
+        details.append("key: arguments asked in the launcher \(keyAsks), none: ran \(keyRuns)")
+
         // Inline: the row shows its line once read.
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
@@ -20062,7 +20091,7 @@ final class SelfTest {
         if let clock { preferences.skilliesInMenuBar = [clock.path] }
         let shownInMenuBar = await waitUntil(timeout: 4) {
             clock.flatMap { self.context.menuBarSkillies.shown[$0.path] } == "tick-\(marker)"
-        } != nil
+        } != nil && clock.map { self.context.menuBarSkillies.withImage.contains($0.path) } == true
         // Settings → Skillies with them listed: the inline one's switch is on.
         context.settings.show(pane: .skillies)
         let switchOn = await waitUntil(timeout: 2) { self.context.settings.switchStates().contains(true) } != nil
@@ -20136,7 +20165,7 @@ final class SelfTest {
         }
         await closeSettings()
 
-        record(name, listed && hello && lastLine && asked && missingSaid && argumentFooter == ["Next ↩", "Actions ⌘K"] && tabActions && dropdown && greeted && inline && inlineRow && shownInMenuBar && switchOn && goneFromMenuBar && failed && shebang && runningCard && importOK
+        record(name, listed && hello && lastLine && asked && missingSaid && argumentFooter == ["Next ↩", "Actions ⌘K"] && tabActions && dropdown && greeted && keyAsks && keyRuns && inline && inlineRow && shownInMenuBar && switchOn && goneFromMenuBar && failed && shebang && runningCard && importOK
                && created.hasPrefix("Created the skillie “Selftest Echo”") && duplicate && toolListed && toolRun == "Hi Max, you look calm"
                && echoed == "made-zebra" && missing, details.joined(separator: "; "), nil)
     }
