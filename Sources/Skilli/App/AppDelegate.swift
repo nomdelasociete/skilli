@@ -82,6 +82,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         learner.gap = { [preferences] in CGFloat(preferences.windowGap) }
         return learner
     }()
+    /// Usual places: an app's first window where the user usually puts it,
+    /// when they turned it on.
+    private lazy var usualPlaces: UsualPlaces = {
+        let usual = UsualPlaces(learner: windowLearner, manager: systemCommands.windows)
+        usual.isOn = { [preferences] in preferences.usualPlaces }
+        usual.leftOut = { [preferences] in Set(preferences.windowNeverPlace) }
+        usual.gap = { [preferences] in CGFloat(preferences.windowGap) }
+        return usual
+    }()
     /// Arrange Windows: a saved layout for what is open, else every window
     /// where the user usually puts it.
     private lazy var windowArrange: WindowArrange = {
@@ -1273,7 +1282,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             snippetExpander.start()
             timers.restore()
             scheduler.start()
-            if case .benchmark = mode {} else { windowLearner.start() }
+            if case .benchmark = mode {} else {
+                windowLearner.start()
+                usualPlaces.start()
+            }
             if case .normal = mode {
                 systemCommands.restoreAwake()
                 autoQuitter.start()

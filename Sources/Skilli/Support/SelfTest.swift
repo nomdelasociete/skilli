@@ -496,6 +496,7 @@ final class SelfTest {
                 arrangeWindowsLearnsAndPutsBack,
                 windowLayoutsAndSwitching,
                 displayPromptArrangesAsUsual,
+                usualPlacesOnLaunch,
                 layoutOpensAFileAndALink,
                 layoutDeleteUndoes
             ])
@@ -5156,6 +5157,7 @@ final class SelfTest {
         await arrangeWindowsLearnsAndPutsBack()
         await windowLayoutsAndSwitching()
         await displayPromptArrangesAsUsual()
+        await usualPlacesOnLaunch()
         await layoutOpensAFileAndALink()
         await browserTabsAreFound()
         await filesGatheredBySpotlight()
@@ -17541,6 +17543,104 @@ final class SelfTest {
 
     private static func describe(_ rect: CGRect) -> String {
         "\(Int(rect.minX)),\(Int(rect.minY)) \(Int(rect.width))×\(Int(rect.height))"
+    }
+
+    /// Usual places (docs/smart-layout.md, phase 3): with three learned
+    /// placements of TextEdit's window on the left half and the setting
+    /// on, TextEdit launched puts its window there before anyone touches
+    /// it; the setting off, the next launch is left where it opens.
+    private func usualPlacesOnLaunch() async {
+        let name = "Usual places: on, an app launched gets its window where it was put the last 3 times; off, it is left where it opens"
+        guard let learner = context.windowLearner else {
+            record(name, false, "no window learner", nil)
+            return
+        }
+        let bundleID = "com.apple.TextEdit"
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            record(name, false, "TextEdit not installed", nil)
+            return
+        }
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty else {
+            record(name, true, "skipped: TextEdit is already open (the test needs to launch it)", nil)
+            return
+        }
+        let preferences = context.preferences
+        let learned = learner.placements
+        let (gap, learning, usual) = (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces)
+        preferences.windowGap = 0
+        preferences.windowLearning = true
+        let marker = Int.random(in: 1000...9999)
+        let files = ["on", "off"].map { FileManager.default.temporaryDirectory.appendingPathComponent("skilli-usual-\($0)-\(marker).txt") }
+        for file in files { try? "usual".write(to: file, atomically: true, encoding: .utf8) }
+        func window(_ file: URL) -> AXUIElement? {
+            guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return nil }
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute as CFString, &value) == .success,
+                  let list = value as? [AXUIElement] else { return nil }
+            return list.first { element in
+                var title: CFTypeRef?
+                AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &title)
+                return (title as? String)?.contains(file.deletingPathExtension().lastPathComponent) == true
+            }
+        }
+        func frame(_ element: AXUIElement) -> CGRect? {
+            var position: CFTypeRef?
+            var size: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &position) == .success,
+                  AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &size) == .success, let position, let size else { return nil }
+            var point = CGPoint.zero
+            var extent = CGSize.zero
+            AXValueGetValue(position as! AXValue, .cgPoint, &point)
+            AXValueGetValue(size as! AXValue, .cgSize, &extent)
+            return CGRect(origin: point, size: extent)
+        }
+        /// TextEdit quit (the test opened it), its windows with it.
+        func quit() async {
+            let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            for app in apps { app.terminate() }
+            _ = await waitUntil(timeout: 4) { apps.allSatisfy(\.isTerminated) }
+        }
+        func launch(_ file: URL) async {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            _ = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration)
+        }
+        // Learned: TextEdit's window on the left half of the menu bar's
+        // display, three times, on the displays there are now.
+        let displays = Displays.current()
+        guard let main = displays.first, let left = WindowLayout.leftHalf.frame(in: main.visible) else {
+            record(name, false, "no display", nil)
+            return
+        }
+        let keys = displays.map { WindowPlacements.displayKey($0.fingerprint) }
+        var seeded = WindowPlacements()
+        for day in 1...3 {
+            seeded.record(.init(place: .of(left, in: main.visible), display: keys[0], title: files[0].lastPathComponent, how: .key,
+                                at: Date.now.addingTimeInterval(-Double(day) * 3_600)),
+                          bundleID: bundleID, displays: keys)
+        }
+        learner.restore(seeded)
+
+        preferences.usualPlaces = true
+        await launch(files[0])
+        let placed = await waitUntil(timeout: 6) { window(files[0]).flatMap(frame).map { WindowLayout.matches($0, left) } ?? false } != nil
+        let placedFrame = window(files[0]).flatMap(frame)
+        await quit()
+
+        preferences.usualPlaces = false
+        await launch(files[1])
+        let opened = await waitUntil(timeout: 6) { window(files[1]).flatMap(frame) != nil } != nil
+        await pause(1_500)
+        let offFrame = window(files[1]).flatMap(frame)
+        let leftAlone = opened && offFrame.map { !WindowLayout.matches($0, left) } ?? false
+        await quit()
+
+        for file in files { try? FileManager.default.removeItem(at: file) }
+        learner.restore(learned)
+        (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces) = (gap, learning, usual)
+        record(name, placed && leftAlone,
+               "on: placed on the left half: \(placed) (\(placedFrame.map(Self.describe) ?? "?")); off: opened \(opened), left where it opened: \(leftAlone) (\(offFrame.map(Self.describe) ?? "?"))",
+               nil)
     }
 
     /// Arrange as Usual (docs/smart-layout.md, phase 2): with a learned

@@ -236,6 +236,33 @@ public struct WindowPlacements: Codable, Equatable, Sendable {
         return choices.sorted { $0.weight > $1.weight }
     }
 
+    /// The place Usual places may put `window` in without asking: the best
+    /// choice with these very displays, held by at least 3 placements and
+    /// 70 % of the weight, and the last 3 placements of the windows most
+    /// like it all there (moved elsewhere lately: not sure until the place
+    /// is confirmed again). An empty title is never enough, unless the
+    /// app's windows are told apart by rank.
+    public func sure(for window: Window, displays: [String], at now: Date) -> Choice? {
+        let here = entries[Self.key(window.bundleID, displays)] ?? []
+        guard here.count >= Self.sureCount else { return nil }
+        let titles = here.map(\.title) + [window.title]
+        let uniform = Set(titles).count == 1
+        if window.title.isEmpty, !uniform { return nil }
+        guard let best = choices(for: window, displays: displays, at: now).first,
+              best.count >= Self.sureCount, best.share >= Self.sureShare else { return nil }
+        // The windows most like this one, newest first.
+        let common = Self.commonWords(titles)
+        let likeness = here.map { Self.alike($0, window, common: common, uniform: uniform) }
+        let most = likeness.max() ?? 0
+        let latest = here.indices.filter { likeness[$0] >= most }.sorted { here[$0].at > here[$1].at }.prefix(Self.sureCount)
+        guard latest.allSatisfy({ here[$0].display == best.display && here[$0].place.near(best.place) }) else { return nil }
+        return best
+    }
+
+    /// How many placements, and how much of the weight, a sure place holds.
+    public static let sureCount = 3
+    public static let sureShare = 0.7
+
     private func weight(_ placement: Placement, for window: Window, common: Set<String>, uniform: Bool, at now: Date) -> Double {
         let age = max(now.timeIntervalSince(placement.at), 0)
         var weight = pow(0.5, age / Self.halfLife)
@@ -387,5 +414,18 @@ public enum ArrangeOffer {
     /// The row for these displays, unless refused for them.
     public static func refused(_ displays: DisplaySet, in never: [DisplaySet]) -> Bool {
         never.contains { $0.key == displays.key }
+    }
+}
+
+/// Usual places (docs/smart-layout.md): a window an app just opened goes to
+/// its usual place only while the user has not touched it.
+public enum UsualPlace {
+    /// How long a new window is still untouched, at most.
+    public static let fresh: TimeInterval = 1.5
+
+    /// Opened less than `fresh` ago, no key typed and no click since, the
+    /// mouse button up. Times are seconds ago.
+    public static func untouched(appearedAgo: TimeInterval, keyAgo: TimeInterval, clickAgo: TimeInterval, mouseDown: Bool) -> Bool {
+        appearedAgo <= fresh && keyAgo > appearedAgo && clickAgo > appearedAgo && !mouseDown
     }
 }

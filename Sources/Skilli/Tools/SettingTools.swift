@@ -998,6 +998,7 @@ final class SettingTools {
         bindings["autoQuitMinutes"] = number(\.autoQuitMinutes)
         bindings["autoQuitNever"] = apps(\.autoQuitNever)
         bindings["windowLearning"] = toggle(\.windowLearning)
+        bindings["usualPlaces"] = toggle(\.usualPlaces)
         bindings["windowNeverPlace"] = apps(\.windowNeverPlace)
         bindings["windowLayoutIgnoredApps"] = apps(\.windowLayoutIgnoredApps)
         var monitors = Binding(get: { [unowned self] in .list(self.preferences.ignoredMonitors.map(\.name)) })

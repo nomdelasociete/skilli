@@ -313,13 +313,16 @@ using.
   give it): every window where you usually put it, learned on this Mac
   from your own moves and ✦W (each app's place, its windows' titles and
   files, the displays, the apps beside it); a layout saved for the apps
-  open comes first. Again within 10 seconds puts them back.
+  open comes first. Again within 10 seconds puts them back. Place new
+  windows where you usually put them (off by default): an app you open
+  gets its window there, when skil.li is sure and before you touch it.
 - **Switch Window**: see Launcher.
 - **Auto Quit**: quits the apps you stopped using after a delay you
   choose; never the front app, unsaved work, sound or a call.
 
 Settings: Space between windows (with a preview) · Arrange Windows:
-Learn where you put windows · Forget What skil.li Learned · Layouts ·
+Learn where you put windows · Place new windows where you usually put
+them · Forget What skil.li Learned · Layouts ·
 Never place · Always leave out of layouts · Monitors ignored when plugged
 in · Displays never arranged when plugged in · Apps You Stopped Using: Quit apps you stopped using · Unused for ·
 Never quit.
