@@ -119,6 +119,8 @@ final class SelfTest {
         /// Where the user puts windows (Arrange Windows), in the
         /// self-test's own placements.json.
         var windowLearner: WindowLearner?
+        /// Better transcription's download, in the self-test's own folder.
+        var betterTranscription: @MainActor () -> BetterTranscription? = { nil }
     }
 
     enum Scope: String, Sendable {
@@ -317,6 +319,16 @@ final class SelfTest {
         /// back; speakers renamed and merged; Transcribe Again (keys,
         /// ~10 min).
         case voices
+        /// Only Better transcription (phase 4): its download from a stand-in
+        /// server (the model on this Mac's ~/recorder-measure: cancelled,
+        /// resumed, a wrong file refused), its row in Settings → Recorder,
+        /// taught once in a window; whisper on the played-back calls; the
+        /// echo drop with its times on the recording's clock (~25 min).
+        case whisper
+        /// Only Better transcription's real download: 1.6 GB from
+        /// huggingface.co through the app's own download, checked, into the
+        /// self-test's scratch (no keys; run once, the network's time).
+        case whisperdownload
     }
 
     /// Extra trigger only the self-test registers. No Hyper tool listens to
@@ -718,6 +730,13 @@ final class SelfTest {
         if scope == .voices {
             window.center()
             return await finish(after: [voicesChecks])
+        }
+        if scope == .whisper {
+            window.center()
+            return await finish(after: [whisperChecks])
+        }
+        if scope == .whisperdownload {
+            return await finish(after: [betterTranscriptionRealDownload])
         }
         if scope == .emoji {
             window.center()
@@ -24203,6 +24222,387 @@ final class SelfTest {
                     nil)
     }
 
+    // MARK: - Phase 4: Better transcription (docs/meeting-recorder-views.md)
+
+    /// Better transcription's checks: the download (a stand-in server
+    /// serving the measurement's own model), whisper on the played-back
+    /// calls through the recorder's own transcript, the echo drop with its
+    /// times on the recording's clock, the engine offered and removed.
+    private func whisperChecks() async {
+        let (language, hint) = (context.preferences.voiceLanguage, context.preferences.recorderBetterHintShown)
+        defer {
+            context.preferences.voiceLanguage = language
+            context.preferences.recorderBetterHintShown = hint
+            // What the checks downloaded (1.6 GB) and pointed at: gone.
+            BetterTranscription.testFiles = nil
+            if let folder = BetterTranscription.testFolder { try? FileManager.default.removeItem(at: folder) }
+            try? FileManager.default.removeItem(at: recorderScratch.appendingPathComponent("wrong-models", isDirectory: true))
+        }
+        context.preferences.voiceLanguage = "en-US"
+        guard await betterTranscriptionDownloads() else { return }
+        var them: [String: (them: [TranscriptWord], me: Int)] = [:]
+        var kept: URL?
+        if !aborted { (them, kept) = await whisperOnTheCalls() }
+        if !aborted, !them.isEmpty { await echoDropWithWhisper(them) }
+        if !aborted, let kept { await whisperOfferedAndRemoved(kept) }
+    }
+
+    /// The measurement's own files (`script/recorder-measure/setup.sh`),
+    /// the same as the download's.
+    private static var measuredModels: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("recorder-measure/models", isDirectory: true)
+    }
+
+    /// A recording made by macOS's engine, for the window's line: two
+    /// silent tracks, a transcript of two lines.
+    private func recordingMadeByMacOS(_ recordings: Recordings, title: String) -> URL? {
+        guard let folder = try? recordings.makeFolder(title: title, started: .now) else { return nil }
+        let silence = recorderScratch.appendingPathComponent("silence-2s.wav")
+        guard Self.clip(nil, seconds: 2, beeps: [], to: silence),
+              Self.m4a(from: silence, to: folder.appendingPathComponent(Speaker.me.file)),
+              Self.m4a(from: silence, to: folder.appendingPathComponent(Speaker.them.file)) else { return nil }
+        var record = MeetingRecord(title: title, started: .now, language: "en-US", recorder: nil)
+        record.state = .done
+        record.engine = TranscriptEngine.macOS.rawValue
+        record.seconds = 2
+        let lines = [TranscriptLine(speaker: .me, words: [TranscriptWord("Hello", start: 0.1, end: 0.4)]),
+                     TranscriptLine(speaker: .them, words: [TranscriptWord("Hi", start: 0.6, end: 0.9)])]
+        guard (try? recordings.write(record, to: folder)) != nil,
+              (try? MeetingTranscript.File(language: "en-US", engine: record.engine!, lines: lines).encoded()
+                .write(to: folder.appendingPathComponent("transcript.json"))) != nil else { return nil }
+        return folder
+    }
+
+    /// The download from a stand-in server serving the measurement's own
+    /// model (its real bytes, checked by the real SHA-256): before it, the
+    /// first window on a transcript macOS made says it once, the next one
+    /// not; a wrong file is thrown away; the row in Settings → Recorder as
+    /// it downloads (captured), Cancel at a third and Download again goes
+    /// on from there (a range asked), checked, downloaded.
+    private func betterTranscriptionDownloads() async -> Bool {
+        let name = "Recorder phase 4: Better transcription: taught once in a window, downloaded from a stand-in server (the real model, its SHA-256 checked), cancelled and resumed from where it stopped, a wrong file thrown away, its row in Settings → Recorder"
+        let models = Self.measuredModels
+        let files = BetterTranscription.files.map { (file: $0, source: models.appendingPathComponent($0.name)) }
+        guard files.allSatisfy({ FileManager.default.fileExists(atPath: $0.source.path) }) else {
+            checks.append(Check(name: name, passed: true, skipped: true,
+                                detail: "no measured model on this Mac (script/recorder-measure/push.sh puts it in ~/recorder-measure/models)", latencyMs: nil))
+            return false
+        }
+        guard let center = context.recorder(), let folder = BetterTranscription.testFolder else {
+            record(name, false, "no recorder, or no self-test folder for the models", nil)
+            return false
+        }
+        // The folder is named by the process: one left by an earlier run
+        // with the same number would make the model look downloaded.
+        try? FileManager.default.removeItem(at: folder)
+        // Taught once: the first window on a transcript macOS made, not the next.
+        context.preferences.recorderBetterHintShown = false
+        var hints: [String?] = []
+        for title in ["Taught once", "Quiet after"] {
+            guard let made = recordingMadeByMacOS(center.recordings, title: title) else { continue }
+            center.open(made)
+            await pause(600)
+            let window = center.window(for: made)
+            hints.append(window?.shownHint)
+            if title == "Taught once", let window { await captureRecordingWindow(window, as: "recorder-window-better-hint") }
+            window?.close()
+        }
+        // The stand-in server: the files by name; a wrong file's checksum.
+        guard let server = ModelStandIn(files: Dictionary(uniqueKeysWithValues: files.map { ($0.file.name, $0.source) })),
+              await waitUntil(timeout: 3, { server.port != nil }) != nil, let port = server.port else {
+            record(name, false, "the stand-in server did not start", nil)
+            return false
+        }
+        defer { server.stop() }
+        let base = "http://127.0.0.1:\(port)/"
+        BetterTranscription.testFiles = files.map {
+            BetterTranscription.File(name: $0.file.name, url: URL(string: base + $0.file.name)!, size: $0.file.size, sha256: $0.file.sha256)
+        }
+        let wrongFolder = recorderScratch.appendingPathComponent("wrong-models", isDirectory: true)
+        let wrong = BetterTranscription(folder: wrongFolder, files: [BetterTranscription.File(name: files[0].file.name, url: URL(string: base + files[0].file.name)!,
+                                                                                             size: files[0].file.size, sha256: String(repeating: "0", count: 64))])
+        wrong.download()
+        let refused = await waitUntil(timeout: 30) { wrong.state == .wrongFile } != nil
+        let nothingKept = ((try? FileManager.default.contentsOfDirectory(atPath: wrongFolder.path)) ?? []).filter { !$0.hasPrefix(".") }.isEmpty
+        // The app's own download, its row shown.
+        guard let store = context.betterTranscription() else {
+            record(name, false, "no Better transcription store", nil)
+            return false
+        }
+        store.refresh()
+        context.settings.show(pane: .recorder, section: "section.betterTranscription")
+        await pause(800)
+        let notDownloaded = store.state == .notDownloaded
+        await captureSettingsBothWays(as: "settings-recorder-better")
+        server.bytesPerSecond = 200_000_000
+        store.download()
+        let third = await waitUntil(timeout: 60) {
+            if case .downloading(let received, let total, _) = store.state { return received > total / 3 }
+            return false
+        } != nil
+        let downloadingLine = store.line
+        await captureSettingsBothWays(as: "settings-recorder-downloading")
+        store.cancel()
+        let cancelled = await waitUntil(timeout: 15) { store.state == .notDownloaded } != nil
+        let resumeKept = ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []).contains { $0.hasSuffix(".resume") }
+        server.bytesPerSecond = nil
+        var sawChecking = false
+        store.download()
+        let done = await waitUntil(timeout: 240) {
+            if store.state == .checking { sawChecking = true }
+            return store.state == .downloaded
+        } != nil
+        let ranged = server.ranges.contains { $0 > 0 }
+        await pause(500)
+        await captureSettingsBothWays(as: "settings-recorder-downloaded")
+        context.settings.close()
+        let ready = BetterTranscription.isReady()
+        let passed = hints.count == 2 && hints[0]?.contains("Better transcription") == true && hints[1] == nil && refused && nothingKept
+            && notDownloaded && third && cancelled && resumeKept && done && sawChecking && ranged && ready
+        record(name, passed,
+               "window lines \(hints.map { $0 ?? "none" }); a wrong file refused \(refused), nothing kept \(nothingKept); row not downloaded \(notDownloaded); a third downloaded \(third) (“\(downloadingLine)”), cancelled \(cancelled), what came kept \(resumeKept); downloaded again \(done) from where it stopped \(ranged) (ranges asked \(server.ranges)), checked \(sawChecking); ready \(ready)",
+               nil)
+        return ready
+    }
+
+    /// The real download, once: the files from huggingface.co at their
+    /// fixed revisions through `BetterTranscription`, each checked by its
+    /// SHA-256, into the self-test's scratch; how long it took.
+    private func betterTranscriptionRealDownload() async {
+        let name = "Recorder phase 4: Better transcription's real download from huggingface.co (1.6 GB), each file's SHA-256 checked"
+        BetterTranscription.testFiles = nil
+        let folder = recorderScratch.appendingPathComponent("real-models", isDirectory: true)
+        let store = BetterTranscription(folder: folder, files: BetterTranscription.files)
+        let start = ContinuousClock.now
+        var lines: [String] = []
+        store.download()
+        // Under SelfTestWatchdog's limit without a check: this check
+        // reports, and removes its folder, not the watchdog.
+        let done = await waitUntil(timeout: 1700) {
+            if case .downloading(_, _, let line) = store.state, lines.last != line, lines.count < 400 { lines.append(line) }
+            if case .stopped = store.state { return true }
+            return store.state == .downloaded || store.state == .wrongFile
+        } != nil
+        let minutes = (ContinuousClock.now - start).milliseconds / 60_000
+        let ready = BetterTranscription.isReady(in: folder, files: BetterTranscription.files)
+        record(name, done && ready && store.state == .downloaded,
+               String(format: "%@ in %.1f min; lines said: %@ … %@", store.line, minutes, lines.dropFirst(5).first ?? "", lines.last ?? ""), nil)
+        try? FileManager.default.removeItem(at: folder)
+    }
+
+    /// whisper (Better transcription, the default once downloaded) on
+    /// every played-back call through the recorder's own transcript: the
+    /// names in its prompt (the attendees, then the user's and the
+    /// contacts' as Dictate orders them), its VAD, its two failures taken
+    /// out, the voices told apart. Written for the kit's scorers
+    /// (`voices/app-w`). For the echo check: the other side's words and
+    /// the number of the user's on the clean track.
+    private func whisperOnTheCalls() async -> ([String: (them: [TranscriptWord], me: Int)], URL?) {
+        let name = "Recorder phase 4: whisper (the default once downloaded) on the played-back calls as skil.li runs it: the names in its prompt, its VAD, its two failures taken out, the voices told apart"
+        let calls = Self.playedBackCalls
+        guard !calls.isEmpty else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "no played-back calls on this Mac", latencyMs: nil))
+            return ([:], nil)
+        }
+        let recordings = Recordings(root: recorderScratch.appendingPathComponent("whisper-recordings", isDirectory: true))
+        let out = context.snapshotDirectory?.appendingPathComponent("voices", isDirectory: true)
+        var them: [String: (them: [TranscriptWord], me: Int)] = [:]
+        var kept: URL?
+        var rows: [String] = []
+        // The calls that went through (rows also say those that did not).
+        var processed = 0
+        var errors = (me: 0.0, meWords: 0, them: 0.0, themWords: 0)
+        var given = (right: 0, of: 0)
+        var engines: Set<String> = []
+        var audio = 0.0, wall = 0.0
+        for call in calls {
+            guard let data = try? Data(contentsOf: call.appendingPathComponent("truth.json")),
+                  let truth = try? JSONDecoder().decode(CallTruth.self, from: data),
+                  let folder = try? recordings.makeFolder(title: call.lastPathComponent, started: .now) else { continue }
+            let converted = await Task.detached {
+                Self.m4a(from: call.appendingPathComponent("me.wav"), to: folder.appendingPathComponent(Speaker.me.file))
+                    && Self.m4a(from: call.appendingPathComponent("them.wav"), to: folder.appendingPathComponent(Speaker.them.file))
+            }.value
+            guard converted else { continue }
+            let user = truth.turns.first(where: \.me)?.speaker
+            // The contacts as the measurement had them (attendees first in
+            // vocab.txt); the user's own name first, as Dictate puts it.
+            let vocabulary = ((try? String(contentsOf: call.appendingPathComponent("vocab.txt"), encoding: .utf8)) ?? "")
+                .split(separator: "\n").map(String.init)
+            let attendees = (truth.attendees ?? []).filter { $0 != user }
+            var record = MeetingRecord(title: call.lastPathComponent, started: .now, language: truth.language == "fr" ? "fr-FR" : "en-US", recorder: nil)
+            record.attendees = attendees
+            record.state = .transcribing
+            let setup = MeetingTranscriber.Setup(standard: .whisper, whisperReady: true,
+                                                 contacts: [user].compactMap { $0 } + vocabulary.filter { !(truth.attendees ?? []).contains($0) })
+            let start = ContinuousClock.now
+            guard let done = try? await MeetingTranscriber.transcribe(folder, record: record, setup: setup, step: { _ in }),
+                  let transcript = recordings.transcript(folder) else {
+                rows.append("\(call.lastPathComponent): no transcript")
+                continue
+            }
+            let seconds = (ContinuousClock.now - start).milliseconds / 1000
+            wall += seconds
+            audio += 2 * (truth.seconds ?? 0)
+            try? recordings.write(done, to: folder)
+            engines.insert(done.engine ?? "none")
+            if call.lastPathComponent == "en01" { kept = folder }
+            let mine = transcript.lines.filter { $0.speaker.track == .me }, theirs = transcript.lines.filter { $0.speaker.track == .them }
+            them[call.lastPathComponent] = (theirs.flatMap(\.words), mine.flatMap(\.words).count)
+            let me = Self.errorsPerHundred(truth.turns.filter(\.me).map(\.text).joined(separator: " "), mine.map(\.text).joined(separator: " "))
+            let other = Self.errorsPerHundred(truth.turns.filter { !$0.me }.map(\.text).joined(separator: " "), theirs.map(\.text).joined(separator: " "))
+            errors.me += me.errors * Double(me.words) / 100
+            errors.meWords += me.words
+            errors.them += other.errors * Double(other.words) / 100
+            errors.themWords += other.words
+            let right = Self.attribution(transcript.lines, track: .them, turns: truth.turns)
+            given.right += right.right
+            given.of += right.of
+            processed += 1
+            rows.append(String(format: "%@ me %.1f them %.1f, %d voices, %.0f s", call.lastPathComponent, me.errors, other.errors,
+                               Set(theirs.map(\.speaker)).count, seconds))
+            if let out {
+                for (track, lines) in [("me", mine), ("them", theirs)] {
+                    Self.writeForScorers(lines.flatMap(\.words), text: lines.map(\.text).joined(separator: " "),
+                                         to: out.appendingPathComponent("app-w/\(call.lastPathComponent)/\(track)"), seconds: seconds / 2)
+                }
+            }
+        }
+        let me = 100 * errors.me / Double(max(1, errors.meWords)), other = 100 * errors.them / Double(max(1, errors.themWords))
+        let share = 100 * Double(given.right) / Double(max(1, given.of))
+        // Measured (whisper turbo, VAD, names): 10.8 per hundred words
+        // against macOS's 17.9; numbers are left out here, so the gate is
+        // loose, the kit's scorer gives the table.
+        let passed = processed == calls.count && engines == [TranscriptEngine.whisper.rawValue] && me <= 20 && other <= 15 && share >= 85
+        record(name, passed,
+               String(format: "%d calls (%.0f min of tracks in %.0f s, ×%.0f real time), engine %@; errors per hundred words me %.1f (%d words), them %.1f (%d words), numbers left out; the other side's words to the right person %.1f %%; %@",
+                      processed, audio / 60, wall, audio / max(1, wall), engines.sorted().joined(separator: ","), me, errors.meWords, other,
+                      errors.themWords, share, rows.joined(separator: "; ")),
+               nil)
+        return (them, kept)
+    }
+
+    /// A track's words as the kit's scorers read them: `<path>.json` with
+    /// its text (`score_engines.py`) and each word's time (`echo_dedup.py`),
+    /// `<path>.log` with the time it took.
+    nonisolated private static func writeForScorers(_ words: [TranscriptWord], text: String, to path: URL, seconds: Double) {
+        try? FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let json: [String: Any] = ["text": text, "words": words.map { ["w": $0.text, "start": $0.start, "end": $0.end] as [String: Any] }]
+        try? JSONSerialization.data(withJSONObject: json).write(to: path.appendingPathExtension("json"))
+        try? "wall \(seconds) rc 0\n".write(to: path.appendingPathExtension("log"), atomically: true, encoding: .utf8)
+    }
+
+    /// No headphones, with whisper (docs/meeting-recorder.md, "To check"):
+    /// the microphone's track with the other side heard again 12 and 20 dB
+    /// under (the measurement's `echo-12`, `echo-20`), its words' times on
+    /// the recording's clock (whisper.cpp adds its VAD's cuts back), then
+    /// the drop by word times against the Mac's sound. Written for
+    /// `echo_dedup.py`; here, the words left against the clean track's.
+    private func echoDropWithWhisper(_ them: [String: (them: [TranscriptWord], me: Int)]) async {
+        let name = "Recorder phase 4: no headphones with whisper: its word times on the recording's clock, the other side's words heard again dropped by word times"
+        let out = context.snapshotDirectory?.appendingPathComponent("voices", isDirectory: true)
+        var rows: [String] = []
+        var totals = (clean: 0, heard: 0, kept: 0)
+        for call in Self.playedBackCalls {
+            guard let (heard, clean) = them[call.lastPathComponent],
+                  let data = try? Data(contentsOf: call.appendingPathComponent("truth.json")),
+                  let truth = try? JSONDecoder().decode(CallTruth.self, from: data) else { continue }
+            let language = truth.language == "fr" ? "fr" : "en"
+            let attendees = (truth.attendees ?? []).filter { $0 != truth.turns.first(where: \.me)?.speaker }
+            for level in ["12", "20"] {
+                let track = recorderScratch.appendingPathComponent("\(call.lastPathComponent)-echo-\(level).m4a")
+                let converted = await Task.detached { Self.m4a(from: call.appendingPathComponent("echo-\(level).wav"), to: track) }.value
+                guard converted else { continue }
+                let start = ContinuousClock.now
+                guard let run = try? await TranscriberHelper.whisper(of: track, language: language, prompt: WhisperTranscript.prompt(
+                    attendees: attendees, contacts: [], language: language), progress: { _ in }) ?? nil else {
+                    rows.append("\(call.lastPathComponent) -\(level): no words")
+                    continue
+                }
+                let phrases = WhisperTranscript.phrases(of: run, attendees: attendees)
+                let (left, dropped) = MeetingTranscript.droppingEcho(phrases, heard: heard)
+                let words = phrases.flatMap { $0 }
+                if level == "12" {
+                    totals.clean += clean
+                    totals.heard += words.count
+                    totals.kept += left.flatMap { $0 }.count
+                }
+                rows.append("\(call.lastPathComponent) -\(level) dB: \(words.count) words, \(dropped) dropped")
+                if let out {
+                    Self.writeForScorers(words, text: MeetingTranscript.joined(words),
+                                         to: out.appendingPathComponent("app-w/\(call.lastPathComponent)/echo-\(level)"),
+                                         seconds: (ContinuousClock.now - start).milliseconds / 1000)
+                }
+            }
+        }
+        // A measurement (the spec's "To check"): the kit's echo_dedup.py
+        // gives the table from what is written here. The check: every call
+        // heard at both levels, and the drop by the words' times taking the
+        // user's transcript back under twice the clean track's (Measured
+        // with whisper's times off: the user's errors after the drop were
+        // 130 per hundred words, against 9 with headphones).
+        let ratio = Double(totals.kept) / Double(max(1, totals.clean))
+        let passed = totals.clean > 0 && rows.count == 2 * Self.playedBackCalls.count && !rows.contains { $0.contains("no words") } && ratio < 2
+        record(name, passed,
+               String(format: "-12 dB: %d words heard without headphones, %d left after the drop, the clean track %d (×%.2f); %@", totals.heard, totals.kept,
+                      totals.clean, ratio, rows.joined(separator: "; ")),
+               nil)
+    }
+
+    /// On en01's whisper transcript: Transcribe Again offers both engines,
+    /// Better transcription picked as it was, its languages; macOS picked
+    /// makes it with macOS's; the Record card's languages hold whisper's
+    /// (Welsh); Remove puts the model in the Trash, macOS's engine from
+    /// then on, ⌘Z brings it back.
+    private func whisperOfferedAndRemoved(_ folder: URL) async {
+        let name = "Recorder phase 4: Transcribe Again offers Better transcription and macOS, each used as picked; whisper's languages listed; Remove to the Trash with the undo card, ⌘Z brings it back"
+        guard let center = context.recorder(), let store = context.betterTranscription() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        center.open(folder)
+        guard let controller = center.window(for: folder) else {
+            record(name, false, "no window", nil)
+            return
+        }
+        controller.showTranscribeAgain()
+        guard let panel = controller.againPanel, await waitUntil(timeout: 5, { panel.isShown && panel.isLoaded }) != nil else {
+            record(name, false, "no panel", nil)
+            return
+        }
+        let engines = panel.shownEngines, whisperLanguages = panel.shownLanguages.count
+        if let directory = context.snapshotDirectory, let window = panel.window {
+            for (suffix, appearance) in GlassCheck.appearances {
+                window.appearance = appearance
+                controller.nsWindow.appearance = appearance
+                await pause(400)
+                if let png = await WindowCapture.png(of: window) { try? png.write(to: directory.appendingPathComponent("recorder-transcribe-again-whisper-\(suffix).png")) }
+            }
+            window.appearance = nil
+            controller.nsWindow.appearance = nil
+        }
+        await panel.pick(language: "en-US", engine: .macOS)
+        panel.press()
+        let byMacOS = await waitUntil(timeout: 120) { center.recordings.read(folder)?.engine == TranscriptEngine.macOS.rawValue && !controller.shownLines.isEmpty } != nil
+        controller.close()
+        let welsh = await MeetingTranscriber.languages().contains { $0.id == "cy" }
+        // Remove: the undo card; ⌘Z puts it back.
+        guard await focusTestWindow() else {
+            record(name, false, "the test window did not take the keyboard", nil)
+            return
+        }
+        let popover = context.aiActions.popover
+        try? context.deletes?.betterTranscription(store)
+        let removed = await waitUntil(timeout: 2) { !BetterTranscription.isReady() && popover.isVisible } != nil
+        let card = popover.shownTitle
+        await pressKey("z", flags: .maskCommand)
+        let back = await waitUntil(timeout: 5) { BetterTranscription.isReady() && store.state == .downloaded } != nil
+        let passed = engines == ["macOS", "Better transcription"] && whisperLanguages >= 90 && byMacOS && welsh && removed && card == "Better Transcription Removed" && back
+        record(name, passed,
+               "engines \(engines), Better transcription's languages \(whisperLanguages); macOS as picked \(byMacOS); Welsh listed \(welsh); removed \(removed) (card “\(card)”), ⌘Z back \(back)",
+               nil)
+    }
+
     private func recorderChecks() async {
         let (consent, language) = (context.preferences.recorderConsentShown, context.preferences.voiceLanguage)
         defer {
@@ -26938,6 +27338,111 @@ private final class ServedRequests: @unchecked Sendable {
 
     var requests: [LoopbackServer.Request] { lock.withLock { list } }
     var paths: [String] { requests.map { $0.target.split(separator: "?").first.map(String.init) ?? $0.target } }
+}
+
+/// A stand-in for huggingface.co (Better transcription's download): files
+/// by name on 127.0.0.1, with ranges (a download resumed) and as slow as
+/// asked; the ranges asked kept.
+private final class ModelStandIn: @unchecked Sendable {
+    private let listener: NWListener
+    private let files: [String: URL]
+    private let lock = NSLock()
+    private var boundPort: UInt16?
+    private var asked: [Int64] = []
+    private var rate: Double?
+
+    var port: UInt16? { lock.withLock { boundPort } }
+    /// Where each request started (0: the whole file).
+    var ranges: [Int64] { lock.withLock { asked } }
+    /// Bytes a second at most; nil: as fast as it goes.
+    var bytesPerSecond: Double? {
+        get { lock.withLock { rate } }
+        set { lock.withLock { rate = newValue } }
+    }
+
+    init?(files: [String: URL]) {
+        self.files = files
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
+        guard let listener = try? NWListener(using: parameters) else { return nil }
+        self.listener = listener
+        listener.stateUpdateHandler = { [weak self] state in
+            guard case .ready = state, let port = listener.port?.rawValue, let self else { return }
+            self.lock.withLock { self.boundPort = port }
+        }
+        listener.newConnectionHandler = { [weak self] connection in
+            connection.start(queue: .global())
+            self?.receive(connection, buffer: Data())
+        }
+        listener.start(queue: .global())
+    }
+
+    private func receive(_ connection: NWConnection, buffer: Data) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+            var buffer = buffer
+            if let data { buffer.append(data) }
+            guard let end = buffer.range(of: Data("\r\n\r\n".utf8)) else {
+                if isComplete || error != nil { connection.cancel() } else { self?.receive(connection, buffer: buffer) }
+                return
+            }
+            self?.answer(String(decoding: buffer[..<end.lowerBound], as: UTF8.self), on: connection)
+        }
+    }
+
+    private func answer(_ head: String, on connection: NWConnection) {
+        let lines = head.components(separatedBy: "\r\n")
+        let parts = lines.first?.split(separator: " ") ?? []
+        let path = parts.count > 1 ? String(parts[1].dropFirst()) : ""
+        guard let url = files[path], let handle = try? FileHandle(forReadingFrom: url),
+              let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize.map(Int64.init) else {
+            connection.send(content: Data("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".utf8),
+                            completion: .contentProcessed { _ in connection.cancel() })
+            return
+        }
+        var from: Int64 = 0
+        if let range = lines.first(where: { $0.lowercased().hasPrefix("range:") }), let equals = range.firstIndex(of: "=") {
+            from = Int64(range[range.index(after: equals)...].split(separator: "-").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? "") ?? 0
+        }
+        lock.withLock { asked.append(from) }
+        var header = "HTTP/1.1 \(from > 0 ? "206 Partial Content" : "200 OK")\r\nContent-Type: application/octet-stream\r\nContent-Length: \(size - from)\r\n"
+            + "Accept-Ranges: bytes\r\nETag: \"selftest-\(path)\"\r\nLast-Modified: Mon, 26 Oct 2026 00:00:00 GMT\r\nConnection: close\r\n"
+        if from > 0 { header += "Content-Range: bytes \(from)-\(size - 1)/\(size)\r\n" }
+        header += "\r\n"
+        try? handle.seek(toOffset: UInt64(from))
+        connection.send(content: Data(header.utf8), completion: .contentProcessed { [weak self] error in
+            guard error == nil, let self else {
+                try? handle.close()
+                connection.cancel()
+                return
+            }
+            self.stream(handle, on: connection, started: Date(), sent: 0)
+        })
+    }
+
+    private func stream(_ handle: FileHandle, on connection: NWConnection, started: Date, sent: Int64) {
+        let chunk = (try? handle.read(upToCount: 1 << 20)) ?? Data()
+        guard !chunk.isEmpty else {
+            try? handle.close()
+            connection.send(content: nil, contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { _ in connection.cancel() })
+            return
+        }
+        if let rate = bytesPerSecond {
+            let due = Double(sent + Int64(chunk.count)) / rate - Date().timeIntervalSince(started)
+            if due > 0 { usleep(useconds_t(min(due, 1) * 1_000_000)) }
+        }
+        connection.send(content: chunk, completion: .contentProcessed { [weak self] error in
+            guard error == nil, let self else {
+                try? handle.close()
+                connection.cancel()
+                return
+            }
+            self.stream(handle, on: connection, started: started, sent: sent + Int64(chunk.count))
+        })
+    }
+
+    func stop() {
+        listener.cancel()
+    }
 }
 
 /// A one-route HTTP server on 127.0.0.1 for the webhook check: keeps the

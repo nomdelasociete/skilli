@@ -105,7 +105,9 @@ final class RecordCard {
         let asksMicrophone = AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined
         Task {
             language = await MeetingTranscriber.defaultLanguage(asked: askedLanguage)
-            if languages.isEmpty { languages = await MeetingTranscriber.languages() }
+            // Read each time: Better transcription's languages come and go
+            // with its download.
+            languages = await MeetingTranscriber.languages()
             guard content == .record else { return }
             view.setLanguages(languages, picked: language)
             updateLanguageNote()
@@ -289,7 +291,7 @@ final class RecordCard {
     }
 
     private func updateLanguageNote() {
-        let known = languages.contains { $0.id == language }
+        let known = MeetingTranscriber.canTranscribe(language, in: languages)
         view.setLanguageNote(known || languages.isEmpty ? nil
                              : "\(MeetingTranscriber.shortName(of: language)) can't be transcribed on this Mac yet: the recording is kept, its transcript waits.")
     }

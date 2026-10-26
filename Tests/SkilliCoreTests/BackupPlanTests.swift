@@ -57,7 +57,7 @@ final class BackupPlanTests: XCTestCase {
 
     func testTheClipboardHistoryRecordingsAndTheirWordsAreNeverBackedUp() {
         XCTAssertEqual(BackupPlan.neverCopied, [
-            "mcp.sock", "Clipboard", "Recordings",
+            "mcp.sock", "Clipboard", "Recordings", "Models",
             "recordings-index.sqlite", "recordings-index.sqlite-wal", "recordings-index.sqlite-shm", "recordings-index.sqlite-journal",
         ])
     }

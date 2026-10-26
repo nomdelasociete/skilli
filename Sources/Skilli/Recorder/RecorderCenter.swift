@@ -36,6 +36,11 @@ final class RecorderCenter {
     /// The user's own name (My Card in Contacts, when allowed): offered
     /// first for Me in a recording's window.
     var ownName: () async -> String? = { nil }
+    /// The contacts' names in Dictate's order: Better transcription's
+    /// prompt after the attendees (never sent anywhere).
+    var contactNames: () async -> [String] = { [] }
+    /// A pane of Settings (Better transcription's line in a window).
+    var openSettings: (SettingsPane) -> Void = { _ in }
 
     /// Why a recording cannot start now, said: nil when it can.
     private var notNow: String? {
@@ -179,6 +184,13 @@ final class RecorderCenter {
         recorder.onFinished = { [weak self] folder in self?.finished(folder) }
         recorder.onStoppedByItself = { [weak self] line in self?.notify(line) }
         recorder.onTranscriptFailed = { [weak self] line in self?.notify(line) }
+        recorder.transcriptSetup = { [weak self] in
+            guard let self else { return MeetingTranscriber.Setup() }
+            let ready = BetterTranscription.isReady()
+            return MeetingTranscriber.Setup(standard: TranscriptEngine.standard(preferred: TranscriptEngine(stored: self.preferences.recorderEngine),
+                                                                                whisperReady: ready),
+                                            whisperReady: ready, contacts: ready ? await self.contactNames() : [])
+        }
         recorder.onLeftUnfinished = { [weak self] folder, record in self?.offerAtOnce(folder, record: record) }
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append(workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
@@ -220,6 +232,11 @@ final class RecorderCenter {
     var isCardVisible: Bool { card.isVisible }
     var menuBar: RecorderIndicator { indicator }
     func window(for folder: URL) -> RecordingWindowController? { windows[Self.key(folder)] }
+
+    /// Better transcription downloaded: no window offers it any more.
+    func betterTranscriptionReady() {
+        for window in windows.values { window.hideBetterHint() }
+    }
     var openWindows: [RecordingWindowController] { Array(windows.values) }
 
     /// The launcher's row for the recording on now.
@@ -769,6 +786,20 @@ final class RecorderCenter {
         }
         window.onEdited = { _ in NotificationCenter.default.post(name: Recordings.changed, object: nil) }
         window.onImport = { [weak self] files in self?.importFiles(files) }
+        window.engines = {
+            [(.macOS, nil), (.whisper, BetterTranscription.isReady() ? nil : "Better transcription isn't downloaded: Settings → Recorder offers it.")]
+        }
+        window.languages = { engine in await MeetingTranscriber.languages(for: engine) }
+        window.onOpenSettings = { [weak self] in self?.openSettings(.recorder) }
+        window.betterHint = { [weak self] record in
+            // Taught once (docs/meeting-recorder-views.md, phase 4): the first
+            // window on a transcript macOS's engine made, Better
+            // transcription not downloaded; then never again.
+            guard let self, !self.preferences.recorderBetterHintShown, TranscriptEngine(stored: record.engine) == .macOS,
+                  !BetterTranscription.isReady() else { return false }
+            self.preferences.recorderBetterHintShown = true
+            return true
+        }
         windows[Self.key(folder)] = window
         return window
     }
@@ -776,7 +807,7 @@ final class RecorderCenter {
     /// Transcribe Again (phase 4): the language and the engine as picked;
     /// the transcript before stays until the new one is written.
     private func transcribeAgain(_ folder: URL, record: MeetingRecord, engine: TranscriptEngine) {
-        recorder.transcribe(folder, record: record, again: true)
+        recorder.transcribe(folder, record: record, again: true, engine: engine)
     }
 
     // MARK: - Import (phase 4)

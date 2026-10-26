@@ -32,27 +32,86 @@ enum MeetingTranscriber {
 
     /// The language a recording starts in: Ask's (Settings → Ask), else
     /// the keyboard's, else the Mac's first, as Ask by Voice hears it. The
-    /// first this Mac can transcribe; none: the first asked, kept as it is
+    /// first this Mac can transcribe (macOS's engine, or Better
+    /// transcription once downloaded); none: the first asked, kept as it is
     /// (the transcript waits).
     @MainActor
     static func defaultLanguage(asked: String) async -> String {
         let wanted = [asked, VoiceInput.keyboardLanguage, Locale.preferredLanguages.first].compactMap { $0 }.filter { !$0.isEmpty }
         for identifier in wanted {
             if let locale = await locale(for: identifier) { return locale.identifier(.bcp47) }
+            if BetterTranscription.isReady(), WhisperTranscript.code(for: identifier) != nil { return identifier }
         }
         return wanted.first ?? "en-US"
     }
 
-    /// The engine's locale for a language, nil when this Mac cannot
-    /// transcribe it.
+    /// macOS's engine's locale for a language, nil when it cannot
+    /// transcribe it on this Mac.
     static func locale(for identifier: String) async -> Locale? {
         await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: identifier))
     }
 
-    /// Every language this Mac transcribes, by name.
+    /// Every language this Mac transcribes, by name: macOS's engine's,
+    /// and Better transcription's once downloaded.
     static func languages() async -> [(id: String, name: String)] {
-        let locales = await SpeechTranscriber.supportedLocales
-        return locales.map { ($0.identifier(.bcp47), name(of: $0.identifier(.bcp47))) }.sorted { $0.name < $1.name }
+        let apple = await languages(for: .macOS)
+        guard BetterTranscription.isReady() else { return apple }
+        let codes = Set(apple.compactMap { Locale(identifier: $0.id).language.languageCode?.identifier })
+        return (apple + (await languages(for: .whisper)).filter { !codes.contains($0.id) }).sorted { $0.name < $1.name }
+    }
+
+    /// The languages one engine transcribes on this Mac, by name.
+    static func languages(for engine: TranscriptEngine) async -> [(id: String, name: String)] {
+        switch engine {
+        case .macOS:
+            let locales = await SpeechTranscriber.supportedLocales
+            return locales.map { ($0.identifier(.bcp47), name(of: $0.identifier(.bcp47))) }.sorted { $0.name < $1.name }
+        case .whisper:
+            return WhisperTranscript.languages.map { ($0, name(of: $0)) }.sorted { $0.name < $1.name }
+        }
+    }
+
+    /// `language` among `languages` (the same id, or Better
+    /// transcription's code for it: "it-IT" in its "it", "nb-NO" in its
+    /// "no").
+    static func canTranscribe(_ language: String, in languages: [(id: String, name: String)]) -> Bool {
+        let code = WhisperTranscript.code(for: language)
+        return languages.contains { $0.id == language || ($0.id == code && !$0.id.contains("-")) }
+    }
+
+    /// What the engines need besides the recording: the default, whether
+    /// Better transcription is downloaded, the contacts' names for its
+    /// prompt.
+    struct Setup: Sendable {
+        var standard: TranscriptEngine = .macOS
+        var whisperReady = false
+        var contacts: [String] = []
+    }
+
+    /// The engine a transcript is made with (docs/meeting-recorder.md,
+    /// "A language this Mac cannot transcribe"): the one picked, as picked,
+    /// or a failure saying why it cannot be; none picked, the default,
+    /// then the others, the first that has the language.
+    static func engine(for language: String, picked: TranscriptEngine?, setup: Setup) async throws -> TranscriptEngine {
+        func has(_ engine: TranscriptEngine) async -> Bool {
+            switch engine {
+            case .macOS: await locale(for: language) != nil
+            case .whisper: setup.whisperReady && WhisperTranscript.code(for: language) != nil
+            }
+        }
+        if let picked {
+            if picked == .whisper, !setup.whisperReady {
+                throw Failure(message: "Better transcription isn't downloaded: Settings → Recorder offers it.")
+            }
+            guard await has(picked) else {
+                throw Failure(message: "\(name(of: language)) can't be transcribed by \(picked.title) on this Mac.")
+            }
+            return picked
+        }
+        for engine in TranscriptEngine.order(standard: setup.standard, whisperReady: setup.whisperReady) {
+            if await has(engine) { return engine }
+        }
+        throw Failure(message: "\(name(of: language)) can't be transcribed on this Mac yet.")
     }
 
     /// "English (United States)", "French (France)".
@@ -69,11 +128,25 @@ enum MeetingTranscriber {
 
     /// Both tracks of `folder` transcribed, put together and written; the
     /// record as it is then (`done`, its engine and the words dropped).
-    static func transcribe(_ folder: URL, record: MeetingRecord, step: @escaping @Sendable (Step) -> Void) async throws -> MeetingRecord {
-        guard let locale = await locale(for: record.language) else {
-            throw Failure(message: "\(name(of: record.language)) can't be transcribed on this Mac yet.")
+    static func transcribe(_ folder: URL, record: MeetingRecord, picked: TranscriptEngine? = nil, setup: Setup = Setup(),
+                           step: @escaping @Sendable (Step) -> Void) async throws -> MeetingRecord {
+        let engine = try await self.engine(for: record.language, picked: picked, setup: setup)
+        let locale = await locale(for: record.language)
+        if engine == .macOS, let locale { try await install(locale, step: step) }
+        let prompt = WhisperTranscript.prompt(attendees: record.attendees, contacts: setup.contacts, language: record.language)
+        let words: @Sendable (URL, @escaping @Sendable (Double) -> Void) async throws -> [[TranscriptWord]] = { url, progress in
+            switch engine {
+            case .macOS:
+                guard let locale else { return [] }
+                return try await phrases(of: url, locale: locale, progress: progress)
+            case .whisper:
+                guard let run = try await TranscriberHelper.whisper(of: url, language: WhisperTranscript.code(for: record.language) ?? "en",
+                                                                     prompt: prompt, progress: progress) else {
+                    throw Failure(message: "This build has no Better transcription.")
+                }
+                return WhisperTranscript.phrases(of: run, attendees: record.attendees)
+            }
         }
-        try await install(locale, step: step)
         let me = folder.appendingPathComponent(Speaker.me.file), them = folder.appendingPathComponent(Speaker.them.file)
         // A track never on (in person, the Mac's sound) is silence: left out.
         let unused = Set(record.unused ?? [])
@@ -82,12 +155,10 @@ enum MeetingTranscriber {
         }
         let total = max(1, lengths.reduce(0, +))
         let split = splitTrack(record)
-        let words = split == nil ? 1 : 1 - voicesShare
+        let share = split == nil ? 1 : 1 - voicesShare
         step(.transcribing(0))
-        let mine = unused.contains(.me) ? []
-            : try await phrases(of: me, locale: locale) { done in step(.transcribing(words * done * lengths[0] / total)) }
-        let theirs = unused.contains(.them) ? []
-            : try await phrases(of: them, locale: locale) { done in step(.transcribing(words * (lengths[0] + done * lengths[1]) / total)) }
+        let mine = unused.contains(.me) ? [] : try await words(me) { done in step(.transcribing(share * done * lengths[0] / total)) }
+        let theirs = unused.contains(.them) ? [] : try await words(them) { done in step(.transcribing(share * (lengths[0] + done * lengths[1]) / total)) }
         let (kept, dropped) = MeetingTranscript.droppingEcho(mine, heard: theirs.flatMap { $0 })
         var voiced = kept.map { (Voice.me, $0) } + theirs.map { (Voice.them, $0) }
         var names = MeetingVoices.names(of: [.me, .them])
@@ -95,7 +166,7 @@ enum MeetingTranscriber {
             let phrases = split == .me ? kept : theirs
             let id: (Int) -> Voice = split == .me ? { Voice.single($0) } : { Voice.them($0) }
             let track = folder.appendingPathComponent(split.file)
-            let wordsDone: Double = words
+            let wordsDone: Double = share
             let progress: @Sendable (Double) -> Void = { done in step(.transcribing(wordsDone + (1 - wordsDone) * done)) }
             let stretches = await voices(of: track, progress: progress)
             var (told, found) = MeetingVoices.split(phrases, stretches: stretches ?? [], id: id)
@@ -110,14 +181,14 @@ enum MeetingTranscriber {
         let lines = MeetingTranscript.lines(voiced)
         var done = record
         done.state = .done
-        done.engine = engine
+        done.engine = engine.rawValue
         done.echoDropped = dropped
         done.recorder = nil
         done.edited = nil
         done.speakers = MeetingVoices.keepingGiven(record.speakers, fresh: names.merging([Voice.me.rawValue: Speaker.me.title]) { a, _ in a })
-        let file = MeetingTranscript.File(language: record.language, engine: engine, lines: lines)
+        let file = MeetingTranscript.File(language: record.language, engine: engine.rawValue, lines: lines)
         try replaceTranscript(in: folder, json: file.encoded(), markdown: Data(markdown(done, lines: lines).utf8))
-        Log.trace("Recorder: transcript of “\(record.title)”: \(lines.count) lines, \(dropped) words heard again left out")
+        Log.trace("Recorder: transcript of “\(record.title)” (\(engine.rawValue)): \(lines.count) lines, \(dropped) words heard again left out")
         return done
     }
 
