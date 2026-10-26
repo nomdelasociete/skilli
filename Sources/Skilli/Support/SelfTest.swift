@@ -24217,10 +24217,17 @@ final class SelfTest {
         // The webcam's row: on, its picture live.
         _ = await clickCardRow(center, .webcam)
         let webcamOn = await waitUntil(timeout: 3) { view.webcamLine == "FaceTime HD Camera" && center.recorder.pictures.webcam.sink.latestPicture != nil } != nil
-        // The screen's row: no meeting's window, its list opens; the slides picked.
+        // The screen's row: no meeting's window, its list opens; the slides
+        // picked. A list that holds the test's own steps is closed in 8 s.
+        let escape = DispatchWorkItem {
+            let source = CGEventSource(stateID: .hidSystemState)
+            for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap) }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 8, execute: escape)
         _ = await clickCardRow(center, .screen)
         await pause(700)
         let (picked, listed) = await pickInOpenMenu("skil.li · Slides")
+        escape.cancel()
         let screenOn = await waitUntil(timeout: 4) { view.screenLine == "skil.li · Slides" && center.recorder.pictures.screen.sink.latestPicture != nil } != nil
         await captureRecordCard(center, as: "recorder-pictures-card")
         guard webcamOn, screenOn, await recordCardHasKeys(center, name) else {

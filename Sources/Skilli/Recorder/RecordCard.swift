@@ -207,7 +207,13 @@ final class RecordCard {
     /// opens under its row.
     func showWindows() {
         guard content == .record, let row = view.row(.screen) else { return }
-        showWindows(under: row)
+        // Opened from the run loop, as a click opens one, never from the
+        // task that asked: a menu runs its own loop until it closes, and
+        // the main actor's other tasks wait for the one it was opened from
+        // (measured: the card's task held the self-test for 20 minutes).
+        RunLoop.main.perform(inModes: [.common]) { [weak self] in
+            MainActor.assumeIsolated { self?.showWindows(under: row) }
+        }
     }
 
     /// macOS asks a question (the camera, Screen Recording, Automation):
