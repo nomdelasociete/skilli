@@ -404,8 +404,9 @@ final class RecorderCenter {
     /// off for a click.
     private func startScreenForCard(_ reading: MeetingMoment.Reading) {
         guard reading.sources.screen else { return }
+        // This card's, taken now (before another card can open).
+        let asked = lookupMoment
         Task {
-            let asked = lookupMoment
             let found = await findMeetingWindow(reading)
             // Another card opened meanwhile (this one closed): not its window.
             guard still(asked) else { return }

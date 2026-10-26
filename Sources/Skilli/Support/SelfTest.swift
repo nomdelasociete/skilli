@@ -24745,6 +24745,7 @@ final class SelfTest {
         await picturesRecordSlidesInStep(center, slides, camera)
         if !aborted { await picturesSayAWindowWithoutPictures(center, slides) }
         if !aborted { await picturesCommandRDoesNotWaitForTheWindow(center, slides) }
+        if !aborted { await picturesLateWindowStaysWithItsCard(center, slides) }
         if !aborted { await picturesInAScratchChrome(center) }
     }
 
@@ -25067,6 +25068,43 @@ final class SelfTest {
                String(format: "recording after %.0f ms, the screen joined after %.2f s; screen.mp4's first picture at %@ s, %.2f s long (me %.2f s)",
                       sound * 1000, joined, first.map { String(format: "%.2f", $0) } ?? "none", lengths.screen, lengths.me),
                nil)
+    }
+
+    /// A card opened with the screen on (Settings → Recorder), its
+    /// meeting's window found only 2 s later; the card closed meanwhile and
+    /// another opened with the screen off: the late window never turns the
+    /// second card's screen on.
+    private func picturesLateWindowStaysWithItsCard(_ center: RecorderCenter, _ slides: SlidesWindow) async {
+        let name = "Recorder's pictures: a card's meeting window found after the card closed never turns on the screen of the card opened since"
+        guard let window = ScreenWindows.window(CGWindowID(slides.window.windowNumber)) else {
+            record(name, false, "the slides window is not in the window list", nil)
+            return
+        }
+        center.standInMicrophone(.none)
+        center.standInMeetingWindow = (window, .seconds(2))
+        defer {
+            center.standInMeetingWindow = nil
+            center.standInMicrophone(nil)
+            if center.isCardVisible { center.closeCardWithoutKeys() }
+        }
+        context.preferences.recorderWebcam = false
+        // Card A: the screen on by default, its window looked for.
+        context.preferences.recorderScreen = true
+        center.showCard(title: "Card A")
+        let first = await waitUntil(timeout: 3) { center.isCardVisible && center.recorder.phase == .listening } != nil
+        await pause(300)
+        center.closeCardWithoutKeys()
+        _ = await waitUntil(timeout: 2) { center.recorder.phase == .idle }
+        // Card B: the screen off; A's lookup answers while it is open.
+        context.preferences.recorderScreen = false
+        center.showCard(title: "Card B")
+        let second = await waitUntil(timeout: 3) { center.isCardVisible && center.recorder.phase == .listening } != nil
+        await pause(2600)
+        let screenOn = center.recorder.sources.screen || center.recorder.pictures.screen.window != nil
+        let line = center.cardView.screenLine
+        center.closeCardWithoutKeys()
+        record(name, first && second && !screenOn && line == "Off",
+               "card A shown \(first), card B shown \(second); 2.6 s later card B's screen: on \(screenOn), its row “\(line)”", nil)
     }
 
     /// A scratch Chrome showing a meeting's page: its window recorded,
