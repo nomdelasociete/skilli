@@ -17567,12 +17567,18 @@ final class SelfTest {
         let preferences = context.preferences
         let learned = learner.placements
         let (gap, learning, usual, never) = (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces, preferences.windowNeverPlace)
+        let marker = Int.random(in: 1000...9999)
+        let files = ["on", "off"].map { FileManager.default.temporaryDirectory.appendingPathComponent("skilli-usual-\($0)-\(marker).txt") }
+        // Put back on every way out, early returns included.
+        defer {
+            for file in files { try? FileManager.default.removeItem(at: file) }
+            learner.restore(learned)
+            (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces, preferences.windowNeverPlace) = (gap, learning, usual, never)
+        }
         preferences.windowGap = 0
         preferences.windowLearning = true
         // Never place would rightly leave TextEdit alone.
         preferences.windowNeverPlace.removeAll { $0 == bundleID }
-        let marker = Int.random(in: 1000...9999)
-        let files = ["on", "off"].map { FileManager.default.temporaryDirectory.appendingPathComponent("skilli-usual-\($0)-\(marker).txt") }
         for file in files { try? "usual".write(to: file, atomically: true, encoding: .utf8) }
         func window(_ file: URL) -> AXUIElement? {
             guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return nil }
@@ -17638,9 +17644,6 @@ final class SelfTest {
         let leftAlone = opened && offFrame.map { !WindowLayout.matches($0, spot) } ?? false
         await quit()
 
-        for file in files { try? FileManager.default.removeItem(at: file) }
-        learner.restore(learned)
-        (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces, preferences.windowNeverPlace) = (gap, learning, usual, never)
         record(name, placed && leftAlone,
                "on: placed in the bottom right quarter: \(placed) (\(placedFrame.map(Self.describe) ?? "?")); off: opened \(opened), left where it opened: \(leftAlone) (\(offFrame.map(Self.describe) ?? "?"))",
                nil)
