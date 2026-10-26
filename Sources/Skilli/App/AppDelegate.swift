@@ -2065,7 +2065,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 recorder: { [weak self] in self?.recorderCenter },
                 recordings: { [weak self] in self?.recordingLibrary },
                 moveRecordings: { [weak self] folder in await self?.moveRecordings(to: folder) },
-                windowLearner: windowLearner
+                windowLearner: windowLearner,
+                betterTranscription: { [weak self] in self?.betterTranscription }
             ))
             SelfTest.emit(await test.run(scope: scope), to: outputPath)
             NSApp.terminate(nil)

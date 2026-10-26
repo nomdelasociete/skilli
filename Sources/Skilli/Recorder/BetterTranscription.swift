@@ -34,8 +34,10 @@ final class BetterTranscription {
 
     #if SKILLI_SELFTEST
     /// Self-test: the models' folder in its own scratch (the Mac's own
-    /// Better transcription left alone).
+    /// Better transcription left alone), and the files from a stand-in
+    /// server.
     nonisolated(unsafe) static var testFolder: URL?
+    nonisolated(unsafe) static var testFiles: [File]?
     #endif
 
     /// Where they are kept.
@@ -87,9 +89,13 @@ final class BetterTranscription {
     private var bytesPerSecond: Double?
     private let session: URLSession
 
-    init(folder: URL = BetterTranscription.standardFolder, files: [File] = BetterTranscription.files) {
+    init(folder: URL = BetterTranscription.standardFolder, files: [File]? = nil) {
         self.folder = folder
-        self.files = files
+        #if SKILLI_SELFTEST
+        self.files = files ?? Self.testFiles ?? Self.files
+        #else
+        self.files = files ?? Self.files
+        #endif
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 60
         session = URLSession(configuration: configuration)
