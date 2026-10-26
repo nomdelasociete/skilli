@@ -68,6 +68,7 @@ class CatalogTests(unittest.TestCase):
              'Needs Xcode Command Line Tools, jq from Homebrew', 'Shell'),
             ('#!/usr/bin/osascript -l JavaScript', '', [], 'Nothing to install', 'JavaScript for Automation'),
             ('#!/usr/bin/osascript', '', [], 'Nothing to install', 'AppleScript'),
+            ('#!/usr/bin/env osascript -l JavaScript', '', [], 'Nothing to install', 'JavaScript for Automation'),
         ]
         for shebang, extra, requires, label, language in cases:
             with self.subTest(shebang=shebang, extra=extra):
@@ -87,6 +88,16 @@ class CatalogTests(unittest.TestCase):
         page = (target / 'index.html').read_text()
         self.assertNotIn('<img/onerror', page)
         self.assertIn('&lt;img/onerror=x&gt; · MIT', page)
+
+    def test_the_readmes_requirement_examples_build(self):
+        readme = (build.ROOT / 'skillies/README.md').read_text()
+        examples = [line for line in readme.splitlines() if line.startswith('# @skilli.requires ')]
+        self.assertTrue(examples)
+        original = self.path.read_text()
+        for example in examples:
+            with self.subTest(example=example):
+                self.path.write_text(original.replace('# MIT License', example + '\n# MIT License', 1))
+                build.catalog(self.source)
 
     def test_unknown_requirements_and_relative_shebangs_fail(self):
         original = self.path.read_text()

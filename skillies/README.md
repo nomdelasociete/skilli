@@ -62,8 +62,13 @@ Tools; `#!/usr/bin/env node`: Node from Homebrew). What the script calls
 itself is said in its header, comma-separated:
 
 ```bash
-# @skilli.requires xcode-tools              # it runs git
-# @skilli.requires homebrew:ffmpeg          # it runs ffmpeg
+# It runs git:
+# @skilli.requires xcode-tools
+```
+
+```bash
+# It runs ffmpeg and jq from Homebrew:
+# @skilli.requires homebrew:ffmpeg, homebrew:jq
 ```
 
 `xcode-tools` and `homebrew:<formula>` are the only values; the website

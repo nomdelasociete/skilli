@@ -25,10 +25,11 @@ def program(code):
         return None
     name, rest = parts[0].rsplit('/', 1)[-1], parts[1:]
     if name == 'env':
-        words = [w for w in rest if not w.startswith('-') and '=' not in w]
-        if not words:
+        # Its options and assignments, then the command and the command's own words.
+        start = next((i for i, w in enumerate(rest) if not w.startswith('-') and '=' not in w), None)
+        if start is None:
             return None
-        name, rest = words[0].rsplit('/', 1)[-1], []
+        name, rest = rest[start].rsplit('/', 1)[-1], rest[start + 1:]
     return name, rest
 
 
