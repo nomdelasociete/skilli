@@ -134,6 +134,16 @@ final class WindowPlacementsTests: XCTestCase {
         XCTAssertNil(book.sure(for: .init(bundleID: browser, title: ""), displays: ["ext"], at: now))
     }
 
+    func testMayBeSureOnlyWithEnoughPlacementsOnTheseDisplays() {
+        var book = WindowPlacements()
+        for _ in 0..<2 { book.record(placed(.leftHalf), bundleID: editor, displays: ["ext"]) }
+        XCTAssertFalse(book.mayBeSure(bundleID: editor, displays: ["ext"]))
+        book.record(placed(.rightHalf), bundleID: editor, displays: ["ext"])
+        XCTAssertTrue(book.mayBeSure(bundleID: editor, displays: ["ext"]))
+        XCTAssertFalse(book.mayBeSure(bundleID: editor, displays: ["built-in"]))
+        XCTAssertFalse(book.mayBeSure(bundleID: browser, displays: ["ext"]))
+    }
+
     func testUntouched() {
         XCTAssertTrue(UsualPlace.untouched(appearedAgo: 0.4, keyAgo: 5, clickAgo: 5, mouseDown: false))
         XCTAssertFalse(UsualPlace.untouched(appearedAgo: 2, keyAgo: 5, clickAgo: 5, mouseDown: false))

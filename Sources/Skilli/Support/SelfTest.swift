@@ -511,6 +511,8 @@ final class SelfTest {
                 windowLayoutsAndSwitching,
                 displayPromptArrangesAsUsual,
                 usualPlacesOnLaunch,
+                usualPlacesForNewWindows,
+                usualPlacesObserversCost,
                 layoutOpensAFileAndALink,
                 layoutDeleteUndoes
             ])
@@ -5180,6 +5182,8 @@ final class SelfTest {
         await windowLayoutsAndSwitching()
         await displayPromptArrangesAsUsual()
         await usualPlacesOnLaunch()
+        await usualPlacesForNewWindows()
+        await usualPlacesObserversCost()
         await layoutOpensAFileAndALink()
         await browserTabsAreFound()
         await filesGatheredBySpotlight()
@@ -17566,6 +17570,180 @@ final class SelfTest {
 
     private static func describe(_ rect: CGRect) -> String {
         "\(Int(rect.minX)),\(Int(rect.minY)) \(Int(rect.width))×\(Int(rect.height))"
+    }
+
+    /// Usual places for new windows of an app already running
+    /// (docs/smart-layout.md, phase 4): TextEdit open, three learned
+    /// placements of two of its documents' windows in the bottom right
+    /// quarter, the setting on: the first opened in it goes there; the
+    /// setting off, the second is left where it opens.
+    private func usualPlacesForNewWindows() async {
+        let name = "Usual places, new windows: on, a window an app already open creates goes where it was put the last 3 times; off, it is left where it opens"
+        guard let learner = context.windowLearner else {
+            record(name, false, "no window learner", nil)
+            return
+        }
+        let bundleID = "com.apple.TextEdit"
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            record(name, false, "TextEdit not installed", nil)
+            return
+        }
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "TextEdit is already open (the test opens and quits its own)", latencyMs: nil))
+            return
+        }
+        let preferences = context.preferences
+        let learned = learner.placements
+        let (gap, learning, usual, never) = (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces, preferences.windowNeverPlace)
+        let marker = Int.random(in: 1000...9999)
+        let files = ["first", "new", "later"].map { FileManager.default.temporaryDirectory.appendingPathComponent("skilli-running-\($0)-\(marker).txt") }
+        defer {
+            for file in files { try? FileManager.default.removeItem(at: file) }
+            learner.restore(learned)
+            (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces, preferences.windowNeverPlace) = (gap, learning, usual, never)
+        }
+        preferences.windowGap = 0
+        preferences.windowLearning = true
+        preferences.windowNeverPlace.removeAll { $0 == bundleID }
+        for file in files { try? "running".write(to: file, atomically: true, encoding: .utf8) }
+        func window(_ file: URL) -> AXUIElement? {
+            guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return nil }
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute as CFString, &value) == .success,
+                  let list = value as? [AXUIElement] else { return nil }
+            return list.first { element in
+                var title: CFTypeRef?
+                AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &title)
+                return (title as? String)?.contains(file.deletingPathExtension().lastPathComponent) == true
+            }
+        }
+        func frame(_ element: AXUIElement) -> CGRect? {
+            var position: CFTypeRef?
+            var size: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &position) == .success,
+                  AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &size) == .success, let position, let size else { return nil }
+            var point = CGPoint.zero
+            var extent = CGSize.zero
+            AXValueGetValue(position as! AXValue, .cgPoint, &point)
+            AXValueGetValue(size as! AXValue, .cgSize, &extent)
+            return CGRect(origin: point, size: extent)
+        }
+        func open(_ file: URL) async {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            _ = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration)
+        }
+        defer {
+            for app in NSRunningApplication.runningApplications(withBundleIdentifier: bundleID) { app.terminate() }
+        }
+        // TextEdit running, with a first window nothing was learned for.
+        preferences.usualPlaces = true
+        await open(files[0])
+        guard await waitUntil(timeout: 6, { window(files[0]) != nil }) != nil else {
+            record(name, false, "TextEdit's first window never came", nil)
+            return
+        }
+        let displays = Displays.current()
+        guard let main = displays.first, let spot = WindowLayout.bottomRight.frame(in: main.visible) else {
+            record(name, false, "no display", nil)
+            return
+        }
+        // Learned: the two other documents' windows in the bottom right
+        // quarter, three times each; watching TextEdit follows.
+        let keys = displays.map { WindowPlacements.displayKey($0.fingerprint) }
+        var seeded = WindowPlacements()
+        for file in files.dropFirst() {
+            for hour in 1...3 {
+                seeded.record(.init(place: .of(spot, in: main.visible), display: keys[0], title: file.lastPathComponent, how: .key,
+                                    at: Date.now.addingTimeInterval(-Double(hour) * 3_600)),
+                              bundleID: bundleID, displays: keys)
+            }
+        }
+        learner.restore(seeded)
+        await pause(300)
+
+        await open(files[1])
+        let placed = await waitUntil(timeout: 6) { window(files[1]).flatMap(frame).map { WindowLayout.matches($0, spot) } ?? false } != nil
+        let placedFrame = window(files[1]).flatMap(frame)
+
+        preferences.usualPlaces = false
+        await pause(300)
+        await open(files[2])
+        let opened = await waitUntil(timeout: 6) { window(files[2]).flatMap(frame) != nil } != nil
+        await pause(1_500)
+        let laterFrame = window(files[2]).flatMap(frame)
+        let leftAlone = opened && laterFrame.map { !WindowLayout.matches($0, spot) } ?? false
+        record(name, placed && leftAlone,
+               "on: the new window in the bottom right quarter: \(placed) (\(placedFrame.map(Self.describe) ?? "?")); off: opened \(opened), left where it opened: \(leftAlone) (\(laterFrame.map(Self.describe) ?? "?"))",
+               nil)
+    }
+
+    /// Usual places for new windows (docs/smart-layout.md, phase 4,
+    /// "To check before building"): what a window-created observer on each
+    /// app costs skil.li at rest. A few small system apps opened hidden so
+    /// there are ~20 apps; 15 s at rest without observers, 15 s with one on
+    /// every app, footprint and CPU time read each time. Measured, reported;
+    /// it fails only past a clear budget (1 MB, 1 % CPU).
+    private func usualPlacesObserversCost() async {
+        let name = "Usual places observers: what a window-created observer on every app costs skil.li at rest (memory, CPU, wakeups)"
+        let extra = ["com.apple.calculator", "com.apple.Stickies", "com.apple.Dictionary", "com.apple.FontBook", "com.apple.ScriptEditor2",
+                     "com.apple.ActivityMonitor", "com.apple.Console", "com.apple.DiskUtility", "com.apple.grapher", "com.apple.Preview",
+                     "com.apple.TextEdit", "com.apple.Notes"]
+        var opened: [NSRunningApplication] = []
+        for bundleID in extra where NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty {
+            guard opened.count + NSWorkspace.shared.runningApplications.filter({ $0.activationPolicy == .regular }).count < 20,
+                  let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { continue }
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            configuration.hides = true
+            if let app = try? await NSWorkspace.shared.openApplication(at: url, configuration: configuration) { opened.append(app) }
+        }
+        defer {
+            for app in opened { app.terminate() }
+        }
+        _ = await waitUntil(timeout: 6) { opened.allSatisfy(\.isFinishedLaunching) }
+        await pause(3_000)
+        let apps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular && $0.processIdentifier != getpid() }
+
+        func rest(_ seconds: Int) async -> (memory: Double, cpu: Double, wakeups: UInt64)? {
+            guard let before = Metrics.cpu() else { return nil }
+            await pause(seconds * 1_000)
+            guard let after = Metrics.cpu(), let memory = Metrics.memoryFootprintMB() else { return nil }
+            return (memory, after.milliseconds - before.milliseconds, after.wakeups - before.wakeups)
+        }
+        guard let without = await rest(15) else {
+            record(name, false, "could not read skil.li's own usage", nil)
+            return
+        }
+        var observers: [(AXObserver, AXUIElement)] = []
+        let callback: AXObserverCallback = { _, _, _, _ in }
+        for app in apps {
+            var made: AXObserver?
+            guard AXObserverCreate(app.processIdentifier, callback, &made) == .success, let observer = made else { continue }
+            let element = AXUIElementCreateApplication(app.processIdentifier)
+            guard AXObserverAddNotification(observer, element, kAXWindowCreatedNotification as CFString, nil) == .success else { continue }
+            CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
+            observers.append((observer, element))
+        }
+        guard !observers.isEmpty else {
+            record(name, false, "no window-created observer could be added (\(apps.count) apps running): nothing measured", nil)
+            return
+        }
+        let with = await rest(15)
+        for (observer, element) in observers {
+            AXObserverRemoveNotification(observer, element, kAXWindowCreatedNotification as CFString)
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
+        }
+        guard let with else {
+            record(name, false, "could not read skil.li's own usage", nil)
+            return
+        }
+        let memory = with.memory - without.memory
+        let cpu = (with.cpu - without.cpu) / 15_000 * 100
+        record(name, memory < 1 && cpu < 1,
+               String(format: "%d apps running, %d observed: footprint %.2f → %.2f MB (%+.2f MB); CPU at rest %.1f → %.1f ms per 15 s (%+.2f %%); wakeups %llu → %llu",
+                      apps.count, observers.count, without.memory, with.memory, memory, without.cpu, with.cpu, cpu, without.wakeups, with.wakeups),
+               nil)
     }
 
     /// Usual places (docs/smart-layout.md, phase 3): with three learned

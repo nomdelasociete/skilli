@@ -316,8 +316,8 @@ using.
   files, the displays, the apps beside it); a layout saved for the apps
   open comes first. Again within 10 seconds puts them back. Place new
   windows where you usually put them (off by default; needs Learn where
-  you put windows): an app you open gets its window there, when skil.li
-  is sure and before you touch it.
+  you put windows): an app you open, or a new window of one already
+  open, goes there, when skil.li is sure and before you touch it.
 - **Switch Window**: see Launcher.
 - **Auto Quit**: quits the apps you stopped using after a delay you
   choose; never the front app, unsaved work, sound or a call.
