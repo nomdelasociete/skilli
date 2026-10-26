@@ -4,7 +4,8 @@ import SkilliCore
 /// Inline skillies the user put in the menu bar (Settings → Skillies): each
 /// shows its last line there, read again at its own refresh time (10 s at
 /// least, a minute when it says none), like the next meeting does. A click
-/// shows the whole line, Refresh Now, and Remove from Menu Bar.
+/// shows the whole line, Refresh Now, and Remove from Menu Bar. An emoji
+/// icon goes before the line; an image icon is the item's image.
 @MainActor
 final class MenuBarSkillies: NSObject {
     private let library: ScriptLibrary
@@ -24,6 +25,11 @@ final class MenuBarSkillies: NSObject {
         items.compactMapValues { $0.button?.title }
     }
 
+    /// Self-test hook: the paths whose item draws an image icon.
+    var withImage: Set<String> {
+        Set(items.filter { $0.value.button?.image != nil }.keys)
+    }
+
     /// The menu bar matches `skilliesInMenuBar`: new ones appear and are
     /// read at once, removed ones go. Only inline skillies with no argument.
     func apply() {
@@ -32,7 +38,9 @@ final class MenuBarSkillies: NSObject {
         for path in items.keys where wanted[path] == nil { remove(path) }
         for (path, command) in wanted where items[path] == nil {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-            item.button?.title = command.icon.isEmpty ? command.title : "\(command.icon) \(command.title)"
+            item.button?.title = Self.titled(command.title, command)
+            item.button?.image = Self.image(command)
+            item.button?.imagePosition = .imageLeading
             items[path] = item
             refresh(command)
             let seconds = TimeInterval(max(10, command.refreshSeconds ?? 60))
@@ -66,7 +74,7 @@ final class MenuBarSkillies: NSObject {
             let line = run.map { ScriptCommand.lastLine($0.output) }.flatMap { $0.isEmpty ? nil : $0 }
                 ?? (run == nil ? "\(command.title) did not answer" : command.title)
             lines[command.path] = line
-            item.button?.title = Self.short(command.icon.isEmpty ? line : "\(command.icon) \(line)")
+            item.button?.title = Self.short(Self.titled(line, command))
             item.menu = menu(for: command, line: line)
         }
     }
@@ -96,6 +104,19 @@ final class MenuBarSkillies: NSObject {
     @objc private func removeFromMenuBar(_ sender: NSMenuItem) {
         guard let path = sender.representedObject as? String else { return }
         preferences.skilliesInMenuBar.removeAll { $0 == path }
+    }
+
+    /// The line with its emoji before it; an image icon is drawn apart.
+    static func titled(_ line: String, _ command: ScriptCommand) -> String {
+        command.emojiIcon.map { "\($0) \(line)" } ?? line
+    }
+
+    /// Its image icon at menu bar size; nil for an emoji, none, or a file
+    /// that is not there.
+    private static func image(_ command: ScriptCommand) -> NSImage? {
+        guard let image = command.iconImagePath.flatMap(NSImage.init(contentsOfFile:)) else { return nil }
+        image.size = NSSize(width: 16, height: 16)
+        return image
     }
 
     /// The menu bar is narrow: 32 characters at most.
