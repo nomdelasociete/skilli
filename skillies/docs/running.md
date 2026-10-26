@@ -1,10 +1,12 @@
 # How a skillie runs
 
 What skil.li does when a skillie runs, whoever started it (the launcher, a
-key, Ask, an agent, a link, the menu bar). The code: `ScriptLibrary.run`
-(`Sources/Skilli/Scripts/ScriptLibrary.swift`), `ChildProcess.run`
-(`Sources/Skilli/AI/ClaudeCLI.swift`), `SkillieEnvironment`
-(`Sources/SkilliCore/SkillieEnvironment.swift`). Change this page with them.
+key, Ask, an agent, a link, the menu bar).
+
+<!-- Maintainers: the code is `ScriptLibrary.run`
+(Sources/Skilli/Scripts/ScriptLibrary.swift), `ChildProcess.run`
+(Sources/Skilli/AI/ClaudeCLI.swift) and `SkillieEnvironment`
+(Sources/SkilliCore/SkillieEnvironment.swift). Change this page with them. -->
 
 ## Before it starts
 

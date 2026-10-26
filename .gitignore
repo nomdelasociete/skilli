@@ -17,5 +17,6 @@ website/assets/font-preview/
 website/skillies/index.html
 website/skillies/catalog.json
 website/skillies/files/
+website/skillies/docs/
 __pycache__/
 *.blend1

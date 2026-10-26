@@ -11,7 +11,7 @@ A skillie reaches skil.li's features in two ways:
 
 Recipes for each feature (CleanShot, windows, Keep Awake, the recorder,
 Shortcuts…) are in the collection's guide:
-[Use skil.li's other features](../../skillies/README.md#use-skillis-other-features).
+[Use skil.li's other features](../README.md#use-skillis-other-features).
 This page is the reference.
 
 ## `"$SKILLI_CLI" call`
@@ -85,12 +85,12 @@ output, for Claude Code, Codex and other agents.
 ## Tools
 
 Every tool skil.li offers, by group. Arguments with `?` are optional.
-**reads**: only reads, never changes anything. The exact text agents see
-(descriptions, choices) is in the code: `Sources/Skilli/Tools/SkilliTools.swift`,
-`SettingTools.swift`, `ToolRightsTools.swift`.
+**reads**: only reads, never changes anything.
 
-`SkillieDocsTests` fails when a tool is missing from this page: add a line
-here when you add a tool.
+<!-- Maintainers: the exact text agents see (descriptions, choices) is in
+Sources/Skilli/Tools/SkilliTools.swift, SettingTools.swift and
+ToolRightsTools.swift. SkillieDocsTests fails when a tool is missing from this
+page: add a line here when you add a tool. -->
 
 ### Selection and clipboard
 

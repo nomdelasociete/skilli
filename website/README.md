@@ -20,6 +20,15 @@ Open http://127.0.0.1:8770/website/. Re-run the generator after editing a skilli
 `skillies/` is canonical; `website/skillies/index.template.html` controls layout.
 Generated HTML, JSON and download copies are ignored by Git.
 
+The skillies docs at `/skillies/docs/` are generated the same way from
+`skillies/docs/*.md` (`render_docs` in `build.py`, the Markdown subset in
+`markdown_pages.py`: headings, lists, fenced code, tables, inline code, bold,
+links). Layout: `website/skillies/docs.template.html` and `docs.css`. Edit the
+Markdown, never the generated pages. A new file there needs its line in `DOCS`
+(`website/tests/test_docs.py` says so). Links to another doc become links to
+its page; links to the rest of the repository go to GitHub. A
+`<!-- … -->` block is a note for maintainers, left out of the page.
+
 ## Build and checks
 
 ```sh
@@ -108,8 +117,8 @@ loaded; check the exported image dimensions, since browser zoom can change the c
 The source page is excluded from the production build.
 
 The build publishes `robots.txt` and `sitemap.xml` at the domain root. The sitemap
-contains the landing page, Skillies collection and legal page, not downloads or
-development previews. No tracking,
+contains the landing page, Skillies collection, the skillies docs and legal
+page, not downloads or development previews. No tracking,
 analytics or external font requests are added. If the domain or paths change,
 update the canonical URLs in all page heads, social metadata and sitemap/robots
 files together.
