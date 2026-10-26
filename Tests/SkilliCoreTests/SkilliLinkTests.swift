@@ -60,7 +60,8 @@ final class SkilliLinkTests: XCTestCase {
     /// The Record card from a link, its name given or not; the recording
     /// on now paused, resumed or stopped.
     func testRecordLinks() throws {
-        let links: [SkilliLink] = [.record(title: nil), .record(title: "Weekly sync & co"), .recording(.pause), .recording(.resume), .recording(.stop)]
+        let links: [SkilliLink] = [.record(title: nil), .record(title: "Weekly sync & co"), .recording(.pause), .recording(.resume), .recording(.stop),
+                                   .importRecording(file: nil), .importRecording(file: "/Users/me/Board call #2.m4a")]
         for link in links {
             XCTAssertEqual(SkilliLink.parse(link.url), link, link.url.absoluteString)
         }
@@ -69,6 +70,8 @@ final class SkilliLinkTests: XCTestCase {
         XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "SKILLI://Record?title=%20"))), .record(title: nil), "an empty name: the card's own")
         XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/STOP"))), .recording(.stop))
         XCTAssertNil(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/delete"))))
+        XCTAssertEqual(SkilliLink.importRecording(file: "/Users/me/Call.m4a").url.absoluteString, "skilli://record/import?file=%2FUsers%2Fme%2FCall%2Em4a")
+        XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/import?file="))), .importRecording(file: nil))
     }
 
     func testWhatIsNotALink() throws {
@@ -110,8 +113,8 @@ final class SkilliLinkTests: XCTestCase {
                 XCTAssertEqual(SkilliLink.skillie(at: path, among: [skillie.path], folders: folders), skillie.path)
             case .doHere:
                 XCTFail("no Catalog entry is a “do it here”: \(entry.id)")
-            case .record, .recording:
-                XCTFail("Record Meeting's link is its entry's: \(entry.id)")
+            case .record, .recording, .importRecording:
+                XCTFail("Record Meeting's and Import Recording's links are their entries': \(entry.id)")
             }
         }
         XCTAssertEqual(SkilliLink.link(for: FeatureCatalog.entries(input).first { $0.id == "quicklink:\(google.id.uuidString)" }!,

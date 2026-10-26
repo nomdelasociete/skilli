@@ -11,6 +11,7 @@ import Foundation
 ///     skilli://do?app=TextEdit&goal=…         "do it here" toward a goal, in that app (else the one in front)
 ///     skilli://record?title=Weekly%20sync     the Record card, that name in it (nothing recorded before ↩)
 ///     skilli://record/stop                    the recording on now: pause, resume or stop (asked first)
+///     skilli://record/import?file=/Users/me/Call.m4a  Import Recording's panel, on that file (imported on ↩)
 ///
 /// `skilli://commands/import` stays `CommandLink`'s.
 public enum SkilliLink: Equatable, Sendable {
@@ -33,6 +34,10 @@ public enum SkilliLink: Equatable, Sendable {
     case record(title: String?)
     /// The recording on now, paused, resumed or stopped.
     case recording(RecordingControl)
+    /// Import Recording's open panel (docs/meeting-recorder-views.md, phase
+    /// 4), on the file named when one is: nothing is imported before the
+    /// user's ↩ there.
+    case importRecording(file: String?)
 
     public enum RecordingControl: String, CaseIterable, Sendable {
         case pause, resume, stop
@@ -82,6 +87,10 @@ public enum SkilliLink: Equatable, Sendable {
         case .recording(let control):
             components.host = "record"
             components.percentEncodedPath = "/" + control.rawValue
+        case .importRecording(let file):
+            components.host = "record"
+            components.percentEncodedPath = "/import"
+            if let file, !file.isEmpty { items.append(URLQueryItem(name: "file", value: file)) }
         }
         if !items.isEmpty {
             // `+`, `&`, `=` and `#` encoded too: pages read `+` as a space.
@@ -108,6 +117,10 @@ public enum SkilliLink: Equatable, Sendable {
             guard !target.isEmpty else {
                 let title = items.first { $0.name == "title" }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 return .record(title: title.isEmpty ? nil : title)
+            }
+            if target.lowercased() == "import" {
+                let file = items.first { $0.name == "file" }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return .importRecording(file: file.isEmpty ? nil : file)
             }
             return RecordingControl(rawValue: target.lowercased()).map(Self.recording)
         }

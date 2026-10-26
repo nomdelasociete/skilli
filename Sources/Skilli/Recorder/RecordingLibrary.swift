@@ -201,10 +201,11 @@ final class RecordingLibrary {
 /// FTS5 table on this Mac (as the clipboard's), filled from each
 /// `transcript.json` and caught up before each search by its file's
 /// date (a transcript made again, a recording renamed or deleted in
-/// Finder). Only a copy of the transcripts: never in a backup
-/// (`BackupPlan.neverCopied`), and a file SQLite finds damaged (as it
-/// opens, or in any read or write after) is made again from them at once.
-/// Searched off the main thread; calls serialized by a lock.
+/// Finder); the text read on screen (`slides.json`, phase 3) in a table
+/// of its own, found the same way. Only a copy of the transcripts: never
+/// in a backup (`BackupPlan.neverCopied`), and a file SQLite finds damaged
+/// (as it opens, or in any read or write after) is made again from them
+/// at once. Searched off the main thread; calls serialized by a lock.
 final class RecordingIndex: @unchecked Sendable {
     private let url: URL
     private var db: OpaquePointer?
@@ -270,6 +271,8 @@ final class RecordingIndex: @unchecked Sendable {
             PRAGMA journal_mode = WAL;
             CREATE TABLE IF NOT EXISTS transcripts (folder TEXT PRIMARY KEY, stamp REAL NOT NULL);
             CREATE VIRTUAL TABLE IF NOT EXISTS words USING fts5 (folder UNINDEXED, text, tokenize = 'unicode61 remove_diacritics 2');
+            CREATE TABLE IF NOT EXISTS slides (folder TEXT PRIMARY KEY, stamp REAL NOT NULL);
+            CREATE VIRTUAL TABLE IF NOT EXISTS shown USING fts5 (folder UNINDEXED, text, tokenize = 'unicode61 remove_diacritics 2');
             """)
         guard made else {
             let code = sqlite3_errcode(db) & 0xff
@@ -296,33 +299,46 @@ final class RecordingIndex: @unchecked Sendable {
 
     private func catchUp(root: URL, folders: [String]) {
         guard open() else { return }
+        sync(root: root, folders: folders, file: "transcript.json", stamps: "transcripts", words: "words") { data in
+            (try? MeetingTranscript.File.decode(data))?.lines.map(\.text).joined(separator: "\n") ?? ""
+        }
+        sync(root: root, folders: folders, file: RecorderPictures.slidesFile, stamps: "slides", words: "shown") { data in
+            ((try? SlideLog.decode(data)) ?? []).map { $0.lines.joined(separator: "\n") }.joined(separator: "\n")
+        }
+    }
+
+    /// One table of words (`words`, its files' dates in `stamps`) caught
+    /// up with each folder's `file`, read by `text`.
+    private func sync(root: URL, folders: [String], file name: String, stamps: String, words: String, text: (Data) -> String) {
         var known: [String: Double] = [:]
-        query("SELECT folder, stamp FROM transcripts", []) { statement in
+        query("SELECT folder, stamp FROM \(stamps)", []) { statement in
             if let folder = sqlite3_column_text(statement, 0) { known[String(cString: folder)] = sqlite3_column_double(statement, 1) }
         }
         var wanted: Set<String> = []
         for folder in folders {
-            let file = root.appendingPathComponent(folder).appendingPathComponent("transcript.json")
+            let file = root.appendingPathComponent(folder).appendingPathComponent(name)
             guard let stamp = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate?.timeIntervalSince1970
             else { continue }
             wanted.insert(folder)
             guard known[folder] != stamp else { continue }
-            let text = (try? Data(contentsOf: file)).flatMap { try? MeetingTranscript.File.decode($0) }?.lines.map(\.text).joined(separator: "\n") ?? ""
+            let read = (try? Data(contentsOf: file)).map(text) ?? ""
             execute("BEGIN")
-            run("DELETE FROM words WHERE folder = ?", [folder])
-            run("INSERT INTO words (folder, text) VALUES (?, ?)", [folder, text])
-            run("INSERT OR REPLACE INTO transcripts (folder, stamp) VALUES (?, ?)", [folder, String(stamp)])
+            run("DELETE FROM \(words) WHERE folder = ?", [folder])
+            run("INSERT INTO \(words) (folder, text) VALUES (?, ?)", [folder, read])
+            run("INSERT OR REPLACE INTO \(stamps) (folder, stamp) VALUES (?, ?)", [folder, String(stamp)])
             execute("COMMIT")
         }
         for gone in Set(known.keys).subtracting(wanted) {
-            run("DELETE FROM words WHERE folder = ?", [gone])
-            run("DELETE FROM transcripts WHERE folder = ?", [gone])
+            run("DELETE FROM \(words) WHERE folder = ?", [gone])
+            run("DELETE FROM \(stamps) WHERE folder = ?", [gone])
         }
     }
 
     /// The folders whose words hold every word of `text` (prefixes), best
     /// first, with six words around the match ("…for the third quarter is
-    /// on…": a row's second line shows the match, not what led to it).
+    /// on…": a row's second line shows the match, not what led to it);
+    /// then those whose screen showed them ("On screen: …Revenue up 12
+    /// %…").
     func search(_ text: String, limit: Int = 30) -> [(folder: String, snippet: String)] {
         lock.lock()
         defer { lock.unlock() }
@@ -339,12 +355,14 @@ final class RecordingIndex: @unchecked Sendable {
     private func find(_ text: String, limit: Int) -> [(folder: String, snippet: String)] {
         guard open(), let match = ClipboardSearch.ftsQuery(text) else { return [] }
         var found: [(String, String)] = []
-        query("SELECT folder, snippet(words, 1, '', '', '…', 6) FROM words WHERE words MATCH ? ORDER BY rank LIMIT \(limit)", [match]) { statement in
-            guard let folder = sqlite3_column_text(statement, 0) else { return }
-            let snippet = sqlite3_column_text(statement, 1).map { String(cString: $0) } ?? ""
-            found.append((String(cString: folder), snippet.replacingOccurrences(of: "\n", with: " ")))
+        for (table, said) in [("words", ""), ("shown", "On screen: ")] {
+            query("SELECT folder, snippet(\(table), 1, '', '', '…', 6) FROM \(table) WHERE \(table) MATCH ? ORDER BY rank LIMIT \(limit)", [match]) { statement in
+                guard let folder = sqlite3_column_text(statement, 0).map({ String(cString: $0) }), !found.contains(where: { $0.0 == folder }) else { return }
+                let snippet = sqlite3_column_text(statement, 1).map { String(cString: $0) } ?? ""
+                found.append((folder, said + snippet.replacingOccurrences(of: "\n", with: " ")))
+            }
         }
-        return found
+        return Array(found.prefix(limit))
     }
 
     // MARK: - SQLite

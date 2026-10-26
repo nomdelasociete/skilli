@@ -42,6 +42,14 @@ final class RecordCard {
     var onDiscard: ((URL, MeetingRecord) -> Void)?
     /// ⌘↩: a permission's list in System Settings.
     var onOpenPrivacy: ((Permission) -> Void)?
+    /// The webcam's or the screen's row clicked: on or off (phase 3).
+    var onTogglePicture: ((PictureSource) -> Void)?
+    /// A window picked for the screen (its ⌃⌄ list).
+    var onPickWindow: ((ScreenWindow) -> Void)?
+    /// The webcam and the screen, once the recorder has them.
+    var pictures: RecorderPictures?
+    /// The windows the screen can record: the meeting's, then the others.
+    var windows: () -> (meeting: ScreenWindow?, all: [ScreenWindow]) = { (nil, ScreenWindows.list()) }
 
     private let recorder: MeetingRecorder
     private(set) var content: Content?
@@ -62,6 +70,11 @@ final class RecordCard {
             guard self?.content == .record else { return }
             self?.onToggleSource?(speaker)
         }
+        view.onTogglePicture = { [weak self] source in
+            guard self?.content == .record else { return }
+            self?.onTogglePicture?(source)
+        }
+        view.onScreenMenu = { [weak self] row in self?.showWindows(under: row) }
         view.onLanguage = { [weak self] id in self?.picked(language: id) }
         view.onReturnInName = { [weak self] in
             // The field's own Return obeys the grace too.
@@ -176,7 +189,87 @@ final class RecordCard {
         let blocked = sources.macSound && recorder.macSoundFailure == nil && silent > 3 ? playingApp() : nil
         view.setMacSound(failure: recorder.macSoundFailure, blockedWhile: blocked, level: levels.mac, starting: !recorder.sourcesStarted,
                          off: !sources.macSound, inPerson: meeting?.reading.kind == .inPerson)
+        if let pictures {
+            view.setWebcam(sources.webcam ? pictures.webcam.state : nil, picture: pictures.webcam.sink.latestPicture)
+            view.setScreen(sources.screen ? pictures.screen.state : nil, picture: pictures.screen.sink.latestPicture)
+        }
         if view.needsRelayout { relayout() }
+    }
+
+    /// The screen's note: the meeting's tab, or what to do when it cannot
+    /// come forward; `automation`: ⌘↩ opens Automation.
+    func setScreenNote(_ text: String?, automation: Bool) {
+        view.setScreenNote(text, automation: automation)
+        relayout()
+    }
+
+    /// The screen turned on with no meeting's window to record: its list
+    /// opens under its row.
+    func showWindows() {
+        guard content == .record, let row = view.row(.screen) else { return }
+        // Opened from the run loop, as a click opens one, never from the
+        // task that asked: a menu runs its own loop until it closes, and
+        // the main actor's other tasks wait for the one it was opened from
+        // (measured: the card's task held the self-test for 20 minutes).
+        RunLoop.main.perform(inModes: [.common]) { [weak self] in
+            MainActor.assumeIsolated { self?.showWindows(under: row) }
+        }
+    }
+
+    /// macOS asks a question (the camera, Screen Recording, Automation):
+    /// the card steps down while it does, so the question is not under it.
+    func whileMacOSAsks<T>(_ asking: Bool, _ work: () async -> T) async -> T {
+        if asking { stepDown() }
+        let done = await work()
+        if asking, content == .record { stepUp() }
+        return done
+    }
+
+    /// The meeting the card records now (nil: no card for a recording).
+    var meetingReading: MeetingMoment.Reading? { content == .record ? meeting?.reading : nil }
+
+    /// The screen's ⌃⌄: the windows it can record, the meeting's first,
+    /// the one recorded checked.
+    private func showWindows(under row: NSView) {
+        let (meeting, all) = windows()
+        let recorded = pictures?.screen.window?.id
+        let menu = NSMenu()
+        var listed: [ScreenWindow] = []
+        if let meeting {
+            let item = NSMenuItem(title: "The Meeting's Window", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+            listed.append(meeting)
+            menu.addItem(windowItem(meeting, index: 0, checked: meeting.id == recorded))
+            menu.addItem(.separator())
+        }
+        for window in all where window.id != meeting?.id {
+            listed.append(window)
+            menu.addItem(windowItem(window, index: listed.count - 1, checked: window.id == recorded))
+        }
+        if listed.isEmpty {
+            let none = NSMenuItem(title: "No window to record", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            menu.addItem(none)
+        }
+        pickable = listed
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: row.bounds.height + 2), in: row)
+    }
+
+    /// The windows the open list offers, in its order.
+    private var pickable: [ScreenWindow] = []
+
+    private func windowItem(_ window: ScreenWindow, index: Int, checked: Bool) -> NSMenuItem {
+        let item = NSMenuItem(title: window.name, action: #selector(WindowPicker.picked(_:)), keyEquivalent: "")
+        item.target = picker
+        item.tag = index
+        item.state = checked ? .on : .off
+        return item
+    }
+
+    private lazy var picker = WindowPicker { [weak self] index in
+        guard let self, self.pickable.indices.contains(index) else { return }
+        self.onPickWindow?(self.pickable[index])
     }
 
     /// Which app plays, read once a second at most (Core Audio's process
@@ -255,7 +348,11 @@ final class RecordCard {
         case (.some, _) where isReturn && flags.isEmpty:
             primary()
         case (.record, _) where isReturn && flags == .command:
-            if let missing = view.missingPermission { onOpenPrivacy?(missing) }
+            if let missing = view.missingPermission {
+                onOpenPrivacy?(missing)
+            } else if view.missingAutomation {
+                NSWorkspace.shared.open(AutomationAccess.settingsURL)
+            }
         case (.slept, _) where isReturn && flags == .command:
             dismiss()
             onStop?()
@@ -329,6 +426,19 @@ private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
+/// The target of the screen's window list.
+private final class WindowPicker: NSObject {
+    private let pick: (Int) -> Void
+
+    init(_ pick: @escaping (Int) -> Void) {
+        self.pick = pick
+    }
+
+    @objc func picked(_ item: NSMenuItem) {
+        pick(item.tag)
+    }
+}
+
 /// Borderless, non-activating, over every space: the app in front stays
 /// in front (the call goes on), the keys come here once it is key.
 private final class RecordPanel: NSPanel {
@@ -364,10 +474,18 @@ private final class RecordPanel: NSPanel {
     override func cancelOperation(_ sender: Any?) {
         card?.closed()
     }
+
+    #if SKILLI_SELFTEST
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown { Log.trace("Recorder card: a click reached the card (key \(isKeyWindow), active \(NSApp.isActive))") }
+        super.sendEvent(event)
+    }
+    #endif
 }
 
 /// The card's content, top-down: the eyebrow and the language, the name,
-/// the two sources, what needs saying, then the keys and Record.
+/// the four sources (the sound's two, the webcam and the screen), what
+/// needs saying, then the keys and Record.
 final class RecordCardView: NSView, NSTextFieldDelegate {
     static let width: CGFloat = 520
     private static let inset: CGFloat = 28
@@ -379,6 +497,9 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     var onEscapeInName: (() -> Void)?
     /// A source's row clicked.
     var onToggleSource: ((Speaker) -> Void)?
+    var onTogglePicture: ((PictureSource) -> Void)?
+    /// The screen's ⌃⌄, under its row.
+    var onScreenMenu: ((NSView) -> Void)?
 
     private let dot = DotView()
     private let eyebrow = NSTextField(labelWithString: "")
@@ -389,6 +510,8 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     private let detail = NSTextField(labelWithString: "")
     private let microphoneRow = SourceRow(symbol: "mic.fill", title: "Microphone")
     private let macRow = SourceRow(symbol: "speaker.wave.2.fill", title: "The Mac's sound")
+    private let webcamRow = SourceRow(symbol: "video.fill", title: "Webcam")
+    private let screenRow = SourceRow(symbol: "macwindow", title: "Screen")
     private let note = CardNoteView()
     private let consent = CardNoteView()
     private let hairline = NSView()
@@ -397,8 +520,13 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     private var isRecordCard = true
     private var inPersonNote: String?
     private var languageIDs: [String] = []
-    /// What ⌘↩ opens: the permission a row says is missing.
-    private(set) var missingPermission: Permission?
+    /// What ⌘↩ opens: the permission a row says is missing, the first
+    /// down the rows.
+    var missingPermission: Permission? { soundMissing ?? pictureMissing }
+    private var soundMissing: Permission?
+    private var pictureMissing: Permission?
+    /// The browser said no to skil.li: ⌘↩ opens Automation.
+    private(set) var missingAutomation = false
     private(set) var needsRelayout = false
     private var microphoneOn = false
     private var macOn = false
@@ -412,6 +540,20 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     var buttonTitle: String { button.title }
     var microphoneLine: String { microphoneRow.line }
     var macLine: String { macRow.line }
+    var webcamLine: String { webcamRow.line }
+    var screenLine: String { screenRow.line }
+
+    /// The webcam's or the screen's row.
+    func row(_ source: PictureSource) -> NSView? {
+        let row = source == .webcam ? webcamRow : screenRow
+        return row.isHidden ? nil : row
+    }
+
+    /// Self-test hook: where a row is on screen (AppKit's coordinates).
+    func screenFrame(of source: PictureSource) -> NSRect? {
+        guard let row = row(source), let window else { return nil }
+        return window.convertToScreen(row.convert(row.bounds, to: nil))
+    }
     var noteText: String { note.isHidden ? "" : note.text }
     var consentShown: Bool { !consent.isHidden }
     var detailText: String { detail.isHidden ? "" : detail.stringValue }
@@ -441,13 +583,20 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         clock.isHidden = true
         microphoneRow.onClick = { [weak self] in self?.onToggleSource?(.me) }
         macRow.onClick = { [weak self] in self?.onToggleSource?(.them) }
+        webcamRow.onClick = { [weak self] in self?.onTogglePicture?(.webcam) }
+        screenRow.onClick = { [weak self] in self?.onTogglePicture?(.screen) }
+        screenRow.onMenu = { [weak self] in
+            guard let self else { return }
+            self.onScreenMenu?(self.screenRow)
+        }
         languageMenu.onPick = { [weak self] index in self?.languagePicked(index) }
         hairline.wantsLayer = true
         button.target = self
         button.action = #selector(primaryPressed)
         consent.symbol = "info.circle"
         consent.text = "The others in the call must agree to be recorded: in many countries, France included, recording a private conversation without consent is an offense."
-        for subview in [dot, eyebrow, clock, languageMenu, nameField, detail, microphoneRow, macRow, note, consent, hairline, leftHints, button] as [NSView] {
+        for subview in [dot, eyebrow, clock, languageMenu, nameField, detail, microphoneRow, macRow, webcamRow, screenRow, note, consent, hairline, leftHints,
+                        button] as [NSView] {
             addSubview(subview)
         }
     }
@@ -493,12 +642,17 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         detail.isHidden = people.isEmpty
         detail.stringValue = people.isEmpty ? "" : "With \(people)"
         languageMenu.isHidden = languageIDs.isEmpty
-        microphoneRow.isHidden = false
-        macRow.isHidden = false
-        microphoneRow.clickable = true
-        macRow.clickable = true
+        for row in [microphoneRow, macRow, webcamRow, screenRow] {
+            row.isHidden = false
+            row.clickable = true
+        }
         microphoneRow.setState("Starting…", level: nil)
         macRow.setState("Starting…", level: nil)
+        webcamRow.setState("Off", level: nil)
+        screenRow.setState("Off", level: nil)
+        screenNote = nil
+        missingAutomation = false
+        pictureMissing = nil
         consent.isHidden = !shown
         inPersonNote = inPerson ? "In person: set the Mac in the middle of the table." : nil
         updateNote()
@@ -521,12 +675,11 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         languageMenu.isHidden = true
         detail.isHidden = false
         detail.stringValue = line
-        microphoneRow.isHidden = true
-        macRow.isHidden = true
+        for row in [microphoneRow, macRow, webcamRow, screenRow] { row.isHidden = true }
         consent.isHidden = true
         inPersonNote = nil
         note.isHidden = true
-        missingPermission = nil
+        soundMissing = nil
         button.title = "Stop"
         button.alphaValue = 1
         leftHints.setHints([("Keep Recording", "esc")])
@@ -547,12 +700,11 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         languageMenu.isHidden = true
         detail.isHidden = false
         detail.stringValue = line
-        microphoneRow.isHidden = true
-        macRow.isHidden = true
+        for row in [microphoneRow, macRow, webcamRow, screenRow] { row.isHidden = true }
         consent.isHidden = true
         inPersonNote = nil
         note.isHidden = true
-        missingPermission = nil
+        soundMissing = nil
         button.title = "Resume"
         button.alphaValue = 1
         leftHints.setHints([("Keep Paused", "esc"), ("Stop", "⌘↩")])
@@ -572,11 +724,10 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         languageMenu.isHidden = true
         detail.isHidden = false
         detail.stringValue = Self.unfinishedLine(record)
-        microphoneRow.isHidden = true
-        macRow.isHidden = true
+        for row in [microphoneRow, macRow, webcamRow, screenRow] { row.isHidden = true }
         consent.isHidden = true
         note.isHidden = true
-        missingPermission = nil
+        soundMissing = nil
         button.title = "Save"
         button.alphaValue = 1
         leftHints.setHints([("Later", "esc"), ("Discard", "⌘⌫")])
@@ -625,7 +776,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
 
     /// The microphone's row; nil: turned off (a click turns it on).
     func setMicrophone(_ state: MicrophoneTrack.State?, level: Double) {
-        let before = (microphoneRow.line, missingPermission)
+        let before = (microphoneRow.line, soundMissing)
         switch state {
         case nil:
             microphoneOn = false
@@ -643,9 +794,9 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
             microphoneOn = false
             microphoneRow.setState("Starting…", level: nil)
         }
-        if case .denied? = state { missingPermission = .microphone } else if missingPermission == .microphone { missingPermission = nil }
+        if case .denied? = state { soundMissing = .microphone } else if soundMissing == .microphone { soundMissing = nil }
         updateMissing()
-        if before != (microphoneRow.line, missingPermission) { needsRelayout = true }
+        if before != (microphoneRow.line, soundMissing) { needsRelayout = true }
     }
 
     /// `blockedWhile`: the app playing while the tap hears only silence;
@@ -670,11 +821,67 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
             macRow.setState("Every app", level: level)
             permissionNote = app.map { "No sound while \($0) plays: allow skil.li in Screen & System Audio Recording · ⌘↩" }
         }
-        if app != nil, missingPermission == nil { missingPermission = .screenRecording }
-        if app == nil, missingPermission == .screenRecording { missingPermission = nil }
+        if app != nil, soundMissing == nil { soundMissing = .screenRecording }
+        if app == nil, soundMissing == .screenRecording { soundMissing = nil }
         updateMissing()
         if before != (macRow.line, permissionNote) { needsRelayout = true }
     }
+
+    /// The webcam's row; nil: off (a click turns it on). Its picture
+    /// mirrored, as calls show you.
+    func setWebcam(_ state: WebcamTrack.State?, picture: CVPixelBuffer?) {
+        let before = (webcamRow.line, pictureMissing)
+        switch state {
+        case nil, .off?:
+            webcamRow.setState("Off", level: nil)
+        case .on(let name)?:
+            webcamRow.setState(name, level: nil, picture: picture, mirrored: true)
+        case .denied?:
+            webcamRow.setState("Not allowed · ⌘↩ opens Privacy", level: nil, warns: true)
+        case .none?:
+            webcamRow.setState("No camera", level: nil)
+        }
+        updatePictureMissing(webcam: state == .denied)
+        if before != (webcamRow.line, pictureMissing) { needsRelayout = true }
+    }
+
+    /// The screen's row: the window recorded, its picture, ⌃⌄ to pick
+    /// another; nil: off.
+    func setScreen(_ state: ScreenTrack.State?, picture: CVPixelBuffer?) {
+        let before = (screenRow.line, pictureMissing, screenRow.menuShown)
+        switch state {
+        case nil, .off?:
+            screenRow.setState("Off", level: nil)
+        case .on(let window)?:
+            screenRow.setState(window.name, level: nil, picture: picture, menu: true)
+        case .denied?:
+            screenRow.setState("Not allowed · ⌘↩ opens Privacy", level: nil, warns: true)
+        case .failed(let why)?:
+            screenRow.setState("Not recorded: \(why)", level: nil, warns: true, menu: true)
+        }
+        updatePictureMissing(screen: state == .denied)
+        if before != (screenRow.line, pictureMissing, screenRow.menuShown) { needsRelayout = true }
+    }
+
+    private var cameraDenied = false
+    private var screenDenied = false
+
+    private func updatePictureMissing(webcam: Bool? = nil, screen: Bool? = nil) {
+        if let webcam { cameraDenied = webcam }
+        if let screen { screenDenied = screen }
+        pictureMissing = cameraDenied ? .camera : screenDenied ? .screenRecording : nil
+    }
+
+    /// The screen's note (the meeting's tab); `automation`: the browser
+    /// said no, ⌘↩ opens Automation.
+    func setScreenNote(_ text: String?, automation: Bool) {
+        screenNote = text
+        missingAutomation = automation
+        updateNote()
+        needsRelayout = true
+    }
+
+    private var screenNote: String?
 
     private func updateMissing() {
         // Both off by a click: nothing to record, nothing to allow.
@@ -692,11 +899,11 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     private var permissionNoteBlocking: String?
 
     private func updateNote() {
-        let lines = [permissionNoteBlocking, permissionNote, languageNote, inPersonNote].compactMap { $0 }
+        let lines = [permissionNoteBlocking, permissionNote, screenNote, languageNote, inPersonNote].compactMap { $0 }
         note.isHidden = lines.isEmpty || !isRecordCard
         note.text = lines.joined(separator: "\n")
-        note.symbol = permissionNoteBlocking != nil || permissionNote != nil ? "exclamationmark.triangle"
-            : languageNote != nil ? "character.bubble" : "person.2"
+        note.symbol = permissionNoteBlocking != nil || permissionNote != nil || missingAutomation ? "exclamationmark.triangle"
+            : screenNote != nil ? "macwindow" : languageNote != nil ? "character.bubble" : "person.2"
     }
 
     private func setEyebrow(_ text: String, dot color: NSColor, hollow: Bool) {
@@ -751,6 +958,10 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
             microphoneRow.frame = NSRect(x: inset, y: y, width: inner, height: SourceRow.height)
             y += SourceRow.height + 4
             macRow.frame = NSRect(x: inset, y: y, width: inner, height: SourceRow.height)
+            y += SourceRow.height + 4
+            webcamRow.frame = NSRect(x: inset, y: y, width: inner, height: SourceRow.height)
+            y += SourceRow.height + 4
+            screenRow.frame = NSRect(x: inset, y: y, width: inner, height: SourceRow.height)
             y += SourceRow.height + 4
         }
 
@@ -862,17 +1073,25 @@ private final class LanguageButton: NSView {
 }
 
 /// One source: its symbol, its name, its device in the secondary color,
-/// and its level, live, at the right.
+/// and at the right its level, live, or its picture (the webcam, the
+/// screen). The screen's has ⌃⌄ after its window's name.
 private final class SourceRow: NSView {
     static let height: CGFloat = 26
+    /// The picture's size: 16:9, the row's height.
+    private static let pictureSize = NSSize(width: 46, height: 26)
     private let icon = NSImageView()
     private let title: NSTextField
     private let device = NSTextField(labelWithString: "")
     private let meter = LevelMeter()
+    private let picture = PictureView()
+    private let chevron = NSImageView()
 
     var line: String { device.stringValue }
+    var menuShown: Bool { !chevron.isHidden }
     /// A click turns the source on or off (the Record card).
     var onClick: (() -> Void)?
+    /// A click on the name and ⌃⌄: the list to pick from.
+    var onMenu: (() -> Void)?
     var clickable = false {
         didSet { window?.invalidateCursorRects(for: self) }
     }
@@ -887,7 +1106,11 @@ private final class SourceRow: NSView {
         device.font = .systemFont(ofSize: 13)
         device.textColor = .secondaryLabelColor
         device.lineBreakMode = .byTruncatingTail
-        for subview in [icon, title, device, meter] as [NSView] { addSubview(subview) }
+        chevron.image = Theme.symbol("chevron.up.chevron.down", pointSize: 10, weight: .semibold)
+        chevron.contentTintColor = .secondaryLabelColor
+        chevron.isHidden = true
+        picture.isHidden = true
+        for subview in [icon, title, device, chevron, meter, picture] as [NSView] { addSubview(subview) }
     }
 
     @available(*, unavailable)
@@ -899,16 +1122,37 @@ private final class SourceRow: NSView {
         if clickable { addCursorRect(bounds, cursor: .pointingHand) }
     }
 
+    /// The card does not activate skil.li: a row's first click acts.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { clickable }
+
     override func mouseDown(with event: NSEvent) {
-        if clickable { onClick?() } else { super.mouseDown(with: event) }
+        let point = convert(event.locationInWindow, from: nil)
+        #if SKILLI_SELFTEST
+        Log.trace("Recorder card: a click on \(title.stringValue) (clickable \(clickable))")
+        #endif
+        if !chevron.isHidden, let onMenu, point.x >= device.frame.minX, point.x <= chevron.frame.maxX + 4 {
+            onMenu()
+        } else if clickable {
+            onClick?()
+        } else {
+            super.mouseDown(with: event)
+        }
     }
 
-    /// The device (or why it is off) and its level; nil: no meter.
-    func setState(_ text: String, level: Double?, warns: Bool = false) {
+    /// The device (or why it is off) and its level, or its picture; nil:
+    /// neither. `menu`: ⌃⌄ after the name.
+    func setState(_ text: String, level: Double?, warns: Bool = false, picture pixels: CVPixelBuffer? = nil, mirrored: Bool = false,
+                  menu: Bool = false) {
         if device.stringValue != text { device.stringValue = text }
         device.textColor = warns ? .systemOrange : .secondaryLabelColor
         meter.isHidden = level == nil
         if let level { meter.level = level }
+        picture.isHidden = pixels == nil
+        picture.show(pixels, mirrored: mirrored)
+        if chevron.isHidden == menu {
+            chevron.isHidden = !menu
+            needsLayout = true
+        }
         needsLayout = true
     }
 
@@ -920,10 +1164,62 @@ private final class SourceRow: NSView {
         title.frame.origin = NSPoint(x: 28, y: middle - title.frame.height / 2)
         let meterWidth: CGFloat = meter.isHidden ? 0 : 64
         meter.frame = NSRect(x: bounds.width - meterWidth, y: middle - 3, width: meterWidth, height: 6)
+        let size = Self.pictureSize
+        picture.frame = NSRect(x: bounds.width - size.width, y: middle - size.height / 2, width: size.width, height: size.height)
         let left = title.frame.maxX + 10
-        let right = bounds.width - (meter.isHidden ? 0 : meterWidth + 14)
+        let rightmost = meter.isHidden && picture.isHidden ? bounds.width : bounds.width - max(meterWidth, picture.isHidden ? 0 : size.width) - 14
+        let chevronWidth: CGFloat = chevron.isHidden ? 0 : 16
         device.sizeToFit()
-        device.frame = NSRect(x: left, y: middle - device.frame.height / 2, width: max(0, right - left), height: device.frame.height)
+        let width = max(0, min(device.frame.width, rightmost - left - chevronWidth))
+        device.frame = NSRect(x: left, y: middle - device.frame.height / 2, width: width, height: device.frame.height)
+        chevron.frame = NSRect(x: device.frame.maxX + 4, y: middle - 6, width: 12, height: 12)
+    }
+}
+
+/// A source's picture, live: the latest frame's surface, the hairline
+/// around it, its corners rounded; mirrored for the webcam, as calls
+/// show you.
+private final class PictureView: NSView {
+    /// The picture, in a layer of its own: mirrored there, never the
+    /// view's own (AppKit lays that one out).
+    private let picture = CALayer()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerRadius = 4
+        layer?.masksToBounds = true
+        layer?.borderWidth = 1
+        layer?.backgroundColor = NSColor.black.cgColor
+        picture.contentsGravity = .resizeAspectFill
+        layer?.addSublayer(picture)
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        picture.frame = bounds
+        CATransaction.commit()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        layer?.borderColor = Theme.hairline.cgColor
+    }
+
+    func show(_ pixels: CVPixelBuffer?, mirrored: Bool) {
+        layer?.borderColor = Theme.hairline.cgColor
+        let surface = pixels.flatMap { CVPixelBufferGetIOSurface($0)?.takeUnretainedValue() }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        picture.frame = bounds
+        picture.contents = surface
+        picture.setAffineTransform(mirrored ? CGAffineTransform(scaleX: -1, y: 1) : .identity)
+        CATransaction.commit()
     }
 }
 

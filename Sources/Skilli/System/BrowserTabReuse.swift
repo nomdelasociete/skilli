@@ -12,11 +12,13 @@ import SkilliCore
 /// that fails or no tab on the site: opened normally.
 @MainActor
 enum BrowserTabReuse {
-    private enum Family {
+    /// How a browser's scripting names its tabs (the recorder's
+    /// `MeetingTabSelect` too).
+    enum Family {
         case safari, chrome
     }
 
-    private static let browsers: [String: Family] = [
+    static let browsers: [String: Family] = [
         "com.apple.Safari": .safari, "com.apple.SafariTechnologyPreview": .safari,
         "com.google.Chrome": .chrome, "com.google.Chrome.canary": .chrome, "com.brave.Browser": .chrome,
         "com.microsoft.edgemac": .chrome, "org.chromium.Chromium": .chrome, "com.vivaldi.Vivaldi": .chrome

@@ -428,12 +428,36 @@ Your meetings recorded on this Mac, both sides, then written out.
   Mac. Also
   `skilli://record` and the Meeting Recorder tools (`record_meeting`,
   `stop_recording`…).
-- **Search Recordings** (`recs`): by title, date, attendees, and the
-  words said; the best two show in any search too.
+- **The webcam and the screen**, off until you turn them on (a click in
+  the card, the red dot's menu, or on by default in Settings): the
+  webcam, and the meeting's window (in a browser, the window holding its
+  tab, which comes forward without a reload) or one you pick, recorded
+  in step with the sound. The menu bar says when that window gives no
+  picture (minimized, hidden, covered whole and still). The text the
+  screen shows is read on this Mac and kept with its time
+  (`slides.json`): the window plays both small beside the transcript,
+  the slides among the lines.
+- **Voices told apart**: the track that holds several people (the other
+  side of a call, the room in person, an import) comes out with each
+  voice on its own lines (SpeakerKit, on this Mac, in a helper that is
+  gone once the transcript is made), Them 1, Them 2… until you name them.
+- **Editing the transcript**, in the recording's window: a line selected
+  (a click, ↑ ↓), ↩ edits its words in place, ⇥ gives it to the next
+  speaker (⇧⇥ the one before), ⌘⌫ deletes it (⌘Z for 10 s), ⌥↩ or a
+  click on a speaker's name renames it: the attendees first, and a name
+  another speaker has makes the two one (Me is kept). ⌘Z and ⇧⌘Z undo
+  and redo while the window is open; every change is written at once.
+  **Transcribe Again…** in the language and with the engine picked.
+- **Import Recording** (`import`): a sound or video file (a voice memo,
+  a call app's own recording) made a recording, transcribed on this Mac,
+  voices told apart; or drop the file on a recording's window. The file
+  stays where it is. Also `skilli://record/import` and `import_recording`.
+- **Search Recordings** (`recs`): by title, date, attendees, the words
+  said and the text read on screen; the best two show in any search too.
 
 Settings: Record ⌘R on the meeting card · Microphone · The Mac's sound
-· Language · Keep recordings in · Delete after · the recordings, by
-month.
+· Webcam · Screen · Language · Keep recordings in · Delete after · the
+recordings, by month.
 
 <!-- pane: reminders -->
 ## Reminders

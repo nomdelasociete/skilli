@@ -57,6 +57,9 @@ public struct LauncherCommand: Sendable {
         /// Turns the launcher into the recordings ("recs "): by title, date,
         /// attendees and the words said.
         case searchRecordings
+        /// A sound or video file made a recording, transcribed on this Mac
+        /// (docs/meeting-recorder-views.md, phase 4, "Import").
+        case importRecording
         /// Turns the launcher into the reminders ("todo ").
         case reminders
         /// Turns the launcher into GitHub: pull requests and notifications
@@ -247,6 +250,13 @@ public struct LauncherCommand: Sendable {
             symbol: "waveform",
             keywords: ["recordings", "recorded", "meetings recorded", "transcripts", "what was said", "enregistrements", "réunions enregistrées",
                        "transcriptions"]
+        ),
+        LauncherCommand(
+            id: .importRecording,
+            title: "Import Recording",
+            symbol: "square.and.arrow.down",
+            keywords: ["import", "import recording", "import audio", "import video", "transcribe a file", "voice memo", "importer",
+                       "importer un enregistrement", "transcrire un fichier", "mémo vocal"]
         ),
         LauncherCommand(
             id: .reminders,

@@ -3,10 +3,11 @@
 Phase 1: spec, 2026-10-23, written before building, then brought in line
 with three rounds of captures on the test Mac (light and dark). Phase 2
 (the moment, below): spec, 2026-10-24, written before building from the
-Moment section of `docs/meeting-recorder.md`. Quit and sleep (last
-part): 2026-10-25, from that file's "Quit and sleep". That file says
-what is recorded, kept and measured; this says what each phase shows. Each view
-is drawn by the code that runs it (`remote recorder` saves
+Moment section of `docs/meeting-recorder.md`. Quit and sleep: 2026-10-25,
+from that file's "Quit and sleep". Phase 3 (the webcam and the screen,
+last): spec, 2026-10-25, written before building. That file says what
+is recorded, kept and measured; this says what each phase shows. Each
+view is drawn by the code that runs it (`remote recorder` saves
 `recorder-*.png`).
 
 ## The Record card
@@ -524,7 +525,8 @@ after a transcript, search by meaning (⇥), the engine choice.
 ## skil.li quits while recording
 
 - Nothing is shown: skil.li quits about a second later than it would,
-  the time the two files take to close. The red dot goes with it.
+  the time every file being recorded takes to close (the sound's two,
+  the webcam's and the screen's when on). The red dot goes with it.
 - At the next launch, a few seconds in: the menu bar's ring, "Transcribing
   40 %", its menu "Transcribing “Weekly sync”…", as after Stop. Done, the
   item goes and no window opens: the recording is in Search Recordings
@@ -562,3 +564,612 @@ frame:
   the call's end is offered again once this one is answered, if the call
   is still over.
 
+# Phase 3: the webcam and the screen
+
+Spec, 2026-10-25, written before building from `docs/meeting-recorder.md`
+(Target, Before, During, Done, Privacy, and Measured's "The screen" and
+"In step over an hour"). Two sources more, both off until the user turns
+them on, recorded by the same clock as the sound; the text of what the
+screen shows read on this Mac.
+
+## The moment, again
+
+Phase 3 changes none of the Moment's answers, checked one by one:
+
+1. **When**: the same moment, the meeting's start. The webcam and the
+   screen are never on by themselves: off in every case unless the user
+   turns them on (a click in the Record card, the red dot's menu) or set
+   them on by default (Settings → Recorder). In person, the screen stays
+   off even then (no call's window to record); the webcam follows the
+   setting.
+2. **The path**: the same keys. ⌘R on the meeting card, the launcher's
+   row or the menu bar records with the case's sources plus the webcam
+   and the screen as Settings → Recorder has them: the sound from the
+   key, the screen joining once the meeting's window is found
+   (Automation's question, a browser slow to answer never delay the
+   sound); the Record card's rows turn either on with a click; the red
+   dot's menu, during the call.
+3. **Hint or push**: nothing new is pushed. One thing is said that the
+   user would not see otherwise: a screen that stops giving pictures
+   (Measured: a minimized or hidden window gives none; Chrome's, fully
+   covered, the same one again and again). Said where the recording is
+   already shown, the menu bar, never a card during the call.
+4. **Deterministic**: the window is the case's app's (its window holding
+   the meeting's tab in a browser, else its front window: the window
+   list), or the one the user picks; the meeting's tab is found by its
+   address (code, `MeetingTab` in SkilliCore). The slides' text is read
+   by Vision's text recognition on this Mac: a reading, not a judgment,
+   and nothing of it leaves the Mac (Privacy's table: "read slides",
+   nowhere).
+5. **Wrong**: a wrong window costs that window's pictures until it is
+   changed: the red dot's menu picks another (or turns the screen off)
+   from then on, nothing asked; the time before stays as recorded. A
+   wrong tab: the user picks the right one in the browser, which is
+   recorded from then on (macOS records the window, not a tab). The
+   webcam not wanted: off from the same menu.
+
+## The Record card: four sources
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ● RECORD A MEETING                             English ⌃⌄ │
+│                                                          │
+│ Weekly design review▌                                    │
+│ With Paul, Anna and 4 others                             │
+│                                                          │
+│ 🎙  Microphone      MacBook Pro Microphone      ▮▮▮▮▯▯   │
+│ 🔊  The Mac's sound  Every app                  ▮▮▯▯▯▯   │
+│ 📷  Webcam           FaceTime HD Camera          ▕▓▓▓▏   │  live, 46 × 26
+│ 🖥  Screen           Google Chrome · Meet ⌃⌄     ▕▓▓▓▏   │  live, its window
+│                                                          │
+│ ⓘ  The meeting's tab comes forward as recording starts; │
+│    a tab you pick later is recorded instead. Keep its   │
+│    window in sight.                                     │
+│ ──────────────────────────────────────────────────────── │
+│ Cancel esc                                  ( Record ↩ ) │
+└──────────────────────────────────────────────────────────┘
+```
+
+- **Four rows**, the same type and height (26 pt) as phase 1's two; the
+  webcam's and the screen's show a picture where the sound shows a
+  meter: 46 × 26 pt, corners of 4 pt, a hairline around it, live (the
+  webcam mirrored as calls show you; recorded as the camera sees). Off:
+  "Off" in the secondary color, no picture, as the sound's rows.
+- **A click on a row** turns it on or off, as phase 2's.
+- **The webcam**: macOS's preferred camera (`systemPreferredCamera`),
+  its name. Asked the first time it is turned on (macOS's question over
+  the card, which steps down meanwhile, as for the microphone). Refused:
+  "Not allowed · ⌘↩ opens Privacy" in orange, no picture. No camera on
+  this Mac: "No camera". The call's app using it too is fine (macOS
+  shares a camera).
+- **The screen**: the window, named "App · its title" (the title cut to
+  fit; read on this Mac, never sent anywhere). Turned on, it is the
+  meeting's window when the case has one (the call's app's window; in a
+  browser, the window holding the meeting's tab), else the list of
+  windows opens under the row and the one picked is recorded; none
+  picked, it stays off.
+  - **⌃⌄** after the name lists the windows on screen: "The meeting's
+    window" first when one is known, then each app's normal windows,
+    front to back, "App · title" (skil.li's own left out); the one
+    recorded checked. The same list as the red dot's menu.
+  - Screen Recording never given: macOS's question as it is turned on;
+    refused: "Not allowed · ⌘↩ opens Privacy" in orange. macOS applies
+    it once skil.li reopens (`Relaunch`, as for "do it here").
+- **A meeting in a browser** (the screen on, its window the meeting's):
+  one note line under the sources, in the card's note style.
+  - Its tab can be brought forward (Safari, Chrome's family, their
+    Automation allowed, a tab on the meeting's address): "The
+    meeting's tab comes forward as recording starts; a tab you pick
+    later is recorded instead. Keep its window in sight."
+  - It cannot, said with what to do:
+    - Arc, Firefox, a browser skil.li does not script: "Bring the
+      meeting's tab forward in Arc: its window is recorded as it is."
+    - No tab on the meeting's address (or the browser not open): "No
+      tab of Google Chrome is on the meeting's address: bring it
+      forward, its window is recorded as it is."
+    - Refused in Privacy & Security → Automation: "Google Chrome said
+      no to skil.li · ⌘↩ opens Automation. Bring the meeting's tab
+      forward: its window is recorded as it is."
+    - The script failed: "Google Chrome did not answer: bring the
+      meeting's tab forward, its window is recorded as it is."
+
+    macOS's question for Automation, never asked before, comes as the
+    screen is turned on (the card steps down), so ↩ never waits on it.
+  - A window of an app (Zoom, Discord…): "Keep the call's window in
+    sight: a minimized or hidden window gives no picture."
+- **⌘↩** opens the list of the permission a row says is missing (the
+  camera, Screen Recording, Automation), the first one down the rows.
+- **↩**: everything on records from that moment, and the meeting's tab
+  comes forward (selected, never reloaded, the browser left where it is:
+  the user's app keeps the keyboard; a browser slow to answer never
+  delays the start).
+- Consent: phase 1's paragraph already says the others must agree, for
+  the webcam and the screen as for the sound; nothing added.
+
+## The menu bar while recording
+
+```
+ ● 12:04 ⣀⣤⣶⣤ ▭̸      ← the screen gives no picture: an orange mark
+```
+
+- **The label**: as phase 1's; while the screen gives no picture, a
+  small screen with a slash, in orange, after the waves (its
+  accessibility label "Recording, 12:04, the screen gives no picture").
+  It goes when the pictures come back. Nothing else is ever added to
+  the label: a source on or off is not shown there.
+- **The red dot's menu** adds the two sources after the sound's, the
+  screen's window in its submenu:
+
+  ```
+  ✓ Microphone · MacBook Pro Microphone  ▮▮▮▯
+  ✓ The Mac's Sound · Every app          ▮▯▯▯
+  ✓ Webcam · FaceTime HD Camera
+  ✓ Screen · Google Chrome · Meet          ▸   The Meeting's Window
+  The Call: Google Chrome                  ▸   ✓ Google Chrome · Meet
+  ──────────                                     Keynote · Q3 review
+  Show in Finder                                 ──────
+                                                 Off
+  ```
+
+  - **Webcam**: a click turns it off or on for the rest of the
+    recording; off, the camera is released (its green light goes) and
+    `webcam.mp4` holds its last picture, then black, until it is on
+    again. Never on in this recording: no file.
+  - **Screen ▸**: the window recorded checked; another picked is
+    recorded from then on, in the same `screen.mp4` (its pictures
+    scaled into the file's size); Off stops it. The meeting's window
+    once known comes first.
+  - **No picture**, the item says why, in place of the window's name:
+    "Screen · Google Chrome is minimized: nothing recorded until it's
+    back", "… is hidden …", "… isn't on screen …" (on another desktop),
+    "Screen · Google Chrome stopped painting: keep some of its window
+    in sight" (covered whole, no new picture for 5 s since it was),
+    "Screen · the window closed: pick another ▸". Said after a second
+    (a window being minimized, a desktop changing). Measured
+    (Chrome, Arc): a covered window that keeps painting is no failure,
+    and a still slide in sight is none either: only a window covered
+    whole and giving no new picture for 5 s is.
+- Paused: nothing written to any of the four (the pictures as the
+  sound), the clock stopped.
+
+## The files
+
+- `webcam.mp4`: H.264, 1280 × 720 at most, 30 pictures a second;
+  `screen.mp4`: H.264, 1920 pt wide at most (the window's own pixels,
+  scaled to fit), 15 a second. Both written as they come, in fragments
+  of a second (a crash keeps what was recorded, as the sound's).
+- **In step** (Measured, "In step over an hour"): each picture at its
+  own time, the host clock's (the camera's clock converted to it), cut
+  where the sound is cut: the start, each pause, the stop, the same host
+  moments for the four tracks. A picture between two is held (a still
+  slide costs next to nothing); each file ends at the stop.
+- `slides.json`: what the screen showed, read on this Mac:
+  `[{ "start": 75.4, "lines": ["Q3 review", "Revenue up 12 %"] }]`,
+  the time on the recording's clock (pauses out).
+
+## Reading the slides
+
+From the screen's own pictures, on this Mac (Vision's text
+recognition), nothing kept but the text:
+
+- Four times a second the picture is compared with the one last read
+  (its brightness on a 64 × 40 grid: fine enough that a slide whose
+  text alone changes shows, a corner's clock ticking does not); when it
+  changed, its text is read, at most once a second, every two seconds
+  while readings find nothing new (a video moving).
+- The lines new since the last reading are a slide, timed at the last
+  change before the reading: between the two readings, so never more
+  than two seconds off, within a second when it is the only thing
+  changing (the check). A still window gives no new picture: its last
+  one is compared again as time goes on, so a change seen while a
+  reading waited is read all the same.
+- A line is text when it has words: a number alone (the call's clock,
+  a counter) is no slide's.
+- Lines seen in most of the recording's readings (the browser's tabs,
+  the call's own buttons, the people's names under their videos) are
+  taken out of every slide at Stop; a slide left with no line goes.
+- The webcam is never read.
+
+## The recording's window
+
+```
+┌ Weekly design review ─────────────────────────────────────────────────┐
+│ Weekly design review                                                  │
+│ Wed 22 Oct 2026, 14:00 · 32 min · English · with Paul, Anna and 4…    │
+│                                                                       │
+│ ▶  12:04 / 32:10                                                      │
+│ Me    ▁▂▅▃▁  ▂▆▇▃▁       ▁▃▂          │                                │
+│ Them      ▃▆▅▂    ▁▂▆▇▅▃▂     ▅▆▃      │                               │
+│ ───────────────────────────────────────────────────────────────────── │
+│ Me      0:00  Hello everyone, can you…      ┌──────────────────────┐  │
+│ Them    0:04  Yes, loud and clear.          │                      │  │
+│ Screen  0:05  Q3 review · Revenue up 12 %   │       screen         │  │
+│ Them    0:07  I can hear you. Ingrid…       │                      │  │
+│                                             └──────────────────────┘  │
+│                                             ┌──────────┐              │
+│                                             │  webcam  │              │
+│                                             └──────────┘              │
+│ ───────────────────────────────────────────────────────────────────── │
+│      Play space   Copy Transcript ⌘C   Show in Finder ⌘↩   Delete ⌘⌫ │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+- **Beside the transcript**, on its right, a column 260 pt wide: the
+  screen at its own shape, the webcam under it (half the column's
+  width), corners of 10 pt, black behind the picture. Only what was
+  recorded shows; neither: the window as phase 2's. With them it opens
+  wider (1020 × 640) and keeps 760 for the lines.
+- **In step**: the pictures play with the sound, one clock (each player
+  started at the same host time, `setRate(_:time:atHostTime:)`), seeking
+  and pausing together; a click on a line or the waveform moves them
+  too.
+- **The slides** are lines of the transcript at their time: "Screen"
+  in the tertiary color where a speaker's name goes, the slide's lines
+  joined by " · " in the secondary color. A click plays from there, as
+  any line; ⌘C's transcript leaves them out (it is what was said).
+
+## Finding recordings
+
+The slides' words are found as the words said (the same index); a row
+found by them says so: "On screen: …Revenue up 12 %…".
+
+## Settings → Recorder
+
+The sources on by default gain two rows, off:
+
+```
+Microphone                                       [✓]
+The Mac's sound                                  [✓]
+Webcam                                           [ ]
+Screen                                           [ ]
+    The sources on when nothing says otherwise (in person: the
+    microphone only; the screen is the meeting's window).
+```
+
+Settings → Privacy's Camera and Screen Recording rows name the recorder
+among what they turn on.
+
+## Said, and not said (phase 3)
+
+- Not said: the webcam or the screen turned on or off, a window picked,
+  the meeting's tab brought forward (all seen).
+- Said: in the menu bar, a screen giving no picture and why; in the
+  card, a tab that cannot be brought forward and what to do.
+
+## Not in phase 3
+
+A browser's tab recorded whatever is in front (an extension: not
+planned), the whole display, the webcam's own sound (the microphone is
+the user's side), slides as chapters (phase 5).
+
+# Phase 4: voices, import, editing, Better transcription
+
+Spec, 2026-10-26, written before building from `docs/meeting-recorder.md`
+(Target, Transcription, Done, Privacy, and Measured's picks: SpeakerKit,
+whisper large-v3-turbo with its VAD and the names, the drop by word
+times). Built in two pull requests, one after the other: (a) the voices,
+import, editing and renaming, Transcribe Again; (b) the Better
+transcription download, its engine, and the echo drop measured with it.
+
+## The moment, again
+
+1. **When**, each case apart:
+   - **Voices told apart**: at Stop, while the transcript is made.
+     Nothing to reach for: a track that holds several people (the Mac's
+     sound in a call, the microphone in person, an imported file) comes
+     out with each voice on its own lines.
+   - **Import**: after a meeting recorded elsewhere (a phone's voice
+     memo, a call app's own recording, a video), at the desk, the file in
+     Finder or just downloaded.
+   - **Editing and renaming**: reading the transcript in the recording's
+     window after the meeting, before quoting it, sending it or keeping
+     it.
+   - **Transcribe Again**: a transcript in the wrong language, or made
+     before Better transcription was downloaded.
+   - **Better transcription**: when a transcript got names or words
+     wrong. Never at the meeting's moment: nothing about the call
+     depends on it, and 1.6 GB is not fetched while someone waits.
+2. **The path**:
+   - Voices: none, it is part of the transcript.
+   - Import: drop the file on a recording's window; Import Recording… in
+     the launcher (`import`, the Catalog); `skilli://record/import?file=…`;
+     `import_recording` for an agent or a skillie.
+   - Editing: in the recording's window, a line selected (a click, or
+     ↑ ↓): ↩ edits its words, ⇥ gives it to the next speaker (⇧⇥ the one
+     before), ⌘⌫ deletes it. Renaming: a click on a speaker's name, or ⌥↩
+     on the selected line.
+   - Transcribe Again: its button on the window's about line.
+   - Better transcription: Settings → Recorder, its own section.
+3. **Hint or push**: nothing is pushed. Better transcription is taught
+   once: the first recording's window that opens on a transcript made by
+   macOS's engine says it in one line at the bottom of its lines (below);
+   never again, in no other window, no badge. The download starts only
+   from its button. While it downloads, its progress shows in its row in
+   Settings → Recorder and nowhere else; Settings closed, it goes on. A
+   failure while Settings is closed is said once in the card (out of
+   sight); done, nothing is said (the next transcript is made with it).
+4. **Deterministic or AI**: SpeakerKit and whisper are models that run on
+   this Mac, in a helper started for the transcript (`skil.li
+   Transcriber`); nothing they hear or write leaves the Mac. No voice is
+   given a name by guess: the user names them (names put on voices from
+   what is said, by the user's AI, are phase 5). The download is one
+   request to huggingface.co for two files, nothing sent with it,
+   checked by their checksums; Settings → Privacy lists it.
+5. **Wrong**: an extra speaker (SpeakerKit's measured mistake): give it
+   a name already used, the two become one. A line on the wrong speaker:
+   ⇥. Words wrong: ↩. A line nobody said: ⌘⌫, ⌘Z brings it back. The
+   wrong language or engine: Transcribe Again, which says first that it
+   replaces the lines' changes. A wrong file imported: ⌘⌫ deletes that
+   recording (to the Trash, ⌘Z). A download not wanted: Cancel, or Remove
+   once done (to the Trash, ⌘Z for 10 s). whisper's two measured
+   failures (a line repeated right after itself, an attendee's name
+   written as a speaker label) are taken out by code after it.
+
+## Voices told apart
+
+- At Stop, after the words: the track that holds several people goes
+  through SpeakerKit (Argmax's, MIT; pyannote community-1 on Core ML),
+  the number of voices found by itself. In a call, the Mac's sound; in
+  person, the microphone (the room); an import's one track. The
+  microphone in a call is the user: never split.
+- Each word goes to the voice heard at its time (the voice's stretch
+  that holds the word's middle; none: the nearest within a second; else
+  the voice of the words around it). A phrase is cut where the voice
+  changes; the lines are then made as before.
+- **Names until the user gives one**: in a call, Me, then Them when one
+  voice is found, else Them 1, Them 2… in the order they first speak; in
+  person and in an import, Speaker 1, Speaker 2…; one voice alone in
+  person stays Room.
+- The colors: Me in the accent color; every other voice in the
+  secondary color (the names tell them apart).
+- Progress: the menu bar's ring and "Transcribing… 40 %" count the
+  voices in (the words first, then the voices).
+- SpeakerKit fails on a file (none seen): that track stays one voice,
+  logged; the transcript is made.
+- `skil.li Transcriber` is a helper inside the app, started for a
+  transcript and gone after it: SpeakerKit's memory (0.8 GB at most,
+  Measured) never counts against skil.li's. SpeakerKit's models (11 MB)
+  ship inside the app: nothing is downloaded for the voices.
+
+## Import
+
+- **Import Recording…** in the launcher (`import`, "importer"; in the
+  Catalog), or a file dropped on a recording's window: the open panel
+  lists sound and video files (m4a, mp3, wav, aiff, caf, mp4, mov,
+  m4v…). Several files dropped: one recording each, in order.
+- A recording is made of it in the Recordings folder, as a recording
+  made here: its title the file's name without its extension, its date
+  the file's creation date (else its last change), its sound as one
+  track (`me.m4a`, AAC, as the microphone's), a video's picture kept as
+  `screen.mp4` (it plays beside the lines, as phase 3's screen). The
+  file itself stays where it was, untouched.
+- Its window opens at once: "Importing… 30 %", then "Transcribing…
+  40 %", in the language Settings → Recorder sets (As Ask: Ask's), with
+  the default engine, voices told apart. The menu bar's ring shows it
+  too, as after a Stop.
+- **About line**: "Imported from Board call.m4a · Mon 12 Oct 2026, 09:30
+  · 48 min · English".
+- **Said**: a file with no sound ("“Holiday.mov” has no sound to
+  transcribe."), one that cannot be read, a disk full: in the card, the
+  recording not made. Nothing else is said: the window shows it.
+- While a meeting records: the import is made all the same; its
+  transcript waits for the recording's, one at a time.
+
+## The recording's window: a line selected
+
+```
+┌ Weekly design review ─────────────────────────────────────────────────┐
+│ Weekly design review                                                  │
+│ Wed 22 Oct 2026, 14:00 · 32 min · English · with …  Transcribe Again… │
+│                                                                       │
+│ ▶  12:04 / 32:10                                                      │
+│ Me    ▁▂▅▃▁  ▂▆▇▃▁       ▁▃▂          │                                │
+│ Them      ▃▆▅▂    ▁▂▆▇▅▃▂     ▅▆▃      │                               │
+│ ───────────────────────────────────────────────────────────────────── │
+│ Me       0:00  Hello everyone, can you all hear me?                   │
+│ Paul     0:04  Yes, loud and clear.                                   │
+│(Them 2   0:07  I can hear you. Ingrid, are you with us?)              │  selected: ring
+│ Me       0:16  That's fine, Ingrid, we don't need to see you…         │
+│ ───────────────────────────────────────────────────────────────────── │
+│ Edit ↩   Next Speaker ⇥   Rename ⌥↩   Copy Line ⌘C   Delete Line ⌘⌫    │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+- **Selecting**: a click on a line selects it and plays from its start
+  (as before); ↑ ↓ move the selection without playing; esc lets go of
+  it. The selected line has a 1.5 pt ring in the accent color, the
+  selection capsule's shape; the line playing keeps its lit capsule (a
+  line can be both).
+- **The keys say what they do now**, in the hint bar: with a line
+  selected, "Edit ↩ · Next Speaker ⇥ · Rename ⌥↩ · Copy Line ⌘C ·
+  Delete Line ⌘⌫" (space still plays); without, as before ("Play space ·
+  Copy Transcript ⌘C · Show in Finder ⌘↩ · Delete ⌘⌫": the recording).
+  ⌘⌫ removes what is selected, as in Finder: the line when one is, the
+  recording when none is.
+- **⌘Z** in the window undoes the last change to its lines (an edit, a
+  speaker, a name, a line deleted), ⇧⌘Z redoes, as long as the window is
+  open. Every change is written at once (`transcript.json`,
+  `transcript.md`, `meeting.json`, the words' search index); nothing is
+  said.
+
+### Edit ↩
+
+- ↩ (or a double-click): the line's words become a field in place, the
+  caret at the end; ↩ keeps, esc puts back what was there, a click
+  elsewhere keeps. Emptied, the line is deleted (as ⌘⌫).
+- The words kept keep their times (the same words at the start and the
+  end of the line); new words share the time of what they replace.
+  `meeting.json`'s `edited` turns true: Transcribe Again says it
+  replaces the changes.
+
+### Next Speaker ⇥
+
+- The line goes to the next speaker in the speakers' order (Me first,
+  then as they first speak), around to the first; ⇧⇥ the one before.
+  It stays selected: ⇥ again moves it on. It keeps its place and time;
+  it is not joined to the lines around it.
+
+### Delete Line ⌘⌫
+
+- Gone at once; the undo card says "Line Deleted" with its first words
+  in bold, Undo ⌘Z for 10 s (`UndoableDeletes`); after the card, ⌘Z in
+  the window still brings it back. The selection moves to the next
+  line.
+
+### Rename ⌥↩
+
+A click on a speaker's name in any line, or ⌥↩ on the selected line,
+opens a menu under the name:
+
+```
+Rename “Them 2”                   (title, disabled)
+──────────
+Paul Arnaud                       the attendees not yet given
+Anna Lindqvist
+──────────
+Camille — joins Camille's lines   names already given: merges
+Me — joins your lines
+──────────
+Other Name…                       typed in place, ↩ keeps
+```
+
+- For Me: the user's own name first (My Card in Contacts, when allowed),
+  then the same list.
+- A name given renames that speaker on every line. Two speakers given
+  the same name (case and accents aside) become one: the renamed one's
+  lines go to the other, which keeps its name and its place in the
+  order. When one of the two is Me, Me is kept (its color, its track):
+  the user's own name is never given away. A speaker given the user's own
+  name joins Me.
+- ⌘Z in the window undoes a rename or a merge, its lines back to the
+  speaker they had.
+
+### Copy Line ⌘C
+
+- The selected line as `transcript.md` writes it ("**Paul** · 0:04" and
+  its words); without a selection, the whole transcript as before.
+
+## Transcribe Again
+
+On the about line's right, "Transcribe Again…" (not while a transcript
+is being made); a panel under it:
+
+```
+┌─────────────────────────────────────────────┐
+│ Transcribe again                            │
+│ Language    English ⌃⌄                      │
+│ Engine      Better transcription ⌃⌄         │  macOS · Better transcription
+│ Your changes to the lines are replaced.     │  only when there are
+│ Cancel esc                  ( Transcribe ↩ )│
+└─────────────────────────────────────────────┘
+```
+
+- **Used as picked**: the language and the engine chosen, never another
+  in their place. The languages listed are the chosen engine's.
+- **One that cannot be used** says why under the menus, and Transcribe
+  dims: "Better transcription isn't downloaded: Settings → Recorder
+  offers it." (a click opens it); "Italian can't be transcribed by
+  macOS's engine on this Mac." The transcript stays as it is.
+- ↩: the window shows "Transcribing… 40 %"; the transcript before stays
+  on disk until the new one is written. A transcript that cannot be made
+  again leaves the one before in place, and the card says why ("The
+  transcript was not made again: … The one before is kept."). A pending
+  one stays pending.
+- The names given are kept for the voices found again in the same
+  order; `edited` goes back to false; `meeting.json`'s `engine` and
+  `language` are the ones used.
+- Engine names, everywhere the user reads them: "macOS" (macOS's own
+  `SpeechTranscriber`) and "Better transcription" (whisper
+  large-v3-turbo).
+
+## Better transcription (Settings → Recorder)
+
+Its own section, after Sources:
+
+```
+Better transcription                                 [Download (1.6 GB)]
+    whisper large-v3-turbo, on this Mac: 40 % fewer errors than
+    macOS's engine, two names in three right. Downloaded from
+    huggingface.co, nothing sent. For the recorder only.
+```
+
+States of the row, by what is happening:
+
+| State | The row | The button(s) |
+|---|---|---|
+| Not downloaded | the text above | Download (1.6 GB) |
+| Not enough room | "1.7 GB free needed on this Mac: 0.9 GB left." in orange | Download (dimmed) |
+| Downloading | a progress bar, "412 MB of 1.6 GB · about 3 min left" | Cancel |
+| Checking | "Checking the file…" (its checksum: a few seconds) | – |
+| Stopped (network, quit) | "The download stopped: the network went away." in orange | Resume (from where it stopped) |
+| Wrong file | "The file downloaded is not the one expected (another checksum): nothing was kept." in orange | Download |
+| Downloaded | "Downloaded · 1.6 GB · whisper large-v3-turbo" | Remove |
+
+- **Engine**, under it once downloaded: Better transcription (the
+  default from then on) or macOS. Not downloaded: no engine row, macOS
+  is used.
+- **Download**: the model (1,624,555,275 bytes) and its VAD's (885,098
+  bytes), from huggingface.co at a fixed revision, into
+  `~/Library/Application Support/skil.li/Models/` (never in a backup).
+  Each file's SHA-256 is checked before it is kept; a wrong one is
+  thrown away. skil.li quits while downloading: what came is kept and
+  Resume goes on from there.
+- **Remove**: the model to the Trash at once, the undo card says "Better
+  Transcription Removed", Undo ⌘Z for 10 s; the engine goes back to
+  macOS.
+- **Taught once** (the moment, above): at the bottom of the first
+  recording's window that opens on a transcript made by macOS's engine,
+  one line in the secondary color: "Names heard wrong? Better
+  transcription gets two in three right, on this Mac: Settings →
+  Recorder (1.6 GB download)." A click opens the pane. Never again
+  (`Preferences.recorderBetterHintShown`).
+- Every setting is an agent's too (`set_setting recorderEngine`); the
+  download itself is the user's click only (1.6 GB of their disk).
+
+## The engine at work (whisper)
+
+- In `skil.li Transcriber`: whisper.cpp 1.9.5 (MIT, Metal), the full
+  model, its Silero VAD on, the names as its prompt ("Attendees: Paul
+  Arnaud, Anna Lindqvist. Also: …." in English, "Participants : … Aussi :
+  …." in French; 450 characters at most: the event's attendees, then the
+  user's contacts in Dictate's order) carried to every 30-second window.
+  Peak memory about 2 GB, in the helper only.
+- **Times on the recording's clock**: whisper's word times are read with
+  its VAD's cuts added back (whisper.cpp's own mapping,
+  `whisper_full_get_token_t0`), so they line up with the other track's;
+  then the drop by word times takes the other side's words out of the
+  user's, as with macOS's engine. Measured with whisper in phase 4 (To
+  check).
+- **After it**: a segment equal to the one before goes; an attendee's
+  name followed by a colon at a segment's start or after a sentence's
+  end goes ("Camille Kerjean : …").
+- Words: whisper's tokens joined into words (a token starting with a
+  space starts a word), each word's time from its first token's start to
+  its last's end.
+
+## Said, and not said (phase 4)
+
+- Not said: the voices found, a line edited or given to another
+  speaker, a speaker renamed or merged, an import started (its window
+  opens), the download done or cancelled.
+- Said: a line deleted (the undo card), the model removed (the undo
+  card), an import that could not be made (the card), a transcript not
+  made again (the card), the download failing while Settings is closed
+  (the card, once), not enough room (its row).
+
+## The files (phase 4)
+
+- `transcript.json` version 2: a line's `speaker` is a voice: `me`,
+  `them`, `them2`, `them3`… on a call's sides, `s1`, `s2`… on one track
+  (in person, an import). Version 1 files read as before.
+- `meeting.json`: `speakers` names every voice; `engine` is `macOS` or
+  `whisper-large-v3-turbo` (`SpeechTranscriber`, the name phase 1 wrote,
+  reads as `macOS`); `edited` once a line was changed by hand;
+  `imported` the file's name for an import.
+
+## Not in phase 4
+
+Names put on voices by the user's AI, chapters, the summary, ⌘K's
+actions in the window (Transcribe Again gets its key there), the q5_0
+model (worse on a bad line, Measured), a voice's lines joined when two
+speakers merge (each line keeps its place).

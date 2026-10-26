@@ -386,9 +386,13 @@ final class SkilliTools {
                        group: .actions, risk: .changes,
                        parameters: [.init(name: "label", description: "Its label, or empty for the only one.")]),
         ToolDefinition(name: "record_meeting", title: "Record a meeting",
-                       description: "Opens skil.li's Record card: the user's microphone and the Mac's sound as two tracks, transcribed on this Mac at the end. Nothing is recorded until the user presses Return in the card; this waits for it and says whether the recording started. Recording others needs their consent: never start one the user did not ask for.",
+                       description: "Opens skil.li's Record card: the user's microphone and the Mac's sound as two tracks, transcribed on this Mac at the end (the webcam and the meeting's window too when the user turns them on). Nothing is recorded until the user presses Return in the card; this waits for it and says whether the recording started. Recording others needs their consent: never start one the user did not ask for.",
                        group: .recorder, risk: .harmless,
                        parameters: [.init(name: "title", description: "The recording's name, as the user said it (“Weekly sync”); empty: “Meeting 14:30”.", isRequired: false)]),
+        ToolDefinition(name: "import_recording", title: "Import a recording",
+                       description: "Makes a recording of a sound or video file (a voice memo, a call app's own recording): its sound copied into skil.li's recordings, transcribed on this Mac, the voices told apart; the file itself stays where it is. Returns the recording's folder once its sound is copied; the transcript follows (recording_status says when).",
+                       group: .recorder, risk: .changes,
+                       parameters: [.init(name: "path", description: "The file's full path (~ allowed).")]),
         ToolDefinition(name: "recording_status", title: "See the recording",
                        description: "Whether a meeting is being recorded now (its name, how long, paused or not, its folder), or its transcript made.",
                        group: .recorder, risk: .read, parameters: []),
@@ -399,8 +403,13 @@ final class SkilliTools {
                        description: "Resumes the recording paused now.",
                        group: .recorder, risk: .changes, parameters: []),
         ToolDefinition(name: "stop_recording", title: "Stop the recording",
-                       description: "Stops the recording on now; its transcript is then made on this Mac and its window opens. Says its folder (me.m4a, them.m4a, then transcript.md).",
+                       description: "Stops the recording on now; its transcript is then made on this Mac and its window opens. Says its folder (me.m4a, them.m4a, webcam.mp4 and screen.mp4 when on, slides.json, then transcript.md).",
                        group: .recorder, risk: .changes, parameters: []),
+        ToolDefinition(name: "set_recording_source", title: "Turn a recording's source on or off",
+                       description: "While the Record card is open or a meeting is recorded: turns the microphone, the Mac's sound, the webcam or the screen (the meeting's window) on or off from now on. Turned off, a track keeps its time (silence, a black picture).",
+                       group: .recorder, risk: .changes,
+                       parameters: [.init(name: "source", description: "Which one.", options: ["microphone", "mac_sound", "webcam", "screen"]),
+                                    .init(name: "on", description: "true to turn it on, false off.", options: ["true", "false"])]),
         ToolDefinition(name: "list_tabs", title: "List browser tabs",
                        description: "The tabs open in Safari, Chrome, Arc, Brave, Edge and others: browser and title.",
                        group: .apps, risk: .read, parameters: []),
@@ -914,8 +923,19 @@ final class SkilliTools {
             }
             return said
 
+        case "import_recording":
+            guard let center = recorder?() else { throw Failure(message: "The recorder is not available.") }
+            let path = (try text("path") as NSString).expandingTildeInPath
+            guard FileManager.default.fileExists(atPath: path) else { throw Failure(message: "No file at \(path).") }
+            let folder = try await center.importForTool(URL(fileURLWithPath: path))
+            return "Imported: \(folder.path)\nIts transcript is being made on this Mac."
+
         case "recording_status":
             return recorder?()?.status ?? "Not recording."
+
+        case "set_recording_source":
+            guard let center = recorder?() else { throw Failure(message: "The recorder is not available.") }
+            return try await center.setSource(try text("source"), on: try text("on") == "true")
 
         case "pause_recording", "resume_recording", "stop_recording":
             guard let center = recorder?(), center.recorder.isRecording else { throw Failure(message: "No recording is on.") }

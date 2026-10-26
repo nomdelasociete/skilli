@@ -200,10 +200,12 @@ page: add a line here when you add a tool. -->
 | Tool | What it does | Arguments |
 | --- | --- | --- |
 | `record_meeting` | Opens the Record card; waits for ↩ (started) or esc. light | `title?` |
+| `import_recording` | Makes a recording of a sound or video file (its sound copied, transcribed on the Mac, voices told apart); the file stays where it is. | `path` |
 | `recording_status` | The recording on now. reads | |
 | `pause_recording` | Pauses it. | |
 | `resume_recording` | Resumes it. | |
 | `stop_recording` | Stops it; the transcript is made on the Mac. | |
+| `set_recording_source` | Turns the microphone, the Mac's sound, the webcam or the screen on or off from now on (Record card open or recording). | `source`, `on` |
 
 ### Snippets and your own tools
 
@@ -262,6 +264,7 @@ Each change asks in the card, every time.
 | `skilli://do?app=<app>&goal=<goal>` | "Do it here" toward a goal (percent-encoded). Several run one after the other, in order. |
 | `skilli://record?title=…` | The Record card (nothing records before ↩). |
 | `skilli://record/pause`, `…/resume`, `…/stop` | Pauses, resumes or stops the recording on now; asked every time, no Always. |
+| `skilli://record/import?file=…` | The Import panel, at that file (nothing imported before ↩). |
 | `skilli://skillies/import?url=…` | Shows a skillie from the web before Add. |
 | `skilli://apps/import?url=…` | Shows an app file before Add. |
 

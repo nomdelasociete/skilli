@@ -84,5 +84,8 @@ agree on the change before you spend time on it: [CONTRIBUTING.md](CONTRIBUTING.
 
 skil.li is free software under the [GNU General Public License v3.0](LICENSE).
 The website's fonts are under the SIL Open Font License (`website/assets/fonts/`).
+The meeting recorder tells voices apart with Argmax's SpeakerKit (MIT) and
+pyannote community-1's models converted by Argmax (CC BY 4.0), fetched when
+the app is built and shipped in it.
 
 Made by [Nom de la société](https://nomdelasociete.com).

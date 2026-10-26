@@ -21,14 +21,71 @@ public struct TranscriptWord: Codable, Equatable, Sendable {
     public var time: Double { (start + end) / 2 }
 }
 
+/// Who said a line (docs/meeting-recorder-views.md, phase 4): the user
+/// (`me`, the microphone in a call); a voice of the other side (`them`,
+/// `them2`…: the Mac's sound, told apart by SpeakerKit); a voice of a
+/// recording's one track (`s1`, `s2`…: in person, an import). Its id in
+/// `transcript.json`; its name in `meeting.json`'s `speakers`.
+public struct Voice: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+        rawValue = value
+    }
+
+    public init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    public static let me: Voice = "me"
+    public static let them: Voice = "them"
+
+    /// The other side's `number`th voice, by the order they first speak:
+    /// `them`, `them2`, `them3`…
+    public static func them(_ number: Int) -> Voice {
+        number <= 1 ? .them : Voice(rawValue: "them\(number)")
+    }
+
+    /// A one-track recording's `number`th voice: `s1`, `s2`…
+    public static func single(_ number: Int) -> Voice {
+        Voice(rawValue: "s\(number)")
+    }
+
+    /// The track it is heard on: the Mac's sound for the other side's
+    /// voices, the microphone (or the one track) for the rest.
+    public var track: Speaker {
+        rawValue.hasPrefix(Speaker.them.rawValue) ? .them : .me
+    }
+
+    /// Its name until the user gives one: "Me", "Them", "Them 2",
+    /// "Speaker 1" (`meeting.json` holds the names given, and those
+    /// written as the voices were found).
+    public var title: String {
+        if self == .me { return Speaker.me.title }
+        if self == .them { return Speaker.them.title }
+        if rawValue.hasPrefix("them"), let number = Int(rawValue.dropFirst(4)) { return "\(Speaker.them.title) \(number)" }
+        if rawValue.hasPrefix("s"), let number = Int(rawValue.dropFirst()) { return "Speaker \(number)" }
+        return rawValue
+    }
+}
+
 /// A line of the transcript: one speaker, from one moment to another.
 public struct TranscriptLine: Codable, Equatable, Sendable {
-    public var speaker: Speaker
+    public var speaker: Voice
     public var start: Double
     public var end: Double
     public var words: [TranscriptWord]
 
-    public init(speaker: Speaker, words: [TranscriptWord]) {
+    public init(speaker: Voice, words: [TranscriptWord]) {
         self.speaker = speaker
         self.words = words
         start = words.first?.start ?? 0
@@ -43,7 +100,9 @@ public struct TranscriptLine: Codable, Equatable, Sendable {
 public enum MeetingTranscript {
     /// `transcript.json`: every line and its words with their times.
     public struct File: Codable, Equatable, Sendable {
-        public var version = 1
+        /// 2: a line's speaker is any voice (phase 4); 1 held `me` and
+        /// `them` only, and reads the same.
+        public var version = 2
         public var language: String
         public var engine: String
         public var lines: [TranscriptLine]
@@ -140,9 +199,21 @@ public enum MeetingTranscript {
     /// `longest` s. Someone talking over the other starts a line of their
     /// own where they start.
     public static func lines(me: [[TranscriptWord]], them: [[TranscriptWord]], gap: Double = 1.5, longest: Double = 60) -> [TranscriptLine] {
-        let phrases = (me.map { (Speaker.me, $0) } + them.map { (Speaker.them, $0) })
-            .filter { !$0.1.isEmpty }
-            .sorted { ($0.1.first?.start ?? 0, $0.0 == .me ? 0 : 1) < ($1.1.first?.start ?? 0, $1.0 == .me ? 0 : 1) }
+        lines(me.map { (Voice.me, $0) } + them.map { (Voice.them, $0) }, gap: gap, longest: longest)
+    }
+
+    /// Every voice's phrases as one transcript, by time (`lines(me:them:)`'s
+    /// rule): the user's first when two start together.
+    public static func lines(_ voiced: [(Voice, [TranscriptWord])], gap: Double = 1.5, longest: Double = 60) -> [TranscriptLine] {
+        let phrases = voiced.enumerated()
+            .filter { !$0.element.1.isEmpty }
+            .sorted { a, b in
+                let (startA, startB) = (a.element.1.first?.start ?? 0, b.element.1.first?.start ?? 0)
+                if startA != startB { return startA < startB }
+                let (meA, meB) = (a.element.0 == .me ? 0 : 1, b.element.0 == .me ? 0 : 1)
+                return meA != meB ? meA < meB : a.offset < b.offset
+            }
+            .map(\.element)
         var lines: [TranscriptLine] = []
         for (speaker, words) in phrases {
             if var last = lines.last, last.speaker == speaker, let first = words.first, first.start - last.end <= gap,

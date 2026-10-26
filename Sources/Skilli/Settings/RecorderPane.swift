@@ -55,6 +55,10 @@ struct RecorderPane: View {
                     .settingAnchor("recorderMicrophone")
                 Toggle("The Mac's sound", isOn: $preferences.recorderMacSound)
                     .settingAnchor("recorderMacSound")
+                Toggle("Webcam", isOn: $preferences.recorderWebcam)
+                    .settingAnchor("recorderWebcam")
+                Toggle("Screen", isOn: $preferences.recorderScreen)
+                    .settingAnchor("recorderScreen")
                 Picker("Language", selection: $preferences.recorderLanguage) {
                     Text("As Ask").tag("")
                     if !preferences.recorderLanguage.isEmpty, !languages.contains(where: { $0.id == preferences.recorderLanguage }) {
@@ -68,7 +72,7 @@ struct RecorderPane: View {
             } header: {
                 Text("Sources")
             } footer: {
-                Text("On when the meeting says nothing else. In person, only the microphone; a call, both sides.")
+                Text("On when the meeting says nothing else. In person, only the microphone; a call, both sides. The screen is the meeting's window, never in person.")
             }
 
             Section {

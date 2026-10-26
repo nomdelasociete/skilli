@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SkilliCore
 
 /// The meeting recorder as skil.li shows it: the Record card, the menu bar
@@ -32,6 +33,9 @@ final class RecorderCenter {
     /// how far: no recording starts meanwhile (its folder would be left
     /// behind).
     var recordingsMoving: () -> (done: Int, of: Int)? = { nil }
+    /// The user's own name (My Card in Contacts, when allowed): offered
+    /// first for Me in a recording's window.
+    var ownName: () async -> String? = { nil }
 
     /// Why a recording cannot start now, said: nil when it can.
     private var notNow: String? {
@@ -91,6 +95,10 @@ final class RecorderCenter {
             self?.offerNext()
         }
         card.onOpenPrivacy = { [weak self] permission in self?.openPrivacy(permission) }
+        card.pictures = recorder.pictures
+        card.onTogglePicture = { [weak self] source in self?.togglePicture(source) }
+        card.onPickWindow = { [weak self] window in self?.pickWindow(window) }
+        card.windows = { [weak self] in (self?.meetingWindow, ScreenWindows.list()) }
         return card
     }()
     private lazy var indicator: RecorderIndicator = {
@@ -105,8 +113,44 @@ final class RecorderCenter {
             guard let self else { return ([], nil) }
             return (self.microphoneHolders().apps, self.callApp)
         }
+        indicator.pictures = recorder.pictures
+        indicator.onTogglePicture = { [weak self] source in self?.togglePicture(source) }
+        indicator.onPickWindow = { [weak self] window in self?.pickWindow(window) }
+        indicator.windows = { [weak self] in (self?.meetingWindow, ScreenWindows.list()) }
         return indicator
     }()
+    /// The meeting's window for the screen (phase 3), once found: the
+    /// call's app's, in a browser the one holding the meeting's tab.
+    private(set) var meetingWindow: ScreenWindow?
+    /// The meeting's tab, when it can be brought forward as recording
+    /// starts (a browser that skil.li scripts).
+    private var meetingTab: (tab: Quicklink.OpenTab, bundleID: String)?
+    /// Each Record card shown: a window lookup answering for an earlier
+    /// card (or another recording) gives up.
+    private var cardSession = 0
+
+    /// What a window lookup found: the window, the card's line, whether
+    /// ⌘↩ opens Automation, the meeting's tab when it can come forward.
+    private struct FoundWindow {
+        var window: ScreenWindow?
+        var note: String?
+        var automation = false
+        var tab: (tab: Quicklink.OpenTab, bundleID: String)?
+    }
+
+    /// The card and the recording a lookup is for, as it starts.
+    private var lookupMoment: (card: Int, folder: URL?) { (cardSession, recorder.folder) }
+
+    /// Whether the card and the recording are still those `moment` named.
+    private func still(_ moment: (card: Int, folder: URL?)) -> Bool {
+        moment.card == cardSession && moment.folder == recorder.folder
+    }
+
+    /// A lookup's answer, for the card or the recording on now.
+    private func use(_ found: FoundWindow) {
+        meetingWindow = found.window
+        meetingTab = found.tab
+    }
     /// Open windows by their folder's path, however the URL was written
     /// (`/var/…` or `/private/var/…`, a trailing slash or not).
     private var windows: [String: RecordingWindowController] = [:]
@@ -134,6 +178,7 @@ final class RecorderCenter {
         recorder.onChange = { [weak self] in self?.changed() }
         recorder.onFinished = { [weak self] folder in self?.finished(folder) }
         recorder.onStoppedByItself = { [weak self] line in self?.notify(line) }
+        recorder.onTranscriptFailed = { [weak self] line in self?.notify(line) }
         recorder.onLeftUnfinished = { [weak self] folder, record in self?.offerAtOnce(folder, record: record) }
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append(workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
@@ -210,7 +255,11 @@ final class RecorderCenter {
     private func showCard(reading: MeetingMoment.Reading, title: String?, joining: Bool, fromOutside: Bool) {
         let meeting = RecordCard.Meeting(reading: reading, joins: joining)
         let name = title ?? reading.title ?? (reading.kind == .callWithoutEvent ? reading.app.map { MeetingMoment.callTitle($0, at: .now) } : nil)
+        meetingWindow = nil
+        meetingTab = nil
+        cardSession += 1
         card.showRecord(title: name, askedLanguage: askedLanguage, consent: !preferences.recorderConsentShown, fromOutside: fromOutside, meeting: meeting)
+        startScreenForCard(reading)
     }
 
     /// The language a recording starts in: Settings → Recorder's, else
@@ -230,7 +279,152 @@ final class RecorderCenter {
             return MicrophoneApp(bundleID: joining.bundleID, name: running?.localizedName ?? joining.name, pid: running?.processIdentifier ?? 0)
         }
         return MeetingMoment.read(event: event, microphone: microphoneHolders(), linkOpensIn: opensIn,
-                                  defaults: MeetingMoment.Sources(microphone: preferences.recorderMicrophone, macSound: preferences.recorderMacSound))
+                                  defaults: MeetingMoment.Sources(microphone: preferences.recorderMicrophone, macSound: preferences.recorderMacSound,
+                                                                  webcam: preferences.recorderWebcam, screen: preferences.recorderScreen))
+    }
+
+    // MARK: - The pictures (phase 3)
+
+    /// The meeting's window and what the card says of it: the call's
+    /// app's front window, in a browser the window holding the meeting's
+    /// tab (`MeetingTabSelect`; macOS's question for Automation, never
+    /// asked, comes now). Nil: no window known (in person, nothing to go
+    /// on, an app not running yet).
+    /// Nothing is changed here: the caller applies the answer (`use`)
+    /// once it knows it is still for the same card and recording.
+    private func findMeetingWindow(_ reading: MeetingMoment.Reading) async -> FoundWindow {
+        #if SKILLI_SELFTEST
+        if let standIn = standInMeetingWindow {
+            try? await Task.sleep(for: standIn.after)
+            return FoundWindow(window: standIn.window)
+        }
+        #endif
+        guard reading.kind != .inPerson, let app = reading.app, app.pid != 0 else { return FoundWindow() }
+        let front = MicrophoneUse.frontWindow(of: app.pid).flatMap(ScreenWindows.window)
+        guard MeetingTabSelect.isBrowser(app.bundleID), let link = reading.event?.meeting?.url else {
+            return FoundWindow(window: front, note: front == nil ? nil : "Keep the call's window in sight: a minimized or hidden window gives no picture.")
+        }
+        let asks = BrowserTabReuse.browsers[app.bundleID] != nil && AutomationAccess.state(of: app.bundleID) == .notAsked
+        let plan = await card.whileMacOSAsks(asks && card.isVisible) { await MeetingTabSelect.plan(for: link, in: app) }
+        switch plan {
+        case .tab(let tab, let id):
+            return FoundWindow(window: id.flatMap(ScreenWindows.window) ?? front,
+                               note: "The meeting's tab comes forward as recording starts; a tab you pick later is recorded instead. Keep its window in sight.",
+                               tab: (tab, app.bundleID))
+        case .cannot(let line, let automation):
+            return FoundWindow(window: front, note: line, automation: automation)
+        }
+    }
+
+    /// The webcam's or the screen's row clicked, or its item in the red
+    /// dot's menu: on or off. The screen on records the meeting's window,
+    /// else the card's list opens to pick one.
+    private func togglePicture(_ source: PictureSource) {
+        switch source {
+        case .webcam:
+            let on = !recorder.sources.webcam
+            Log.trace("Recorder: the webcam turned \(on ? "on" : "off")")
+            let asks = on && AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined
+                && (AVCaptureDevice.systemPreferredCamera ?? AVCaptureDevice.default(for: .video)) != nil
+            Task { await card.whileMacOSAsks(asks && card.isVisible) { await recorder.setWebcam(on) } }
+        case .screen:
+            guard !recorder.sources.screen else {
+                Task {
+                    await recorder.setScreen(nil)
+                    card.setScreenNote(nil, automation: false)
+                }
+                return
+            }
+            Task {
+                let asked = lookupMoment
+                let found = await findMeetingWindow(card.meetingReading ?? self.reading ?? moment(for: nil))
+                guard still(asked) else { return }
+                use(found)
+                if let window = found.window {
+                    await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(window) }
+                    card.setScreenNote(found.note, automation: found.automation)
+                } else if card.isVisible, card.content == .record {
+                    card.showWindows()
+                }
+            }
+        }
+    }
+
+    /// `set_recording_source` (a tool, a skillie): a source on or off while
+    /// the card is open or a recording is on; the screen on records the
+    /// meeting's window, said when none is known.
+    func setSource(_ source: String, on: Bool) async throws -> String {
+        guard recorder.isRecording || recorder.phase == .listening else { throw MeetingRecorder.Failure(message: "No recording is on, and the Record card is not open.") }
+        let sources = recorder.sources
+        switch source {
+        case "microphone":
+            if sources.microphone != on { await recorder.setSource(.me, on: on) }
+        case "mac_sound":
+            if sources.macSound != on { await recorder.setSource(.them, on: on) }
+        case "webcam":
+            await recorder.setWebcam(on)
+        case "screen":
+            if !on {
+                await recorder.setScreen(nil)
+            } else if !sources.screen {
+                let asked = lookupMoment
+                let found = await findMeetingWindow(card.meetingReading ?? reading ?? moment(for: nil))
+                guard still(asked) else { throw MeetingRecorder.Failure(message: "The recording changed while its window was looked for: nothing turned on.") }
+                use(found)
+                guard let window = found.window else {
+                    throw MeetingRecorder.Failure(message: "No meeting's window is known: pick one in the Record card or the red dot's menu (Screen).")
+                }
+                await recorder.setScreen(window)
+                card.setScreenNote(found.note, automation: found.automation)
+            }
+        default:
+            throw MeetingRecorder.Failure(message: "No source “\(source)”: microphone, mac_sound, webcam or screen.")
+        }
+        let now = recorder.sources
+        let (named, state): (String, Bool) = switch source {
+        case "microphone": ("The microphone", now.microphone)
+        case "mac_sound": ("The Mac's sound", now.macSound)
+        case "webcam": ("The webcam", now.webcam)
+        default: ("The screen", now.screen)
+        }
+        return "\(named) \(state ? "on" : "off")."
+    }
+
+    /// A window picked for the screen (the card's list, the red dot's
+    /// menu): recorded from now on.
+    private func pickWindow(_ window: ScreenWindow) {
+        Task {
+            await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(window) }
+            // Another window than the meeting's: its tab is not this one's.
+            if window.id != meetingWindow?.id {
+                meetingTab = nil
+                card.setScreenNote(nil, automation: false)
+            }
+        }
+    }
+
+    /// The card opened with the screen on (Settings → Recorder): the
+    /// meeting's window found, then recorded; none known, the screen stays
+    /// off for a click.
+    private func startScreenForCard(_ reading: MeetingMoment.Reading) {
+        guard reading.sources.screen else { return }
+        Task {
+            let asked = lookupMoment
+            let found = await findMeetingWindow(reading)
+            // Another card opened meanwhile (this one closed): not its window.
+            guard still(asked) else { return }
+            use(found)
+            guard let window = found.window, recorder.phase == .listening, card.content == .record else { return }
+            await card.whileMacOSAsks(!ScreenTrack.isAllowed) { await recorder.setScreen(window) }
+            card.setScreenNote(found.note, automation: found.automation)
+        }
+    }
+
+    /// The meeting's tab in front of its window, as recording starts:
+    /// selected, never reloaded, the browser left where it is.
+    private func bringMeetingTabForward() {
+        guard let meetingTab, recorder.sources.screen, recorder.pictures.screen.window?.id == meetingWindow?.id else { return }
+        _ = MeetingTabSelect.select(meetingTab.tab, in: meetingTab.bundleID)
     }
 
     /// Who runs the microphone now, read at once.
@@ -283,6 +477,9 @@ final class RecorderCenter {
         let start = Self.start(reading, title: title, language: language, sources: sources)
         Task { [weak self] in
             guard let self else { return }
+            // The sound from the key on; the meeting's window looked for
+            // after (Automation's question, a browser slow to answer: seconds
+            // the call would lose), the screen joining once it is found.
             do {
                 #if SKILLI_SELFTEST
                 if self.startFails {
@@ -300,7 +497,22 @@ final class RecorderCenter {
             self.preferences.recorderConsentShown = true
             self.began(reading)
             if joining, let event = reading.event { self.join(event) }
+            if sources.screen { await self.addMeetingScreen(reading) }
         }
+    }
+
+    /// The screen on for a recording ⌘R started: the meeting's window,
+    /// once found, recorded from then on, its tab brought forward.
+    private func addMeetingScreen(_ reading: MeetingMoment.Reading) async {
+        // The recording this window is for: another one started meanwhile
+        // never gets it.
+        let asked = lookupMoment
+        let found = await findMeetingWindow(reading)
+        guard asked.folder != nil, still(asked) else { return }
+        use(found)
+        guard let window = found.window, recorder.isRecording, !recorder.sources.screen else { return }
+        await recorder.setScreen(window)
+        bringMeetingTabForward()
     }
 
     /// What `reading` starts a recording with.
@@ -424,6 +636,9 @@ final class RecorderCenter {
         do {
             let reading = meeting?.reading ?? MeetingMoment.Reading(kind: .nothing, event: nil, app: nil, sources: recorder.sources, title: nil)
             try recorder.begin(Self.start(reading, title: title, language: language, sources: recorder.sources))
+            // Recording from ↩: the tab then (a browser slow to answer
+            // never delays the start).
+            bringMeetingTabForward()
             preferences.recorderConsentShown = true
             began(reading)
             if meeting?.joins == true, let event = reading.event { join(event) }
@@ -526,7 +741,15 @@ final class RecorderCenter {
             window.present()
             return
         }
-        let window = RecordingWindowController(folder: folder, record: record, transcript: transcript)
+        let window = makeWindow(folder, record: record, transcript: transcript)
+        window.present()
+    }
+
+    /// A recording's window, its actions wired: delete, the folder, a
+    /// transcript made (again), a line deleted (the undo card), a file
+    /// dropped (imported).
+    private func makeWindow(_ folder: URL, record: MeetingRecord, transcript: MeetingTranscript.File?) -> RecordingWindowController {
+        let window = RecordingWindowController(folder: folder, record: record, transcript: transcript, ownName: ownName)
         window.onClose = { [weak self] controller in self?.windows[Self.key(controller.folder)] = nil }
         window.onShowFolder = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
         window.onDelete = { [weak self] folder, record in
@@ -538,8 +761,90 @@ final class RecorderCenter {
             try? self.recordings.write(record, to: folder)
             self.recorder.transcribe(folder, record: record)
         }
+        window.onTranscribeAgain = { [weak self] folder, record, engine in
+            self?.transcribeAgain(folder, record: record, engine: engine)
+        }
+        window.onDeleteLine = { [weak self] words, undo in
+            self?.deletes.transcriptLine(words, undo: undo)
+        }
+        window.onEdited = { _ in NotificationCenter.default.post(name: Recordings.changed, object: nil) }
+        window.onImport = { [weak self] files in self?.importFiles(files) }
         windows[Self.key(folder)] = window
+        return window
+    }
+
+    /// Transcribe Again (phase 4): the language and the engine as picked;
+    /// the transcript before stays until the new one is written.
+    private func transcribeAgain(_ folder: URL, record: MeetingRecord, engine: TranscriptEngine) {
+        recorder.transcribe(folder, record: record, again: true)
+    }
+
+    // MARK: - Import (phase 4)
+
+    /// Import Recording… (the launcher, a link): the open panel, sound and
+    /// video files; `selecting` a file a link named, chosen only with the
+    /// user's ↩.
+    func importRecording(selecting file: URL? = nil) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = RecordingImport.types
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.prompt = "Import"
+        panel.message = "Each file becomes a recording, transcribed on this Mac. The file itself stays where it is."
+        if let file {
+            panel.directoryURL = file.deletingLastPathComponent()
+            panel.nameFieldStringValue = file.lastPathComponent
+        }
+        NSApp.activate()
+        guard panel.runModal() == .OK else { return }
+        importFiles(panel.urls)
+    }
+
+    /// Each file a recording of its own, in order: its window opens at once
+    /// ("Importing… 30 %", then its transcript), voices told apart. One
+    /// that cannot be made says why in the card.
+    func importFiles(_ files: [URL]) {
+        let files = files.filter(RecordingImport.isImportable)
+        guard !files.isEmpty else { return }
+        Task {
+            let language = await MeetingTranscriber.defaultLanguage(asked: askedLanguage)
+            for file in files {
+                do {
+                    _ = try await importFile(file, language: language)
+                } catch {
+                    notify(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// `import_recording` (an agent, a skillie): one file, its recording's
+    /// folder once its sound is copied (the transcript follows).
+    func importForTool(_ file: URL) async throws -> URL {
+        guard RecordingImport.isImportable(file) else {
+            throw RecordingImport.Failure(message: "“\(file.lastPathComponent)” is not a sound or video file.")
+        }
+        return try await importFile(file, language: await MeetingTranscriber.defaultLanguage(asked: askedLanguage))
+    }
+
+    private func importFile(_ file: URL, language: String) async throws -> URL {
+        let made = try await RecordingImport.prepare(file, in: recordings, language: language)
+        let window = makeWindow(made.folder, record: made.record, transcript: nil)
+        window.showImporting(0)
         window.present()
+        do {
+            let record = try await RecordingImport.copy(file, into: made.folder, record: made.record) { done in
+                DispatchQueue.main.async { MainActor.assumeIsolated { [weak window] in window?.showImporting(done) } }
+            }
+            Log.trace("Recorder: “\(file.lastPathComponent)” imported, \(Int(record.seconds)) s")
+            NotificationCenter.default.post(name: Recordings.changed, object: nil)
+            window.show(record, transcript: nil)
+            recorder.transcribe(made.folder, record: record)
+            return made.folder
+        } catch {
+            window.close()
+            throw RecordingImport.Failure(message: "“\(file.lastPathComponent)” was not imported: \(error.localizedDescription)")
+        }
     }
 
     private func delete(_ folder: URL, title: String) {
@@ -608,6 +913,32 @@ final class RecorderCenter {
     }
 
     #if SKILLI_SELFTEST
+    /// Self-test: the meeting's window, found only `after` that long (a
+    /// browser slow to answer, Automation's question).
+    var standInMeetingWindow: (window: ScreenWindow, after: Duration)?
+
+    /// Self-test: recorded at once as ⌘R records (the sources as Settings
+    /// sets them), `screen` the window recorded.
+    func recordForTest(screen: ScreenWindow?) {
+        guard recorder.phase == .idle, !starting else { return }
+        let reading = moment(for: nil)
+        starting = true
+        Task {
+            let language = await MeetingTranscriber.defaultLanguage(asked: askedLanguage)
+            var start = Self.start(reading, title: "Pictures check", language: language, sources: reading.sources)
+            start.screen = screen
+            do {
+                try await recorder.record(start)
+            } catch {
+                starting = false
+                notify("The recording could not start: \(error.localizedDescription)")
+                return
+            }
+            starting = false
+            began(reading)
+        }
+    }
+
     /// Self-test: the card closed as esc would, without a key.
     func closeCardWithoutKeys() {
         card.closeWithoutKeys()

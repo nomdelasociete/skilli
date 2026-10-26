@@ -2,10 +2,15 @@
 
 Status: 2026-10-23, spec agreed, target raised: on par with omarchy's
 recorder, then better where skil.li knows the Mac. 2026-10-23: phase 1
-built (PR #35). 2026-10-24: phase 2, the Moment below, being built; its
-views and states in `docs/meeting-recorder-views.md`. 2026-10-25: skil.li
-quitting and the Mac sleeping during a recording (Quit and sleep below),
-and the words said kept out of backups (Where it lives).
+built (PR #35). 2026-10-24: phase 2, the Moment below, built (PR #38).
+2026-10-25: skil.li quitting and the Mac sleeping during a recording
+(Quit and sleep below), and the words said kept out of backups (Where
+it lives). 2026-10-25: phase 3, the webcam and the screen, being built;
+the Moment checked again for them and their views and states in
+`docs/meeting-recorder-views.md` ("Phase 3"). 2026-10-26: phase 4
+being built: its moment, views and states in the same file ("Phase
+4"), first the voices, import, editing and renaming, then Better
+transcription.
 
 Asked for: a meeting recorder like omarchy-meeting-recorder (an
 open-source recorder for Omarchy Linux): your microphone and the
@@ -199,8 +204,9 @@ or System Settings quits it to apply a permission (Quit & Reopen).
    and goes through at once: no question in its way (MANIFESTO 6: what is
    kept needs no question).
 3. **Neither hint nor push**: the recording is stopped as Stop stops it,
-   both tracks closed at the same moment (whole files: about a second, the
-   last buffers), `meeting.json` written `stopped`. Its transcript is left
+   every track on (the sound's two, the webcam and the screen when on)
+   closed at the same moment (whole files: about a second, the last
+   buffers), `meeting.json` written `stopped`. Its transcript is left
    for the next launch, made then a few seconds in without asking, the
    menu bar's ring showing it while it is made; done, no window opens (it
    was not asked for at that moment): the recording is in the launcher
@@ -236,8 +242,8 @@ user's act or the battery's.
    Resume ↩, Stop ⌘↩ (stops and transcribes), Keep Paused esc. Resume
    and Stop are also where they always are, the red dot's menu.
 3. **Paused, then a push at wake**: as the Mac goes to sleep the
-   recording is paused, both tracks at the same moment, as Pause does
-   (the time asleep and the time paused after it are in neither track).
+   recording is paused, every track on at the same moment, as Pause does
+   (the time asleep and the time paused after it are in no track).
    Nothing resumes by itself: whoever is in the room at wake has not
    agreed to be recorded then. The card at wake is a push, because the
    rest of a meeting that goes on is lost if missed and due now, and the
