@@ -2229,11 +2229,16 @@ re-investigating.
   is transcribed without asking and without opening its window
   (`RecorderCenter.left(in:)`, `pickUp`); nothing is made unless one is
   found. Quit and sleep (2026-10-25, the spec's "Quit and sleep"): a quit
-  with a recording on answers `applicationShouldTerminate` with
-  `.terminateLater` (`MeetingRecorder.quitReply`), closes it as Stop does
-  (both files whole, about a second), writes it `stopped` and replies;
-  a transcript being made or waiting is left `stopped` too; never a
-  question, never transcribed at the quit. `NSWorkspace.willSleepNotification`
+  with a recording on closes it as Stop does in `applicationShouldTerminate`
+  before answering `.terminateNow` (`MeetingRecorder.closeForQuit`: both
+  files whole, the main thread held about a second while the writers
+  finish on their own queues; never `.terminateLater` with a Task, which
+  never runs when the quit comes from a job of the main queue: AppKit's
+  wait for the answer runs inside that job), writes it `stopped`; a
+  transcript being made or waiting is left `stopped` too; never a
+  question, never transcribed at the quit. A file not finished 5 s in
+  (`TrackWriter.closeNow(until:)` says nil): `meeting.json` stays as it
+  was while recording, offered at the next launch as never stopped. `NSWorkspace.willSleepNotification`
   pauses a recording on (`RecorderCenter.macWillSleep`); at
   `didWakeNotification` nothing resumes, the card offers Resume ↩, Stop
   ⌘↩, Keep Paused esc (`RecordCard.Content.slept`), never taking the

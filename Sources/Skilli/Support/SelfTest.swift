@@ -18849,7 +18849,7 @@ final class SelfTest {
             let listed = backup.backups()
             let contents = try await backup.contents(of: url)
             let expected = ["1 setting", "2 snippets", "2 quicklinks", "1 window layout"]
-            let zipped = Self.zipEntries(url) ?? []
+            let zipped = await Self.zipEntries(url) ?? []
             let noClipboard = !zipped.isEmpty && !zipped.contains { $0.contains("/Clipboard/") || $0.hasSuffix("mcp.sock") }
 
             try files.removeItem(at: source.appendingPathComponent("snippets/sign.md"))
@@ -18895,23 +18895,18 @@ final class SelfTest {
     }
 
     /// The paths a zip holds (`zipinfo -1`), or nil.
-    private static func zipEntries(_ zip: URL) -> [String]? {
-        guard let text = toolOutput("/usr/bin/zipinfo", ["-1", zip.path]) else { return nil }
-        return String(decoding: text, as: UTF8.self).split(separator: "\n").map(String.init)
+    private static func zipEntries(_ zip: URL) async -> [String]? {
+        await toolOutput("/usr/bin/zipinfo", ["-1", zip.path])?.split(separator: "\n").map(String.init)
     }
 
-    /// What `tool` writes with `arguments`, nil when it fails.
-    private static func toolOutput(_ tool: String, _ arguments: [String]) -> Data? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: tool)
-        process.arguments = arguments
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        guard (try? process.run()) != nil else { return nil }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return process.terminationStatus == 0 ? data : nil
+    /// What `tool` writes with `arguments` (as text), nil when it fails. Run
+    /// off the main thread (`ChildProcess.run`): waiting for it here would
+    /// spin a nested run loop where a timer's `MainActor.assumeIsolated`
+    /// crashes the Swift runtime.
+    private static func toolOutput(_ tool: String, _ arguments: [String]) async -> String? {
+        guard let run = try? await ChildProcess.run(URL(fileURLWithPath: tool), arguments, withErrors: false, timeout: 120), run.status == 0
+        else { return nil }
+        return run.output
     }
 
     /// The words said in recordings never reach a backup
@@ -18962,11 +18957,11 @@ final class SelfTest {
             preferences.backupKeep = 10
 
             let url = try await backup.backUpNow()
-            let zipped = Self.zipEntries(url) ?? []
+            let zipped = await Self.zipEntries(url) ?? []
             let indexInZip = zipped.filter { entry in RecordingSearch.indexFiles.contains { entry.hasSuffix("/" + $0) } }
             let lookalikeKept = zipped.contains { $0.hasSuffix("/recordings-index.sqlite.bak") }
-            let unzipped = Self.toolOutput("/usr/bin/unzip", ["-p", url.path]) ?? Data()
-            let noWords = !unzipped.isEmpty && !String(decoding: unzipped, as: UTF8.self).contains("elephant")
+            let unzipped = await Self.toolOutput("/usr/bin/unzip", ["-p", url.path]) ?? ""
+            let noWords = !unzipped.isEmpty && !unzipped.contains("elephant")
 
             // Restored: this Mac's index as it was.
             try await backup.restore(url)
@@ -18984,7 +18979,7 @@ final class SelfTest {
             try PropertyListSerialization.data(fromPropertyList: ["Preferences.selftestBackup": "older"], format: .xml, options: 0)
                 .write(to: olderRoot.appendingPathComponent("Settings.plist"))
             let olderZip = destination.appendingPathComponent(olderName)
-            guard Self.toolOutput("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", olderRoot.path, olderZip.path]) != nil else {
+            guard await Self.toolOutput("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", olderRoot.path, olderZip.path]) != nil else {
                 record(name, false, "the older backup could not be zipped", nil)
                 return
             }
@@ -19002,10 +18997,27 @@ final class SelfTest {
             remade.sync(root: recordings, folders: [folder.lastPathComponent])
             let rebuilt = !remade.search("elephant").isEmpty
 
+            // A database whose pages after the first are damaged: SQLite
+            // opens it, then a read finds the damage; made again at once.
+            let pagesURL = garbage.appendingPathComponent("pages.sqlite")
+            do {
+                let whole = RecordingIndex(url: pagesURL)
+                whole.sync(root: recordings, folders: [folder.lastPathComponent])
+                _ = whole.search("elephant")
+            }
+            if let handle = try? FileHandle(forWritingTo: pagesURL) {
+                try handle.seek(toOffset: 4096)
+                try handle.write(contentsOf: Data(repeating: 0xA5, count: 16_384))
+                try handle.close()
+            }
+            let damaged = RecordingIndex(url: pagesURL)
+            damaged.sync(root: recordings, folders: [folder.lastPathComponent])
+            let readAgain = !damaged.search("elephant").isEmpty
+
             let passed = indexed && present.contains(RecordingSearch.indexFile + "-wal") && indexInZip.isEmpty && lookalikeKept && noWords
-                && keptAfterRestore && olderLeftOut && rebuilt
+                && keptAfterRestore && olderLeftOut && rebuilt && readAgain
             record(name, passed,
-                   "index with the words \(indexed), beside it \(present); in the zip: index files \(indexInZip), the look-alike kept \(lookalikeKept), no transcript text \(noWords) (\(zipped.count) entries, \(unzipped.count) bytes unzipped); after restore the index kept \(keptAfterRestore); an older backup's index left out \(olderLeftOut); an unreadable index made again \(rebuilt)",
+                   "index with the words \(indexed), beside it \(present); in the zip: index files \(indexInZip), the look-alike kept \(lookalikeKept), no transcript text \(noWords) (\(zipped.count) entries, \(unzipped.count) characters unzipped); after restore the index kept \(keptAfterRestore); an older backup's index left out \(olderLeftOut); an unreadable index made again \(rebuilt); one damaged under a read made again \(readAgain)",
                    nil)
         } catch {
             record(name, false, error.localizedDescription, nil)
@@ -23767,12 +23779,14 @@ final class SelfTest {
     /// standing in for the microphone and `them` played as the other side,
     /// for `seconds`, then is sent `ending`: SIGKILL (a crash, a power cut)
     /// or SIGTERM (a quit, as `pkill`: through `NSApp.terminate`, as the
-    /// menu's Quit or a logout). Nil when it never recorded.
-    private func recordInAnotherSkilli(root: URL, me: URL, them: URL, seconds: Double, ending: Int32) async -> ChildRecording? {
+    /// menu's Quit or a logout). `stalls`: its files never say they are
+    /// finished. Nil when it never recorded.
+    private func recordInAnotherSkilli(root: URL, me: URL, them: URL, seconds: Double, ending: Int32,
+                                       stalls: Bool = false) async -> ChildRecording? {
         guard let executable = Bundle.main.executablePath else { return nil }
         let child = Process()
         child.executableURL = URL(fileURLWithPath: executable)
-        child.arguments = ["recorderchild", root.path, me.path]
+        child.arguments = ["recorderchild", root.path, me.path] + (stalls ? ["stall"] : [])
         let output = Pipe()
         child.standardOutput = output
         let exited = DispatchSemaphore(value: 0)
@@ -23827,7 +23841,7 @@ final class SelfTest {
     /// offered as unfinished). Then the next launch's pick-up: its
     /// transcript made without a card and without opening its window.
     private func recorderQuitClosesItWhole() async {
-        let name = "Recorder: skil.li quit while recording (another skil.li sent SIGTERM) closes both tracks whole before it exits, left stopped, never offered as unfinished; the next launch makes its transcript without a card or a window"
+        let name = "Recorder: skil.li quit while recording (another skil.li sent SIGTERM) closes both tracks whole before it exits, left stopped, never offered as unfinished; the next launch makes its transcript without a card or a window; a file never finished leaves it offered as never stopped"
         guard let center = context.recorder() else {
             record(name, false, "no recorder", nil)
             return
@@ -23865,14 +23879,34 @@ final class SelfTest {
         let noWindow = center.openWindows.isEmpty
         let noCard = !center.isCardVisible
         let haveCall = FileManager.default.fileExists(atPath: Self.recorderCalls.appendingPathComponent("en01/me.wav").path)
+        // A file whose finishing never says it is done (5 s at most): the
+        // quit still ends, the recording left as it was, offered at the next
+        // launch as never stopped, never transcribed unasked.
+        var stall = "the stalled child did not record"
+        var stallPassed = false
+        if let stuck = await recordInAnotherSkilli(root: root, me: me, them: them, seconds: 4, ending: SIGTERM, stalls: true) {
+            let leftAs = center.recordings.read(stuck.folder)
+            let next = await RecorderCenter.left(in: root)
+            let offeredAgain = next.unfinished.contains { $0.0.standardizedFileURL == stuck.folder.standardizedFileURL }
+            let madeUnasked = next.toTranscribe.contains { $0.0.standardizedFileURL == stuck.folder.standardizedFileURL }
+            stallPassed = stuck.reason == .exit && stuck.status == 0 && (stuck.ended ?? 99) < 9 && leftAs?.state == .recording && offeredAgain && !madeUnasked
+            stall = String(format: "stalled: exit %@, meeting.json “%@”, offered as never stopped %@, transcribed unasked %@",
+                           stuck.ended.map { String(format: "%.2f s", $0) } ?? "never", leftAs?.state.rawValue ?? "nothing", "\(offeredAgain)",
+                           "\(madeUnasked)")
+            // Not offered by a later check.
+            if var rest = leftAs {
+                rest.state = .pending
+                try? center.recordings.write(rest, to: stuck.folder)
+            }
+        }
         let passed = quitClean && whole && stopped && notUnfinished && toMake.count == 1 && !offered && ring && made && after?.state == .done
-            && (!haveCall || lines > 0) && noWindow && noCard
+            && (!haveCall || lines > 0) && noWindow && noCard && stallPassed
         record(name, passed,
-               String(format: "recorded %.2f s, SIGTERM → exit %@ (%@ %d); tracks %.2f s / %.2f s, meeting.json %.2f s “%@”, its recorder %@, unfinished %@; found for the next launch's transcript %d, offered %@; transcribing at once %@, made %@ (“%@”, %d lines), window %@, card %@",
+               String(format: "recorded %.2f s, SIGTERM → exit %@ (%@ %d); tracks %.2f s / %.2f s, meeting.json %.2f s “%@”, its recorder %@, unfinished %@; found for the next launch's transcript %d, offered %@; transcribing at once %@, made %@ (“%@”, %d lines), window %@, card %@; %@",
                       child.recorded, child.ended.map { String(format: "%.2f s", $0) } ?? "never", child.reason == .exit ? "exit" : "signal", child.status,
                       lengths.me, lengths.them, left?.seconds ?? 0, left?.state.rawValue ?? "nothing", left?.recorder == nil ? "none" : "kept",
                       "\(!notUnfinished)", toMake.count, "\(offered)", "\(ring)", "\(made)", after?.state.rawValue ?? "?", lines,
-                      noWindow ? "none" : "opened", noCard ? "none" : "shown"),
+                      noWindow ? "none" : "opened", noCard ? "none" : "shown", stall),
                nil)
         // Not found again by a later check.
         if after?.state != .done, var rest = after {

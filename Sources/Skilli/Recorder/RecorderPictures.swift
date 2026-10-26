@@ -24,6 +24,10 @@ final class RecorderPictures {
     private var webcamWriter: PictureTrackWriter?
     private var screenWriter: PictureTrackWriter?
     private var slides: SlideReader?
+    /// The files a stop under way is closing: a quit meanwhile waits for
+    /// them too.
+    private var closing: [PictureTrackWriter] = []
+    private var closingSlides: SlideReader?
     private var folder: URL?
     private var start = 0.0
     /// The recording's pauses so far (host times): a file made later in
@@ -164,6 +168,12 @@ final class RecorderPictures {
         self.webcamWriter = nil
         self.screenWriter = nil
         self.slides = nil
+        closing = [webcamWriter, screenWriter].compactMap { $0 }
+        closingSlides = slides
+        defer {
+            closing = []
+            closingSlides = nil
+        }
         webcam.record(into: nil)
         screen.stopRecording()
         async let webcamSeconds = webcamWriter?.finish(at: stop) ?? 0
@@ -174,6 +184,31 @@ final class RecorderPictures {
         folder = nil
         pauses = []
         return (lengths.0, lengths.1, kept.count)
+    }
+
+    /// skil.li quits: every file closed at `stop` now, waited for until
+    /// `deadline` at most (the main thread held, as the sound's). Whether
+    /// each was finished by then.
+    func finishNow(at stop: Double, until deadline: DispatchTime) -> Bool {
+        markStop(at: stop)
+        let writers = [webcamWriter, screenWriter].compactMap { $0 } + closing
+        let finished = writers.allSatisfy { $0.closeNow(at: stop, until: deadline) != nil }
+        let kept = (slides ?? closingSlides)?.finishNow(at: stop) ?? 0
+        if let folder, kept == 0, slides != nil { try? FileManager.default.removeItem(at: folder.appendingPathComponent(Self.slidesFile)) }
+        webcamWriter = nil
+        screenWriter = nil
+        slides = nil
+        folder = nil
+        pauses = []
+        return finished
+    }
+
+    /// The stop's moment, at once: no picture placed past it (the files
+    /// closed after).
+    func markStop(at stop: Double) {
+        webcam.record(into: nil)
+        screen.stopRecording()
+        for writer in [webcamWriter, screenWriter].compactMap({ $0 }) { writer.markStop(at: stop) }
     }
 
     /// Nothing kept: a recording that never started for real.

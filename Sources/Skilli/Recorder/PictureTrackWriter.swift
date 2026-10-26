@@ -41,6 +41,9 @@ final class PictureTrackWriter: @unchecked Sendable {
     /// When the source last went off: a picture shown before it, arriving
     /// late, is not written after the black one.
     private var blankedAt: Double?
+    /// Once closed, its length; those waiting for a close under way.
+    private var closedLength: Double?
+    private var closeWaiters: [@Sendable (Double) -> Void] = []
     /// Pictures written, and left out while the encoder was behind.
     private(set) var written = 0
     private(set) var dropped = 0
@@ -121,25 +124,69 @@ final class PictureTrackWriter: @unchecked Sendable {
     /// is removed (0).
     func finish(at stop: Double) async -> Double {
         await withCheckedContinuation { (done: CheckedContinuation<Double, Never>) in
-            queue.async {
-                guard !self.finished else { return done.resume(returning: 0) }
-                self.finished = true
-                let end = self.timeline.finish(at: stop)
-                self.latest = nil
-                guard self.written > 0, !self.failed, self.writer.status == .writing else {
-                    if self.written == 0 {
-                        self.writer.cancelWriting()
-                        try? FileManager.default.removeItem(at: self.url)
-                    }
-                    return done.resume(returning: self.written > 0 ? end : 0)
-                }
-                self.writer.endSession(atSourceTime: CMTime(seconds: end, preferredTimescale: 600))
-                self.input.markAsFinished()
-                self.writer.finishWriting {
-                    done.resume(returning: end)
-                }
+            queue.async { self.close(at: stop) { done.resume(returning: $0) } }
+        }
+    }
+
+    /// The stop's moment, at once: no picture placed past it.
+    func markStop(at stop: Double) {
+        queue.sync { _ = timeline.finish(at: stop) }
+    }
+
+    /// skil.li quits: closed at `stop` now, waited for until `deadline` at
+    /// most (the main thread held, as the sound's). Its length; nil when
+    /// the file was not finished by then (it plays up to its last
+    /// fragment, as after a crash).
+    func closeNow(at stop: Double, until deadline: DispatchTime) -> Double? {
+        let finished = DispatchSemaphore(value: 0)
+        let length = Length()
+        queue.sync {
+            close(at: stop) { seconds in
+                length.set(seconds)
+                finished.signal()
             }
         }
+        return finished.wait(timeout: deadline) == .success ? length.value : nil
+    }
+
+    private final class Length: @unchecked Sendable {
+        private let lock = NSLock()
+        private var seconds = 0.0
+        var value: Double { lock.withLock { seconds } }
+        func set(_ value: Double) { lock.withLock { seconds = value } }
+    }
+
+    /// On the writer's queue: the file ended at `stop`, `done` told its
+    /// length once finished (a close already under way: once it is).
+    private func close(at stop: Double, done: @escaping @Sendable (Double) -> Void) {
+        guard !finished else {
+            if let closedLength { done(closedLength) } else { closeWaiters.append(done) }
+            return
+        }
+        finished = true
+        let end = timeline.finish(at: stop)
+        latest = nil
+        guard written > 0, !failed, writer.status == .writing else {
+            if written == 0 {
+                writer.cancelWriting()
+                try? FileManager.default.removeItem(at: url)
+            }
+            closed(written > 0 ? end : 0, done)
+            return
+        }
+        writer.endSession(atSourceTime: CMTime(seconds: end, preferredTimescale: 600))
+        input.markAsFinished()
+        writer.finishWriting {
+            self.queue.async { self.closed(end, done) }
+        }
+    }
+
+    private func closed(_ length: Double, _ done: @Sendable (Double) -> Void) {
+        closedLength = length
+        done(length)
+        let waiting = closeWaiters
+        closeWaiters = []
+        waiting.forEach { $0(length) }
     }
 
     /// Nothing kept: the recording never started for real.

@@ -215,7 +215,9 @@ or System Settings quits it to apply a permission (Quit & Reopen).
    (recording others is always the user's key): ⌘R makes a second
    recording. A crash or a power cut is not a quit: what was written is
    kept and offered at the next launch (Save, Later or Discard), as
-   before.
+   before. A file macOS has not finished 5 s into the quit (a stuck
+   disk) is left the same way, never transcribed unasked: the quit does
+   not wait longer, since a logout would not.
 
 **The Mac goes to sleep during a recording**: the lid closed, Sleep in
 the Apple menu, the battery run out. A recording keeps the Mac and its

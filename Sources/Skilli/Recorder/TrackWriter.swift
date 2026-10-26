@@ -41,6 +41,9 @@ final class TrackWriter: @unchecked Sendable {
     /// The host time the newest buffer taken ends at.
     private var newest = 0.0
     private var failed = false
+    /// Once closed: its length in seconds, and left when the file is
+    /// finished (closed once, by Stop or by the quit, whichever comes first).
+    private var closing: (seconds: Double, finished: DispatchGroup)?
     /// How far each run after a pause moved to its place (seconds; the
     /// track's own slip), once finished.
     private(set) var resumeJumps: [Double] = []
@@ -99,44 +102,46 @@ final class TrackWriter: @unchecked Sendable {
     /// off), pads the track to the stop, closes the file. Its length in
     /// seconds.
     func finish(at stop: Double, waitingForSource: Bool = true) async -> Double {
-        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-            queue.async {
-                self.timeline.finish(at: stop)
-                done.resume()
-            }
-        }
+        await onQueue { self.timeline.finish(at: stop) }
         let deadline = ContinuousClock.now + .seconds(waitingForSource ? 1 : 0)
         while ContinuousClock.now < deadline {
-            let arrived = await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
-                queue.async {
-                    self.drain()
-                    done.resume(returning: self.newest >= stop)
-                }
-            }
-            if arrived { break }
+            if await onQueue({ self.drained(upTo: stop) }) { break }
             try? await Task.sleep(for: .milliseconds(50))
         }
-        return await withCheckedContinuation { (done: CheckedContinuation<Double, Never>) in
-            queue.async {
-                self.timer?.cancel()
-                self.timer = nil
-                self.drain()
-                let over = self.timeline.overshoot()
-                if over > 0 { self.pending.removeLast(min(over, self.pending.count)) }
-                if let tail = self.timeline.tail() { self.apply([tail], from: []) }
-                self.flush(all: true)
-                self.resumeJumps = self.timeline.resumeJumps.map { Double($0) / Self.rate }
-                let seconds = Double(self.appended) / Self.rate
-                // A writer that failed (the disk full) is not finished: its
-                // file plays up to its last fragment as it is.
-                guard !self.failed, self.writer.status == .writing else { return done.resume(returning: seconds) }
-                self.input.markAsFinished()
-                self.writer.finishWriting {
-                    done.resume(returning: seconds)
-                }
-            }
-        }
+        let (seconds, finished) = await onQueue { self.close() }
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in finished.notify(queue: queue) { done.resume() } }
+        return seconds
     }
+
+    // MARK: - Closing while skil.li quits
+
+    // The quit may come from a job of the main queue, where no other job
+    // runs until it ends: these hold the calling thread instead (never the
+    // writer's queue).
+
+    /// Nothing after the host time `stop` goes in.
+    func markStop(at stop: Double) {
+        queue.sync { timeline.finish(at: stop) }
+    }
+
+    /// Whether what the source handed over reaches `stop`.
+    func hasArrived(upTo stop: Double) -> Bool {
+        queue.sync { drained(upTo: stop) }
+    }
+
+    /// Closes the file and waits until it is finished, until `deadline` at
+    /// most. Its length in seconds; nil when the file was not finished by
+    /// then (it plays up to its last fragment, as after a crash).
+    func closeNow(until deadline: DispatchTime) -> Double? {
+        let (seconds, finished) = queue.sync { close() }
+        return finished.wait(timeout: deadline) == .success ? seconds : nil
+    }
+
+    #if SKILLI_SELFTEST
+    /// Self-test: the file's finishing never says it is done (a stuck
+    /// writer at the quit).
+    var finishingStalls = false
+    #endif
 
     /// Nothing kept: the recording was never started for real.
     func cancel() {
@@ -148,6 +153,48 @@ final class TrackWriter: @unchecked Sendable {
     }
 
     // MARK: - On the writer's queue
+
+    private func onQueue<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+        await withCheckedContinuation { done in queue.async { done.resume(returning: work()) } }
+    }
+
+    private func drained(upTo stop: Double) -> Bool {
+        drain()
+        return newest >= stop
+    }
+
+    /// Pads or cuts the track to its stop, writes what is left and finishes
+    /// the file, once: its length, and left when the file is finished.
+    private func close() -> (seconds: Double, finished: DispatchGroup) {
+        if let closing { return closing }
+        timer?.cancel()
+        timer = nil
+        drain()
+        let over = timeline.overshoot()
+        if over > 0 { pending.removeLast(min(over, pending.count)) }
+        if let tail = timeline.tail() { apply([tail], from: []) }
+        flush(all: true)
+        resumeJumps = timeline.resumeJumps.map { Double($0) / Self.rate }
+        let finished = DispatchGroup()
+        finished.enter()
+        // A writer that failed (the disk full) is not finished: its file
+        // plays up to its last fragment as it is.
+        if !failed, writer.status == .writing {
+            input.markAsFinished()
+            #if SKILLI_SELFTEST
+            if finishingStalls {
+                writer.finishWriting {}
+                return (Double(appended) / Self.rate, finished)
+            }
+            #endif
+            writer.finishWriting { finished.leave() }
+        } else {
+            finished.leave()
+        }
+        let closed = (Double(appended) / Self.rate, finished)
+        closing = closed
+        return closed
+    }
 
     private func drain() {
         guard !failed else { return }

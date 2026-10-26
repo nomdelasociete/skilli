@@ -82,6 +82,22 @@ final class SlideReader: @unchecked Sendable {
         }
     }
 
+    /// skil.li quits: the slides as kept now, a reading under way left out.
+    @discardableResult
+    func finishNow(at stop: Double) -> Int {
+        queue.sync {
+            guard !finished else { return 0 }
+            let end = timeline.finish(at: stop)
+            timer?.cancel()
+            timer = nil
+            latest = nil
+            finished = true
+            let kept = log.kept().filter { $0.start <= end }
+            write(kept)
+            return kept.count
+        }
+    }
+
     // MARK: - On the reader's queue
 
     /// No new picture for a while (a still window): the last one again, at
