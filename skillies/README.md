@@ -150,6 +150,7 @@ Later, while it records (another skillie, or a later step of this one):
 ```bash
 "$SKILLI_CLI" call recording_status      # Recording “Weekly sync” · 12:04, and its folder
 "$SKILLI_CLI" call pause_recording       # nothing written until resume_recording
+"$SKILLI_CLI" call set_recording_source source=screen on=true   # the meeting's window; webcam, microphone, mac_sound too
 "$SKILLI_CLI" call stop_recording        # stops; the transcript is made on this Mac, its window opens
 open "skilli://record/stop"              # pause, resume, stop: asked in the card every time
 ```
@@ -167,6 +168,7 @@ each asked in the card):
 open "skilli://run/cmd:searchRecordings"   # the launcher, on Search Recordings
 "$SKILLI_CLI" call set_setting pane=recorder setting=recorderRetention value=month        # Delete after: 1 month
 "$SKILLI_CLI" call set_setting pane=recorder setting=recorderMeetingCard value=false      # no Record ⌘R on the meeting card
+"$SKILLI_CLI" call set_setting pane=recorder setting=recorderScreen value=true             # every call's window recorded too
 "$SKILLI_CLI" call set_setting pane=recorder setting=recorderFolderPath value=~/Documents/Meetings  # moves them there
 ```
 

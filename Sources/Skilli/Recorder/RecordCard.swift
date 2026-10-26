@@ -212,11 +212,15 @@ final class RecordCard {
 
     /// macOS asks a question (the camera, Screen Recording, Automation):
     /// the card steps down while it does, so the question is not under it.
-    func whileMacOSAsks(_ asking: Bool, _ work: () async -> Void) async {
+    func whileMacOSAsks<T>(_ asking: Bool, _ work: () async -> T) async -> T {
         if asking { stepDown() }
-        await work()
+        let done = await work()
         if asking, content == .record { stepUp() }
+        return done
     }
+
+    /// The meeting the card records now (nil: no card for a recording).
+    var meetingReading: MeetingMoment.Reading? { content == .record ? meeting?.reading : nil }
 
     /// The screen's ⌃⌄: the windows it can record, the meeting's first,
     /// the one recorded checked.
