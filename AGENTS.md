@@ -2236,7 +2236,9 @@ re-investigating.
   never runs when the quit comes from a job of the main queue: AppKit's
   wait for the answer runs inside that job), writes it `stopped`; a
   transcript being made or waiting is left `stopped` too; never a
-  question, never transcribed at the quit. `NSWorkspace.willSleepNotification`
+  question, never transcribed at the quit. A file not finished 5 s in
+  (`TrackWriter.closeNow(until:)` says nil): `meeting.json` stays as it
+  was while recording, offered at the next launch as never stopped. `NSWorkspace.willSleepNotification`
   pauses a recording on (`RecorderCenter.macWillSleep`); at
   `didWakeNotification` nothing resumes, the card offers Resume ↩, Stop
   ⌘↩, Keep Paused esc (`RecordCard.Content.slept`), never taking the

@@ -23768,12 +23768,14 @@ final class SelfTest {
     /// standing in for the microphone and `them` played as the other side,
     /// for `seconds`, then is sent `ending`: SIGKILL (a crash, a power cut)
     /// or SIGTERM (a quit, as `pkill`: through `NSApp.terminate`, as the
-    /// menu's Quit or a logout). Nil when it never recorded.
-    private func recordInAnotherSkilli(root: URL, me: URL, them: URL, seconds: Double, ending: Int32) async -> ChildRecording? {
+    /// menu's Quit or a logout). `stalls`: its files never say they are
+    /// finished. Nil when it never recorded.
+    private func recordInAnotherSkilli(root: URL, me: URL, them: URL, seconds: Double, ending: Int32,
+                                       stalls: Bool = false) async -> ChildRecording? {
         guard let executable = Bundle.main.executablePath else { return nil }
         let child = Process()
         child.executableURL = URL(fileURLWithPath: executable)
-        child.arguments = ["recorderchild", root.path, me.path]
+        child.arguments = ["recorderchild", root.path, me.path] + (stalls ? ["stall"] : [])
         let output = Pipe()
         child.standardOutput = output
         let exited = DispatchSemaphore(value: 0)
@@ -23828,7 +23830,7 @@ final class SelfTest {
     /// offered as unfinished). Then the next launch's pick-up: its
     /// transcript made without a card and without opening its window.
     private func recorderQuitClosesItWhole() async {
-        let name = "Recorder: skil.li quit while recording (another skil.li sent SIGTERM) closes both tracks whole before it exits, left stopped, never offered as unfinished; the next launch makes its transcript without a card or a window"
+        let name = "Recorder: skil.li quit while recording (another skil.li sent SIGTERM) closes both tracks whole before it exits, left stopped, never offered as unfinished; the next launch makes its transcript without a card or a window; a file never finished leaves it offered as never stopped"
         guard let center = context.recorder() else {
             record(name, false, "no recorder", nil)
             return
@@ -23866,14 +23868,34 @@ final class SelfTest {
         let noWindow = center.openWindows.isEmpty
         let noCard = !center.isCardVisible
         let haveCall = FileManager.default.fileExists(atPath: Self.recorderCalls.appendingPathComponent("en01/me.wav").path)
+        // A file whose finishing never says it is done (5 s at most): the
+        // quit still ends, the recording left as it was, offered at the next
+        // launch as never stopped, never transcribed unasked.
+        var stall = "the stalled child did not record"
+        var stallPassed = false
+        if let stuck = await recordInAnotherSkilli(root: root, me: me, them: them, seconds: 4, ending: SIGTERM, stalls: true) {
+            let leftAs = center.recordings.read(stuck.folder)
+            let next = await RecorderCenter.left(in: root)
+            let offeredAgain = next.unfinished.contains { $0.0.standardizedFileURL == stuck.folder.standardizedFileURL }
+            let madeUnasked = next.toTranscribe.contains { $0.0.standardizedFileURL == stuck.folder.standardizedFileURL }
+            stallPassed = stuck.reason == .exit && stuck.status == 0 && (stuck.ended ?? 99) < 9 && leftAs?.state == .recording && offeredAgain && !madeUnasked
+            stall = String(format: "stalled: exit %@, meeting.json “%@”, offered as never stopped %@, transcribed unasked %@",
+                           stuck.ended.map { String(format: "%.2f s", $0) } ?? "never", leftAs?.state.rawValue ?? "nothing", "\(offeredAgain)",
+                           "\(madeUnasked)")
+            // Not offered by a later check.
+            if var rest = leftAs {
+                rest.state = .pending
+                try? center.recordings.write(rest, to: stuck.folder)
+            }
+        }
         let passed = quitClean && whole && stopped && notUnfinished && toMake.count == 1 && !offered && ring && made && after?.state == .done
-            && (!haveCall || lines > 0) && noWindow && noCard
+            && (!haveCall || lines > 0) && noWindow && noCard && stallPassed
         record(name, passed,
-               String(format: "recorded %.2f s, SIGTERM → exit %@ (%@ %d); tracks %.2f s / %.2f s, meeting.json %.2f s “%@”, its recorder %@, unfinished %@; found for the next launch's transcript %d, offered %@; transcribing at once %@, made %@ (“%@”, %d lines), window %@, card %@",
+               String(format: "recorded %.2f s, SIGTERM → exit %@ (%@ %d); tracks %.2f s / %.2f s, meeting.json %.2f s “%@”, its recorder %@, unfinished %@; found for the next launch's transcript %d, offered %@; transcribing at once %@, made %@ (“%@”, %d lines), window %@, card %@; %@",
                       child.recorded, child.ended.map { String(format: "%.2f s", $0) } ?? "never", child.reason == .exit ? "exit" : "signal", child.status,
                       lengths.me, lengths.them, left?.seconds ?? 0, left?.state.rawValue ?? "nothing", left?.recorder == nil ? "none" : "kept",
                       "\(!notUnfinished)", toMake.count, "\(offered)", "\(ring)", "\(made)", after?.state.rawValue ?? "?", lines,
-                      noWindow ? "none" : "opened", noCard ? "none" : "shown"),
+                      noWindow ? "none" : "opened", noCard ? "none" : "shown", stall),
                nil)
         // Not found again by a later check.
         if after?.state != .done, var rest = after {

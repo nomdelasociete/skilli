@@ -129,13 +129,19 @@ final class TrackWriter: @unchecked Sendable {
         queue.sync { drained(upTo: stop) }
     }
 
-    /// Closes the file and waits until it is finished (5 s at most). Its
-    /// length in seconds.
-    func closeNow() -> Double {
+    /// Closes the file and waits until it is finished, until `deadline` at
+    /// most. Its length in seconds; nil when the file was not finished by
+    /// then (it plays up to its last fragment, as after a crash).
+    func closeNow(until deadline: DispatchTime) -> Double? {
         let (seconds, finished) = queue.sync { close() }
-        _ = finished.wait(timeout: .now() + 5)
-        return seconds
+        return finished.wait(timeout: deadline) == .success ? seconds : nil
     }
+
+    #if SKILLI_SELFTEST
+    /// Self-test: the file's finishing never says it is done (a stuck
+    /// writer at the quit).
+    var finishingStalls = false
+    #endif
 
     /// Nothing kept: the recording was never started for real.
     func cancel() {
@@ -175,6 +181,12 @@ final class TrackWriter: @unchecked Sendable {
         // plays up to its last fragment as it is.
         if !failed, writer.status == .writing {
             input.markAsFinished()
+            #if SKILLI_SELFTEST
+            if finishingStalls {
+                writer.finishWriting {}
+                return (Double(appended) / Self.rate, finished)
+            }
+            #endif
             writer.finishWriting { finished.leave() }
         } else {
             finished.leave()

@@ -248,6 +248,9 @@ final class MeetingRecorder {
                     let said = error.localizedDescription
                     DispatchQueue.main.async { MainActor.assumeIsolated { self?.stoppedByItself(said) } }
                 }
+                #if SKILLI_SELFTEST
+                writer.finishingStalls = finishingStalls
+                #endif
                 writers[speaker] = writer
             }
         } catch {
@@ -371,16 +374,41 @@ final class MeetingRecorder {
 
     /// Stops as `stop()` does (a stop under way too), holding the main
     /// thread until both files are closed: a second at most for the
-    /// sources' last buffers, then the files finished.
+    /// sources' last buffers, then the files finished, 5 s at most. A file
+    /// not finished by then: `meeting.json` stays as it was while recording,
+    /// so the next launch offers it as never stopped (Save, Later, Discard;
+    /// its length read from its files) instead of transcribing a file that
+    /// may lack its end.
     private func stopNow() {
         guard let stopping = self.stopping ?? beginStopping() else { return }
         let tracks = Speaker.allCases.compactMap { speaker in writers[speaker].map { (speaker, $0) } }
         for (_, writer) in tracks { writer.markStop(at: stopping.at) }
-        let deadline = ContinuousClock.now + .seconds(1)
-        while ContinuousClock.now < deadline, !tracks.allSatisfy({ !isOn($0.0) || $0.1.hasArrived(upTo: stopping.at) }) {
+        let arrival = ContinuousClock.now + .seconds(1)
+        while ContinuousClock.now < arrival, !tracks.allSatisfy({ !isOn($0.0) || $0.1.hasArrived(upTo: stopping.at) }) {
             Thread.sleep(forTimeInterval: 0.05)
         }
-        endStopping(lengths: tracks.map { $0.1.closeNow() })
+        let deadline = DispatchTime.now() + 5
+        let lengths = tracks.map { $0.1.closeNow(until: deadline) }
+        guard lengths.allSatisfy({ $0 != nil }) else {
+            Log.actions.error("Recorder: a track was not finished as skil.li quit; offered at the next launch")
+            abandon()
+            return
+        }
+        endStopping(lengths: lengths.compactMap { $0 })
+    }
+
+    /// The recording let go as it is, `meeting.json` untouched: found at
+    /// the next launch as one never stopped.
+    private func abandon() {
+        stopping = nil
+        writers = [:]
+        stopSources()
+        if let activity { ProcessInfo.processInfo.endActivity(activity) }
+        activity = nil
+        record = nil
+        folder = nil
+        pausedAt = nil
+        phase = .idle
     }
 
     // MARK: - Quitting
@@ -499,6 +527,8 @@ final class MeetingRecorder {
     /// Self-test: Stop takes this long to close the files (⌘R pressed
     /// meanwhile).
     var closingDelay: Duration = .zero
+    /// Self-test: the next recording's files never say they are finished.
+    var finishingStalls = false
 
     /// Self-test: the Mac's sound leaves these processes out too, and a
     /// file stands in for the microphone (the test Mac has none).

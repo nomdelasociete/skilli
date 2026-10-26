@@ -3,12 +3,13 @@
 #if SKILLI_SELFTEST
 import AppKit
 
-/// `Skilli recorderchild <recordings folder> <me.wav>`: records as skil.li
-/// does (the Mac's sound, a file standing in for the microphone) until it is
-/// killed, so the self-test finds a recording never stopped, as a crash or
-/// a power cut leaves one; or until it is sent SIGTERM, which quits it as
-/// skil.li quits (`NSApp.terminate`, then the recorder's `closeForQuit`).
-/// Prints its folder once it records.
+/// `Skilli recorderchild <recordings folder> <me.wav> [stall]`: records as
+/// skil.li does (the Mac's sound, a file standing in for the microphone)
+/// until it is killed, so the self-test finds a recording never stopped, as
+/// a crash or a power cut leaves one; or until it is sent SIGTERM, which
+/// quits it as skil.li quits (`NSApp.terminate`, then the recorder's
+/// `closeForQuit`). `stall`: its files never say they are finished. Prints
+/// its folder once it records.
 @MainActor
 enum RecorderChild {
     static func runIfRequested(_ arguments: [String]) -> Int32? {
@@ -24,6 +25,7 @@ enum RecorderChild {
         let terminate = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
         terminate.setEventHandler { MainActor.assumeIsolated { NSApp.terminate(nil) } }
         terminate.resume()
+        recorder.finishingStalls = arguments.dropFirst(4).first == "stall"
         Task { @MainActor in
             recorder.standIn(microphone: me, alsoLeaveOut: [])
             await recorder.listen()
