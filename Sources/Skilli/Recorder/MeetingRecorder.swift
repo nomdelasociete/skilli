@@ -293,7 +293,7 @@ final class MeetingRecorder {
                     DispatchQueue.main.async { MainActor.assumeIsolated { self?.stoppedByItself(said) } }
                 }
                 #if SKILLI_SELFTEST
-                writer.finishingStalls = finishingStalls
+                writer.stalls = stalls
                 #endif
                 writers[speaker] = writer
             }
@@ -427,22 +427,25 @@ final class MeetingRecorder {
     }
 
     /// Stops as `stop()` does (a stop under way too), holding the main
-    /// thread until both files are closed: a second at most for the
-    /// sources' last buffers, then the files finished, 5 s at most. A file
-    /// not finished by then: `meeting.json` stays as it was while recording,
+    /// thread until both files are closed: the sources' last buffers (a
+    /// second at most), what is left encoded and the files finished, 5 s at
+    /// most for all of it (the encoder or the disk may never answer). A file not whole and finished by then: `meeting.json` stays
+    /// as it was while recording (`recording` or `paused`), no transcript,
     /// so the next launch offers it as never stopped (Save, Later, Discard;
     /// its length read from its files) instead of transcribing a file that
     /// may lack its end.
     private func stopNow() {
         guard let stopping = self.stopping ?? beginStopping() else { return }
+        // One deadline for all of it: the last buffers, what is left to
+        // encode, the files finished.
+        let deadline = DispatchTime.now() + TrackWriter.closingTime
         let tracks = Speaker.allCases.compactMap { speaker in writers[speaker].map { (speaker, $0) } }
         for (_, writer) in tracks { writer.markStop(at: stopping.at) }
         madePictures?.markStop(at: stopping.at)
         let arrival = ContinuousClock.now + .seconds(1)
-        while ContinuousClock.now < arrival, !tracks.allSatisfy({ !isOn($0.0) || $0.1.hasArrived(upTo: stopping.at) }) {
+        while ContinuousClock.now < arrival, !tracks.allSatisfy({ !isOn($0.0) || $0.1.hasArrived(upTo: stopping.at, until: deadline) }) {
             Thread.sleep(forTimeInterval: 0.05)
         }
-        let deadline = DispatchTime.now() + 5
         let lengths = tracks.map { $0.1.closeNow(until: deadline) }
         let pictured = madePictures?.finishNow(at: stopping.at, until: deadline) ?? true
         guard lengths.allSatisfy({ $0 != nil }), pictured else {
@@ -583,8 +586,8 @@ final class MeetingRecorder {
     /// Self-test: Stop takes this long to close the files (⌘R pressed
     /// meanwhile).
     var closingDelay: Duration = .zero
-    /// Self-test: the next recording's files never say they are finished.
-    var finishingStalls = false
+    /// Self-test: what gets stuck as the next recording's files close.
+    var stalls: TrackWriter.Stall?
 
     /// Self-test: the Mac's sound leaves these processes out too, and a
     /// file stands in for the microphone (the test Mac has none).
