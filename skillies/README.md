@@ -4,13 +4,18 @@ This folder is the source of truth for the website's Skillies collection.
 Each file is a command that skil.li can run locally. Website cards, source
 previews, downloads and `catalog.json` are generated from these exact files.
 
+What a skillie is, every header key, how it runs and every tool it can call
+are in the reference: [`docs/skillies/`](../docs/skillies/README.md). This
+page is about the collection, and recipes for skil.li's features.
+
 ## Contribute
 
 1. Fork this repository. Add one script at `skillies/<category>/<unique-name>.sh`
    (also supported: `.py`, `.js`, `.rb`, `.swift`). Use lowercase hyphenated names.
    Prefer what runs on every Mac (below): a skillie that needs nothing installed
    works for everyone who adds it.
-2. Start with a shebang and the `@skilli` header from an existing example.
+2. Start with a shebang and the `@skilli` header from an existing example
+   (every key: [header reference](../docs/skillies/header.md)).
    Include `schemaVersion 1`, `title`, `description`, `packageName` and `mode`.
    Keep metadata within the first 60 lines and 8 KB, as required by the app.
 3. Include the full MIT license and your copyright notice in the script, so the
