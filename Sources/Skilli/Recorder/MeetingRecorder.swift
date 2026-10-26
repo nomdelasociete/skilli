@@ -249,7 +249,7 @@ final class MeetingRecorder {
                     DispatchQueue.main.async { MainActor.assumeIsolated { self?.stoppedByItself(said) } }
                 }
                 #if SKILLI_SELFTEST
-                writer.finishingStalls = finishingStalls
+                writer.stalls = stalls
                 #endif
                 writers[speaker] = writer
             }
@@ -374,8 +374,10 @@ final class MeetingRecorder {
 
     /// Stops as `stop()` does (a stop under way too), holding the main
     /// thread until both files are closed: a second at most for the
-    /// sources' last buffers, then the files finished, 5 s at most. A file
-    /// not finished by then: `meeting.json` stays as it was while recording,
+    /// sources' last buffers, then what is left encoded and the files
+    /// finished, 5 s at most for both (the encoder or the disk may never
+    /// answer). A file not whole and finished by then: `meeting.json` stays
+    /// as it was while recording (`recording` or `paused`), no transcript,
     /// so the next launch offers it as never stopped (Save, Later, Discard;
     /// its length read from its files) instead of transcribing a file that
     /// may lack its end.
@@ -387,7 +389,7 @@ final class MeetingRecorder {
         while ContinuousClock.now < arrival, !tracks.allSatisfy({ !isOn($0.0) || $0.1.hasArrived(upTo: stopping.at) }) {
             Thread.sleep(forTimeInterval: 0.05)
         }
-        let deadline = DispatchTime.now() + 5
+        let deadline = DispatchTime.now() + TrackWriter.closingTime
         let lengths = tracks.map { $0.1.closeNow(until: deadline) }
         guard lengths.allSatisfy({ $0 != nil }) else {
             Log.actions.error("Recorder: a track was not finished as skil.li quit; offered at the next launch")
@@ -527,8 +529,8 @@ final class MeetingRecorder {
     /// Self-test: Stop takes this long to close the files (⌘R pressed
     /// meanwhile).
     var closingDelay: Duration = .zero
-    /// Self-test: the next recording's files never say they are finished.
-    var finishingStalls = false
+    /// Self-test: what gets stuck as the next recording's files close.
+    var stalls: TrackWriter.Stall?
 
     /// Self-test: the Mac's sound leaves these processes out too, and a
     /// file stands in for the microphone (the test Mac has none).

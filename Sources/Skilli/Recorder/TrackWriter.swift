@@ -41,9 +41,21 @@ final class TrackWriter: @unchecked Sendable {
     /// The host time the newest buffer taken ends at.
     private var newest = 0.0
     private var failed = false
-    /// Once closed: its length in seconds, and left when the file is
-    /// finished (closed once, by Stop or by the quit, whichever comes first).
-    private var closing: (seconds: Double, finished: DispatchGroup)?
+    /// The file is being closed: what is left goes to the encoder.
+    private var closingStarted = false
+    /// Once closed (once, by Stop or by the quit, whichever comes first):
+    /// its length in seconds, whether all of it went to the encoder, and
+    /// left when the file is finished.
+    private var closing: Closing?
+    /// How long closing a file may take: what is left to encode, then the
+    /// file finished. Past it, the file is left as a crash leaves it.
+    static let closingTime: TimeInterval = 5
+
+    private struct Closing {
+        let seconds: Double
+        let whole: Bool
+        let finished: DispatchGroup
+    }
     /// How far each run after a pause moved to its place (seconds; the
     /// track's own slip), once finished.
     private(set) var resumeJumps: [Double] = []
@@ -108,9 +120,16 @@ final class TrackWriter: @unchecked Sendable {
             if await onQueue({ self.drained(upTo: stop) }) { break }
             try? await Task.sleep(for: .milliseconds(50))
         }
-        let (seconds, finished) = await onQueue { self.close() }
-        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in finished.notify(queue: queue) { done.resume() } }
-        return seconds
+        let closeBy = DispatchTime.now() + Self.closingTime
+        let closed = await onQueue { self.close(until: closeBy) }
+        // Finished, or past the deadline: never waits on a writer for good.
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                _ = closed.finished.wait(timeout: closeBy)
+                done.resume()
+            }
+        }
+        return closed.seconds
     }
 
     // MARK: - Closing while skil.li quits
@@ -130,17 +149,24 @@ final class TrackWriter: @unchecked Sendable {
     }
 
     /// Closes the file and waits until it is finished, until `deadline` at
-    /// most. Its length in seconds; nil when the file was not finished by
-    /// then (it plays up to its last fragment, as after a crash).
+    /// most (what is left to encode included: the encoder may never take it).
+    /// Its length in seconds; nil when the file was not whole and finished
+    /// by then (it plays up to its last fragment, as after a crash).
     func closeNow(until deadline: DispatchTime) -> Double? {
-        let (seconds, finished) = queue.sync { close() }
-        return finished.wait(timeout: deadline) == .success ? seconds : nil
+        let closed = queue.sync { close(until: deadline) }
+        return closed.whole && closed.finished.wait(timeout: deadline) == .success ? closed.seconds : nil
     }
 
     #if SKILLI_SELFTEST
-    /// Self-test: the file's finishing never says it is done (a stuck
-    /// writer at the quit).
-    var finishingStalls = false
+    /// Self-test: what gets stuck as the file closes.
+    enum Stall: String {
+        /// The file's finishing never says it is done.
+        case finishing
+        /// The encoder never takes another sample.
+        case encoder
+    }
+
+    var stalls: Stall?
     #endif
 
     /// Nothing kept: the recording was never started for real.
@@ -163,35 +189,36 @@ final class TrackWriter: @unchecked Sendable {
         return newest >= stop
     }
 
-    /// Pads or cuts the track to its stop, writes what is left and finishes
-    /// the file, once: its length, and left when the file is finished.
-    private func close() -> (seconds: Double, finished: DispatchGroup) {
+    /// Pads or cuts the track to its stop, writes what is left (until
+    /// `deadline`) and finishes the file, once.
+    private func close(until deadline: DispatchTime) -> Closing {
         if let closing { return closing }
         timer?.cancel()
         timer = nil
+        closingStarted = true
         drain()
         let over = timeline.overshoot()
         if over > 0 { pending.removeLast(min(over, pending.count)) }
         if let tail = timeline.tail() { apply([tail], from: []) }
-        flush(all: true)
+        let whole = flush(all: true, until: deadline)
         resumeJumps = timeline.resumeJumps.map { Double($0) / Self.rate }
         let finished = DispatchGroup()
         finished.enter()
-        // A writer that failed (the disk full) is not finished: its file
-        // plays up to its last fragment as it is.
-        if !failed, writer.status == .writing {
+        // A writer that failed (the disk full), or whose encoder never took
+        // the rest, is not finished: its file plays up to its last fragment
+        // as it is.
+        if whole, !failed, writer.status == .writing {
             input.markAsFinished()
-            #if SKILLI_SELFTEST
-            if finishingStalls {
-                writer.finishWriting {}
-                return (Double(appended) / Self.rate, finished)
+            writer.finishWriting {
+                #if SKILLI_SELFTEST
+                if self.stalls == .finishing { return }
+                #endif
+                finished.leave()
             }
-            #endif
-            writer.finishWriting { finished.leave() }
         } else {
             finished.leave()
         }
-        let closed = (Double(appended) / Self.rate, finished)
+        let closed = Closing(seconds: Double(appended) / Self.rate, whole: whole, finished: finished)
         closing = closed
         return closed
     }
@@ -258,25 +285,42 @@ final class TrackWriter: @unchecked Sendable {
 
     /// What is pending to the encoder, 100 ms at a time (`all`: the rest
     /// too, at the end).
-    private func flush(all: Bool) {
+    /// What is pending to the encoder, 100 ms at a time (`all`: the rest
+    /// too, at the end, waited for until `deadline`). Whether all that was
+    /// due went.
+    @discardableResult
+    private func flush(all: Bool, until deadline: DispatchTime = .distantFuture) -> Bool {
         var start = 0
         // What went is taken off once, after (a long silence is many pieces).
         defer { pending.removeFirst(start) }
         while pending.count - start >= Self.piece + (all ? 0 : Self.heldBack) || (all && start < pending.count) {
-            guard writer.status == .writing else { return fail() }
-            guard input.isReadyForMoreMediaData else {
+            guard writer.status == .writing else {
+                fail()
+                return false
+            }
+            guard encoderIsReady else {
                 // The encoder is behind: kept for the next turn, never lost
-                // (at the end, waited for).
-                guard all else { return }
+                // (at the end, waited for until the deadline).
+                guard all, DispatchTime.now() < deadline else { return !all }
                 Thread.sleep(forTimeInterval: 0.01)
                 continue
             }
             let count = min(Self.piece, pending.count - start)
-            guard let buffer = sampleBuffer(from: start, count: count) else { return fail() }
-            guard input.append(buffer) else { return fail() }
+            guard let buffer = sampleBuffer(from: start, count: count), input.append(buffer) else {
+                fail()
+                return false
+            }
             appended += count
             start += count
         }
+        return true
+    }
+
+    private var encoderIsReady: Bool {
+        #if SKILLI_SELFTEST
+        if stalls == .encoder, closingStarted { return false }
+        #endif
+        return input.isReadyForMoreMediaData
     }
 
     private func fail() {
