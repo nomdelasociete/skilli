@@ -105,7 +105,9 @@ final class TranscribeAgainPanel: NSObject, NSPopoverDelegate {
             self.content.languageMenu.removeAllItems()
             self.content.languageMenu.addItems(withTitles: languages.map(\.name))
             let code = Locale(identifier: self.language).language.languageCode?.identifier
+            // Better transcription's own code too: nb-NO is its "no".
             let index = self.languageIDs.firstIndex(of: self.language)
+                ?? WhisperTranscript.code(for: self.language).flatMap { self.languageIDs.firstIndex(of: $0) }
                 ?? self.languageIDs.firstIndex { Locale(identifier: $0).language.languageCode?.identifier == code } ?? 0
             if !languages.isEmpty {
                 self.content.languageMenu.selectItem(at: index)

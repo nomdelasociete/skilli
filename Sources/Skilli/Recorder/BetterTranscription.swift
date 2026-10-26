@@ -371,11 +371,18 @@ final class BetterTranscription {
 
     /// ⌘Z: the files back from the Trash.
     func putBack(_ moved: [(from: URL, trashed: URL)]) throws {
+        // Each one tried, whatever another did: as many back as can be.
+        var failed: Error?
         for (from, trashed) in moved {
-            try? FileManager.default.createDirectory(at: from.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try FileManager.default.moveItem(at: trashed, to: from)
+            do {
+                try FileManager.default.createDirectory(at: from.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try FileManager.default.moveItem(at: trashed, to: from)
+            } catch {
+                failed = failed ?? error
+            }
         }
         refresh()
+        if let failed { throw failed }
     }
 
     #if SKILLI_SELFTEST

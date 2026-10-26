@@ -365,7 +365,8 @@ private struct BetterTranscriptionSection: View {
     /// What went wrong, or why it cannot start.
     private var warning: String? {
         switch better.state {
-        case .stopped(let why, _): why
+        // Not enough room to go on: said instead of the stop's reason.
+        case .stopped(let why, _): better.roomLine ?? why
         case .wrongFile: "The file downloaded is not the one expected (another checksum): nothing was kept."
         case .notDownloaded: better.roomLine
         default: removeFailed
@@ -379,6 +380,7 @@ private struct BetterTranscriptionSection: View {
                 .disabled(better.roomLine != nil)
         case .stopped(_, let resumable):
             Button(resumable ? "Resume" : "Download") { better.download() }
+                .disabled(better.roomLine != nil)
         case .downloading:
             Button("Cancel") { better.cancel() }
         case .checking:
