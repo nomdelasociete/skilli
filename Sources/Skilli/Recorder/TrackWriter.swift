@@ -130,7 +130,7 @@ final class TrackWriter: @unchecked Sendable {
                 done.resume(returning: closed.finished.wait(timeout: closeBy) == .success)
             }
         }
-        return (closed.seconds, closed.whole && finished)
+        return (closed.seconds, isComplete(closed, finished: finished))
     }
 
     // MARK: - Closing while skil.li quits
@@ -156,7 +156,19 @@ final class TrackWriter: @unchecked Sendable {
     /// by then (it plays up to its last fragment, as after a crash).
     func closeNow(until deadline: DispatchTime) -> Double? {
         let closed = queue.sync { close(until: deadline) }
-        return closed.whole && closed.finished.wait(timeout: deadline) == .success ? closed.seconds : nil
+        return isComplete(closed, finished: closed.finished.wait(timeout: deadline) == .success) ? closed.seconds : nil
+    }
+
+    /// A file whole, its finishing called back in time, and the writer
+    /// done with it (`completed`: its finishing also calls back on a writer
+    /// that failed). Not: what the writer said is logged.
+    private func isComplete(_ closed: Closing, finished: Bool) -> Bool {
+        guard closed.whole, finished else { return false }
+        guard writer.status == .completed else {
+            Log.actions.error("Recorder: \(self.url.lastPathComponent, privacy: .public) not completed (\(self.writer.error?.localizedDescription ?? "status \(self.writer.status.rawValue)", privacy: .public))")
+            return false
+        }
+        return true
     }
 
     #if SKILLI_SELFTEST
@@ -170,6 +182,9 @@ final class TrackWriter: @unchecked Sendable {
         /// then each sample slowly at the close: the backlog would outlast
         /// the deadline.
         case slow
+        /// The finishing ends without a completed file (the writer not
+        /// `completed`, as one that failed).
+        case failing
     }
 
     var stalls: Stall?
@@ -215,6 +230,16 @@ final class TrackWriter: @unchecked Sendable {
         // as it is.
         if whole, !failed, writer.status == .writing {
             input.markAsFinished()
+            #if SKILLI_SELFTEST
+            if stalls == .failing {
+                // Ends without a completed file, as a writer that failed.
+                writer.cancelWriting()
+                finished.leave()
+                let closed = Closing(seconds: Double(appended) / Self.rate, whole: whole, finished: finished)
+                closing = closed
+                return closed
+            }
+            #endif
             writer.finishWriting {
                 #if SKILLI_SELFTEST
                 if self.stalls == .finishing { return }
