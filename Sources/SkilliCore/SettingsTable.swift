@@ -152,6 +152,7 @@ public enum SettingsTable {
         public static let macOS = "macOS owns permissions: the user turns them on in System Settings (Settings → Privacy opens the right list)."
         public static let signIn = "Signing in is the user's, in the app's own sign-in: skil.li never handles it."
         public static let relay = "It says where skil.li sends the relay's stream token: the user sets it in the pane."
+        public static let consent = "It sends the user's pull requests and notifications through a server: only the user turns it on, after reading what it keeps."
     }
 
     private static let set = SettingEntry.Access.tools([Tool.setSetting])
@@ -342,6 +343,8 @@ public enum SettingsTable {
         setting("github", "githubUnderSearch", "Show under the search field", .toggle),
         setting("github", "relayPublicURL", "Live updates from", .text(maxLength: 300), access: .paneOnly(Why.relay),
                 note: "Under Advanced. The address of the user's own relay, which says when a pull request changes; empty reads GitHub on a timer."),
+        setting("github", "githubServerSync", "Server sync", .toggle, access: .paneOnly(Why.consent),
+                note: "Pull requests and notifications read by the relay with its own GitHub authorization, one copy for all the user's Macs; merging and marking read stay on this Mac."),
         setting("github", "githubAccount", "GitHub", .text(maxLength: 0), access: .paneOnly(Why.signIn), preference: .some(nil)),
         setting("github", "relayToken", "Live updates token", .text(maxLength: 0), access: .paneOnly(Why.secret), preference: .some(nil),
                 secret: true, note: "Under Advanced, with Live updates from."),

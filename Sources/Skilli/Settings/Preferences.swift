@@ -179,6 +179,7 @@ final class Preferences {
         static let launcherEnglishInput = "Preferences.launcherEnglishInput"
         static let quicklinkReuseTab = "Preferences.quicklinkReuseTab"
         static let relayPublicURL = "Preferences.relayPublicURL"
+        static let githubServerSync = "Preferences.githubServerSync"
         static let backupFolder = "Preferences.backupFolder"
         static let backupSchedule = "Preferences.backupSchedule"
         static let backupKeep = "Preferences.backupKeep"
@@ -566,6 +567,13 @@ final class Preferences {
         }
     }
 
+    /// Server sync (Settings → GitHub): pull requests and notifications
+    /// read from the relay's copy, never from this Mac. Off by default; on
+    /// only from the pane, after the user's consent.
+    var githubServerSync: Bool {
+        didSet { save(githubServerSync, Key.githubServerSync) }
+    }
+
     /// Today's reminders in the menu bar (hidden when there are none).
     var remindersMenuBar: RemindersMenuBar {
         didSet { save(remindersMenuBar.rawValue, Key.remindersMenuBar) }
@@ -737,6 +745,7 @@ final class Preferences {
         launcherEnglishInput = defaults.object(forKey: Key.launcherEnglishInput) as? Bool ?? false
         quicklinkReuseTab = defaults.object(forKey: Key.quicklinkReuseTab) as? Bool ?? false
         relayPublicURL = defaults.string(forKey: Key.relayPublicURL) ?? ""
+        githubServerSync = defaults.object(forKey: Key.githubServerSync) as? Bool ?? false
         backupFolder = defaults.string(forKey: Key.backupFolder) ?? ""
         backupSchedule = defaults.string(forKey: Key.backupSchedule).flatMap(BackupSchedule.init(rawValue:)) ?? .weekly
         backupKeep = defaults.object(forKey: Key.backupKeep) as? Int ?? 10

@@ -618,9 +618,10 @@ starts from it.
   Open skil.li first ("Shortcuts", "✦K, then a key", "Windows: ✦W, then a key"; the ✦K
   group's stored name, "Leader", is never shown). Backup: Back up to, How
   often, Keep, Back Up Now, where backups go, then the backups. GitHub:
-  the account and Last read, the strip and its preview, what leaves, then
-  Live updates from (the relay: "relay" only in Advanced's help) and its
-  token under Advanced. Your Details: the card (Contacts in its place
+  the account and Last read, the strip and its preview, what leaves, Live
+  updates (this Mac's authorization), Server sync (once this Mac is
+  authorized, or while on), then Live updates from (the relay: "relay"
+  only in Advanced's help) and its token under Advanced. Your Details: the card (Contacts in its place
   while missing), your other details, About You, what leaves, then the
   people and what forms get from the card.
   Apps (docs/apps.md): a list of the apps skil.li drives that are
@@ -2384,6 +2385,35 @@ re-investigating.
   that stream is down. Notifications stay `GET /notifications` on GitHub's
   interval. No origin: the timer above, unchanged. The GitHub OAuth token
   is never sent to the relay.
+  Server sync (Settings → GitHub → Server sync, `githubServerSync`, off by
+  default, pane only: the user's consent): the relay reads pull requests
+  and notifications on GitHub with its own OAuth grant (`read:user repo`,
+  given in the browser on the relay's `/inbox/authorize`, which must prove
+  this Mac's numeric GitHub id) and keeps one encrypted copy per product
+  and user for all their Macs. Every read then goes to the relay's
+  authority (`RelayInboxClient`: `GET`/`POST /inbox`, `GET`/`POST
+  /inbox/notifications`, `DELETE /inbox`, `POST /inbox/authorization`;
+  this Mac's v2 relay token only) through `GitHubServerInbox`, which has no
+  way to GitHub: `GitHubBook.refresh` returns into it before any native
+  read, and the native read task checks again. The stream sends
+  `X-Relay-Inbox: 1` (wakes only when the relay's copy changed); the copy
+  is read on connect, on a wake (a burst folded into one more read), every
+  minute while connected and every 30 s while not (the relay reconciles
+  with GitHub at most once a minute); notifications at the relay's
+  `pollInterval`. 401 renews this Mac's relay access; 428 says to authorize
+  (checked every 5 min, every 5 s for 10 min after the browser opened,
+  never reopened by itself) and clears what was read; 429/503 keep the last
+  copy, said as paused, until `Retry-After` (else 30 s doubling to 15 min,
+  `RelayReadPacer`). A snapshot for another subject, too old, cut (checks
+  or results) or without a field the classification reads
+  (`isInMergeQueue`, `viewerCanUpdateBranch`, `createdAt`, a status's
+  `context`) is refused, never guessed. Late answers after sign-out, an
+  account change or turning it off are dropped (`reset`). Merge, Update
+  Branch and Mark Read stay native, then ask the relay to reread
+  (`POST`). Turn Off on This Mac goes back to native reads (the user's
+  choice, never a fallback); Delete for All Macs is `DELETE /inbox`.
+  Agents' lists say "Not up to date: …" when their kind could not be read
+  again.
   "pr " / "prs " or GitHub Inbox: the GitHub mode (grey chip; "gh " stays
   GitHub's search quicklink): Return opens (a notification is then read),
   ⌘Return copies the link, ⌘K (or ⇥) its actions (Open, the merge method,

@@ -451,9 +451,14 @@ what waits for you.
   twice), updates the branch or shows the checks, ⌘⌫ marks read.
 - **The strip** under the launcher's search field.
 - Sign in with GitHub (device flow); authorize this Mac in the browser for live updates. Access renews automatically and can be revoked independently of GitHub sign-in. If live updates are unavailable, the inbox keeps polling.
+- **Server sync** (off by default): the relay reads your pull requests
+  and notifications on GitHub with its own authorization, given in the
+  browser, and keeps one copy for all your Macs; this Mac only acts
+  (merge, update a branch, mark read). A relay that cannot answer is
+  said, never read around. Turn it off on one Mac, or delete it for all.
 
 Settings: GitHub (sign in) · Show under the search field · Live updates
-from · Live updates token.
+from · Live updates token · Server sync.
 
 <!-- pane: apps -->
 ## Apps

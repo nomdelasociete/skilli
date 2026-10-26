@@ -1833,6 +1833,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return place
         }
         reminderWatch.refresh()
+        // Before the strip asks: its first read goes the chosen way.
+        githubBook.serverSync = preferences.githubServerSync
         githubBook.relayPublicURL = preferences.relayPublicURL
         githubBook.keepsFresh = preferences.githubUnderSearch
         menuBarSkillies.apply()
