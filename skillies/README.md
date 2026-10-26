@@ -211,6 +211,15 @@ Later, while it records (another skillie, or a later step of this one):
 open "skilli://record/stop"              # pause, resume, stop: asked in the card every time
 ```
 
+A sound or video file made a recording (a voice memo, a call app's own
+recording), transcribed on this Mac with its voices told apart; the file
+stays where it is:
+
+```bash
+"$SKILLI_CLI" call import_recording path=~/Downloads/Board\ call.m4a   # its folder once its sound is copied
+open "skilli://record/import?file=%2FUsers%2Fme%2FCall.m4a"       # Import Recording's panel on that file: ↩ imports
+```
+
 `record_meeting` exits 0 once the user pressed ↩ ("Recording “Weekly
 sync” started."), 1 when the card was closed. Pausing and stopping ask
 in the skillie's card unless the user's tool rights allow them. While a

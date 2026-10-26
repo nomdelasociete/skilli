@@ -52,6 +52,8 @@ final class LinkRunner {
     /// The Record card, its name given or not: nothing recorded before ↩
     /// in it, so it opens at once.
     var openRecordCard: (String?) -> Void = { _ in }
+    /// Import Recording's panel, on a file when the link names one.
+    var openImport: (URL?) -> Void = { _ in }
     /// The recording on now, by its name (nil: none).
     var recordingTitle: () -> String? = { nil }
     var controlRecording: (SkilliLink.RecordingControl) -> Void = { _ in }
@@ -133,6 +135,10 @@ final class LinkRunner {
             if !dryRun { openRecordCard(title) }
         case .recording(let control):
             await askThenControl(control)
+        case .importRecording(let file):
+            // The panel only: the user's ↩ there imports.
+            log.append("import \(file ?? "")")
+            if !dryRun { openImport(file.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }) }
         }
     }
 

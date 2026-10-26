@@ -389,6 +389,10 @@ final class SkilliTools {
                        description: "Opens skil.li's Record card: the user's microphone and the Mac's sound as two tracks, transcribed on this Mac at the end (the webcam and the meeting's window too when the user turns them on). Nothing is recorded until the user presses Return in the card; this waits for it and says whether the recording started. Recording others needs their consent: never start one the user did not ask for.",
                        group: .recorder, risk: .harmless,
                        parameters: [.init(name: "title", description: "The recording's name, as the user said it (“Weekly sync”); empty: “Meeting 14:30”.", isRequired: false)]),
+        ToolDefinition(name: "import_recording", title: "Import a recording",
+                       description: "Makes a recording of a sound or video file (a voice memo, a call app's own recording): its sound copied into skil.li's recordings, transcribed on this Mac, the voices told apart; the file itself stays where it is. Returns the recording's folder once its sound is copied; the transcript follows (recording_status says when).",
+                       group: .recorder, risk: .changes,
+                       parameters: [.init(name: "path", description: "The file's full path (~ allowed).")]),
         ToolDefinition(name: "recording_status", title: "See the recording",
                        description: "Whether a meeting is being recorded now (its name, how long, paused or not, its folder), or its transcript made.",
                        group: .recorder, risk: .read, parameters: []),
@@ -918,6 +922,13 @@ final class SkilliTools {
                 throw Failure(message: "Not started: the Record card was closed without recording.")
             }
             return said
+
+        case "import_recording":
+            guard let center = recorder?() else { throw Failure(message: "The recorder is not available.") }
+            let path = (try text("path") as NSString).expandingTildeInPath
+            guard FileManager.default.fileExists(atPath: path) else { throw Failure(message: "No file at \(path).") }
+            let folder = try await center.importForTool(URL(fileURLWithPath: path))
+            return "Imported: \(folder.path)\nIts transcript is being made on this Mac."
 
         case "recording_status":
             return recorder?()?.status ?? "Not recording."

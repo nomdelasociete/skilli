@@ -310,6 +310,13 @@ final class SelfTest {
         /// window minimized or covered said in the menu bar; a scratch
         /// Chrome's window (keys, Chrome).
         case pictures
+        /// Only the recorder's phase 4 without Better transcription: the
+        /// played-back calls through the recorder's own transcript, the
+        /// voices told apart (SpeakerKit in skil.li Transcriber); an import;
+        /// a line edited, given to another speaker, deleted and brought
+        /// back; speakers renamed and merged; Transcribe Again (keys,
+        /// ~10 min).
+        case voices
     }
 
     /// Extra trigger only the self-test registers. No Hyper tool listens to
@@ -707,6 +714,10 @@ final class SelfTest {
         if scope == .pictures {
             window.center()
             return await finish(after: [picturesChecks])
+        }
+        if scope == .voices {
+            window.center()
+            return await finish(after: [voicesChecks])
         }
         if scope == .emoji {
             window.center()
@@ -23612,6 +23623,586 @@ final class SelfTest {
     // MARK: - Meeting recorder (docs/meeting-recorder.md, phase 1)
 
     /// Every recorder check, on the self-test's own Recordings folder.
+    // MARK: - Phase 4: voices, import, editing (docs/meeting-recorder-views.md)
+
+    /// Phase 4's checks: the played-back calls through the recorder's own
+    /// transcript, the voices told apart; an import; a line edited, given
+    /// to another speaker, deleted and brought back; speakers renamed and
+    /// merged; Transcribe Again as picked.
+    private func voicesChecks() async {
+        let (consent, language) = (context.preferences.recorderConsentShown, context.preferences.voiceLanguage)
+        defer {
+            context.preferences.recorderConsentShown = consent
+            context.preferences.voiceLanguage = language
+        }
+        context.preferences.recorderConsentShown = true
+        context.preferences.voiceLanguage = "en-US"
+        var imported: URL?
+        imported = await importMakesARecording()
+        if !aborted, let imported { await linesEditedAndUndone(imported) }
+        let call = aborted ? nil : await voicesToldApartInTheCalls()
+        if !aborted, let call { await speakersRenamedAndMerged(call) }
+        if !aborted, let call { await transcribeAgainAsPicked(call) }
+    }
+
+    /// The played-back calls (`script/recorder-measure`), their names
+    /// ("en01"…"fr08"); none on this Mac: empty.
+    private static var playedBackCalls: [URL] {
+        ((try? FileManager.default.contentsOfDirectory(at: recorderCalls, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.lastPathComponent.range(of: #"^(en|fr)\d\d$"#, options: .regularExpression) != nil }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// A WAV as the recorder's own tracks are written (`TrackWriter`: AAC
+    /// in M4A, mono, 48 kHz, 64 kb/s), so the engines hear what they hear
+    /// in a recording.
+    nonisolated private static func m4a(from wav: URL, to url: URL) -> Bool {
+        guard let input = try? AVAudioFile(forReading: wav),
+              let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48000, channels: 1, interleaved: false),
+              let converter = AVAudioConverter(from: input.processingFormat, to: format),
+              let output = try? AVAudioFile(forWriting: url, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 48000,
+                                                                         AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64000],
+                                            commonFormat: .pcmFormatFloat32, interleaved: false),
+              let read = AVAudioPCMBuffer(pcmFormat: input.processingFormat, frameCapacity: 16384),
+              let written = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(16384 * 48000 / input.processingFormat.sampleRate) + 1024)
+        else { return false }
+        var finished = false
+        while true {
+            written.frameLength = 0
+            var error: NSError?
+            let status = converter.convert(to: written, error: &error) { _, state in
+                guard !finished, (try? input.read(into: read, frameCount: 16384)) != nil, read.frameLength > 0 else {
+                    finished = true
+                    state.pointee = .endOfStream
+                    return nil
+                }
+                state.pointee = .haveData
+                return read
+            }
+            if error != nil { return false }
+            if written.frameLength > 0, (try? output.write(from: written)) == nil { return false }
+            if status == .endOfStream || status == .error { return status == .endOfStream }
+        }
+    }
+
+    /// Of `lines` on `track` (nil: every line), the words given to the
+    /// person speaking at their time, the voices mapped one to one to the
+    /// people by the time they share (most first); words where nobody of
+    /// that side speaks are left out.
+    nonisolated private static func attribution(_ lines: [TranscriptLine], track: Speaker?, turns: [CallTruth.Turn]) -> (right: Int, of: Int) {
+        let side = turns.filter { track == nil || $0.me == (track == .me) }
+        var heard: [(voice: Voice, people: Set<String>)] = []
+        for line in lines where track == nil || line.speaker.track == track {
+            for word in line.words where !MeetingTranscript.folded(word.text).isEmpty {
+                let people = Set(side.filter { $0.start - 0.25 <= word.time && word.time <= $0.end + 0.25 }.compactMap(\.speaker))
+                if !people.isEmpty { heard.append((line.speaker, people)) }
+            }
+        }
+        var shared: [Voice: [String: Int]] = [:]
+        for word in heard {
+            for person in word.people { shared[word.voice, default: [:]][person, default: 0] += 1 }
+        }
+        var mapping: [Voice: String] = [:]
+        let pairs = shared.flatMap { voice, people in people.map { (voice, $0.key, $0.value) } }.sorted { $0.2 > $1.2 }
+        for (voice, person, _) in pairs where mapping[voice] == nil && !mapping.values.contains(person) { mapping[voice] = person }
+        return (heard.filter { mapping[$0.voice].map($0.people.contains) ?? false }.count, heard.count)
+    }
+
+    /// Every played-back call transcribed by the recorder's own code
+    /// (`MeetingTranscriber`, macOS's engine), the other side's voices
+    /// told apart by `skil.li Transcriber`; then its one-track mix as an
+    /// import. The transcripts and the voices' stretches are written for
+    /// `script/recorder-measure`'s scorers (`voices/app-st`, `voices/app-sk`),
+    /// to compare with the Measured tables. en01's call is kept for the
+    /// checks after.
+    private func voicesToldApartInTheCalls() async -> URL? {
+        let name = "Recorder phase 4: the played-back calls transcribed as skil.li does, the other side's voices told apart (SpeakerKit, in skil.li Transcriber), and each call's one-track mix as an import"
+        let calls = Self.playedBackCalls
+        guard !calls.isEmpty else {
+            checks.append(Check(name: name, passed: true, skipped: true,
+                                detail: "no played-back calls on this Mac (script/recorder-measure/push.sh puts them in ~/recorder-measure)", latencyMs: nil))
+            return nil
+        }
+        guard TranscriberHelper.executable != nil, TranscriberHelper.speakerModels != nil else {
+            record(name, false, "this build has no skil.li Transcriber or no SpeakerKit models", nil)
+            return nil
+        }
+        let recordings = Recordings(root: recorderScratch.appendingPathComponent("voices-recordings", isDirectory: true))
+        let out = context.snapshotDirectory?.appendingPathComponent("voices", isDirectory: true)
+        var kept: URL?
+        var rows: [String] = []
+        // The calls that went through (rows also say those that did not).
+        var processed = 0
+        var errors = (me: 0.0, meWords: 0, them: 0.0, themWords: 0)
+        var given = (call: (right: 0, of: 0), mix: (right: 0, of: 0))
+        var counts = (callRight: 0, callFewer: 0, mixRight: 0, mixFewer: 0)
+        var audio = 0.0, wall = 0.0
+        for call in calls {
+            guard let data = try? Data(contentsOf: call.appendingPathComponent("truth.json")),
+                  let truth = try? JSONDecoder().decode(CallTruth.self, from: data) else { continue }
+            let language = truth.language == "fr" ? "fr-FR" : "en-US"
+            let user = truth.turns.first(where: \.me)?.speaker
+            let others = Set(truth.turns.filter { !$0.me }.compactMap(\.speaker)), everyone = Set(truth.turns.compactMap(\.speaker))
+            // As a call: the microphone and the Mac's sound.
+            guard let folder = try? recordings.makeFolder(title: call.lastPathComponent, started: .now),
+                  let mix = try? recordings.makeFolder(title: call.lastPathComponent + " mix", started: .now) else { continue }
+            let converted = await Task.detached {
+                Self.m4a(from: call.appendingPathComponent("me.wav"), to: folder.appendingPathComponent(Speaker.me.file))
+                    && Self.m4a(from: call.appendingPathComponent("them.wav"), to: folder.appendingPathComponent(Speaker.them.file))
+                    && Self.m4a(from: call.appendingPathComponent("mix.wav"), to: mix.appendingPathComponent(Speaker.me.file))
+            }.value
+            guard converted else {
+                rows.append("\(call.lastPathComponent): not converted")
+                continue
+            }
+            var record = MeetingRecord(title: call.lastPathComponent, started: .now, language: language, recorder: nil)
+            record.attendees = (truth.attendees ?? []).filter { $0 != user }
+            record.seconds = truth.seconds ?? 0
+            record.state = .transcribing
+            var single = record
+            single.unused = [.them]
+            single.imported = "mix.wav"
+            single.speakers = [Voice.me.rawValue: RecordingImport.laneName]
+            let start = ContinuousClock.now
+            guard let done = try? await MeetingTranscriber.transcribe(folder, record: record, step: { _ in }),
+                  let oneTrack = try? await MeetingTranscriber.transcribe(mix, record: single, step: { _ in }),
+                  let transcript = recordings.transcript(folder), let mixed = recordings.transcript(mix) else {
+                rows.append("\(call.lastPathComponent): no transcript")
+                continue
+            }
+            wall += (ContinuousClock.now - start).milliseconds / 1000
+            audio += 2 * (truth.seconds ?? 0)
+            try? recordings.write(done, to: folder)
+            try? recordings.write(oneTrack, to: mix)
+            if call.lastPathComponent == "en01" { kept = folder }
+            // Each side against the script.
+            let mine = Self.errorsPerHundred(truth.turns.filter(\.me).map(\.text).joined(separator: " "),
+                                             transcript.lines.filter { $0.speaker.track == .me }.map(\.text).joined(separator: " "))
+            let theirs = Self.errorsPerHundred(truth.turns.filter { !$0.me }.map(\.text).joined(separator: " "),
+                                               transcript.lines.filter { $0.speaker.track == .them }.map(\.text).joined(separator: " "))
+            errors.me += mine.errors * Double(mine.words) / 100
+            errors.meWords += mine.words
+            errors.them += theirs.errors * Double(theirs.words) / 100
+            errors.themWords += theirs.words
+            // The voices against the people.
+            let callVoices = Set(transcript.lines.filter { $0.speaker.track == .them }.map(\.speaker))
+            let mixVoices = Set(mixed.lines.map(\.speaker))
+            let callGiven = Self.attribution(transcript.lines, track: .them, turns: truth.turns)
+            let mixGiven = Self.attribution(mixed.lines, track: nil, turns: truth.turns)
+            given.call.right += callGiven.right
+            given.call.of += callGiven.of
+            given.mix.right += mixGiven.right
+            given.mix.of += mixGiven.of
+            counts.callRight += callVoices.count == others.count ? 1 : 0
+            counts.callFewer += callVoices.count < others.count ? 1 : 0
+            counts.mixRight += mixVoices.count == everyone.count ? 1 : 0
+            counts.mixFewer += mixVoices.count < everyone.count ? 1 : 0
+            processed += 1
+            rows.append(String(format: "%@ them %d/%d voices %.0f %%, mix %d/%d %.0f %%", call.lastPathComponent, callVoices.count, others.count,
+                               100 * Double(callGiven.right) / Double(max(1, callGiven.of)), mixVoices.count, everyone.count,
+                               100 * Double(mixGiven.right) / Double(max(1, mixGiven.of))))
+            // For the scorers: the text of each side; each track's stretches.
+            if let out {
+                for (track, lines) in [("me", transcript.lines.filter { $0.speaker.track == .me }), ("them", transcript.lines.filter { $0.speaker.track == .them })] {
+                    let file = out.appendingPathComponent("app-st/\(call.lastPathComponent)/\(track).json")
+                    try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try? JSONSerialization.data(withJSONObject: ["text": lines.map(\.text).joined(separator: " ")]).write(to: file)
+                }
+                for (track, url) in [("them", folder.appendingPathComponent(Speaker.them.file)), ("mix", mix.appendingPathComponent(Speaker.me.file))] {
+                    let began = ContinuousClock.now
+                    let stretches = (try? await TranscriberHelper.voices(of: url) { _ in }) ?? nil
+                    let seconds = (ContinuousClock.now - began).milliseconds / 1000
+                    let file = out.appendingPathComponent("app-sk/\(call.lastPathComponent)/\(track).json")
+                    try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    let segments = (stretches ?? []).map { ["speaker": "S\($0.voice)", "start": $0.start, "end": $0.end] as [String: Any] }
+                    try? JSONSerialization.data(withJSONObject: ["segments": segments, "audioSeconds": truth.seconds ?? 0, "wallSeconds": seconds,
+                                                                 "maxRSSMB": 0] as [String: Any]).write(to: file)
+                }
+            }
+        }
+        let callShare = 100 * Double(given.call.right) / Double(max(1, given.call.of))
+        let mixShare = 100 * Double(given.mix.right) / Double(max(1, given.mix.of))
+        let me = 100 * errors.me / Double(max(1, errors.meWords)), them = 100 * errors.them / Double(max(1, errors.themWords))
+        // Measured (SpeakerKit): never fewer voices than people on the Mac's
+        // sound; the words given to the right person, most of them.
+        let passed = processed == calls.count && kept != nil && counts.callFewer == 0 && callShare >= 85 && mixShare >= 75 && me <= 30 && them <= 25
+        record(name, passed,
+               String(format: "%d calls (%.0f min of tracks in %.0f s, ×%.0f real time); errors per hundred words me %.1f (%d words), them %.1f (%d words), numbers left out; the other side's words given to the right person %.1f %%, voices found right in %d calls, fewer in %d; one-track mix %.1f %%, right in %d, fewer in %d; %@",
+                      processed, audio / 60, wall, audio / max(1, wall), me, errors.meWords, them, errors.themWords, callShare, counts.callRight,
+                      counts.callFewer, mixShare, counts.mixRight, counts.mixFewer, rows.joined(separator: "; ")),
+               nil)
+        return kept
+    }
+
+    /// `import_recording` with a played-back call's one-track mix: its
+    /// window at once, a recording named after the file, the sound one
+    /// lane ("Sound"), its voices Speaker 1, 2…, the file untouched; a
+    /// video with no sound said, nothing made. Its folder, for the
+    /// editing checks.
+    private func importMakesARecording() async -> URL? {
+        let name = "Recorder phase 4: Import (import_recording): a one-track recording named after the file, its window at once, voices told apart (Speaker 1, 2…), the file untouched; a video with no sound is said, nothing made"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return nil
+        }
+        let call = Self.recorderCalls.appendingPathComponent("en03")
+        guard let data = try? Data(contentsOf: call.appendingPathComponent("truth.json")), let truth = try? JSONDecoder().decode(CallTruth.self, from: data)
+        else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "no played-back calls on this Mac", latencyMs: nil))
+            return nil
+        }
+        let file = recorderScratch.appendingPathComponent("Board call.wav")
+        try? FileManager.default.removeItem(at: file)
+        guard (try? FileManager.default.copyItem(at: call.appendingPathComponent("mix.wav"), to: file)) != nil else {
+            record(name, false, "the file could not be made", nil)
+            return nil
+        }
+        let before = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let settings = context.tools.settings
+        let mode = settings.mode
+        settings.mode = .always
+        defer { settings.mode = mode }
+        let started = Task { await self.skilliCall("import_recording", "{\"path\":\"\(file.path)\"}") }
+        let atOnce = await waitUntil(timeout: 10) { center.openWindows.contains { $0.record.imported == "Board call.wav" } } != nil
+        let (status, said) = await started.value
+        let made = await waitUntil(timeout: 180) {
+            center.openWindows.contains { $0.record.imported == "Board call.wav" && !$0.shownLines.isEmpty }
+        } != nil
+        guard atOnce, made, let controller = center.openWindows.first(where: { $0.record.imported == "Board call.wav" }),
+              let record = center.recordings.read(controller.folder) else {
+            self.record(name, false, "window at once \(atOnce), transcript \(made); the tool said (\(status)) “\(said)”", nil)
+            return nil
+        }
+        let voices = MeetingVoices.order(of: controller.shownLines)
+        let names = voices.map { MeetingVoices.name(of: $0, in: controller.shownNames) }
+        let people = Set(truth.turns.compactMap(\.speaker))
+        let given = Self.attribution(controller.shownLines, track: nil, turns: truth.turns)
+        let after = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        await captureRecordingWindow(controller, as: "recorder-import")
+        controller.showDropRing(true)
+        await captureRecordingWindow(controller, as: "recorder-window-drop")
+        controller.showDropRing(false)
+        // A video with no sound: said, nothing made.
+        let silent = recorderScratch.appendingPathComponent("No sound.mov")
+        let wrote = await Self.writeSilentVideo(silent)
+        let folders = (try? FileManager.default.contentsOfDirectory(atPath: center.recordings.root.path))?.count ?? 0
+        let (refusedStatus, refused) = await skilliCall("import_recording", "{\"path\":\"\(silent.path)\"}")
+        let foldersAfter = (try? FileManager.default.contentsOfDirectory(atPath: center.recordings.root.path))?.count ?? 0
+        let passed = status == 0 && said.contains("Imported") && record.imported == "Board call.wav" && record.unused == [.them] && record.state == .done
+            && record.title == "Board call" && controller.shownAbout.hasPrefix("Imported from Board call.wav") && controller.shownLanes == ["Sound"]
+            && voices.allSatisfy { $0.rawValue.hasPrefix("s") } && voices.count >= 2 && names.first == "Speaker 1"
+            && Double(given.right) >= 0.75 * Double(given.of) && before?.fileSize == after?.fileSize
+            && before?.contentModificationDate == after?.contentModificationDate
+            && wrote && refusedStatus != 0 && refused.contains("has no sound to transcribe") && folders == foldersAfter
+        self.record(name, passed,
+                    String(format: "the tool said (%d) “%@”; “%@”, %@, lanes %@, %d voices for %d people (%@), %.0f %% of words to the right person; the file untouched %@; a video with no sound (%d) “%@”, folders %d → %d",
+                           status, said, record.title, controller.shownAbout, controller.shownLanes.joined(separator: ", "), voices.count, people.count,
+                           names.joined(separator: ", "), 100 * Double(given.right) / Double(max(1, given.of)),
+                           "\(before?.fileSize == after?.fileSize && before?.contentModificationDate == after?.contentModificationDate)",
+                           refusedStatus, refused, folders, foldersAfter),
+                    nil)
+        return controller.folder
+    }
+
+    /// A one-second black video with no sound track.
+    nonisolated private static func writeSilentVideo(_ url: URL) async -> Bool {
+        try? FileManager.default.removeItem(at: url)
+        guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mov) else { return false }
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 64,
+                                                                           AVVideoHeightKey: 64])
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: nil)
+        writer.add(input)
+        guard writer.startWriting() else { return false }
+        writer.startSession(atSourceTime: .zero)
+        for frame in 0..<10 {
+            var buffer: CVPixelBuffer?
+            CVPixelBufferCreate(nil, 64, 64, kCVPixelFormatType_32BGRA, nil, &buffer)
+            guard let buffer else { return false }
+            // A writer that failed is never ready again: not waited for.
+            while !input.isReadyForMoreMediaData {
+                guard writer.status == .writing else { return false }
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            guard adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 10)) else { return false }
+        }
+        input.markAsFinished()
+        await writer.finishWriting()
+        return writer.status == .completed
+    }
+
+    /// The window has the keyboard before keys are pressed into it; else
+    /// every later check is skipped (no key may land in another app).
+    private func recordingWindowHasKeys(_ controller: RecordingWindowController, _ name: String) async -> Bool {
+        controller.present()
+        if await waitUntil(timeout: 2, { controller.nsWindow.isKeyWindow && NSApp.isActive }) != nil { return true }
+        aborted = true
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
+        record(name, false, "the recording's window did not take the keyboard (front: \(front)): stopped so no key lands elsewhere", nil)
+        return false
+    }
+
+    /// A real click at the middle of `frame` (AppKit's coordinates).
+    private func click(_ frame: NSRect) async {
+        let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        let point = CGPoint(x: frame.midX, y: screenHeight - frame.midY)
+        let source = CGEventSource(stateID: .hidSystemState)
+        for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
+            CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+            await pause(60)
+        }
+    }
+
+    /// In the import's window, with keys: a click selects a line (and
+    /// plays it), ↓ the next, ↩ edits it in place (typed, ↩ kept, written),
+    /// ⇥ gives it to the next speaker and ⇧⇥ back, ⌘⌫ deletes it with the
+    /// undo card whose ⌘Z brings it back, ⌘Z in the window undoes the rest
+    /// and ⇧⌘Z does it again, esc lets go.
+    private func linesEditedAndUndone(_ folder: URL) async {
+        let name = "Recorder phase 4: a line selected in its window: ↩ edits it in place, ⇥ ⇧⇥ change its speaker, ⌘⌫ deletes it (the undo card's ⌘Z brings it back), ⌘Z and ⇧⌘Z undo and redo, each change written at once"
+        guard let center = context.recorder(), let controller = center.window(for: folder), controller.shownLines.count > 4 else {
+            record(name, false, "no import's window with lines", nil)
+            return
+        }
+        // A card left by the import's tool calls is not under the click.
+        let popover = context.aiActions.popover
+        if popover.isVisible {
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            _ = await waitUntil(timeout: 8) { !popover.isVisible }
+        }
+        guard await recordingWindowHasKeys(controller, name) else { return }
+        guard let frame = controller.screenFrame(ofLine: 1) else {
+            record(name, false, "line 2 not on screen", nil)
+            return
+        }
+        let cardBefore = popover.isVisible ? "a card “\(popover.shownTitle)” in front" : "no card"
+        await click(frame)
+        let clicked = await waitUntil(timeout: 2) { controller.selectedLine == 1 } != nil
+        let clickDetail = clicked ? "" : " (\(cardBefore); key window “\(NSApp.keyWindow?.title ?? "none")”, the line at \(Int(frame.midX)),\(Int(frame.midY)))"
+        if controller.playing { await pressKey(nil, code: CGKeyCode(kVK_Space)) }
+        await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
+        let moved = await waitUntil(timeout: 1) { controller.selectedLine == 2 } != nil
+        let hints = controller.shownHints
+        await captureRecordingWindow(controller, as: "recorder-line-selected")
+        let original = controller.shownLines[2]
+        let count = controller.shownLines.count
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let editing = await waitUntil(timeout: 1) { controller.isEditingLine } != nil
+        // Captured before typing (switching the window's appearance for
+        // it lost the keys before ↩ in earlier rounds), then the keys made
+        // sure again.
+        await captureRecordingWindow(controller, as: "recorder-line-editing")
+        guard await recordingWindowHasKeys(controller, name) else { return }
+        await pressKey("a", flags: .maskCommand)
+        for character in "We meet at noon" { _ = await typeCharacter(character) }
+        await pause(200)
+        let typedState = controller.editorState
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let edited = await waitUntil(timeout: 2) { !controller.isEditingLine && controller.shownLines[2].text == "We meet at noon" } != nil
+        let afterReturn = edited ? "" : " (still editing \(controller.isEditingLine), first responder \(controller.nsWindow.firstResponder.map { String(describing: type(of: $0)) } ?? "none"), key \(controller.nsWindow.isKeyWindow), front \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"), line 3 “\(controller.shownLines[2].text.prefix(30))”; typed: \(typedState); after ↩: \(controller.editorState))"
+        let written = center.recordings.transcript(folder)?.lines[2].text == "We meet at noon" && center.recordings.read(folder)?.edited == true
+        let order = MeetingVoices.order(of: controller.shownLines)
+        let next = MeetingVoices.next(after: original.speaker, in: order)
+        await pressKey(nil, code: CGKeyCode(kVK_Tab))
+        let given = await waitUntil(timeout: 1) { controller.shownLines[2].speaker == next } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Tab), flags: .maskShift)
+        let back = await waitUntil(timeout: 1) { controller.shownLines[2].speaker == original.speaker } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Delete), flags: .maskCommand)
+        let deleted = await waitUntil(timeout: 2) { controller.shownLines.count == count - 1 && popover.isVisible } != nil
+        let card = "“\(popover.shownTitle)”: \(popover.shownText.prefix(80))"
+        await pressKey("z", flags: .maskCommand)
+        let cameBack = await waitUntil(timeout: 2) { controller.shownLines.count == count && !popover.isVisible } != nil
+        let backInPlace = cameBack && controller.shownLines[2].text == "We meet at noon"
+        // The rest, from the window: ⇧⇥, ⇥, the edit.
+        for _ in 0..<3 { await pressKey("z", flags: .maskCommand) }
+        let undone = await waitUntil(timeout: 2) { controller.shownLines[2].text == original.text && controller.shownLines[2].speaker == original.speaker } != nil
+        await pressKey("z", flags: [.maskCommand, .maskShift])
+        let redone = await waitUntil(timeout: 2) { controller.shownLines[2].text == "We meet at noon" } != nil
+        let writtenAgain = center.recordings.transcript(folder)?.lines.map(\.text) == controller.shownLines.map(\.text)
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let letGo = await waitUntil(timeout: 1) { controller.selectedLine == nil } != nil
+        let passed = clicked && moved && hints.first == "Edit" && editing && edited && written && given && back && deleted
+            && popover.shownTitle == "Line Deleted" && backInPlace && undone && redone && writtenAgain && letGo
+        record(name, passed,
+               "clicked \(clicked)\(clickDetail), ↓ \(moved), hints \(hints.joined(separator: " · ")); ↩ edits \(editing), kept \(edited)\(afterReturn), written \(written); ⇥ to \(next.rawValue) \(given), ⇧⇥ back \(back); ⌘⌫ \(deleted) (card \(card)), its ⌘Z \(backInPlace); ⌘Z ×3 \(undone), ⇧⌘Z \(redone), on disk \(writtenAgain); esc \(letGo)",
+               nil)
+    }
+
+    /// In en01's window (its attendees, Me and the other side's voices):
+    /// a click on a speaker's name opens the menu of names (the attendees
+    /// first); one picked renames that speaker everywhere; the same name
+    /// given to another voice merges them; Other Name… typed in place;
+    /// the user's own name joins Me; ⌘Z undoes the merges.
+    private func speakersRenamedAndMerged(_ folder: URL) async {
+        let name = "Recorder phase 4: speakers renamed from the menu under a name (the attendees first), two given the same name become one, Other Name… typed in place, the user's own name joins Me, ⌘Z undoes"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        center.open(folder)
+        guard let controller = center.window(for: folder) else {
+            record(name, false, "en01's window did not open", nil)
+            return
+        }
+        let them = MeetingVoices.order(of: controller.shownLines).filter { $0.track == .them }
+        guard them.count >= 2, let first = controller.shownLines.firstIndex(where: { $0.speaker == them[0] }),
+              let second = controller.shownLines.firstIndex(where: { $0.speaker == them[1] }) else {
+            record(name, false, "fewer than two voices on the other side: \(them.map(\.rawValue))", nil)
+            return
+        }
+        guard await recordingWindowHasKeys(controller, name) else { return }
+        controller.standInOwnName("Camille Rocher")
+        // A click on the first voice's name: its menu, captured light and dark.
+        var items: [String] = []
+        for (suffix, appearance) in GlassCheck.appearances {
+            controller.nsWindow.appearance = appearance
+            await pause(300)
+            guard let frame = controller.screenFrame(ofSpeakerIn: first) else { continue }
+            let guardTimer = escapeLater(10)
+            await click(frame)
+            await pause(600)
+            if let menu = controller.renameMenu {
+                items = menu.items.filter { !$0.isSeparatorItem }.map(\.title)
+                if let directory = context.snapshotDirectory, let image = await WindowCapture.openMenuImage(),
+                   let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+                    try? png.write(to: directory.appendingPathComponent("recorder-rename-menu-\(suffix).png"))
+                }
+                menu.cancelTracking()
+            }
+            guardTimer.cancel()
+            await pause(300)
+        }
+        controller.nsWindow.appearance = nil
+        let attendees = Array(items.dropFirst().prefix(3))
+        // Picked: the first attendee for the first voice, then the same name for the second.
+        let picked = await pickName(controller, line: first, item: attendees.first ?? "")
+        let renamed = controller.shownNames[them[0].rawValue] == attendees.first
+        let secondCount = controller.shownLines.filter { $0.speaker == them[1] }.count
+        let firstCount = controller.shownLines.filter { $0.speaker == them[0] }.count
+        let merged = await pickName(controller, line: second, item: "\(attendees.first ?? "") — joins \(attendees.first ?? "")’s lines")
+        let mergedRight = controller.shownLines.filter { $0.speaker == them[0] }.count == firstCount + secondCount
+            && !controller.shownLines.contains { $0.speaker == them[1] } && controller.shownNames[them[1].rawValue] == nil
+        await captureRecordingWindow(controller, as: "recorder-window-voices")
+        // Other Name… on a third voice (else on the merged one): typed, ↩.
+        let third = them.count > 2 ? controller.shownLines.firstIndex { $0.speaker == them[2] } ?? first : first
+        let typedVoice = controller.shownLines[third].speaker
+        let other = await pickName(controller, line: third, item: "Other Name…")
+        let fieldShown = await waitUntil(timeout: 1) { controller.isRenaming } != nil
+        await captureRecordingWindow(controller, as: "recorder-rename-field")
+        await pressKey("a", flags: .maskCommand)
+        for character in "Bartholomew" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let typed = await waitUntil(timeout: 2) { controller.shownNames[typedVoice.rawValue] == "Bartholomew" } != nil
+        // The user's own name: that voice's lines join Me, Me's name kept.
+        let meBefore = controller.shownLines.filter { $0.speaker == .me }.count
+        let typedCount = controller.shownLines.filter { $0.speaker == typedVoice }.count
+        _ = await pickName(controller, line: controller.shownLines.firstIndex { $0.speaker == typedVoice } ?? third, item: "Other Name…")
+        _ = await waitUntil(timeout: 1) { controller.isRenaming }
+        await pressKey("a", flags: .maskCommand)
+        for character in "Camille Rocher" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let joinedMe = await waitUntil(timeout: 2) { controller.shownLines.filter { $0.speaker == .me }.count == meBefore + typedCount } != nil
+        let meKept = MeetingVoices.name(of: .me, in: controller.shownNames) == "Me"
+        // ⌘Z: Me's lines back to that voice, then the merge undone.
+        await pressKey("z", flags: .maskCommand)
+        let unjoined = await waitUntil(timeout: 2) { controller.shownLines.filter { $0.speaker == .me }.count == meBefore } != nil
+        await pressKey("z", flags: .maskCommand)
+        await pressKey("z", flags: .maskCommand)
+        let unmerged = await waitUntil(timeout: 2) { controller.shownLines.filter { $0.speaker == them[1] }.count == secondCount } != nil
+        let saved = center.recordings.read(folder)?.speakers[them[0].rawValue] == attendees.first
+        let passed = items.first?.hasPrefix("Rename “") == true && attendees.count == 3 && !attendees.contains("Camille Rocher")
+            && items.contains("Me — joins your lines") && items.last == "Other Name…" && picked && renamed && merged && mergedRight && other
+            && fieldShown && typed && joinedMe && meKept && unjoined && unmerged && saved
+        record(name, passed,
+               "menu \(items.joined(separator: " | ")); renamed \(renamed), merged \(mergedRight) (\(firstCount)+\(secondCount) lines); Other Name… field \(fieldShown), typed \(typed); own name joins Me \(joinedMe), Me kept \(meKept); ⌘Z unjoins \(unjoined), unmerges \(unmerged); written \(saved)",
+               nil)
+    }
+
+    /// Esc posted `seconds` from now unless cancelled: a menu left open
+    /// never holds the run.
+    private func escapeLater(_ seconds: Double) -> DispatchWorkItem {
+        let work = DispatchWorkItem {
+            let source = CGEventSource(stateID: .hidSystemState)
+            for down in [true, false] {
+                CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap)
+            }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + seconds, execute: work)
+        return work
+    }
+
+    /// The line selected, ⌥↩ opens its speaker's menu, `item` chosen in
+    /// it (as a click on it does). False when the menu or the item was not
+    /// there.
+    private func pickName(_ controller: RecordingWindowController, line: Int, item: String) async -> Bool {
+        guard let frame = controller.screenFrame(ofLine: line) else { return false }
+        await click(frame)
+        if controller.playing { await pressKey(nil, code: CGKeyCode(kVK_Space)) }
+        let guardTimer = escapeLater(10)
+        defer { guardTimer.cancel() }
+        await pressKey(nil, code: CGKeyCode(kVK_Return), flags: .maskAlternate)
+        guard await waitUntil(timeout: 2, { controller.renameMenu != nil }) != nil,
+              let menu = controller.renameMenu, let index = menu.items.firstIndex(where: { $0.title == item }) else {
+            controller.renameMenu?.cancelTracking()
+            return false
+        }
+        await pause(200)
+        menu.cancelTracking()
+        menu.performActionForItem(at: index)
+        await pause(200)
+        return true
+    }
+
+    /// Transcribe Again on en01, edited: its panel (the languages, the
+    /// engine, the changes said replaced), French picked: made in French
+    /// with macOS's engine, the names given kept; then English again.
+    private func transcribeAgainAsPicked(_ folder: URL) async {
+        let name = "Recorder phase 4: Transcribe Again in the language and engine picked (its panel says the changes are replaced), the names given kept"
+        guard let center = context.recorder(), let controller = center.window(for: folder) else {
+            record(name, false, "no window", nil)
+            return
+        }
+        guard await recordingWindowHasKeys(controller, name) else { return }
+        let names = center.recordings.read(folder)?.speakers ?? [:]
+        controller.showTranscribeAgain()
+        guard let panel = controller.againPanel, await waitUntil(timeout: 5, { panel.isShown && panel.isLoaded }) != nil else {
+            record(name, false, "no panel", nil)
+            return
+        }
+        let languages = panel.shownLanguages, engines = panel.shownEngines, note = panel.shownNote
+        if let directory = context.snapshotDirectory, let window = panel.window {
+            for (suffix, appearance) in GlassCheck.appearances {
+                window.appearance = appearance
+                controller.nsWindow.appearance = appearance
+                await pause(400)
+                if let png = await WindowCapture.png(of: window) { try? png.write(to: directory.appendingPathComponent("recorder-transcribe-again-\(suffix).png")) }
+            }
+            window.appearance = nil
+            controller.nsWindow.appearance = nil
+        }
+        await panel.pick(language: "fr-FR", engine: .macOS)
+        panel.press()
+        let showsProgress = await waitUntil(timeout: 10) { controller.shownState.hasPrefix("Transcribing") } != nil
+        let madeAgain = await waitUntil(timeout: 120) { center.recordings.transcript(folder)?.language == "fr-FR" && !controller.shownLines.isEmpty } != nil
+        let record = center.recordings.read(folder)
+        let kept = names.filter { !MeetingVoices.isStandard($0.value) }.allSatisfy { id, given in record?.speakers[id] == nil || record?.speakers[id] == given }
+        // English again, for the window's last captures.
+        controller.showTranscribeAgain()
+        var english = false
+        if let back = controller.againPanel, await waitUntil(timeout: 5, { back.isLoaded }) != nil {
+            await back.pick(language: "en-US", engine: .macOS)
+            back.press()
+            english = await waitUntil(timeout: 120) { center.recordings.transcript(folder)?.language == "en-US" && !controller.shownLines.isEmpty } != nil
+        }
+        await captureRecordingWindow(controller, as: "recorder-window-again")
+        controller.close()
+        let passed = languages.contains { $0.hasPrefix("English") } && languages.contains { $0.hasPrefix("French") } && engines == ["macOS"]
+            && note == "Your changes to the lines are replaced." && showsProgress && madeAgain && record?.language == "fr-FR"
+            && record?.engine == TranscriptEngine.macOS.rawValue && record?.edited == nil && kept && english
+        self.record(name, passed,
+                    "\(languages.count) languages, engines \(engines), note “\(note)”; progress shown \(showsProgress), made again in \(record?.language ?? "?") with \(record?.engine ?? "?") \(madeAgain), edited \(record?.edited.map(String.init) ?? "nil"), names given kept \(kept) (\(record?.speakers ?? [:])); then English again \(english)",
+                    nil)
+    }
+
     private func recorderChecks() async {
         let (consent, language) = (context.preferences.recorderConsentShown, context.preferences.voiceLanguage)
         defer {
@@ -23645,10 +24236,13 @@ final class SelfTest {
             let start: Double
             let end: Double
             let text: String
+            let speaker: String?
         }
 
         let language: String
         let turns: [Turn]
+        let attendees: [String]?
+        let seconds: Double?
     }
 
     /// The self-test's scratch audio.
@@ -24047,9 +24641,10 @@ final class SelfTest {
         let mine = Self.errorsPerHundred(turns.filter(\.me).map(\.text).joined(separator: " "),
                                          transcript.lines.filter { $0.speaker == .me }.map(\.text).joined(separator: " "))
         let theirs = Self.errorsPerHundred(turns.filter { !$0.me }.map(\.text).joined(separator: " "),
-                                           transcript.lines.filter { $0.speaker == .them }.map(\.text).joined(separator: " "))
-        // Me and Them by time: the script's turns and the lines alternate alike.
-        let speakers = transcript.lines.map(\.speaker)
+                                           transcript.lines.filter { $0.speaker.track == .them }.map(\.text).joined(separator: " "))
+        // Me and Them by time: the script's turns and the lines alternate
+        // alike (the other side's voices told apart since phase 4).
+        let speakers = transcript.lines.map(\.speaker.track)
         let both = speakers.contains(.me) && speakers.contains(.them)
         // The window: its lines; a click on the third plays from it.
         let shownLines = controller.shownLines.count

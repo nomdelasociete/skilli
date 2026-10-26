@@ -119,7 +119,7 @@ extension LauncherController {
     /// What ↩ does on a built-in command: a mode or a window opens, the
     /// rest runs (the Catalog's "?" says the same).
     static func returnTitle(_ id: LauncherCommand.ID) -> String {
-        mode(for: id) != nil || [.openSettings, .newWindowLayout, .newEmptyWindowLayout, .newSnippet, .newQuicklink, .newCommand, .recordMeeting].contains(id)
+        mode(for: id) != nil || [.openSettings, .newWindowLayout, .newEmptyWindowLayout, .newSnippet, .newQuicklink, .newCommand, .recordMeeting, .importRecording].contains(id)
             ? "Open" : "Run"
     }
 

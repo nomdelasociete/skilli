@@ -33,6 +33,9 @@ final class RecorderCenter {
     /// how far: no recording starts meanwhile (its folder would be left
     /// behind).
     var recordingsMoving: () -> (done: Int, of: Int)? = { nil }
+    /// The user's own name (My Card in Contacts, when allowed): offered
+    /// first for Me in a recording's window.
+    var ownName: () async -> String? = { nil }
 
     /// Why a recording cannot start now, said: nil when it can.
     private var notNow: String? {
@@ -175,6 +178,7 @@ final class RecorderCenter {
         recorder.onChange = { [weak self] in self?.changed() }
         recorder.onFinished = { [weak self] folder in self?.finished(folder) }
         recorder.onStoppedByItself = { [weak self] line in self?.notify(line) }
+        recorder.onTranscriptFailed = { [weak self] line in self?.notify(line) }
         recorder.onLeftUnfinished = { [weak self] folder, record in self?.offerAtOnce(folder, record: record) }
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append(workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
@@ -741,7 +745,15 @@ final class RecorderCenter {
             window.present()
             return
         }
-        let window = RecordingWindowController(folder: folder, record: record, transcript: transcript)
+        let window = makeWindow(folder, record: record, transcript: transcript)
+        window.present()
+    }
+
+    /// A recording's window, its actions wired: delete, the folder, a
+    /// transcript made (again), a line deleted (the undo card), a file
+    /// dropped (imported).
+    private func makeWindow(_ folder: URL, record: MeetingRecord, transcript: MeetingTranscript.File?) -> RecordingWindowController {
+        let window = RecordingWindowController(folder: folder, record: record, transcript: transcript, ownName: ownName)
         window.onClose = { [weak self] controller in self?.windows[Self.key(controller.folder)] = nil }
         window.onShowFolder = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
         window.onDelete = { [weak self] folder, record in
@@ -753,8 +765,90 @@ final class RecorderCenter {
             try? self.recordings.write(record, to: folder)
             self.recorder.transcribe(folder, record: record)
         }
+        window.onTranscribeAgain = { [weak self] folder, record, engine in
+            self?.transcribeAgain(folder, record: record, engine: engine)
+        }
+        window.onDeleteLine = { [weak self] words, undo in
+            self?.deletes.transcriptLine(words, undo: undo)
+        }
+        window.onEdited = { _ in NotificationCenter.default.post(name: Recordings.changed, object: nil) }
+        window.onImport = { [weak self] files in self?.importFiles(files) }
         windows[Self.key(folder)] = window
+        return window
+    }
+
+    /// Transcribe Again (phase 4): the language and the engine as picked;
+    /// the transcript before stays until the new one is written.
+    private func transcribeAgain(_ folder: URL, record: MeetingRecord, engine: TranscriptEngine) {
+        recorder.transcribe(folder, record: record, again: true)
+    }
+
+    // MARK: - Import (phase 4)
+
+    /// Import Recording… (the launcher, a link): the open panel, sound and
+    /// video files; `selecting` a file a link named, chosen only with the
+    /// user's ↩.
+    func importRecording(selecting file: URL? = nil) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = RecordingImport.types
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.prompt = "Import"
+        panel.message = "Each file becomes a recording, transcribed on this Mac. The file itself stays where it is."
+        if let file {
+            panel.directoryURL = file.deletingLastPathComponent()
+            panel.nameFieldStringValue = file.lastPathComponent
+        }
+        NSApp.activate()
+        guard panel.runModal() == .OK else { return }
+        importFiles(panel.urls)
+    }
+
+    /// Each file a recording of its own, in order: its window opens at once
+    /// ("Importing… 30 %", then its transcript), voices told apart. One
+    /// that cannot be made says why in the card.
+    func importFiles(_ files: [URL]) {
+        let files = files.filter(RecordingImport.isImportable)
+        guard !files.isEmpty else { return }
+        Task {
+            let language = await MeetingTranscriber.defaultLanguage(asked: askedLanguage)
+            for file in files {
+                do {
+                    _ = try await importFile(file, language: language)
+                } catch {
+                    notify(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// `import_recording` (an agent, a skillie): one file, its recording's
+    /// folder once its sound is copied (the transcript follows).
+    func importForTool(_ file: URL) async throws -> URL {
+        guard RecordingImport.isImportable(file) else {
+            throw RecordingImport.Failure(message: "“\(file.lastPathComponent)” is not a sound or video file.")
+        }
+        return try await importFile(file, language: await MeetingTranscriber.defaultLanguage(asked: askedLanguage))
+    }
+
+    private func importFile(_ file: URL, language: String) async throws -> URL {
+        let made = try await RecordingImport.prepare(file, in: recordings, language: language)
+        let window = makeWindow(made.folder, record: made.record, transcript: nil)
+        window.showImporting(0)
         window.present()
+        do {
+            let record = try await RecordingImport.copy(file, into: made.folder, record: made.record) { done in
+                DispatchQueue.main.async { MainActor.assumeIsolated { [weak window] in window?.showImporting(done) } }
+            }
+            Log.trace("Recorder: “\(file.lastPathComponent)” imported, \(Int(record.seconds)) s")
+            NotificationCenter.default.post(name: Recordings.changed, object: nil)
+            window.show(record, transcript: nil)
+            recorder.transcribe(made.folder, record: record)
+            return made.folder
+        } catch {
+            window.close()
+            throw RecordingImport.Failure(message: "“\(file.lastPathComponent)” was not imported: \(error.localizedDescription)")
+        }
     }
 
     private func delete(_ folder: URL, title: String) {
