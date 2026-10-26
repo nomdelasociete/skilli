@@ -17560,9 +17560,26 @@ final class SelfTest {
             record(name, false, "TextEdit not installed", nil)
             return
         }
-        guard NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty else {
-            checks.append(Check(name: name, passed: true, skipped: true, detail: "TextEdit is already open (the test needs to launch it)", latencyMs: nil))
-            return
+        // The check needs to launch TextEdit: one left open with no window
+        // (nothing in it to lose) is quit first; one with windows is the
+        // user's, and the check is skipped.
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        if !running.isEmpty {
+            let windows = running.reduce(0) { count, app in
+                var value: CFTypeRef?
+                AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute as CFString, &value)
+                return count + ((value as? [AXUIElement])?.count ?? 0)
+            }
+            guard windows == 0 else {
+                checks.append(Check(name: name, passed: true, skipped: true, detail: "TextEdit is open with \(windows) window(s) (the test needs to launch it)",
+                                    latencyMs: nil))
+                return
+            }
+            for app in running { app.terminate() }
+            guard await waitUntil(timeout: 4, { running.allSatisfy(\.isTerminated) }) != nil else {
+                record(name, false, "TextEdit, open with no window, did not quit", nil)
+                return
+            }
         }
         let preferences = context.preferences
         let learned = learner.placements
