@@ -204,6 +204,7 @@ here when you add a tool.
 | `pause_recording` | Pauses it. | |
 | `resume_recording` | Resumes it. | |
 | `stop_recording` | Stops it; the transcript is made on the Mac. | |
+| `set_recording_source` | Turns the microphone, the Mac's sound, the webcam or the screen on or off from now on (Record card open or recording). | `source`, `on` |
 
 ### Snippets and your own tools
 
