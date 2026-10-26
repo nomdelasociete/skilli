@@ -203,13 +203,17 @@ final class RecordingLibrary {
 /// date (a transcript made again, a recording renamed or deleted in
 /// Finder); the text read on screen (`slides.json`, phase 3) in a table
 /// of its own, found the same way. Only a copy of the transcripts: never
-/// in a backup (`BackupPlan.neverCopied`), and a file that is not a
-/// database SQLite can read is made again from them. Searched off the
-/// main thread; calls serialized by a lock.
+/// in a backup (`BackupPlan.neverCopied`), and a file SQLite finds damaged
+/// (as it opens, or in any read or write after) is made again from them
+/// at once. Searched off the main thread; calls serialized by a lock.
 final class RecordingIndex: @unchecked Sendable {
     private let url: URL
     private var db: OpaquePointer?
     private let lock = NSLock()
+    /// A statement found the file damaged: it is made again.
+    private var damaged = false
+    /// What the last sync read, to fill a file made again at once.
+    private var synced: (root: URL, folders: [String])?
 
     init(url: URL) {
         self.url = url
@@ -226,16 +230,29 @@ final class RecordingIndex: @unchecked Sendable {
             return true
         case SQLITE_NOTADB, SQLITE_CORRUPT:
             // Not a database it can read (half written, another file in its
-            // place): made again, the next sync fills it from the transcripts.
-            Log.actions.error("Recordings index unreadable: made again from the transcripts")
-            // With SQLite's files beside it (`RecordingSearch.indexFiles`).
-            for suffix in ["", "-wal", "-shm", "-journal"] {
-                try? FileManager.default.removeItem(atPath: url.path + suffix)
-            }
+            // place): made again, the sync fills it from the transcripts.
+            removeFiles()
             return connect() == SQLITE_OK
         default:
             return false
         }
+    }
+
+    /// The file and SQLite's files beside it (`RecordingSearch.indexFiles`)
+    /// gone, the connection closed: the next statement makes it again.
+    private func removeFiles() {
+        Log.actions.error("Recordings index damaged: made again from the transcripts")
+        sqlite3_close(db)
+        db = nil
+        damaged = false
+        for suffix in ["", "-wal", "-shm", "-journal"] {
+            try? FileManager.default.removeItem(atPath: url.path + suffix)
+        }
+    }
+
+    /// Whether `code` (an SQLite result) says the file is damaged.
+    private static func isDamage(_ code: Int32) -> Bool {
+        [SQLITE_CORRUPT, SQLITE_NOTADB].contains(code & 0xff)
     }
 
     /// Opens the file and makes its tables; SQLite's primary result code
@@ -267,10 +284,20 @@ final class RecordingIndex: @unchecked Sendable {
     }
 
     /// Each of `folders` in `root` as its transcript is now: added or read
-    /// again when its file changed, gone when it has none.
+    /// again when its file changed, gone when it has none. A damaged file
+    /// is made again and filled at once.
     func sync(root: URL, folders: [String]) {
         lock.lock()
         defer { lock.unlock() }
+        synced = (root, folders)
+        catchUp(root: root, folders: folders)
+        if damaged {
+            removeFiles()
+            catchUp(root: root, folders: folders)
+        }
+    }
+
+    private func catchUp(root: URL, folders: [String]) {
         guard open() else { return }
         sync(root: root, folders: folders, file: "transcript.json", stamps: "transcripts", words: "words") { data in
             (try? MeetingTranscript.File.decode(data))?.lines.map(\.text).joined(separator: "\n") ?? ""
@@ -315,6 +342,17 @@ final class RecordingIndex: @unchecked Sendable {
     func search(_ text: String, limit: Int = 30) -> [(folder: String, snippet: String)] {
         lock.lock()
         defer { lock.unlock() }
+        let found = find(text, limit: limit)
+        guard damaged else { return found }
+        // Damaged under the search: made again from the last sync's
+        // transcripts, then searched again.
+        removeFiles()
+        guard let synced else { return [] }
+        catchUp(root: synced.root, folders: synced.folders)
+        return find(text, limit: limit)
+    }
+
+    private func find(_ text: String, limit: Int) -> [(folder: String, snippet: String)] {
         guard open(), let match = ClipboardSearch.ftsQuery(text) else { return [] }
         var found: [(String, String)] = []
         for (table, said) in [("words", ""), ("shown", "On screen: ")] {
@@ -333,7 +371,9 @@ final class RecordingIndex: @unchecked Sendable {
 
     @discardableResult
     private func execute(_ sql: String) -> Bool {
-        sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK
+        let code = sqlite3_exec(db, sql, nil, nil, nil)
+        if Self.isDamage(code) { damaged = true }
+        return code == SQLITE_OK
     }
 
     private func run(_ sql: String, _ values: [String]) {
@@ -344,7 +384,9 @@ final class RecordingIndex: @unchecked Sendable {
     /// `row` called for each row.
     private func query(_ sql: String, _ values: [String], row: (OpaquePointer?) -> Void) {
         var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+        let prepared = sqlite3_prepare_v2(db, sql, -1, &statement, nil)
+        guard prepared == SQLITE_OK else {
+            if Self.isDamage(prepared) { damaged = true }
             Log.actions.error("Recordings index: \(String(cString: sqlite3_errmsg(self.db)), privacy: .public)")
             return
         }
@@ -352,6 +394,11 @@ final class RecordingIndex: @unchecked Sendable {
         for (index, value) in values.enumerated() {
             sqlite3_bind_text(statement, Int32(index + 1), value, -1, Self.transient)
         }
-        while sqlite3_step(statement) == SQLITE_ROW { row(statement) }
+        var stepped = sqlite3_step(statement)
+        while stepped == SQLITE_ROW {
+            row(statement)
+            stepped = sqlite3_step(statement)
+        }
+        if Self.isDamage(stepped) { damaged = true }
     }
 }

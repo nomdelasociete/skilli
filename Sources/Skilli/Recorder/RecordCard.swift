@@ -207,7 +207,13 @@ final class RecordCard {
     /// opens under its row.
     func showWindows() {
         guard content == .record, let row = view.row(.screen) else { return }
-        showWindows(under: row)
+        // Opened from the run loop, as a click opens one, never from the
+        // task that asked: a menu runs its own loop until it closes, and
+        // the main actor's other tasks wait for the one it was opened from
+        // (measured: the card's task held the self-test for 20 minutes).
+        RunLoop.main.perform(inModes: [.common]) { [weak self] in
+            MainActor.assumeIsolated { self?.showWindows(under: row) }
+        }
     }
 
     /// macOS asks a question (the camera, Screen Recording, Automation):
@@ -468,6 +474,13 @@ private final class RecordPanel: NSPanel {
     override func cancelOperation(_ sender: Any?) {
         card?.closed()
     }
+
+    #if SKILLI_SELFTEST
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown { Log.trace("Recorder card: a click reached the card (key \(isKeyWindow), active \(NSApp.isActive))") }
+        super.sendEvent(event)
+    }
+    #endif
 }
 
 /// The card's content, top-down: the eyebrow and the language, the name,
@@ -1109,8 +1122,14 @@ private final class SourceRow: NSView {
         if clickable { addCursorRect(bounds, cursor: .pointingHand) }
     }
 
+    /// The card does not activate skil.li: a row's first click acts.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { clickable }
+
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        #if SKILLI_SELFTEST
+        Log.trace("Recorder card: a click on \(title.stringValue) (clickable \(clickable))")
+        #endif
         if !chevron.isHidden, let onMenu, point.x >= device.frame.minX, point.x <= chevron.frame.maxX + 4 {
             onMenu()
         } else if clickable {

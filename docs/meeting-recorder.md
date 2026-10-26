@@ -181,7 +181,11 @@ need a browser extension: not planned.
 - The call ends (the meeting app leaves its call, or the event is over and
   the Mac's sound has been silent for a minute): a card offers Stop ↩.
 - Written as it comes: a crash or a power cut keeps what was recorded,
-  and the next launch offers Save, Later or Discard. skil.li quitting (a
+  and the next launch offers Save, Later or Discard. A Stop whose files
+  are not written and finished within 5 s (the encoder or the disk stuck),
+  or whose writer ends without a completed file, is never transcribed as if whole: `meeting.json` keeps the state it had
+  while recording, no transcript starts, and the same card offers it at
+  once. skil.li quitting (a
   logout too) stops it as Stop does, and the Mac going to sleep pauses it:
   see Quit and sleep.
 
@@ -218,7 +222,13 @@ or System Settings quits it to apply a permission (Quit & Reopen).
    (recording others is always the user's key): ⌘R makes a second
    recording. A crash or a power cut is not a quit: what was written is
    kept and offered at the next launch (Save, Later or Discard), as
-   before.
+   before. The one exception to `stopped`: if either track is not
+   written and finished within 5 s of the quit (the encoder or the disk
+   stuck), or its writer ends without a completed file, `meeting.json` keeps the state it had while recording
+   (`recording`, or `paused`), no transcript starts, and the next launch
+   takes it through the same recovery as after a crash (offered: Save,
+   Later or Discard, its length read from its files). The quit does not
+   wait longer: a logout would not.
 
 **The Mac goes to sleep during a recording**: the lid closed, Sleep in
 the Apple menu, the battery run out. A recording keeps the Mac and its

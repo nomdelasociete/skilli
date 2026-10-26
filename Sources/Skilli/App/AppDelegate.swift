@@ -1230,9 +1230,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // System Settings quits skil.li so a permission takes effect, and on
         // macOS 26 does not open it again: skil.li does, once it has quit.
         if mode == .normal, Relaunch.quitBySystemSettings() { Relaunch.afterExit() }
-        // A recording on is closed first, its files whole (about a second);
-        // its transcript waits for the next launch. Nothing asked.
-        return madeRecorderCenter?.recorder.quitReply() ?? .terminateNow
+        // A recording on is closed first, its files whole (about a second,
+        // before answering); its transcript waits for the next launch.
+        // Nothing asked.
+        madeRecorderCenter?.recorder.closeForQuit()
+        return .terminateNow
     }
 
     func applicationWillTerminate(_ notification: Notification) {

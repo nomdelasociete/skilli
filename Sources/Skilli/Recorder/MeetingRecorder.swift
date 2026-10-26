@@ -60,6 +60,9 @@ final class MeetingRecorder {
     /// A transcript that could not be made again (the one before kept):
     /// said in the card.
     var onTranscriptFailed: ((String) -> Void)?
+    /// A Stop could not finish its files: no transcript, the recording as
+    /// it was (offered as never stopped, at once).
+    var onLeftUnfinished: ((URL, MeetingRecord) -> Void)?
 
     /// Room for 10 s of each source, made when first listened to.
     private lazy var micInbox = AudioInbox()
@@ -95,13 +98,20 @@ final class MeetingRecorder {
     /// The default engine, whether Better transcription is downloaded,
     /// the contacts' names for its prompt: read as each transcript starts.
     var transcriptSetup: () async -> MeetingTranscriber.Setup = { MeetingTranscriber.Setup() }
-    /// A stop under way (`stopping`): told once its files are closed.
-    private var closedWaiters: [CheckedContinuation<Void, Never>] = []
+    /// The transcripts' one worker, while there is one.
+    private var worker: Task<Void, Never>?
+    /// What a stop under way closes: the moment it stops at, the
+    /// recording, its folder.
+    private struct Stopping {
+        let at: Double
+        var record: MeetingRecord
+        let folder: URL
+    }
+
+    private var stopping: Stopping?
     /// skil.li quits: nothing starts any more, every transcript not made
     /// is left for the next launch.
     private(set) var quitting = false
-    /// The quit's close, once asked (macOS may ask twice).
-    private var quitClose: Task<Void, Never>?
 
     init(recordings: Recordings) {
         self.recordings = recordings
@@ -293,6 +303,9 @@ final class MeetingRecorder {
                     let said = error.localizedDescription
                     DispatchQueue.main.async { MainActor.assumeIsolated { self?.stoppedByItself(said) } }
                 }
+                #if SKILLI_SELFTEST
+                writer.stalls = stalls
+                #endif
                 writers[speaker] = writer
             }
             try pictures.begin(folder: folder, start: start, webcam: sources.webcam, screen: sources.screen)
@@ -357,28 +370,71 @@ final class MeetingRecorder {
     /// Stops: the files closed (both end at this moment), then the
     /// transcript.
     func stop() async {
-        guard isRecording, var record, let folder else { return }
-        let now = HostClock.now
-        if let pausedAt, let last = record.pauses.indices.last { record.pauses[last].seconds = now - pausedAt }
-        phase = .stopping
-        // The pictures stop at this moment too: none placed past it.
-        let picturesClosed = madePictures.map { pictures in Task { await pictures.finish(at: now) } }
+        guard let stopping = beginStopping() else { return }
+        // The pictures stop at this moment too, none placed past it; they
+        // close by the sound's deadline.
+        let picturesCloseBy = DispatchTime.now() + 1 + TrackWriter.closingTime
+        let picturesClosed = madePictures.map { pictures in Task { await pictures.finish(at: stopping.at, closeBy: picturesCloseBy) } }
         #if SKILLI_SELFTEST
         // Self-test: its files take that long to close.
         if closingDelay > .zero { try? await Task.sleep(for: closingDelay) }
         #endif
         var lengths: [Double] = []
-        var jumps: [Speaker: [Double]] = [:]
+        var complete = true
+        // One deadline for both tracks: their last buffers, then closing.
+        let closeBy = DispatchTime.now() + 1 + TrackWriter.closingTime
         for speaker in Speaker.allCases {
             guard let writer = writers[speaker] else { continue }
-            let on = speaker == .me ? sources.microphone : sources.macSound
-            lengths.append(await writer.finish(at: now, waitingForSource: on))
-            jumps[speaker] = writer.resumeJumps
+            let closed = await writer.finish(at: stopping.at, waitingForSource: isOn(speaker), closeBy: closeBy)
+            lengths.append(closed.seconds)
+            complete = complete && closed.complete
         }
-        // The pictures end at the same moment (none written: no file).
-        if let pictures = await picturesClosed?.value, pictures.webcam > 0 || pictures.screen > 0 {
-            Log.trace("Recorder: pictures closed, webcam \(Int(pictures.webcam)) s, screen \(Int(pictures.screen)) s, \(pictures.slides) slides")
+        // The pictures end at the same moment (none written: no file); a
+        // picture file not whole leaves the recording as a sound file does.
+        if let pictures = await picturesClosed?.value {
+            complete = complete && pictures.complete
+            if pictures.webcam > 0 || pictures.screen > 0 {
+                Log.trace("Recorder: pictures closed, webcam \(Int(pictures.webcam)) s, screen \(Int(pictures.screen)) s, \(pictures.slides) slides")
+            }
         }
+        // skil.li quit meanwhile: closed there already.
+        guard self.stopping?.folder == stopping.folder else { return }
+        guard complete else {
+            // A file not finished within the deadline (the encoder or the
+            // disk stuck): never transcribed as if whole. `meeting.json` stays
+            // as it was, the recording offered as never stopped.
+            Log.actions.error("Recorder: a track was not finished at Stop; offered as never stopped")
+            abandon()
+            onLeftUnfinished?(stopping.folder, stopping.record)
+            return
+        }
+        endStopping(lengths: lengths)
+    }
+
+    private func isOn(_ speaker: Speaker) -> Bool {
+        speaker == .me ? sources.microphone : sources.macSound
+    }
+
+    /// The stop's moment, the clock stopped: nil when nothing records.
+    private func beginStopping() -> Stopping? {
+        guard isRecording, var record, let folder else { return nil }
+        let now = HostClock.now
+        if let pausedAt, let last = record.pauses.indices.last { record.pauses[last].seconds = now - pausedAt }
+        let stopping = Stopping(at: now, record: record, folder: folder)
+        self.stopping = stopping
+        phase = .stopping
+        return stopping
+    }
+
+    /// Both files closed (`lengths`, seconds): the sources released,
+    /// `meeting.json` written, then the transcript.
+    private func endStopping(lengths: [Double]) {
+        guard let stopping else { return }
+        self.stopping = nil
+        var record = stopping.record
+        let folder = stopping.folder
+        var jumps: [Speaker: [Double]] = [:]
+        for (speaker, writer) in writers { jumps[speaker] = writer.resumeJumps }
         // A track never on (in person, the Mac's sound): no lane, nothing
         // transcribed; the microphone then holds the whole room.
         let unused = Speaker.allCases.filter { !everOn.contains($0) }
@@ -399,51 +455,67 @@ final class MeetingRecorder {
         phase = .idle
         Log.trace("Recorder: “\(record.title)” stopped, \(Int(record.seconds)) s (me \(lengths.first ?? 0), them \(lengths.last ?? 0))")
         transcribe(folder, record: record)
-        let waiting = closedWaiters
-        closedWaiters = []
-        waiting.forEach { $0.resume() }
+    }
+
+    /// Stops as `stop()` does (a stop under way too), holding the main
+    /// thread until both files are closed: the sources' last buffers (a
+    /// second at most), what is left encoded and the files finished, 5 s at
+    /// most for all of it (the encoder or the disk may never answer). A file not whole and finished by then: `meeting.json` stays
+    /// as it was while recording (`recording` or `paused`), no transcript,
+    /// so the next launch offers it as never stopped (Save, Later, Discard;
+    /// its length read from its files) instead of transcribing a file that
+    /// may lack its end.
+    private func stopNow() {
+        guard let stopping = self.stopping ?? beginStopping() else { return }
+        // One deadline for all of it: the last buffers, what is left to
+        // encode, the files finished.
+        let deadline = DispatchTime.now() + TrackWriter.closingTime
+        let tracks = Speaker.allCases.compactMap { speaker in writers[speaker].map { (speaker, $0) } }
+        for (_, writer) in tracks { writer.markStop(at: stopping.at) }
+        madePictures?.markStop(at: stopping.at)
+        let arrival = ContinuousClock.now + .seconds(1)
+        while ContinuousClock.now < arrival, !tracks.allSatisfy({ !isOn($0.0) || $0.1.hasArrived(upTo: stopping.at, until: deadline) }) {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        let lengths = tracks.map { $0.1.closeNow(until: deadline) }
+        let pictured = madePictures?.finishNow(at: stopping.at, until: deadline) ?? true
+        guard lengths.allSatisfy({ $0 != nil }), pictured else {
+            Log.actions.error("Recorder: a track was not finished as skil.li quit; offered at the next launch")
+            abandon()
+            return
+        }
+        endStopping(lengths: lengths.compactMap { $0 })
+    }
+
+    /// The recording let go as it is, `meeting.json` untouched: found at
+    /// the next launch as one never stopped.
+    private func abandon() {
+        stopping = nil
+        writers = [:]
+        stopSources()
+        if let activity { ProcessInfo.processInfo.endActivity(activity) }
+        activity = nil
+        record = nil
+        folder = nil
+        pausedAt = nil
+        phase = .idle
     }
 
     // MARK: - Quitting
 
-    /// `applicationShouldTerminate`'s answer (docs/meeting-recorder.md,
-    /// "Quit and sleep"): at once when no recording is on (a transcript
-    /// being made or waiting is left for the next launch); else later,
-    /// once the recording is closed as Stop closes it, both files whole
-    /// (about a second), when the app is told it may quit. Nothing asked.
-    func quitReply() -> NSApplication.TerminateReply {
-        if quitClose != nil { return .terminateLater }
-        guard isRecording || phase == .stopping else {
-            closeForQuitNow()
-            return .terminateNow
-        }
-        quitClose = Task {
-            await closeForQuit()
-            NSApp.reply(toApplicationShouldTerminate: true)
-        }
-        return .terminateLater
-    }
-
-    /// skil.li quits: a recording on is stopped as Stop stops it (its files
-    /// closed, `meeting.json` written), a stop under way finishes, and every
-    /// transcript not made yet is left `stopped` for the next launch.
-    func closeForQuit() async {
+    /// skil.li quits (docs/meeting-recorder.md, "Quit and sleep"), from
+    /// `applicationShouldTerminate`: a recording on, or a stop under way,
+    /// is closed as Stop closes it, both files whole, before it answers
+    /// (about a second, the main thread held: the quit may come from a job
+    /// of the main queue, where a close waiting for another job would never
+    /// run); every transcript not made yet is left `stopped` for the next
+    /// launch. Nothing asked.
+    func closeForQuit() {
         quitting = true
         if phase == .listening { stopListening() }
-        if isRecording {
-            await stop()
-        } else if phase == .stopping {
-            await withCheckedContinuation { closedWaiters.append($0) }
-        }
-        closeForQuitNow()
-    }
-
-    /// The part that does not wait: no recording on. The card's sources
-    /// stopped; the transcript being made and those waiting their turn
-    /// left for the next launch (one finishing meanwhile is written done).
-    private func closeForQuitNow() {
-        quitting = true
-        if phase == .listening { stopListening() }
+        if isRecording || phase == .stopping { stopNow() }
+        // The one being made and those waiting their turn (one finishing
+        // meanwhile is written done).
         var left = queue.map(\.0)
         queue = []
         if let transcribing { left.insert(transcribing.folder, at: 0) }
@@ -477,8 +549,13 @@ final class MeetingRecorder {
     func transcribe(_ folder: URL, record: MeetingRecord, again: Bool = false, engine: TranscriptEngine? = nil) {
         guard !quitting else { return leave(folder, record: record) }
         queue.append((folder, record, again, engine))
-        guard transcribing == nil else { return }
-        Task { await transcribeNext() }
+        // One worker for them all: several asked at once (the launch's) wait
+        // their turn.
+        guard worker == nil else { return }
+        worker = Task {
+            await transcribeNext()
+            worker = nil
+        }
     }
 
     private func transcribeNext() async {
@@ -550,6 +627,8 @@ final class MeetingRecorder {
     /// Self-test: Stop takes this long to close the files (⌘R pressed
     /// meanwhile).
     var closingDelay: Duration = .zero
+    /// Self-test: what gets stuck as the next recording's files close.
+    var stalls: TrackWriter.Stall?
 
     /// Self-test: the Mac's sound leaves these processes out too, and a
     /// file stands in for the microphone (the test Mac has none).
