@@ -23313,10 +23313,10 @@ final class SelfTest {
         }
         context.preferences.recorderConsentShown = true
         context.preferences.voiceLanguage = "en-US"
-        let call = await voicesToldApartInTheCalls()
         var imported: URL?
-        if !aborted { imported = await importMakesARecording() }
+        imported = await importMakesARecording()
         if !aborted, let imported { await linesEditedAndUndone(imported) }
+        let call = aborted ? nil : await voicesToldApartInTheCalls()
         if !aborted, let call { await speakersRenamedAndMerged(call) }
         if !aborted, let call { await transcribeAgainAsPicked(call) }
     }
@@ -23645,6 +23645,7 @@ final class SelfTest {
         await captureRecordingWindow(controller, as: "recorder-line-editing")
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         let edited = await waitUntil(timeout: 2) { !controller.isEditingLine && controller.shownLines[2].text == "We meet at noon" } != nil
+        let afterReturn = edited ? "" : " (still editing \(controller.isEditingLine), first responder \(controller.nsWindow.firstResponder.map { String(describing: type(of: $0)) } ?? "none"), line 3 “\(controller.shownLines[2].text.prefix(30))”)"
         let written = center.recordings.transcript(folder)?.lines[2].text == "We meet at noon" && center.recordings.read(folder)?.edited == true
         let order = MeetingVoices.order(of: controller.shownLines)
         let next = MeetingVoices.next(after: original.speaker, in: order)
@@ -23669,7 +23670,7 @@ final class SelfTest {
         let passed = clicked && moved && hints.first == "Edit" && editing && edited && written && given && back && deleted
             && popover.shownTitle == "Line Deleted" && backInPlace && undone && redone && writtenAgain && letGo
         record(name, passed,
-               "clicked \(clicked)\(clickDetail), ↓ \(moved), hints \(hints.joined(separator: " · ")); ↩ edits \(editing), kept \(edited), written \(written); ⇥ to \(next.rawValue) \(given), ⇧⇥ back \(back); ⌘⌫ \(deleted) (card \(card)), its ⌘Z \(backInPlace); ⌘Z ×3 \(undone), ⇧⌘Z \(redone), on disk \(writtenAgain); esc \(letGo)",
+               "clicked \(clicked)\(clickDetail), ↓ \(moved), hints \(hints.joined(separator: " · ")); ↩ edits \(editing), kept \(edited)\(afterReturn), written \(written); ⇥ to \(next.rawValue) \(given), ⇧⇥ back \(back); ⌘⌫ \(deleted) (card \(card)), its ⌘Z \(backInPlace); ⌘Z ×3 \(undone), ⇧⌘Z \(redone), on disk \(writtenAgain); esc \(letGo)",
                nil)
     }
 

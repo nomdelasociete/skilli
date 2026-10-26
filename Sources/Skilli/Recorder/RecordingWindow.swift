@@ -96,7 +96,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         if let ownName {
             Task { [weak self] in
                 let name = await ownName()
-                self?.ownName = name
+                // A name already given (the self-test's) stays.
+                if self?.ownName == nil { self?.ownName = name }
             }
         }
         show(record, transcript: transcript)
@@ -1108,9 +1109,11 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
             return
         }
         editingLine = nil
-        let text = cell.words.stringValue
-        cell.endEditing()
+        // The field editor's text as typed, then the editing ended before
+        // the field stops being editable.
+        let text = (cell.words.currentEditor() as? NSTextView)?.string ?? cell.words.stringValue
         window?.makeFirstResponder(table)
+        cell.endEditing()
         if keep { onEdited?(line, text) } else { table.reloadData(forRowIndexes: [rowOfLine[line]], columnIndexes: [0]) }
     }
 
@@ -1121,9 +1124,9 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
             return
         }
         renamingLine = nil
-        let text = cell.nameField.stringValue
-        cell.endRenaming()
+        let text = (cell.nameField.currentEditor() as? NSTextView)?.string ?? cell.nameField.stringValue
         window?.makeFirstResponder(table)
+        cell.endRenaming()
         if keep { onRenamed?(line, text) }
     }
 
