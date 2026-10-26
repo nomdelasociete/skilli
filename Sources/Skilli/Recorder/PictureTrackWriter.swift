@@ -41,6 +41,11 @@ final class PictureTrackWriter: @unchecked Sendable {
     /// When the source last went off: a picture shown before it, arriving
     /// late, is not written after the black one.
     private var blankedAt: Double?
+    /// A picture that must be in the file (held over a cut, black) the
+    /// encoder had no room for yet: written before the next, or at the
+    /// close; one never written leaves the file not whole.
+    private var pendingRequired: (pixels: CVPixelBuffer, time: Double)?
+    private var missedRequired = false
     /// Once closed, its length and whether it is whole; those waiting for
     /// a close under way.
     private var closedLength: (seconds: Double, complete: Bool)?
@@ -190,6 +195,11 @@ final class PictureTrackWriter: @unchecked Sendable {
             if let closedLength { done(closedLength.seconds, closedLength.complete) } else { closeWaiters.append(done) }
             return
         }
+        // A required picture still waiting: a bounded last chance.
+        if pendingRequired != nil, !failed, writer.status == .writing, !appendPending(tries: 40) {
+            pendingRequired = nil
+            missedRequired = true
+        }
         finished = true
         let end = timeline.finish(at: stop)
         latest = nil
@@ -207,7 +217,7 @@ final class PictureTrackWriter: @unchecked Sendable {
         input.markAsFinished()
         writer.finishWriting {
             // Finished is not whole: the writer says which (Apple's rule).
-            self.queue.async { self.closed(end, complete: self.writer.status == .completed, done) }
+            self.queue.async { self.closed(end, complete: self.writer.status == .completed && !self.missedRequired, done) }
         }
     }
 
@@ -242,15 +252,51 @@ final class PictureTrackWriter: @unchecked Sendable {
     private func write(_ pixels: CVPixelBuffer, at time: Double, waiting: Bool) {
         guard !failed, !finished else { return }
         guard writer.status == .writing else { return fail() }
-        var tries = 0
-        while !input.isReadyForMoreMediaData {
-            guard waiting, tries < 20 else {
+        // A required picture still waiting goes first.
+        if pendingRequired != nil, !appendPending(tries: waiting ? 20 : 0) {
+            guard waiting else {
                 dropped += 1
                 return
             }
-            tries += 1
+            // Another required picture now: the one before is lost (its time
+            // is past), the file not whole.
+            pendingRequired = nil
+            missedRequired = true
+        }
+        guard ready(tries: waiting ? 20 : 0) else {
+            if waiting {
+                // Kept for later, never silently lost.
+                pendingRequired = (pixels, time)
+            } else {
+                dropped += 1
+            }
+            return
+        }
+        append(pixels, at: time)
+    }
+
+    /// Whether the encoder takes a picture now, asked `tries` more times 5
+    /// ms apart.
+    private func ready(tries: Int) -> Bool {
+        var left = tries
+        while !input.isReadyForMoreMediaData {
+            guard left > 0 else { return false }
+            left -= 1
             Thread.sleep(forTimeInterval: 0.005)
         }
+        return true
+    }
+
+    /// The required picture waiting, written if the encoder takes it.
+    private func appendPending(tries: Int) -> Bool {
+        guard let pending = pendingRequired else { return true }
+        guard ready(tries: tries) else { return false }
+        pendingRequired = nil
+        append(pending.pixels, at: pending.time)
+        return true
+    }
+
+    private func append(_ pixels: CVPixelBuffer, at time: Double) {
         guard adaptor.append(pixels, withPresentationTime: CMTime(seconds: time, preferredTimescale: 90000)) else { return fail() }
         written += 1
     }
