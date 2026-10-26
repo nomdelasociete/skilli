@@ -35,6 +35,8 @@ final class SkilliesPaneModel {
     private(set) var changed = 0
     /// The launcher's rows follow (set by the app).
     var onSkilliesChanged: (() -> Void)?
+    /// A skillie's shortcut recorded on its row (docs/adding-a-shortcut.md).
+    let newShortcut = NewShortcut()
 
     /// `.skilli` files opened in skil.li (Finder, the Dock, Open With).
     func receive(files: [URL]) async {
@@ -190,7 +192,8 @@ struct SkilliesPane: View {
             ForEach(grouped, id: \.title) { group in
                 Section {
                     ForEach(group.items, id: \.path) { skillie in
-                        let row = SkillieRow(skillie: skillie, inMenuBar: menuBarBinding(skillie, on: inMenuBar.contains(skillie.path)))
+                        let row = SkillieRow(skillie: skillie, inMenuBar: menuBarBinding(skillie, on: inMenuBar.contains(skillie.path)),
+                                             store: context.shortcuts, newShortcut: model.newShortcut)
                         if skillie.path == firstInMenuBar {
                             row.settingAnchor("skilliesInMenuBar")
                         } else {
@@ -210,6 +213,13 @@ struct SkilliesPane: View {
         }
         .formStyle(.grouped)
         .onAppear { shown = skillies() }
+        // ⎋, refused, or another pane: one added for a recording and left
+        // without keys goes, and nothing records out of sight.
+        .onChange(of: context.shortcuts.recordingID) { model.newShortcut.recordingEnded(context.shortcuts) }
+        .onDisappear {
+            if context.shortcuts.recordingID != nil { context.shortcuts.cancelRecording() }
+            model.newShortcut.recordingEnded(context.shortcuts, leaving: true)
+        }
         // Added from a file or link: the list with it.
         .onChange(of: model.changed) { shown = skillies() }
         .sheet(isPresented: $model.isImporting) {
@@ -244,11 +254,17 @@ struct SkilliesPane: View {
 }
 
 /// A skillie: its icon, title and what it does (or its file), the
-/// arguments it asks for, and its file in the Finder.
+/// arguments it asks for, its shortcut, and its file in the Finder.
 private struct SkillieRow: View {
     let skillie: ScriptCommand
     /// Inline skillies only: its line in the menu bar.
     let inMenuBar: Binding<Bool>?
+    @Bindable var store: ShortcutStore
+    let newShortcut: NewShortcut
+
+    /// What its key does: runs it, or opens the launcher on its argument
+    /// when it needs one (`ActionRunner`).
+    private var action: SkilliAction? { .mac(.script(skillie)) }
 
     var body: some View {
         LabeledContent {
@@ -269,6 +285,15 @@ private struct SkillieRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if let action {
+                    // Recorded here, on a click: "Record Shortcut" until it has keys.
+                    let id = store.entryID(for: action)
+                    ShortcutField(store: store, id: id ?? "skillie.unbound.\(skillie.path)",
+                                  chords: id.flatMap { id in store.config.shortcuts.first { $0.id == id }?.chords },
+                                  minWidth: 120) {
+                        newShortcut.record(action, store)
+                    }
+                }
                 Button {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: skillie.path)])
                 } label: {
@@ -285,6 +310,12 @@ private struct SkillieRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                    // Recording's hint, or why the keys were refused.
+                    if let action, let id = store.entryID(for: action), ShortcutNote.shows(store, id) {
+                        ShortcutNote(store: store, id: id)
+                            .font(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             } icon: {
                 SkillieIcon(skillie: skillie)

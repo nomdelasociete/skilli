@@ -200,12 +200,13 @@ final class SettingsSearchModel {
     /// with another setting on leads to that one (`SettingsSearch.shownWith`).
     /// Each step follows what SwiftUI draws (the rows' `onAppear`), never a
     /// delay; a guard gives up after 2 s on a pane that draws no row.
-    func reveal(_ anchor: String, in pane: SettingsPane) {
+    /// `drawing`: the row was just added, not drawn yet: waited for.
+    func reveal(_ anchor: String, in pane: SettingsPane, drawing: Bool = false) {
         revealing = anchor
         revealPane = pane
         landed = nil
         revealCount += 1
-        let redrawn = beforeReveal(pane, anchor)
+        let redrawn = beforeReveal(pane, anchor) || drawing
         if navigation.pane != pane || redrawn {
             // Its rows say when it is drawn.
             awaitingPane = true

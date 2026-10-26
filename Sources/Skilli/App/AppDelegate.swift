@@ -1936,7 +1936,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let ran = ask.lastRun.map { " · " + ScheduledAsks.moment($0) } ?? ""
             Task { await self.aiActions.presentScheduled(ask, answer: answer, failed: ask.lastFailed, status: ask.schedule.spoken + ran, by: nil) }
         }
-        context.scriptCommands = { [scriptLibrary] in scriptLibrary.all().filter { $0.arguments.allSatisfy(\.optional) } }
+        // Every one takes a key: one that needs an argument opens the launcher on it.
+        context.scriptCommands = { [scriptLibrary] in scriptLibrary.all() }
         context.arranger = arranger
         context.tryMeetingAlert = { [weak self] alert in
             self?.meetingCard.show(MeetingCardView.sample(startingIn: TimeInterval(alert.minutes * 60)), dark: alert.style == .dark)
