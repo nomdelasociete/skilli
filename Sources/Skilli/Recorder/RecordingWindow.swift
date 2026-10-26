@@ -727,6 +727,9 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     private(set) var selectedLine: Int?
     /// The line whose words are being edited, and the name being typed.
     private(set) var editingLine: Int?
+    /// The edited line's words as typed, for its height: the table must not
+    /// be asked for its cell while it measures rows (it raises).
+    private var editedText: String?
     private(set) var renamingLine: Int?
     /// Lines that came while a line was edited or renamed: shown once it
     /// ends (a reload would take the editor's cell away).
@@ -1069,14 +1072,17 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         guard line < rowOfLine.count, let cell = table.view(atColumn: 0, row: rowOfLine[line], makeIfNecessary: true) as? LineCell else { return }
         endRenaming(keep: false)
         editingLine = line
-        cell.beginEditing(onEnd: { [weak self] keep in self?.endEditing(keep: keep) }, onChange: { [weak self] in self?.editedTextChanged() })
+        cell.beginEditing(onEnd: { [weak self] keep in self?.endEditing(keep: keep) },
+                          onChange: { [weak self, weak cell] in self?.editedTextChanged(cell?.editor.string) })
+        editedText = cell.editor.string
         window?.makeFirstResponder(cell.editor)
         cell.editor.moveToEndOfDocument(nil)
     }
 
     /// The line grows as its words wrap.
-    private func editedTextChanged() {
+    private func editedTextChanged(_ text: String?) {
         guard let line = editingLine, line < rowOfLine.count else { return }
+        editedText = text
         heights[rowOfLine[line]] = nil
         table.noteHeightOfRows(withIndexesChanged: [rowOfLine[line]])
     }
@@ -1097,10 +1103,12 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         guard let line = editingLine, line < rowOfLine.count,
               let cell = table.view(atColumn: 0, row: rowOfLine[line], makeIfNecessary: false) as? LineCell else {
             editingLine = nil
+            editedText = nil
             showLinesLater()
             return
         }
         editingLine = nil
+        editedText = nil
         let text = cell.editor.string
         cell.endEditing()
         window?.makeFirstResponder(table)
@@ -1217,10 +1225,9 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         case .shown(let slide): LineCell.text(of: slide)
         }
         var height = LineCell.height(of: text, width: linesWidth > 0 ? linesWidth : 712, speakerWidth: speakerWidth)
-        // Being edited: the field's text as typed.
-        if let line = editingLine, line < rowOfLine.count, rowOfLine[line] == row,
-           let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? LineCell {
-            height = max(height, LineCell.height(of: cell.editor.string, width: linesWidth > 0 ? linesWidth : 712, speakerWidth: speakerWidth))
+        // Being edited: the words as typed.
+        if let line = editingLine, line < rowOfLine.count, rowOfLine[line] == row, let typed = editedText {
+            height = max(height, LineCell.height(of: typed, width: linesWidth > 0 ? linesWidth : 712, speakerWidth: speakerWidth))
         }
         heights[row] = height
         return height
