@@ -280,7 +280,8 @@ On this Mac, at Stop, with progress in the menu bar.
   with `SpeechTranscriber`, which gives each word's time; 30 to 37 % with
   whisper, whose times are per line and on the audio without its VAD's
   silences. For whisper, the times are put back on the recording's clock
-  first (the VAD's cuts added back); that is not measured yet (To check).
+  first (the VAD's cuts added back): 15 % left (Measured, phase 4),
+  half as many, still well behind `SpeechTranscriber`.
 - A language this Mac cannot transcribe: the Record card checks it before
   ↩, the default engine first (whisper when it is the one downloaded and
   set), then the others (`SpeechTranscriber.supportedLocales`,
@@ -430,9 +431,10 @@ Measured below. Still open:
 - No headphones with real speakers and a real microphone (the test Mac
   has neither): macOS's own echo cancellation (`AVAudioEngine`'s voice
   processing) against the word-level drop measured below.
-- The drop with whisper once its word times are put back on the
-  recording's clock (measured without it: 30 to 37 % of the other side
-  left, against 3 % with `SpeechTranscriber`).
+- Whether whisper's drop (15 % of the other side left with its times on
+  the recording's clock, Measured) gains from whisper.cpp's DTW word
+  times, or whether macOS's engine should make the microphone's track
+  when no headphones are worn.
 
 ## Measured
 
@@ -712,6 +714,8 @@ words; the other side's 14,218.
 | `DictationTranscriber` + names | 20 dB under | 19.0 | 145.6 | 67.9 | 41.4 % | 15.6 % |
 | whisper turbo + VAD + names | 12 dB under | 9.2 | 281.8 | 130.4 | 88.1 % | 36.8 % |
 | whisper turbo + VAD + names | 20 dB under | 9.2 | 291.5 | 134.7 | 82.9 % | 30.4 % |
+| whisper, times on the recording's clock (phase 4, through the app) | 12 dB under | 10.0 | 283.9 | 62.2 | 89.6 % | 14.5 % |
+| whisper, times on the recording's clock (phase 4, through the app) | 20 dB under | 10.0 | 271.7 | 69.0 | 84.0 % | 15.3 % |
 
 - Without headphones the user's transcript holds most of the other side's
   words again, even 20 dB under the voice: the transcript doubles.
@@ -722,11 +726,20 @@ words; the other side's 14,218.
 - whisper gives times per line, not per word, once its VAD has cut the
   silences (whisper.cpp 1.9.5's word times are then those of the audio
   without its silences): the drop misses a third of the other side.
+- 2026-10-26 (phase 4): with each token's time read through whisper.cpp
+  1.9.5's `whisper_full_get_token_t0/t1`, which put its VAD's cuts back,
+  through the app's own transcript (`remote whisper`, scored by
+  `echo_dedup.py`; the tracks written as the recorder writes them): 14.5
+  and 15.3 % of the other side left, against 36.8 and 30.4 % with the
+  times off. Its two tracks agree less on the same words than
+  `SpeechTranscriber`'s do, as `DictationTranscriber`'s: the rule and its
+  window stay as they were set, not tuned on this.
 
 **Pick: the drop by words, on each word's time.** Apple's engines give
-them; whisper's have to be put back on the recording's clock first (the
-VAD's cuts added back), not measured here. macOS's own echo cancellation
-is still to measure on a Mac with speakers and a microphone (To check).
+them; whisper's are put back on the recording's clock first (the VAD's
+cuts added back: measured in phase 4, 15 % left). macOS's own echo
+cancellation is still to measure on a Mac with speakers and a
+microphone (To check).
 
 ### The microphone's app
 
