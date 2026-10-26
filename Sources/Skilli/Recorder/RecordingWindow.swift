@@ -1050,14 +1050,22 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         select(min(max(0, from + step), lines.count - 1), scrollToIt: true)
     }
 
-    /// ↩ on a line: its words a field in place, the caret at the end.
+    /// ↩ on a line: its words a text view in place, the caret at the end;
+    /// ↩ keeps, esc puts back, a click elsewhere keeps.
     func beginEditing(line: Int) {
         guard line < rowOfLine.count, let cell = table.view(atColumn: 0, row: rowOfLine[line], makeIfNecessary: true) as? LineCell else { return }
         endRenaming(keep: false)
         editingLine = line
-        cell.beginEditing(delegate: self)
-        window?.makeFirstResponder(cell.words)
-        (window?.fieldEditor(false, for: cell.words) as? NSTextView)?.moveToEndOfDocument(nil)
+        cell.beginEditing(onEnd: { [weak self] keep in self?.endEditing(keep: keep) }, onChange: { [weak self] in self?.editedTextChanged() })
+        window?.makeFirstResponder(cell.editor)
+        cell.editor.moveToEndOfDocument(nil)
+    }
+
+    /// The line grows as its words wrap.
+    private func editedTextChanged() {
+        guard let line = editingLine, line < rowOfLine.count else { return }
+        heights[rowOfLine[line]] = nil
+        table.noteHeightOfRows(withIndexesChanged: [rowOfLine[line]])
     }
 
     /// "Other Name…": the speaker's name a field over its line.
@@ -1079,11 +1087,9 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
             return
         }
         editingLine = nil
-        // The field editor's text as typed, then the editing ended before
-        // the field stops being editable.
-        let text = (cell.words.currentEditor() as? NSTextView)?.string ?? cell.words.stringValue
-        window?.makeFirstResponder(table)
+        let text = cell.editor.string
         cell.endEditing()
+        window?.makeFirstResponder(table)
         if keep { onEdited?(line, text) } else { table.reloadData(forRowIndexes: [rowOfLine[line]], columnIndexes: [0]) }
     }
 
@@ -1104,7 +1110,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     func commitEditing(_ text: String) -> Bool {
         guard let line = editingLine, line < rowOfLine.count,
               let cell = table.view(atColumn: 0, row: rowOfLine[line], makeIfNecessary: false) as? LineCell else { return false }
-        cell.words.stringValue = text
+        cell.editor.string = text
         endEditing(keep: true)
         return true
     }
@@ -1122,30 +1128,23 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     }
     #endif
 
+    /// The name typed in place: ↩ keeps, esc puts back.
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-        let renaming = renamingLine != nil
+        guard renamingLine != nil else { return false }
         switch selector {
         case #selector(NSResponder.insertNewline(_:)):
-            renaming ? endRenaming(keep: true) : endEditing(keep: true)
+            endRenaming(keep: true)
             return true
         case #selector(NSResponder.cancelOperation(_:)):
-            renaming ? endRenaming(keep: false) : endEditing(keep: false)
+            endRenaming(keep: false)
             return true
         default:
             return false
         }
     }
 
-    func controlTextDidChange(_ notification: Notification) {
-        // The line grows as its words wrap.
-        guard let line = editingLine, line < rowOfLine.count else { return }
-        heights[rowOfLine[line]] = nil
-        table.noteHeightOfRows(withIndexesChanged: [rowOfLine[line]])
-    }
-
     func controlTextDidEndEditing(_ notification: Notification) {
-        // A click elsewhere keeps what was typed.
-        if editingLine != nil, (notification.object as? NSTextField) is LineWordsField { endEditing(keep: true) }
+        // A click elsewhere keeps the name typed.
         if renamingLine != nil, (notification.object as? NSTextField) is LineNameField { endRenaming(keep: true) }
     }
 
@@ -1185,7 +1184,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         // Being edited: the field's text as typed.
         if let line = editingLine, line < rowOfLine.count, rowOfLine[line] == row,
            let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? LineCell {
-            height = max(height, LineCell.height(of: cell.words.stringValue, width: linesWidth > 0 ? linesWidth : 712, speakerWidth: speakerWidth))
+            height = max(height, LineCell.height(of: cell.editor.string, width: linesWidth > 0 ? linesWidth : 712, speakerWidth: speakerWidth))
         }
         heights[row] = height
         return height
@@ -1339,8 +1338,53 @@ private final class LineRowView: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {}
 }
 
-/// The words' field of a line: a label until ↩ makes it editable.
-private final class LineWordsField: NSTextField {}
+/// A line's words while they are edited (↩ keeps, esc puts back, the
+/// keyboard going elsewhere keeps): a text view of its own over the words'
+/// label, so its keys are its own whatever a field would do with them.
+private final class LineWordsEditor: NSTextView {
+    var onEnd: ((Bool) -> Void)?
+    var onChange: (() -> Void)?
+    private var ended = true
+
+    func begin(_ text: String) {
+        string = text
+        ended = false
+    }
+
+    override func keyDown(with event: NSEvent) {
+        let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        switch (flags, Int(event.keyCode)) {
+        case ([], kVK_Return), ([], kVK_ANSI_KeypadEnter): end(keep: true)
+        case ([], kVK_Escape): end(keep: false)
+        default: super.keyDown(with: event)
+        }
+    }
+
+    override func doCommand(by selector: Selector) {
+        switch selector {
+        case #selector(insertNewline(_:)): end(keep: true)
+        case #selector(cancelOperation(_:)): end(keep: false)
+        default: super.doCommand(by: selector)
+        }
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned { end(keep: true) }
+        return resigned
+    }
+
+    override func didChangeText() {
+        super.didChangeText()
+        onChange?()
+    }
+
+    private func end(keep: Bool) {
+        guard !ended else { return }
+        ended = true
+        onEnd?(keep)
+    }
+}
 
 /// The speaker's name typed in place ("Other Name…").
 private final class LineNameField: NSTextField {}
@@ -1357,7 +1401,8 @@ private final class LineCell: NSTableCellView {
     static let vertical: CGFloat = 7
     private let speaker = SpeakerLabel(labelWithString: "")
     private let time = NSTextField(labelWithString: "")
-    let words = LineWordsField(wrappingLabelWithString: "")
+    let words = NSTextField(wrappingLabelWithString: "")
+    let editor = LineWordsEditor()
     let nameField = LineNameField(string: "")
     var speakerWidth: CGFloat = minimumSpeakerWidth {
         didSet { if speakerWidth != oldValue { needsLayout = true } }
@@ -1375,12 +1420,21 @@ private final class LineCell: NSTableCellView {
         words.font = Self.textFont
         words.textColor = .labelColor
         words.isSelectable = false
+        editor.font = Self.textFont
+        editor.isRichText = false
+        editor.allowsUndo = true
+        editor.drawsBackground = true
+        editor.backgroundColor = .textBackgroundColor
+        editor.textContainerInset = .zero
+        editor.textContainer?.lineFragmentPadding = 2
+        editor.textContainer?.widthTracksTextView = true
+        editor.isHidden = true
         nameField.font = Self.speakerFont
         nameField.drawsBackground = true
         nameField.backgroundColor = .textBackgroundColor
         nameField.isHidden = true
         nameField.placeholderString = "Name"
-        for subview in [speaker, time, words, nameField] { addSubview(subview) }
+        for subview in [speaker, time, words, editor, nameField] { addSubview(subview) }
     }
 
     @available(*, unavailable)
@@ -1414,20 +1468,21 @@ private final class LineCell: NSTableCellView {
         needsLayout = true
     }
 
-    func beginEditing(delegate: NSTextFieldDelegate) {
-        words.isEditable = true
-        words.isSelectable = true
-        words.isBordered = false
-        words.drawsBackground = false
-        words.focusRingType = .exterior
-        words.delegate = delegate
+    func beginEditing(onEnd: @escaping (Bool) -> Void, onChange: @escaping () -> Void) {
+        editor.onEnd = onEnd
+        editor.onChange = onChange
+        editor.begin(words.stringValue)
+        editor.isHidden = false
+        words.isHidden = true
+        needsLayout = true
     }
 
     func endEditing() {
-        guard words.isEditable else { return }
-        words.isEditable = false
-        words.isSelectable = false
-        words.delegate = nil
+        guard !editor.isHidden else { return }
+        editor.onEnd = nil
+        editor.onChange = nil
+        editor.isHidden = true
+        words.isHidden = false
     }
 
     func beginRenaming(_ name: String, delegate: NSTextFieldDelegate) {
@@ -1464,6 +1519,7 @@ private final class LineCell: NSTableCellView {
         time.frame = NSRect(x: x + speakerWidth, y: Self.vertical + 1, width: Self.timeWidth - 6, height: 16)
         let left = x + speakerWidth + Self.timeWidth
         words.frame = NSRect(x: left, y: Self.vertical, width: max(0, bounds.width - left - Self.padding), height: bounds.height - Self.vertical * 2)
+        editor.frame = words.frame.insetBy(dx: -2, dy: 0)
     }
 }
 
