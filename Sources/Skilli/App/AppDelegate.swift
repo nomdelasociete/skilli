@@ -80,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         learner.isOn = { [preferences] in preferences.windowLearning }
         learner.leftOut = { [preferences] in Set(preferences.windowNeverPlace) }
         learner.gap = { [preferences] in CGFloat(preferences.windowGap) }
+        learner.onChange = { [weak self] in self?.madeUsualPlaces?.refresh() }
         return learner
     }()
     /// Usual places: an app's first window where the user usually puts it,
@@ -89,8 +90,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         usual.isOn = { [preferences] in preferences.usualPlaces }
         usual.leftOut = { [preferences] in Set(preferences.windowNeverPlace) }
         usual.gap = { [preferences] in CGFloat(preferences.windowGap) }
+        madeUsualPlaces = usual
         return usual
     }()
+    /// Made once started: settings and learning changes refresh what it watches.
+    private var madeUsualPlaces: UsualPlaces?
     /// Arrange Windows: a saved layout for what is open, else every window
     /// where the user usually puts it.
     private lazy var windowArrange: WindowArrange = {
@@ -1922,6 +1926,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if imageFolder.onImage != nil { watchImageFolder() }
             autoQuitter.schedule()
         }
+        // The setting, Never place, learning: which apps are watched for new windows.
+        madeUsualPlaces?.refresh()
     }
 
     /// What the user made, for the Catalog: the launcher's "?" and
@@ -1957,7 +1963,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let ran = ask.lastRun.map { " · " + ScheduledAsks.moment($0) } ?? ""
             Task { await self.aiActions.presentScheduled(ask, answer: answer, failed: ask.lastFailed, status: ask.schedule.spoken + ran, by: nil) }
         }
-        context.scriptCommands = { [scriptLibrary] in scriptLibrary.all().filter { $0.arguments.allSatisfy(\.optional) } }
+        // Every one takes a key: one that needs an argument opens the launcher on it.
+        context.scriptCommands = { [scriptLibrary] in scriptLibrary.all() }
         context.arranger = arranger
         context.tryMeetingAlert = { [weak self] alert in
             self?.meetingCard.show(MeetingCardView.sample(startingIn: TimeInterval(alert.minutes * 60)), dark: alert.style == .dark)

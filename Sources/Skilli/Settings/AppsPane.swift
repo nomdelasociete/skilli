@@ -346,7 +346,7 @@ private struct AppPageView: View {
         // keys goes.
         .onDisappear {
             if store.recordingID != nil { store.cancelRecording() }
-            model.newShortcut.recordingEnded(store)
+            model.newShortcut.recordingEnded(store, leaving: true)
         }
     }
 

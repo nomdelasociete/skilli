@@ -61,58 +61,88 @@ function run() {
 
     const colors = [$.NSColor.systemRedColor, $.NSColor.systemOrangeColor, $.NSColor.systemYellowColor, $.NSColor.systemGreenColor,
                     $.NSColor.systemTealColor, $.NSColor.systemBlueColor, $.NSColor.systemPurpleColor, $.NSColor.systemPinkColor]
+        .map(color => color.CGColor)
     const shapes = [[7, 14, 0], [9, 9, 0], [8, 8, 4]]
     const random = (low, high) => low + Math.random() * (high - low)
+    const pick = list => list[Math.floor(Math.random() * list.length)]
     const now = $.CACurrentMediaTime()
-    const life = 5, steps = 50, gravity = 0.6 * height, drag = 1.0
+    const life = 5, gravity = 0.6 * height, drag = 1.0
 
-    // A piece of paper shot from (x0, 0) toward `aim`: its path under
-    // gravity and the air's drag, sampled for a keyframe animation.
-    function piece(x0, aim) {
-        const [w, h, radius] = shapes[Math.floor(Math.random() * shapes.length)]
-        const layer = $.CALayer.layer
-        layer.bounds = $.NSMakeRect(0, 0, w, h)
-        layer.cornerRadius = radius
-        layer.backgroundColor = colors[Math.floor(Math.random() * colors.length)].CGColor
+    // Each call to Cocoa from JavaScript costs: a few paths and turns are
+    // made once and shared, each piece offset a little from its path.
+    function settle(animation) {
+        animation.duration = life
+        animation.fillMode = $.kCAFillModeBoth
+        animation.removedOnCompletion = false
+        return animation
+    }
+    // A path shot toward `aim` under gravity and the air's drag, relative
+    // to where its piece starts: ten points, joined in curves.
+    function path(aim) {
         const angle = aim + random(-Math.PI / 10, Math.PI / 10)
         const speed = random(1.5, 2.6) * height
-        let x = x0, y = -20, vx = Math.cos(angle) * speed, vy = Math.sin(angle) * speed
-        const dt = life / steps, points = []
-        for (let i = 0; i <= steps; i++) {
-            points.push($.NSValue.valueWithPoint($.NSMakePoint(x, y)))
+        let x = 0, y = 0, vx = Math.cos(angle) * speed, vy = Math.sin(angle) * speed
+        const fine = 100, dt = life / fine, points = []
+        for (let i = 0; i <= fine; i++) {
+            if (i % 10 === 0) points.push($.NSValue.valueWithPoint($.NSMakePoint(x, y)))
             vx -= vx * drag * dt
             vy -= (gravity + vy * drag) * dt
             x += vx * dt
             y += vy * dt
         }
-        layer.position = $.NSMakePoint(x0, -20)
-        const delay = random(0, 0.25)
-        const path = $.CAKeyframeAnimation.animationWithKeyPath('position')
-        path.values = $(points)
-        const spin = $.CABasicAnimation.animationWithKeyPath('transform.rotation.z')
-        spin.fromValue = $(0)
-        spin.toValue = $(random(-12, 12))
-        // `transform.rotation.x` turns it over as it falls: paper flutters.
-        const flip = $.CABasicAnimation.animationWithKeyPath('transform.rotation.x')
-        flip.fromValue = $(0)
-        flip.toValue = $(random(4, 16))
-        for (const animation of [path, spin, flip]) {
-            animation.beginTime = now + delay
-            animation.duration = life
-            animation.fillMode = $.kCAFillModeBoth
-            animation.removedOnCompletion = false
+        const animation = $.CAKeyframeAnimation.animationWithKeyPath('position')
+        animation.values = $(points)
+        animation.calculationMode = $.kCAAnimationCubic
+        animation.additive = true
+        return settle(animation)
+    }
+    function turn(keyPath, low, high) {
+        const animation = $.CABasicAnimation.animationWithKeyPath(keyPath)
+        animation.fromValue = $(0)
+        animation.toValue = $(random(low, high))
+        return settle(animation)
+    }
+    const cannons = [{ x: 0, aim: Math.PI * 0.36, paths: [] }, { x: width, aim: Math.PI * 0.64, paths: [] }]
+    const spins = [], flips = []
+    function more(count) {
+        for (let i = 0; i < count; i++) {
+            cannons.forEach(cannon => cannon.paths.push(path(cannon.aim)))
+            // Spinning flat, and turning over as it falls: paper flutters.
+            spins.push(turn('transform.rotation.z', -12, 12))
+            flips.push(turn('transform.rotation.x', 4, 16))
+        }
+    }
+
+    // `made`: when its group was made. One made after its turn in the
+    // burst leaves then, from its cannon, never halfway along its path.
+    function piece(cannon, made) {
+        const [w, h, radius] = pick(shapes)
+        const layer = $.CALayer.layer
+        layer.bounds = $.NSMakeRect(0, 0, w, h)
+        if (radius) layer.cornerRadius = radius
+        layer.backgroundColor = pick(colors)
+        layer.position = $.NSMakePoint(cannon.x + random(-70, 70), random(-80, -20))
+        const begin = Math.max(now + random(0, 0.35), made)
+        for (const animation of [pick(cannon.paths), pick(spins), pick(flips)]) {
+            animation.beginTime = begin
             layer.addAnimationForKey(animation, $())
         }
         view.layer.addSublayer(layer)
     }
 
-    for (let i = 0; i < 110; i++) {
-        piece(0, Math.PI * 0.36)
-        piece(width, Math.PI * 0.64)
-    }
-    window.orderFrontRegardless
-
     const wait = seconds => $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(seconds))
+    // The first pieces on screen at once; the rest made while they fly.
+    more(4)
+    for (let i = 0; i < 20; i++) cannons.forEach(cannon => piece(cannon, now))
+    window.orderFrontRegardless
+    wait(0.01)
+    more(28)
+    // In groups, each shown as it is made.
+    for (let group = 0; group < 6; group++) {
+        const made = $.CACurrentMediaTime()
+        for (let i = 0; i < 15; i++) cannons.forEach(cannon => piece(cannon, made))
+        wait(0.001)
+    }
     // The last of it fades as it falls away.
     wait(3.8)
     for (let step = 1; step <= 12; step++) {

@@ -295,6 +295,7 @@
 		CBAFA5BE3CC36D3776FBFD26 /* SearchNarrowing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0A5338C5E10B0F81C2D977 /* SearchNarrowing.swift */; };
 		CC37162DDE0BFD3B34653CF7 /* MCPServerImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C705923EE4CFF8A97B7BCC /* MCPServerImporter.swift */; };
 		CC7C2D4B082AD7F5C12DE109 /* MenuBarSkillies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DF855C181119E9A4FFA2AC /* MenuBarSkillies.swift */; };
+		CD5EE21A12FA15B98B37EC53 /* AddShortcutSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D07CDB42AF7CA9B447FB64 /* AddShortcutSheet.swift */; };
 		CE2C31E6575DD75556295640 /* SkillieEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1652A2C8726A9428E6EDCBA2 /* SkillieEnvironment.swift */; };
 		CF69A58D5DE3C7E6193DE53E /* ClipboardRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CAA8284FAB4B0E13B42626 /* ClipboardRules.swift */; };
 		CF9D2511DC34F623FB2281F0 /* PasteCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2BE8AC7ABCBB95696CCC88 /* PasteCheck.swift */; };
@@ -564,6 +565,7 @@
 		61892FB77FB4F33A30C7052E /* ClipboardPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPreviewView.swift; sourceTree = "<group>"; };
 		61D48A25D8C9F405A4C19344 /* AppIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIndex.swift; sourceTree = "<group>"; };
 		62D0F221E67A7E6E6CB14CD2 /* PrivacyMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyMap.swift; sourceTree = "<group>"; };
+		63D07CDB42AF7CA9B447FB64 /* AddShortcutSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddShortcutSheet.swift; sourceTree = "<group>"; };
 		647FE5DF22E6127D94001A33 /* DisplayArrival.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayArrival.swift; sourceTree = "<group>"; };
 		6600E397D54C1645B5932506 /* CatalogReach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogReach.swift; sourceTree = "<group>"; };
 		6650ECA5F6A1027FFBEA23F0 /* AwakeStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AwakeStatus.swift; sourceTree = "<group>"; };
@@ -1098,6 +1100,7 @@
 		7DAE5FBF2E554AE7A129A546 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				63D07CDB42AF7CA9B447FB64 /* AddShortcutSheet.swift */,
 				FD66CE9CAC47F6338D5DCEFA /* AgendaPane.swift */,
 				CB63022DBB47B70E6F914593 /* AIAccountsPane.swift */,
 				3AD6D29CADF32C24BD18BE7D /* AICommandsViews.swift */,
@@ -1729,6 +1732,7 @@
 				6211358FE99ACDDA2BC7FBD0 /* AXWait.swift in Sources */,
 				FD7C61F2FBFA0F7148568E4A /* ActionPanel.swift in Sources */,
 				A3298F585D31A726CB08A8B8 /* ActionRunner.swift in Sources */,
+				CD5EE21A12FA15B98B37EC53 /* AddShortcutSheet.swift in Sources */,
 				B055A6078F10B93739132063 /* AgendaPane.swift in Sources */,
 				8E9669A96E05F90F1B11280F /* AgentRun.swift in Sources */,
 				40BDA0F4D924D1345636EED9 /* AppCandidates.swift in Sources */,

@@ -340,7 +340,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         // keys gone (its page's onDisappear may not run as the window goes).
         if let store = search.shortcuts {
             if store.recordingID != nil { store.cancelRecording() }
-            apps.newShortcut.recordingEnded(store)
+            apps.newShortcut.recordingEnded(store, leaving: true)
+            skillies.newShortcut.recordingEnded(store, leaving: true)
         }
     }
 

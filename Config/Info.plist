@@ -42,7 +42,10 @@
 	<true/>
 	<!-- A skillie as a file (docs/skillie-files.md): the script itself, as
 	     text, so Quick Look shows it; opened, Settings → Skillies shows it
-	     whole before Add. -->
+	     whole before Add. Its icon: macOS's document sheet with skil.li's
+	     icon, no text (UTTypeIcons; CFBundleTypeIconSystemGenerated is
+	     ignored for a type that is plain text, and UTTypeIconText is drawn
+	     in capitals, never skil.li as the brand writes it). -->
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
@@ -54,6 +57,11 @@
 			<array>
 				<string>public.plain-text</string>
 			</array>
+			<key>UTTypeIcons</key>
+			<dict>
+				<key>UTTypeIconBadgeName</key>
+				<string>AppIcon</string>
+			</dict>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>

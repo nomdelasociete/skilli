@@ -824,9 +824,15 @@ starts from it.
   again closes it). Their titles read the names live
   (`SkilliAction.snippetName`, `quicklinkName`): renamed, the shortcut
   stays. Deleting one takes its shortcuts with it (⌘Z puts both back).
-  Keys → Add Shortcut: Launcher Commands (a submenu, by the "?"'s
-  groups), then Snippets and Quicklinks (a submenu each, after Skillies);
-  `add_shortcut` takes them by name or id.
+  Keys → Add Shortcut… (docs/adding-a-shortcut.md, asked 2026-10-26: the
+  menu could not be narrowed, its new row landed out of sight already
+  recording): a sheet (`AddShortcutSheet`, `ShortcutChoice.all`, read as
+  it opens) with a focused search over every command the menu listed,
+  each word in its title or section; ↑↓ and ↩, or a double-click, pick. Picked:
+  its row added without keys, not recording, Keys scrolled to it, glowing
+  (`SettingsSearchModel.reveal(_:in:drawing:)`); left without keys, it
+  goes when another is picked or Keys closes. `add_shortcut` takes them
+  by name or id.
 - Keys → Restore Defaults asks first and names what goes
   (`RestoreDefaults` in SkilliCore, `ShortcutStore.changesFromDefaults`:
   "Your 3 custom shortcuts and 2 changed keys are removed.", destructive
@@ -3142,7 +3148,15 @@ re-investigating.
   `UsualPlace.untouched` (under 1.5 s old, no key or click since, mouse
   up); `WindowManager.remember` keeps where it opened for ✦W R. A move
   away is learned as usual and makes it unsure. `selftest windows`
-  (`usualPlacesOnLaunch`).
+  (`usualPlacesOnLaunch`). New windows of running apps: a
+  `kAXWindowCreatedNotification` observer only on the apps with 3
+  placements on these displays (`WindowPlacements.mayBeSure`), refreshed
+  when the setting, Never place, the learner (`WindowLearner.onChange`),
+  the apps or the displays change; the same `place(...)` rules, a window
+  seen twice (launch and observer) handled once. Measured at rest with an
+  observer on all 17 apps of the test Mac: no memory or CPU change
+  (`usualPlacesObserversCost`, `Metrics.cpu`). `selftest windows`
+  (`usualPlacesForNewWindows`).
 - File search (`FileSearch`, `FileMeaning` in SkilliCore): Search Files
   or "f " / "file " / "fichier " turns the launcher into Spotlight's files
   (a green chip). Typing searches names (every word, case and accents
@@ -3500,7 +3514,9 @@ re-investigating.
   card says the last line. needsConfirmation asks in the card, even when
   `run_skillie` is always allowed. Ask: skillies that need no argument
   join the command question as `script0`…; one that fits (≥ 60 %) beats
-  the agent, asked first under 85 %. Shortcuts: Add Shortcut → Skillies
+  the agent, asked first under 85 %. Shortcuts: on its row in Settings →
+  Skillies (a `ShortcutField` reading "Record Shortcut"; a click records
+  there, `NewShortcut`, ⎋ leaves none), or Keys → Add Shortcut…
   (`script:<path>`); one with a required argument opens the launcher on
   its chip (`ActionRunner`, `run(fromLink:)`), never empty. Menu bar: an
   emoji icon before the line, an image file as the item's image
@@ -3511,7 +3527,11 @@ re-investigating.
   in SkilliCore, `SkilliesPaneModel`, `ScriptLibrary.add`): a `.skilli`
   file is a skillie renamed, plain text (type
   `com.nomdelasociete.skilli.skillie`, exported in `Config/Info.plist`,
-  conforming to `public.plain-text`; skil.li its owner, role Viewer).
+  conforming to `public.plain-text`; skil.li its owner, role Viewer; its
+  icon the document sheet with skil.li's icon, no text, `UTTypeIcons`
+  badge AppIcon: `UTTypeIconText` is drawn in capitals, never the brand's
+  skil.li, and `CFBundleTypeIconSystemGenerated` is ignored for a
+  plain-text type).
   Opened (Finder, the Dock, Open With: `application(_:open:)`, every file
   of one open in one sheet) or `skilli://skillies/import?url=https://…`
   (repeatable; `SmallDownload`, as `apps/import`): Settings → Skillies'
