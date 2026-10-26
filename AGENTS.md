@@ -113,7 +113,7 @@ Mac mini, driven from here:
 |---|---|---|
 | This Mac, any time | Unit tests, builds | `./script/build_and_run.sh test` |
 | This Mac, any time (no keys, no windows; restarts skil.li ~2 s) | Clipboard store, search, OCR; setup drawn off screen; live decisions (Ask, emoji, clipboard and files by meaning, nothing written) | `./script/build_and_run.sh selftest clipboard` / `selftest setup` / `selftest decide` |
-| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote pictures` (the recorder's webcam and screen: a stand-in camera, a slides window, a scratch Chrome, ~3 min), `remote` (all) |
+| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote pictures` (the recorder's webcam and screen: a stand-in camera, a slides window, a scratch Chrome, ~3 min), `remote voices` (the recorder's phase 4: the played-back calls' voices told apart, an import, a line edited and undone, speakers renamed, Transcribe Again, ~10 min), `remote` (all) |
 
 Nothing else that opens skil.li runs on the developer's Mac: `selftest` refuses other
 scopes and `benchmark` refuses outright unless `SKILLI_LOCAL_UI=1` (a Mac
@@ -340,7 +340,9 @@ SkilliCore (framework + SwiftPM library, no AppKit)
 | `Sources/Skilli/Support/Benchmark.swift` | `--benchmark` report |
 | `Sources/Skilli/Support/SelfTest.swift` | `--selftest` end-to-end driver |
 | `Sources/Skilli/App/UndoableDeletes.swift` | Every delete of the user's data: at once, Undo ⌘Z for 10 s in the card (`offerUndo`) |
-| `Sources/Skilli/Recorder/*` | The meeting recorder: `MeetingRecorder` (the two tracks, pause, stop, sources on or off), `MacSoundTap` + `MicrophoneTrack` + `TrackWriter` (sources and files), `MeetingTranscriber`, `RecordCard`, `RecorderIndicator` (menu bar), `RecordingWindow`, `RecorderCenter` (what the rest of the app calls; the moment, the call's end), `RecordingLibrary` + `RecordingIndex` (the list, the words said and the text read on screen); phase 3: `RecorderPictures` (the webcam and the screen together), `WebcamTrack`, `ScreenTrack` + `ScreenWindows`, `PictureTrackWriter`, `SlideReader`, `MeetingTabSelect` |
+| `Sources/Skilli/Recorder/*` | The meeting recorder: `MeetingRecorder` (the two tracks, pause, stop, sources on or off), `MacSoundTap` + `MicrophoneTrack` + `TrackWriter` (sources and files), `MeetingTranscriber`, `RecordCard`, `RecorderIndicator` (menu bar), `RecordingWindow`, `RecorderCenter` (what the rest of the app calls; the moment, the call's end), `RecordingLibrary` + `RecordingIndex` (the list, the words said and the text read on screen); phase 3: `RecorderPictures` (the webcam and the screen together), `WebcamTrack`, `ScreenTrack` + `ScreenWindows`, `PictureTrackWriter`, `SlideReader`, `MeetingTabSelect`; phase 4: `TranscriberHelper` (runs `skil.li Transcriber`), `RecordingImport`, `TranscribeAgainPanel` |
+| `Sources/Transcriber/*` | `skil.li Transcriber`, the recorder's helper beside the app's executable (`Contents/MacOS`): the models' work for a transcript (SpeakerKit's voices), started for it, gone after; never linked by the app |
+| `Sources/SkilliCore/MeetingVoices.swift`, `MeetingTranscriptEdits.swift` | The recorder's voices (words to voices, names, renames that merge) and a transcript's edits with their undo (`TranscriptDraft`, `TranscriptHistory`) |
 | `Sources/SkilliCore/MeetingMoment.swift` | The recorder's moment: the five cases, a place, call apps, `CallEndWatch`, `RecordingRetention`, `RecordingSearch` |
 | `Sources/SkilliCore/*` | Pure logic, unit-tested |
 
@@ -2351,6 +2353,36 @@ re-investigating.
   question. `remote pictures` (Mac mini): a stand-in camera
   (`StandInCamera`, the mini has none) and a slides window, a scratch
   Chrome's window covered; `recorder-pictures-*.png`.
+- Meeting recorder, phase 4 (docs/meeting-recorder-views.md, "Phase 4"):
+  the track that holds several people (the Mac's sound in a call, the
+  microphone in person, an import's one track) is told apart by
+  SpeakerKit (argmax-oss-swift 1.1.1, MIT; pyannote community-1 on Core
+  ML, CC BY 4.0), the count found by itself, in `skil.li Transcriber`, a
+  helper target (`Sources/Transcriber`, project.yml's `Transcriber`)
+  copied beside the app's executable: started for a transcript, gone
+  after, so the models' memory (0.8 GB) never counts against skil.li's.
+  SpeakerKit's models (11 MB) are fetched at build time at a fixed
+  revision of huggingface.co/argmaxinc/speakerkit-coreml, each file
+  checked by its SHA-256 (`script/speakerkit_models.sh`, cached in
+  `build/`), and copied into `Contents/Resources/SpeakerKit`: nothing is
+  downloaded when the app runs. Words go to the voice heard at their
+  time (`MeetingVoices.split`); a line's speaker is a `Voice` (`me`,
+  `them`, `them2`…, `s1`…; `transcript.json` version 2). The window
+  (`RecordingWindow`): a line selected (a click plays from it, ↑ ↓, esc),
+  ↩ edits it in place, ⇥ ⇧⇥ give it to the next or previous speaker, ⌥↩
+  or a click on a name opens the menu of names (the attendees first; a
+  name another speaker has merges them, Me kept: `MeetingVoices.rename`),
+  ⌘⌫ deletes the line (`UndoableDeletes.transcriptLine`, the undo card
+  reverting that edit wherever it is in `TranscriptHistory`), ⌘Z ⇧⌘Z
+  while it is open, each change written at once; the letters C and Z by
+  what they type (AZERTY). Transcribe Again (`TranscribeAgainPanel`): the
+  language and the engine as picked, the transcript before kept when
+  it fails. Import (`RecordingImport`): the launcher's Import Recording,
+  a file dropped on a recording's window, `skilli://record/import`
+  (the panel only), `import_recording`. `remote voices` (Mac mini): the
+  sixteen played-back calls through `MeetingTranscriber` (written for
+  `script/recorder-measure`'s scorers under `voices/`), an import, the
+  keys on a line, renames, Transcribe Again.
 - Reminders (`ReminderItem`, `ReminderRequest`, `RemindersRequest`,
   `Reminders` in SkilliCore, `ReminderBook`; Permission `.reminders`):
   every list the Reminders app has, through EventKit, asked for at first
