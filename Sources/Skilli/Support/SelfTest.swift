@@ -300,6 +300,13 @@ final class SelfTest {
         /// Recordings; Settings → Recorder, Delete after and the folder's
         /// move (keys, Chrome, stand-in events).
         case moment
+        /// Only the recorder's webcam and screen (phase 3): a stand-in
+        /// camera, a test window showing slides at known times recorded
+        /// with a call whose beeps it flashes with: `slides.json` at those
+        /// times, the pictures in step with the sound across a pause; a
+        /// window minimized or covered said in the menu bar; a scratch
+        /// Chrome's window (keys, Chrome).
+        case pictures
     }
 
     /// Extra trigger only the self-test registers. No Hyper tool listens to
@@ -690,6 +697,10 @@ final class SelfTest {
         if scope == .moment {
             window.center()
             return await finish(after: [momentChecks])
+        }
+        if scope == .pictures {
+            window.center()
+            return await finish(after: [picturesChecks])
         }
         if scope == .emoji {
             window.center()
@@ -24059,6 +24070,384 @@ final class SelfTest {
     }
 
     // MARK: - The recorder's moment (phase 2)
+
+    // MARK: - The recorder's pictures (phase 3)
+
+    /// The webcam and the screen (docs/meeting-recorder.md, Phases): a
+    /// stand-in camera (the test Mac has none) and a test window showing
+    /// slides with known text at known times, recorded with a call whose
+    /// microphone's beeps the window and the camera flash with.
+    private func picturesChecks() async {
+        guard let center = context.recorder() else {
+            record("Recorder's pictures", false, "no recorder", nil)
+            return
+        }
+        let preferences = context.preferences
+        let saved = (preferences.recorderConsentShown, preferences.voiceLanguage, preferences.recorderWebcam, preferences.recorderScreen)
+        let visible = (NSScreen.main ?? NSScreen.screens[0]).visibleFrame
+        let slides = SlidesWindow(frame: NSRect(x: visible.minX + 20, y: visible.minY + 40, width: min(900, visible.width * 0.55), height: 560))
+        let camera = StandInCamera()
+        ScreenWindows.includesOwn = true
+        center.recorder.standIn(camera: camera)
+        defer {
+            preferences.recorderConsentShown = saved.0
+            preferences.voiceLanguage = saved.1
+            preferences.recorderWebcam = saved.2
+            preferences.recorderScreen = saved.3
+            slides.window.orderOut(nil)
+            ScreenWindows.includesOwn = false
+            center.recorder.standIn(camera: nil)
+        }
+        preferences.recorderConsentShown = true
+        preferences.voiceLanguage = "en-US"
+        preferences.recorderWebcam = false
+        preferences.recorderScreen = false
+        slides.show(["skil.li", "Lumière · weekly review"])
+        slides.window.orderFront(nil)
+        await picturesRecordSlidesInStep(center, slides, camera)
+        if !aborted { await picturesSayAWindowWithoutPictures(center, slides) }
+        if !aborted { await picturesInAScratchChrome(center) }
+    }
+
+    /// A real click on a row of the Record card.
+    private func clickCardRow(_ center: RecorderCenter, _ source: PictureSource) async -> Bool {
+        guard let frame = center.cardView.screenFrame(of: source) else { return false }
+        let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        // On the row's title, left of its picture and of the ⌃⌄.
+        let point = CGPoint(x: frame.minX + 40, y: screenHeight - frame.midY)
+        let source = CGEventSource(stateID: .hidSystemState)
+        for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
+            CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+            await pause(60)
+        }
+        return true
+    }
+
+    /// The menu open in skil.li (a pop-up list): its item titled `title`
+    /// pressed; else esc. Whether it was.
+    private func pickInOpenMenu(_ title: String) async -> (picked: Bool, titles: [String]) {
+        let items = Self.axElements(roles: [kAXMenuItemRole], under: AXUIElementCreateApplication(getpid())) { _ in true }
+        let titles = items.compactMap { Self.axTitle($0) }.filter { !$0.isEmpty }
+        if let item = items.first(where: { Self.axTitle($0) == title }) {
+            AXUIElementPerformAction(item, kAXPressAction as CFString)
+            await pause(300)
+            return (true, titles)
+        }
+        let source = CGEventSource(stateID: .hidSystemState)
+        for down in [true, false] {
+            CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap)
+        }
+        await pause(300)
+        return (false, titles)
+    }
+
+    /// The spec's phase-3 check: the Record card's webcam row clicked on
+    /// (the stand-in camera), its screen row clicked (no meeting's window:
+    /// the list opens) and the slides window picked, both pictures live
+    /// (light and dark); ↩ records a 24 s call whose microphone beeps at
+    /// known times, the window flashing white and the camera too at each
+    /// beep, four slides at known times, a pause of 2 s; then
+    /// `slides.json` holds each slide's text at its time within a second,
+    /// `screen.mp4` and `webcam.mp4` keep the beeps' times across the
+    /// pause, the files as long as the sound; the window plays both beside
+    /// the lines, in step; Search Recordings finds a slide's words.
+    private func picturesRecordSlidesInStep(_ center: RecorderCenter, _ slides: SlidesWindow, _ camera: StandInCamera) async {
+        let name = "Recorder's pictures: the card turns the webcam and the screen on (a window picked from its list), both live; a 24 s call records them in step with the sound across a pause; slides.json holds the four slides at their times within a second; the window plays both beside the lines in step; the slides are found by search"
+        // Beeps at the microphone's known times; a pause from 13 to 15 s.
+        let beeps: [Double] = [1, 3, 5, 7, 9, 11, 17, 19, 21, 23]
+        let shown: [(at: Double, lines: [String])] = [
+            (2.0, ["Quarterly review", "Lumière, third quarter"]),
+            (6.4, ["Budget 2027", "Revenue up 12 %"]),
+            (10.2, ["Hiring plan", "Two designers in Q1"]),
+            (18.6, ["Next steps", "Ship the recorder in November"]),
+        ]
+        let (pauseAt, resumeAt, end) = (13.0, 15.0, 24.5)
+        let mic = recorderScratch.appendingPathComponent("pictures-me.wav")
+        guard Self.clip(nil, seconds: end + 1, beeps: beeps, to: mic) else {
+            record(name, false, "the microphone's stand-in could not be made", nil)
+            return
+        }
+        center.recorder.standIn(microphone: mic, alsoLeaveOut: [])
+        guard await typeInLauncher("rec slides call") else {
+            record(name, false, "the launcher did not take “rec slides call”", nil)
+            return
+        }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let view = center.cardView
+        guard await waitUntil(timeout: 3, { center.isCardVisible && view.microphoneLine != "Starting…" }) != nil else {
+            record(name, false, "no Record card", nil)
+            return
+        }
+        guard await recordCardHasKeys(center, name) else { return }
+        let offBefore = (view.webcamLine, view.screenLine)
+        // The webcam's row: on, its picture live.
+        _ = await clickCardRow(center, .webcam)
+        let webcamOn = await waitUntil(timeout: 3) { view.webcamLine == "FaceTime HD Camera" && center.recorder.pictures.webcam.sink.latestPicture != nil } != nil
+        // The screen's row: no meeting's window, its list opens; the slides picked.
+        _ = await clickCardRow(center, .screen)
+        await pause(700)
+        let (picked, listed) = await pickInOpenMenu("skil.li · Slides")
+        let screenOn = await waitUntil(timeout: 4) { view.screenLine == "skil.li · Slides" && center.recorder.pictures.screen.sink.latestPicture != nil } != nil
+        await captureRecordCard(center, as: "recorder-pictures-card")
+        guard webcamOn, screenOn, await recordCardHasKeys(center, name) else {
+            record(name, false, "rows before “\(offBefore.0)” / “\(offBefore.1)”; webcam on \(webcamOn) “\(view.webcamLine)”, screen picked \(picked) from \(listed), on \(screenOn) “\(view.screenLine)”", nil)
+            center.closeCardWithoutKeys()
+            return
+        }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 3, { center.recorder.phase == .recording }) != nil, let folder = center.recorder.folder else {
+            record(name, false, "↩ did not record (\(center.recorder.phase))", nil)
+            return
+        }
+        // The call's clock: the microphone's file from now, the flashes at
+        // its beeps.
+        let start = mach_absolute_time()
+        let zero = HostClock.seconds(start)
+        try? center.recorder.microphone.playStandIn(at: start)
+        camera.flash(at: beeps.map { zero + $0 })
+        var events: [(at: Double, run: () -> Void)] = beeps.map { beep in (beep, { slides.flash() }) }
+        events += shown.map { slide in (slide.at, { slides.show(slide.lines) }) }
+        events.append((pauseAt, { center.control(.pause) }))
+        events.append((resumeAt, { center.control(.resume) }))
+        // The corner's counter, four times a second: new pictures that are
+        // no slide (as a call's video moving).
+        events += stride(from: 0.125, to: end, by: 0.25).enumerated().map { index, at in (at, { slides.tick(index) }) }
+        for event in events.sorted(by: { $0.at < $1.at }) {
+            let wait = zero + event.at - HostClock.now
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+            event.run()
+        }
+        let rest = zero + end - HostClock.now
+        if rest > 0 { try? await Task.sleep(for: .seconds(rest)) }
+        center.control(.stop)
+        _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil && center.window(for: folder) != nil }
+        guard let controller = center.window(for: folder) else {
+            record(name, false, "no window after Stop (\(center.recorder.phase))", nil)
+            return
+        }
+        // The sound's beeps are the recording's clock: where each landed.
+        let urls = (me: folder.appendingPathComponent("me.m4a"), screen: folder.appendingPathComponent(RecorderPictures.screenFile),
+                    webcam: folder.appendingPathComponent(RecorderPictures.webcamFile))
+        let found = await Task.detached { Self.beeps(in: urls.me) }.value
+        let screenFlashes = await PictureCheck.flashes(in: urls.screen)
+        let webcamFlashes = await PictureCheck.flashes(in: urls.webcam)
+        let screenOffsets = PictureCheck.offsets(found, screenFlashes)
+        let webcamOffsets = PictureCheck.offsets(found, webcamFlashes)
+        // Before the pause and after it: the same offset.
+        let paused = found.count == beeps.count ? 6 : found.firstIndex { $0 > pauseAt - 0.5 } ?? found.count
+        func spread(_ values: [Double]) -> Double { (values.max() ?? 0) - (values.min() ?? 0) }
+        func mean(_ values: [Double]) -> Double { values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count) }
+        let screenStep = abs(mean(Array(screenOffsets.prefix(paused))) - mean(Array(screenOffsets.dropFirst(paused))))
+        let webcamStep = abs(mean(Array(webcamOffsets.prefix(paused))) - mean(Array(webcamOffsets.dropFirst(paused))))
+        // Each slide's time on the recording's clock, from the beep before
+        // it in the same part (a beep lands at its own time).
+        let kept = RecordingWindowController.slides(in: folder)
+        var slideDetail: [String] = []
+        var slidesRight = found.count == beeps.count
+        for slide in shown {
+            guard let index = beeps.lastIndex(where: { $0 <= slide.at && ($0 < pauseAt) == (slide.at < pauseAt) }), index < found.count else {
+                slidesRight = false
+                continue
+            }
+            let expected = found[index] + slide.at - beeps[index]
+            let match = kept.first { candidate in
+                slide.lines.allSatisfy { line in candidate.lines.contains { SlideLog.folded($0) == SlideLog.folded(line) } }
+            }
+            let off = match.map { $0.start - expected }
+            if off.map({ abs($0) > 1 }) ?? true { slidesRight = false }
+            slideDetail.append("“\(slide.lines[0])” \(off.map { String(format: "%+.2f s", $0) } ?? "missing")")
+        }
+        let lengths = (me: trackLength(urls.me), screen: await PictureCheck.length(urls.screen), webcam: await PictureCheck.length(urls.webcam))
+        // The window: both pictures beside the lines, the slides among them;
+        // played, the pictures keep up with the sound.
+        await captureRecordingWindow(controller, as: "recorder-pictures-window")
+        let pictures = controller.shownPictures
+        let slideRows = controller.shownSlides.count
+        controller.seek(to: 4, play: true)
+        await pause(1500)
+        let audio = controller.currentTime
+        let behind = controller.pictureTimes.map { abs($0 - audio) }.max() ?? 99
+        await captureRecordingWindow(controller, as: "recorder-pictures-window-playing")
+        controller.togglePlay()
+        controller.close()
+        // Found by search: a slide's words.
+        var foundBySlide = ""
+        if let library = context.recordings() {
+            library.reload()
+            _ = await waitUntil(timeout: 3) { library.recordings.contains { $0.folder == folder.lastPathComponent } }
+            foundBySlide = await library.searchWords("designers").first { $0.folder == folder.lastPathComponent }?.snippet ?? ""
+        }
+        let inStep = screenOffsets.count >= 8 && webcamOffsets.count >= 8 && spread(screenOffsets) <= 0.09 && abs(mean(screenOffsets)) <= 0.15
+            && spread(webcamOffsets) <= 0.045 && abs(mean(webcamOffsets)) <= 0.05 && screenStep <= 0.07 && webcamStep <= 0.035
+        let passed = offBefore == ("Off", "Off") && picked && inStep && slidesRight && abs(lengths.screen - lengths.me) <= 0.15
+            && abs(lengths.webcam - lengths.me) <= 0.15 && pictures == 2 && slideRows >= 4 && behind <= 0.1 && foundBySlide.hasPrefix("On screen:")
+        record(name, passed,
+               String(format: "beeps found %d of %d; the screen's flashes %d, offsets %@ (spread %.0f ms, mean %.0f ms, across the pause %.0f ms); the webcam's %d, offsets %@ (spread %.0f ms, mean %.0f ms, across the pause %.0f ms); slides %@ (%d kept); lengths me %.2f s, screen %.2f s, webcam %.2f s; the window: %d pictures, %d slide rows, pictures %.0f ms from the sound while playing; search “designers”: “%@”",
+                      found.count, beeps.count, screenFlashes.count, screenOffsets.map { String(format: "%.0f", $0 * 1000) }.joined(separator: ","),
+                      spread(screenOffsets) * 1000, mean(screenOffsets) * 1000, screenStep * 1000, webcamFlashes.count,
+                      webcamOffsets.map { String(format: "%.0f", $0 * 1000) }.joined(separator: ","), spread(webcamOffsets) * 1000,
+                      mean(webcamOffsets) * 1000, webcamStep * 1000, slideDetail.joined(separator: ", "), kept.count, lengths.me, lengths.screen,
+                      lengths.webcam, pictures, slideRows, behind * 1000, foundBySlide),
+               nil)
+    }
+
+    /// The slides window minimized while it is recorded: within two
+    /// seconds the menu bar's mark and the menu's line ("… is minimized");
+    /// back, both gone. Covered whole by another window and still for 5 s:
+    /// "stopped painting"; uncovered, gone. The red dot's menu turns the
+    /// webcam off and on, and picks the screen Off.
+    private func picturesSayAWindowWithoutPictures(_ center: RecorderCenter, _ slides: SlidesWindow) async {
+        let name = "Recorder's pictures: a recorded window minimized is said in the menu bar (an orange mark, its line in the menu) and the saying goes when it is back; covered whole and still for 5 s, “stopped painting”; the red dot's menu turns the webcam and the screen off"
+        let silence = recorderScratch.appendingPathComponent("silence.wav")
+        _ = Self.clip(nil, seconds: 120, beeps: [], to: silence)
+        center.recorder.standIn(microphone: silence, alsoLeaveOut: [])
+        context.preferences.recorderWebcam = true
+        context.preferences.recorderScreen = true
+        guard let window = ScreenWindows.window(CGWindowID(slides.window.windowNumber)) else {
+            record(name, false, "the slides window is not in the window list", nil)
+            return
+        }
+        // ⌘R's way: the sources from Settings, the screen's window given.
+        center.recordForTest(screen: window)
+        guard await waitUntil(timeout: 4, { center.recorder.isRecording && center.recorder.pictures.screen.window != nil }) != nil,
+              let folder = center.recorder.folder else {
+            record(name, false, "no recording with the screen (\(center.recorder.phase))", nil)
+            return
+        }
+        await pause(1500)
+        let before = center.menuBar.button?.accessibilityLabel() ?? ""
+        slides.window.miniaturize(nil)
+        let minimized = await waitUntil(timeout: 4) { center.recorder.pictures.screen.problem == .minimized } != nil
+        await pause(400)
+        let said = center.menuBar.button?.accessibilityLabel() ?? ""
+        if let button = center.menuBar.button { await captureStatusItem(button, "recorder-pictures-menubar") }
+        let menu = await openRecorderMenu(center, capture: "recorder-pictures-menu.png")
+        slides.window.deminiaturize(nil)
+        let back = await waitUntil(timeout: 5) { center.recorder.pictures.screen.problem == nil } != nil
+        // Covered whole by another window, the slide still.
+        let cover = NSWindow(contentRect: slides.window.frame.insetBy(dx: -40, dy: -40), styleMask: [.borderless], backing: .buffered, defer: false)
+        cover.backgroundColor = .windowBackgroundColor
+        cover.isOpaque = true
+        cover.isReleasedWhenClosed = false
+        cover.orderFront(nil)
+        let covered = await waitUntil(timeout: 9) { center.recorder.pictures.screen.problem == .stoppedPainting } != nil
+        let coveredMenu = center.menuBar.menuTitles.first { $0.hasPrefix("Screen ·") } ?? ""
+        cover.orderOut(nil)
+        let uncovered = await waitUntil(timeout: 4) { center.recorder.pictures.screen.problem == nil } != nil
+        // The red dot's menu: the webcam off, the screen off.
+        _ = await openRecorderMenu(center, capture: "recorder-pictures-menu-webcam.png", pick: "Webcam · ", pickPrefix: true)
+        let webcamOff = await waitUntil(timeout: 3) { !center.recorder.sources.webcam && !center.recorder.pictures.webcam.isOn } != nil
+        await center.recorder.setScreen(nil)
+        let screenOff = !center.recorder.sources.screen && center.recorder.pictures.screen.window == nil
+        await momentStop(center)
+        center.openWindows.forEach { $0.close() }
+        let files = [RecorderPictures.screenFile, RecorderPictures.webcamFile].filter { FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path) }
+        let screenLine = menu.first { $0.hasPrefix("Screen ·") } ?? ""
+        record(name, !before.contains("no picture") && minimized && said.contains("the screen gives no picture") && screenLine.contains("is minimized") && back
+               && covered && coveredMenu.contains("stopped painting") && uncovered && webcamOff && screenOff && files.count == 2,
+               "before “\(before)”; minimized: said \(minimized), label “\(said)”, menu “\(screenLine)”; back \(back); covered: \(covered) “\(coveredMenu)”, uncovered \(uncovered); webcam off \(webcamOff), screen off \(screenOff); files \(files)",
+               nil)
+    }
+
+    /// A scratch Chrome showing a meeting's page: its window recorded,
+    /// covered whole it stops painting (Measured) and is said so. With
+    /// skil.li allowed to script Chrome, the meeting's tab (behind another
+    /// one) comes forward without a reload; without, the card's line says
+    /// what to do (macOS's question needs a person: never answered here).
+    private func picturesInAScratchChrome(_ center: RecorderCenter) async {
+        let name = "Recorder's pictures: a scratch Chrome's meeting window recorded; covered whole, Chrome stops painting and it is said; the meeting's tab brought forward without a reload when skil.li may script Chrome"
+        guard let chromeURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.google.Chrome") else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "no Google Chrome on this Mac", latencyMs: nil))
+            return
+        }
+        let profile = recorderScratch.appendingPathComponent("chrome-pictures", isDirectory: true)
+        /// The meeting page's loads (a reload would leave the call).
+        final class Loads: @unchecked Sendable {
+            private let lock = NSLock()
+            private var value = 0
+            var count: Int { lock.withLock { value } }
+            func add() { lock.withLock { value += 1 } }
+        }
+        let loads = Loads()
+        let page = """
+            <!doctype html><meta charset="utf-8"><title>Weekly design review</title>
+            <body style="font:28px -apple-system;padding:40px;background:#111;color:#eee"><h1>Weekly design review</h1><div id="c">0</div>
+            <script>let n = 0; (function f() { document.getElementById('c').textContent = ++n; requestAnimationFrame(f) })()</script>
+            """
+        guard let server = LoopbackServer(handler: { request in
+            if request.target.hasPrefix("/meet/") { loads.add() }
+            return .html(page)
+        }), let port = await server.port() else {
+            record(name, false, "the meeting's page could not be served", nil)
+            return
+        }
+        defer { server.stop() }
+        let meeting = URL(string: "http://127.0.0.1:\(port)/meet/lumiere-weekly")!
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        configuration.activates = false
+        // The meeting's tab first, another tab in front of it.
+        configuration.arguments = ["--user-data-dir=\(profile.path)", "--no-first-run", "--no-default-browser-check", meeting.absoluteString,
+                                   "http://127.0.0.1:\(port)/other"]
+        let chrome = try? await NSWorkspace.shared.openApplication(at: chromeURL, configuration: configuration)
+        let pid = chrome?.processIdentifier ?? 0
+        defer {
+            chrome?.forceTerminate()
+            try? FileManager.default.removeItem(at: profile)
+        }
+        _ = await waitUntil(timeout: 15) { MicrophoneUse.frontWindow(of: pid) != nil && loads.count > 0 }
+        await pause(1500)
+        let app = MicrophoneApp(bundleID: "com.google.Chrome", name: chrome?.localizedName ?? "Google Chrome", pid: pid)
+        // The tab: only when macOS already lets skil.li script Chrome.
+        let automation = AutomationAccess.state(of: "com.google.Chrome")
+        var tabDetail = "not tried: skil.li may not script Chrome on this Mac (\(automation)); macOS asks a person once"
+        var tabRight = true
+        let loadsBefore = loads.count
+        if automation == .granted {
+            let plan = await MeetingTabSelect.plan(for: meeting, in: app)
+            if case .tab(let tab, let id) = plan {
+                let selected = MeetingTabSelect.select(tab, in: app.bundleID)
+                await pause(1200)
+                tabRight = selected && id != nil && loads.count == loadsBefore && NSWorkspace.shared.frontmostApplication?.processIdentifier != pid
+                tabDetail = "tab \(tab.index) of window \(tab.window) selected \(selected), its window \(id.map(String.init) ?? "none"), reloads \(loads.count - loadsBefore), Chrome brought forward \(NSWorkspace.shared.frontmostApplication?.processIdentifier == pid)"
+            } else {
+                tabRight = false
+                tabDetail = "plan \(plan)"
+            }
+        }
+        guard let id = MicrophoneUse.frontWindow(of: pid), let window = ScreenWindows.window(id),
+              let frame = (CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]])?.first?[kCGWindowBounds as String] as? NSDictionary,
+              let bounds = CGRect(dictionaryRepresentation: frame) else {
+            record(name, false, "no Chrome window (\(tabDetail))", nil)
+            return
+        }
+        let silence = recorderScratch.appendingPathComponent("silence.wav")
+        center.recorder.standIn(microphone: silence, alsoLeaveOut: [])
+        context.preferences.recorderWebcam = false
+        context.preferences.recorderScreen = true
+        center.recordForTest(screen: window)
+        guard await waitUntil(timeout: 4, { center.recorder.isRecording && center.recorder.pictures.screen.window?.id == id }) != nil else {
+            record(name, false, "Chrome's window not recorded (\(center.recorder.phase))", nil)
+            return
+        }
+        await pause(2000)
+        let painting = center.recorder.pictures.screen.problem == nil
+        // Covered whole (AppKit's frame: from the bottom of the main screen).
+        let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        let cover = NSWindow(contentRect: NSRect(x: bounds.minX - 30, y: screenHeight - bounds.maxY - 30, width: bounds.width + 60, height: bounds.height + 60),
+                             styleMask: [.borderless], backing: .buffered, defer: false)
+        cover.backgroundColor = .windowBackgroundColor
+        cover.isReleasedWhenClosed = false
+        cover.orderFront(nil)
+        let stopped = await waitUntil(timeout: 10) { center.recorder.pictures.screen.problem == .stoppedPainting } != nil
+        cover.orderOut(nil)
+        let again = await waitUntil(timeout: 4) { center.recorder.pictures.screen.problem == nil } != nil
+        await momentStop(center)
+        center.openWindows.forEach { $0.close() }
+        record(name, painting && stopped && again && tabRight,
+               "Chrome \(pid), window \(id) “\(window.name)”; painting \(painting); covered: stopped painting said \(stopped); uncovered \(again); \(tabDetail)",
+               nil)
+    }
 
     /// The recorder's moment (docs/meeting-recorder-views.md, phase 2), on
     /// stand-in events and, but for the browser call, stand-in apps on the

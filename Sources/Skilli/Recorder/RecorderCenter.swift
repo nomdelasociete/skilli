@@ -733,6 +733,28 @@ final class RecorderCenter {
     }
 
     #if SKILLI_SELFTEST
+    /// Self-test: recorded at once as ⌘R records (the sources as Settings
+    /// sets them), `screen` the window recorded.
+    func recordForTest(screen: ScreenWindow?) {
+        guard recorder.phase == .idle, !starting else { return }
+        let reading = moment(for: nil)
+        starting = true
+        Task {
+            let language = await MeetingTranscriber.defaultLanguage(asked: askedLanguage)
+            var start = Self.start(reading, title: "Pictures check", language: language, sources: reading.sources)
+            start.screen = screen
+            do {
+                try await recorder.record(start)
+            } catch {
+                starting = false
+                notify("The recording could not start: \(error.localizedDescription)")
+                return
+            }
+            starting = false
+            began(reading)
+        }
+    }
+
     /// Self-test: the card closed as esc would, without a key.
     func closeCardWithoutKeys() {
         card.closeWithoutKeys()
