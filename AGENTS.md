@@ -2239,7 +2239,11 @@ re-investigating.
   question, never transcribed at the quit. A file not encoded and
   finished 5 s in (`TrackWriter.closeNow(until:)` says nil; the final
   flush itself stops at that deadline, a Stop's too): `meeting.json` stays
-  as it was while recording, offered at the next launch as never stopped. `NSWorkspace.willSleepNotification`
+  as it was while recording, offered at the next launch as never stopped.
+  A Stop's close has one 5 s deadline too (both tracks, after their last
+  buffers): `TrackWriter.finish` says whether the file is complete; if not,
+  no transcript, `meeting.json` untouched, and `onLeftUnfinished` has the
+  card offer it at once (Save, Later, Discard). `NSWorkspace.willSleepNotification`
   pauses a recording on (`RecorderCenter.macWillSleep`); at
   `didWakeNotification` nothing resumes, the card offers Resume ↩, Stop
   ⌘↩, Keep Paused esc (`RecordCard.Content.slept`), never taking the

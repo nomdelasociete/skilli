@@ -23121,6 +23121,7 @@ final class SelfTest {
         if !aborted { await recorderPausesBothTracksTogether() }
         if !aborted { await recorderOffersOneNeverStopped() }
         if !aborted { await recorderQuitClosesItWhole() }
+        if !aborted { await recorderStopStuckOffersIt() }
         if !aborted { await recorderSleepPausesUntilResumed() }
         if !aborted { await recorderFromLinksAndTools() }
     }
@@ -23921,6 +23922,67 @@ final class SelfTest {
             rest.state = .pending
             try? center.recordings.write(rest, to: folder)
         }
+    }
+
+    /// A Stop whose files cannot be finished in time (docs/meeting-recorder.md,
+    /// "Quit and sleep"; the self-test's stalls: the finishing never calls
+    /// back, the encoder takes nothing more, or a backlog it takes too
+    /// slowly): no transcript starts, `meeting.json` stays as it was while
+    /// recording, and the Unfinished Recording card offers it at once.
+    private func recorderStopStuckOffersIt() async {
+        let name = "Recorder: a Stop whose files cannot be finished in time (finishing, encoder, slow encoder stuck) starts no transcript, leaves meeting.json as it was and offers the recording at once as never stopped"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let clip = recorderScratch.appendingPathComponent("stuck-me.wav")
+        _ = Self.clip(nil, seconds: 20, beeps: [1, 2, 3], to: clip)
+        center.openWindows.forEach { $0.close() }
+        var details: [String] = []
+        var passed = true
+        for kind in [TrackWriter.Stall.finishing, .encoder, .slow] {
+            center.recorder.standIn(microphone: clip, alsoLeaveOut: [])
+            center.recorder.stalls = kind
+            await center.recorder.listen()
+            do {
+                try center.recorder.begin(title: "Stuck \(kind.rawValue)", language: "en-US")
+            } catch {
+                center.recorder.stalls = nil
+                center.recorder.stopListening()
+                passed = false
+                details.append("\(kind.rawValue): did not record (\(error.localizedDescription))")
+                continue
+            }
+            // Only this recording's writers stall (set as it began).
+            center.recorder.stalls = nil
+            try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
+            guard let folder = center.recorder.folder else {
+                passed = false
+                details.append("\(kind.rawValue): no folder")
+                continue
+            }
+            await pause(3000)
+            let stopped = ContinuousClock.now
+            center.control(.stop)
+            let offered = await waitUntil(timeout: TrackWriter.closingTime + 4) {
+                center.isCardVisible && center.cardView.eyebrowText == "UNFINISHED RECORDING"
+            } != nil
+            let took = (ContinuousClock.now - stopped).milliseconds / 1000
+            let left = center.recordings.read(folder)
+            let noTranscript = center.recorder.transcribing == nil
+                && !FileManager.default.fileExists(atPath: folder.appendingPathComponent("transcript.json").path)
+            let ok = offered && took < TrackWriter.closingTime + 2.5 && left?.state == .recording && noTranscript && center.recorder.phase == .idle
+            passed = passed && ok
+            details.append(String(format: "%@: card %@ after %.2f s, meeting.json “%@”, no transcript %@, idle %@", kind.rawValue, "\(offered)", took,
+                                  left?.state.rawValue ?? "nothing", "\(noTranscript)", "\(center.recorder.phase == .idle)"))
+            // Later (esc): not offered again in this run.
+            if offered { center.closeCardWithoutKeys() }
+            if var rest = left {
+                rest.state = .pending
+                try? center.recordings.write(rest, to: folder)
+            }
+        }
+        record(name, passed, details.joined(separator: "; "), nil)
     }
 
     /// The Mac goes to sleep while recording (docs/meeting-recorder.md,

@@ -152,8 +152,9 @@ when closed.
 
 ## An unfinished recording
 
-At launch, a recording that was never stopped (skil.li quit, the Mac
-lost power): what was written is kept (the files are readable up to the
+At launch, a recording that was never stopped (skil.li crashed, the Mac
+lost power), or at once after a Stop whose files could not be finished
+within 5 s: what was written is kept (the files are readable up to the
 last second). The Record card's place and frame:
 
 ```

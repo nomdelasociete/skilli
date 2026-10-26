@@ -178,7 +178,11 @@ need a browser extension: not planned.
 - The call ends (the meeting app leaves its call, or the event is over and
   the Mac's sound has been silent for a minute): a card offers Stop ↩.
 - Written as it comes: a crash or a power cut keeps what was recorded,
-  and the next launch offers Save, Later or Discard. skil.li quitting (a
+  and the next launch offers Save, Later or Discard. A Stop whose files
+  are not written and finished within 5 s (the encoder or the disk stuck)
+  is never transcribed as if whole: `meeting.json` keeps the state it had
+  while recording, no transcript starts, and the same card offers it at
+  once. skil.li quitting (a
   logout too) stops it as Stop does, and the Mac going to sleep pauses it:
   see Quit and sleep.
 

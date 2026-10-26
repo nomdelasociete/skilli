@@ -57,6 +57,9 @@ final class MeetingRecorder {
     var onFinished: ((URL) -> Void)?
     /// It stopped by itself (the disk full): said in the card.
     var onStoppedByItself: ((String) -> Void)?
+    /// A Stop could not finish its files: no transcript, the recording as
+    /// it was (offered as never stopped, at once).
+    var onLeftUnfinished: ((URL, MeetingRecord) -> Void)?
 
     /// Room for 10 s of each source, made when first listened to.
     private lazy var micInbox = AudioInbox()
@@ -367,9 +370,14 @@ final class MeetingRecorder {
         if closingDelay > .zero { try? await Task.sleep(for: closingDelay) }
         #endif
         var lengths: [Double] = []
+        var complete = true
+        // One deadline for both tracks: their last buffers, then closing.
+        let closeBy = DispatchTime.now() + 1 + TrackWriter.closingTime
         for speaker in Speaker.allCases {
             guard let writer = writers[speaker] else { continue }
-            lengths.append(await writer.finish(at: stopping.at, waitingForSource: isOn(speaker)))
+            let closed = await writer.finish(at: stopping.at, waitingForSource: isOn(speaker), closeBy: closeBy)
+            lengths.append(closed.seconds)
+            complete = complete && closed.complete
         }
         // The pictures end at the same moment (none written: no file).
         if let pictures = await picturesClosed?.value, pictures.webcam > 0 || pictures.screen > 0 {
@@ -377,6 +385,15 @@ final class MeetingRecorder {
         }
         // skil.li quit meanwhile: closed there already.
         guard self.stopping?.folder == stopping.folder else { return }
+        guard complete else {
+            // A file not finished within the deadline (the encoder or the
+            // disk stuck): never transcribed as if whole. `meeting.json` stays
+            // as it was, the recording offered as never stopped.
+            Log.actions.error("Recorder: a track was not finished at Stop; offered as never stopped")
+            abandon()
+            onLeftUnfinished?(stopping.folder, stopping.record)
+            return
+        }
         endStopping(lengths: lengths)
     }
 
