@@ -446,13 +446,16 @@ final class MCPService {
                       call: @autoclosure () -> ApprovalRules.Call, caller: String, run: AgentContext?,
                       screenStep: Bool = false) async -> Gate {
         justAllowed = nil
-        let ruled = await ruled(name, risk: risk, call: call())
+        let (ruled, rulesUnchecked) = await ruled(name, risk: risk, call: call())
         switch ruled.decision {
         case .block:
             if let reason = ruled.reason { presenter?.ruleApplied(reason.line, tool: fullName, run: run) }
             Log.actions.notice("Tool \(name, privacy: .public) refused by a rule")
             return .refused(ruled.reason?.rule?.said ?? "")
-        case .ask where screenStep && run?.screenAllowed == true && ruled.reason == nil:
+        // Not a new "do it here" goal, a tool set to Ask First, or rules that
+        // could not be checked: those ask as before.
+        case .ask where screenStep && name != SkilliTools.doInApp && run?.screenAllowed == true && ruled.reason == nil
+            && settings.override(for: name) != .ask && !rulesUnchecked:
             Log.trace("Tool \(name) allowed with this run's first step on screen")
             return .go
         case .ask:
@@ -475,9 +478,10 @@ final class MCPService {
         }
     }
 
-    /// What a call does now. The rules are judged only when one could
-    /// change it (`ApprovalRules.shouldJudge`) and a key can check them.
-    private func ruled(_ name: String, risk: ToolRisk, call: @autoclosure () -> ApprovalRules.Call) async -> ToolPolicy.Ruled {
+    /// What a call does now, and whether the user's rules could not be
+    /// checked. The rules are judged only when one could change it
+    /// (`ApprovalRules.shouldJudge`) and a key can check them.
+    private func ruled(_ name: String, risk: ToolRisk, call: @autoclosure () -> ApprovalRules.Call) async -> (ToolPolicy.Ruled, unchecked: Bool) {
         let everyTime = ToolSettings.asksEveryTime(name)
         let rules = ApprovalRules.active(settings.rules)
         var verdict = ApprovalRules.Verdict.none
@@ -485,8 +489,9 @@ final class MCPService {
            ApprovalRules.shouldJudge(rules, risk: risk, mode: settings.mode, override: settings.override(for: name), everyTime: everyTime) {
             verdict = await judge.judge(call(), rules: rules)
         }
-        return ToolPolicy.decision(risk: risk, mode: settings.mode, override: settings.override(for: name), everyTime: everyTime,
-                                   verdict: verdict, hasStrictRules: rules.contains(where: \.isStrict))
+        let unchecked = if case .unchecked = verdict { true } else { false }
+        return (ToolPolicy.decision(risk: risk, mode: settings.mode, override: settings.override(for: name), everyTime: everyTime,
+                                    verdict: verdict, hasStrictRules: rules.contains(where: \.isStrict)), unchecked)
     }
 
     /// What a tool does, for the decision model.
