@@ -18838,7 +18838,7 @@ final class SelfTest {
             let listed = backup.backups()
             let contents = try await backup.contents(of: url)
             let expected = ["1 setting", "2 snippets", "2 quicklinks", "1 window layout"]
-            let zipped = Self.zipEntries(url) ?? []
+            let zipped = await Self.zipEntries(url) ?? []
             let noClipboard = !zipped.isEmpty && !zipped.contains { $0.contains("/Clipboard/") || $0.hasSuffix("mcp.sock") }
 
             try files.removeItem(at: source.appendingPathComponent("snippets/sign.md"))
@@ -18884,23 +18884,18 @@ final class SelfTest {
     }
 
     /// The paths a zip holds (`zipinfo -1`), or nil.
-    private static func zipEntries(_ zip: URL) -> [String]? {
-        guard let text = toolOutput("/usr/bin/zipinfo", ["-1", zip.path]) else { return nil }
-        return String(decoding: text, as: UTF8.self).split(separator: "\n").map(String.init)
+    private static func zipEntries(_ zip: URL) async -> [String]? {
+        await toolOutput("/usr/bin/zipinfo", ["-1", zip.path])?.split(separator: "\n").map(String.init)
     }
 
-    /// What `tool` writes with `arguments`, nil when it fails.
-    private static func toolOutput(_ tool: String, _ arguments: [String]) -> Data? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: tool)
-        process.arguments = arguments
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        guard (try? process.run()) != nil else { return nil }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return process.terminationStatus == 0 ? data : nil
+    /// What `tool` writes with `arguments` (as text), nil when it fails. Run
+    /// off the main thread (`ChildProcess.run`): waiting for it here would
+    /// spin a nested run loop where a timer's `MainActor.assumeIsolated`
+    /// crashes the Swift runtime.
+    private static func toolOutput(_ tool: String, _ arguments: [String]) async -> String? {
+        guard let run = try? await ChildProcess.run(URL(fileURLWithPath: tool), arguments, withErrors: false, timeout: 120), run.status == 0
+        else { return nil }
+        return run.output
     }
 
     /// The words said in recordings never reach a backup
@@ -18951,11 +18946,11 @@ final class SelfTest {
             preferences.backupKeep = 10
 
             let url = try await backup.backUpNow()
-            let zipped = Self.zipEntries(url) ?? []
+            let zipped = await Self.zipEntries(url) ?? []
             let indexInZip = zipped.filter { entry in RecordingSearch.indexFiles.contains { entry.hasSuffix("/" + $0) } }
             let lookalikeKept = zipped.contains { $0.hasSuffix("/recordings-index.sqlite.bak") }
-            let unzipped = Self.toolOutput("/usr/bin/unzip", ["-p", url.path]) ?? Data()
-            let noWords = !unzipped.isEmpty && !String(decoding: unzipped, as: UTF8.self).contains("elephant")
+            let unzipped = await Self.toolOutput("/usr/bin/unzip", ["-p", url.path]) ?? ""
+            let noWords = !unzipped.isEmpty && !unzipped.contains("elephant")
 
             // Restored: this Mac's index as it was.
             try await backup.restore(url)
@@ -18973,7 +18968,7 @@ final class SelfTest {
             try PropertyListSerialization.data(fromPropertyList: ["Preferences.selftestBackup": "older"], format: .xml, options: 0)
                 .write(to: olderRoot.appendingPathComponent("Settings.plist"))
             let olderZip = destination.appendingPathComponent(olderName)
-            guard Self.toolOutput("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", olderRoot.path, olderZip.path]) != nil else {
+            guard await Self.toolOutput("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", olderRoot.path, olderZip.path]) != nil else {
                 record(name, false, "the older backup could not be zipped", nil)
                 return
             }
@@ -18991,10 +18986,27 @@ final class SelfTest {
             remade.sync(root: recordings, folders: [folder.lastPathComponent])
             let rebuilt = !remade.search("elephant").isEmpty
 
+            // A database whose pages after the first are damaged: SQLite
+            // opens it, then a read finds the damage; made again at once.
+            let pagesURL = garbage.appendingPathComponent("pages.sqlite")
+            do {
+                let whole = RecordingIndex(url: pagesURL)
+                whole.sync(root: recordings, folders: [folder.lastPathComponent])
+                _ = whole.search("elephant")
+            }
+            if let handle = try? FileHandle(forWritingTo: pagesURL) {
+                try handle.seek(toOffset: 4096)
+                try handle.write(contentsOf: Data(repeating: 0xA5, count: 16_384))
+                try handle.close()
+            }
+            let damaged = RecordingIndex(url: pagesURL)
+            damaged.sync(root: recordings, folders: [folder.lastPathComponent])
+            let readAgain = !damaged.search("elephant").isEmpty
+
             let passed = indexed && present.contains(RecordingSearch.indexFile + "-wal") && indexInZip.isEmpty && lookalikeKept && noWords
-                && keptAfterRestore && olderLeftOut && rebuilt
+                && keptAfterRestore && olderLeftOut && rebuilt && readAgain
             record(name, passed,
-                   "index with the words \(indexed), beside it \(present); in the zip: index files \(indexInZip), the look-alike kept \(lookalikeKept), no transcript text \(noWords) (\(zipped.count) entries, \(unzipped.count) bytes unzipped); after restore the index kept \(keptAfterRestore); an older backup's index left out \(olderLeftOut); an unreadable index made again \(rebuilt)",
+                   "index with the words \(indexed), beside it \(present); in the zip: index files \(indexInZip), the look-alike kept \(lookalikeKept), no transcript text \(noWords) (\(zipped.count) entries, \(unzipped.count) characters unzipped); after restore the index kept \(keptAfterRestore); an older backup's index left out \(olderLeftOut); an unreadable index made again \(rebuilt); one damaged under a read made again \(readAgain)",
                    nil)
         } catch {
             record(name, false, error.localizedDescription, nil)

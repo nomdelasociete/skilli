@@ -7,7 +7,7 @@ import AppKit
 /// does (the Mac's sound, a file standing in for the microphone) until it is
 /// killed, so the self-test finds a recording never stopped, as a crash or
 /// a power cut leaves one; or until it is sent SIGTERM, which quits it as
-/// skil.li quits (`NSApp.terminate`, then the recorder's `quitReply`).
+/// skil.li quits (`NSApp.terminate`, then the recorder's `closeForQuit`).
 /// Prints its folder once it records.
 @MainActor
 enum RecorderChild {
@@ -50,7 +50,8 @@ enum RecorderChild {
         }
 
         func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-            recorder.quitReply()
+            recorder.closeForQuit()
+            return .terminateNow
         }
     }
 }
