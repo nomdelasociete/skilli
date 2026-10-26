@@ -236,6 +236,9 @@ final class BetterTranscription {
     /// One file: downloaded (resumed when what came before is kept),
     /// checked by its SHA-256, moved in place.
     private func fetch(_ file: File) async throws {
+        // Each file downloading in turn (the one before was "checking").
+        let got = received()
+        state = .downloading(received: got, total: total, line: ModelDownload.progress(received: got, total: total, bytesPerSecond: bytesPerSecond))
         let delegate = TaskCatcher { [weak self] task in
             Task { @MainActor in self?.current = task as? URLSessionDownloadTask }
         }
