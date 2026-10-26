@@ -409,6 +409,16 @@ final class SettingTools {
 
     private static func folded(_ text: String) -> String { SettingsTable.folded(text) }
 
+    /// Never Arrange's display sets as tools list them: their names, and
+    /// their key in brackets when two have the same names.
+    private func neverArrangedItems() -> [(item: String, set: ArrangeOffer.DisplaySet)] {
+        let sets = preferences.neverArrangeDisplays
+        return sets.map { set in
+            let twins = sets.filter { $0.label == set.label }.count > 1
+            return (twins ? "\(set.label) [\(set.key)]" : set.label, set)
+        }
+    }
+
     // MARK: - Aliases
 
     private func prepareAlias(_ arguments: [String: Any]) throws -> Plan {
@@ -1000,10 +1010,17 @@ final class SettingTools {
             }
         }
         bindings["ignoredMonitors"] = monitors
-        var neverArranged = Binding(get: { [unowned self] in .list(self.preferences.neverArrangeDisplays.map(\.label)) })
+        var neverArranged = Binding(get: { [unowned self] in .list(self.neverArrangedItems().map(\.item)) })
         neverArranged.remove = { [unowned self] text in
-            guard let set = self.preferences.neverArrangeDisplays.first(where: { Self.folded($0.label) == Self.folded(text) }) else {
-                throw Failure("No displays named “\(text)” are left out. Left out: \(self.preferences.neverArrangeDisplays.map(\.label).joined(separator: ", ")).")
+            // By its names, or, when two sets have the same names, as listed
+            // (the names, then its key in brackets).
+            let items = self.neverArrangedItems()
+            let found = items.filter { Self.folded($0.item) == Self.folded(text) }
+            let named = found.isEmpty ? items.filter { Self.folded($0.set.label) == Self.folded(text) } : found
+            guard named.count == 1, let set = named.first?.set else {
+                throw Failure(named.isEmpty
+                              ? "No displays named “\(text)” are left out. Left out: \(items.map(\.item).joined(separator: ", "))."
+                              : "Several sets are named “\(text)”: name one as listed: \(named.map(\.item).joined(separator: ", ")).")
             }
             return ListChange(item: set.label) { [unowned self] in
                 self.preferences.neverArrangeDisplays.removeAll { $0.key == set.key }
