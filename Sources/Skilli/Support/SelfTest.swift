@@ -24261,11 +24261,12 @@ final class SelfTest {
     /// files) while ⌘R starts another: no card while that one starts or
     /// records; offered once it stops.
     private func momentUnfinishedWaitsForTheStart(_ center: RecorderCenter, _ book: CalendarBook) async {
-        let name = "Recorder's moment: an unfinished recording found while ⌘R starts one shows no card while it starts or records, and is offered once it stops"
+        let name = "Recorder's moment: an unfinished recording found while ⌘R starts one shows no card while it starts or records, and is offered once it stops, or at once when the start fails"
         let consent = context.preferences.recorderConsentShown
         defer {
             context.preferences.recorderConsentShown = consent
             center.startDelay = .zero
+            center.startFails = false
         }
         context.preferences.recorderConsentShown = true
         let event = momentEvent("st-moment-unfinished", "Starting sync", in: -60, link: false, location: "Online")
@@ -24291,9 +24292,28 @@ final class SelfTest {
         center.openWindows.forEach { $0.close() }
         left.state = .pending
         try? center.recordings.write(left, to: folder)
+
+        // The start fails: offered right after, nothing recording.
+        var failedOffered = false, heldWhileFailing = false, failedNamed = ""
+        if let other = try? center.recordings.makeFolder(title: "Found while failing", started: .now) {
+            var second = MeetingRecord(title: "Found while failing", started: .now, language: "en-US", recorder: Recordings.ownProcess)
+            try? center.recordings.write(second, to: other)
+            center.startFails = true
+            center.recordMeeting(event, joining: false)
+            center.offerAtOnceForTest(other, record: second)
+            await pause(1000)
+            heldWhileFailing = !center.isCardVisible
+            failedOffered = await waitUntil(timeout: 4) { center.isCardVisible && center.cardView.eyebrowText == "UNFINISHED RECORDING" } != nil
+                && !center.recorder.isRecording
+            failedNamed = center.cardView.name
+            if failedOffered { center.closeCardWithoutKeys() }
+            second.state = .pending
+            try? center.recordings.write(second, to: other)
+        }
         book.testEvents = []
-        record(name, heldWhileStarting && recording && heldWhileRecording && offered && named == "Found while starting",
-               "while starting: no card \(heldWhileStarting); recording \(recording), no card \(heldWhileRecording); once stopped: offered \(offered) “\(named)”",
+        record(name, heldWhileStarting && recording && heldWhileRecording && offered && named == "Found while starting"
+               && heldWhileFailing && failedOffered && failedNamed == "Found while failing",
+               "while starting: no card \(heldWhileStarting); recording \(recording), no card \(heldWhileRecording); once stopped: offered \(offered) “\(named)”; a start that fails: no card while it starts \(heldWhileFailing), offered right after \(failedOffered) “\(failedNamed)”",
                nil)
     }
 

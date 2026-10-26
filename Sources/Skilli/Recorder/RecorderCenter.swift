@@ -65,7 +65,12 @@ final class RecorderCenter {
     /// ⌘R's recording is being started (its language read, its sources
     /// started): another ⌘R meanwhile asks the same.
     private var starting = false {
-        didSet { holdMenuBar() }
+        didSet {
+            holdMenuBar()
+            // Started or failed to: one never stopped, asked meanwhile, is
+            // offered once nothing records (`offerNext` checks).
+            if !starting { offerNext() }
+        }
     }
     private lazy var card: RecordCard = {
         let card = RecordCard(recorder: recorder)
@@ -279,6 +284,12 @@ final class RecorderCenter {
         Task { [weak self] in
             guard let self else { return }
             do {
+                #if SKILLI_SELFTEST
+                if self.startFails {
+                    self.startFails = false
+                    throw MeetingRecorder.Failure(message: "the self-test's start failed.")
+                }
+                #endif
                 try await self.recorder.record(start)
             } catch {
                 self.starting = false
@@ -614,6 +625,8 @@ final class RecorderCenter {
     /// Self-test: ⌘R's recording takes this long to start (an unfinished
     /// one found meanwhile).
     var startDelay: Duration = .zero
+    /// Self-test: ⌘R's next recording fails to start.
+    var startFails = false
 
     /// Self-test: a Stop that could not finish `folder`'s files, as the
     /// recorder reports it.
