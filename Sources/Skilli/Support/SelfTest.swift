@@ -23919,7 +23919,7 @@ final class SelfTest {
     /// slowly): no transcript starts, `meeting.json` stays as it was while
     /// recording, and the Unfinished Recording card offers it at once.
     private func recorderStopStuckOffersIt() async {
-        let name = "Recorder: a Stop whose files cannot be finished whole in time (finishing, encoder, slow encoder stuck; a writer not completed) starts no transcript, leaves meeting.json as it was and offers the recording at once as never stopped"
+        let name = "Recorder: a Stop whose files cannot be finished whole in time (finishing, encoder, slow encoder stuck; a writer not completed) starts no transcript, leaves meeting.json as it was and offers the recording at once as never stopped (after a recording on then, once it stops)"
         guard let center = context.recorder() else {
             record(name, false, "no recorder", nil)
             return
@@ -23970,6 +23970,34 @@ final class SelfTest {
                 rest.state = .pending
                 try? center.recordings.write(rest, to: folder)
             }
+        }
+
+        // One left so while another records: held back, offered once that
+        // one stops.
+        center.recorder.standIn(microphone: clip, alsoLeaveOut: [])
+        await center.recorder.listen()
+        if let folder = try? center.recordings.makeFolder(title: "Left meanwhile", started: .now),
+           (try? center.recorder.begin(title: "Meanwhile", language: "en-US")) != nil {
+            let left = MeetingRecord(title: "Left meanwhile", started: .now, language: "en-US", recorder: Recordings.ownProcess)
+            try? center.recordings.write(left, to: folder)
+            center.offerAtOnceForTest(folder, record: left)
+            await pause(1500)
+            let heldBack = !center.isCardVisible
+            center.control(.stop)
+            let offeredAfter = await waitUntil(timeout: 10) { center.isCardVisible && center.cardView.eyebrowText == "UNFINISHED RECORDING" } != nil
+            let named = center.cardView.name
+            if offeredAfter { center.closeCardWithoutKeys() }
+            _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil }
+            center.openWindows.forEach { $0.close() }
+            var rest = left
+            rest.state = .pending
+            try? center.recordings.write(rest, to: folder)
+            passed = passed && heldBack && offeredAfter && named == "Left meanwhile"
+            details.append("asked while recording: held back \(heldBack), offered once it stopped \(offeredAfter) (“\(named)”)")
+        } else {
+            center.recorder.stopListening()
+            passed = false
+            details.append("asked while recording: did not record")
         }
         record(name, passed, details.joined(separator: "; "), nil)
     }

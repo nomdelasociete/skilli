@@ -478,6 +478,8 @@ final class RecorderCenter {
             asked.forEach { $0() }
             holdMenuBar()
         }
+        // One never stopped, asked while another recorded: offered now.
+        if recorder.phase == .idle, !starting, !unfinished.isEmpty { offerNext() }
         onChange?()
         // The window open while its transcript is made follows it.
         if let transcribing = recorder.transcribing, let window = windows[Self.key(transcribing.folder)], let record = recordings.read(transcribing.folder) {
@@ -602,6 +604,12 @@ final class RecorderCenter {
 
     /// Self-test: what the card shows now.
     var cardContent: RecordCard.Content? { card.content }
+
+    /// Self-test: a Stop that could not finish `folder`'s files, as the
+    /// recorder reports it.
+    func offerAtOnceForTest(_ folder: URL, record: MeetingRecord) {
+        offerAtOnce(folder, record: record)
+    }
 
     /// Self-test: the found ones offered now, without the wait.
     func offerUnfinishedNow() -> Int {
