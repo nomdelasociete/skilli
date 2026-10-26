@@ -24167,7 +24167,10 @@ final class SelfTest {
         // On the row's title, left of its picture and of the ⌃⌄.
         let point = CGPoint(x: frame.minX + 40, y: screenHeight - frame.midY)
         let source = CGEventSource(stateID: .hidSystemState)
-        for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
+        // The pointer there first, as a hand gets there before it clicks.
+        CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+        await pause(300)
+        for type in [CGEventType.leftMouseDown, .leftMouseUp] {
             CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
             await pause(60)
         }

@@ -474,6 +474,13 @@ private final class RecordPanel: NSPanel {
     override func cancelOperation(_ sender: Any?) {
         card?.closed()
     }
+
+    #if SKILLI_SELFTEST
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown { Log.trace("Recorder card: a click reached the card (key \(isKeyWindow), active \(NSApp.isActive))") }
+        super.sendEvent(event)
+    }
+    #endif
 }
 
 /// The card's content, top-down: the eyebrow and the language, the name,
