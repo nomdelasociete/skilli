@@ -2962,6 +2962,14 @@ re-investigating.
   (`WindowManager.remember`). Settings → Windows: Learn where you put
   windows (on), Forget What skil.li Learned (⌘Z, `UndoableDeletes`),
   Never place (Advanced). `selftest windows` (`arrangeWindowsLearnsAndPutsBack`).
+  The display prompt (`DisplayPrompt`) adds Arrange as Usual last
+  (`Offer.arrange`, `layout == nil`) when learning is on, a plugged display
+  is not ignored, the displays connected are not in
+  `Preferences.neverArrangeDisplays` (`ArrangeOffer.DisplaySet`, by
+  `WindowPlacements.displaysKey`) and `WindowArrange.coverage()` places at
+  least half of the windows open (`ArrangeOffer.offered`); alone, it shows
+  with no saved layout too. ↩ runs Arrange Windows; ⌘K adds Never Arrange
+  on These Displays. `selftest windows` (`displayPromptArrangesAsUsual`).
 - File search (`FileSearch`, `FileMeaning` in SkilliCore): Search Files
   or "f " / "file " / "fichier " turns the launcher into Spotlight's files
   (a green chip). Typing searches names (every word, case and accents

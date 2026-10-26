@@ -135,6 +135,7 @@ final class Preferences {
         static let windowLayoutIgnoredApps = "Preferences.windowLayoutIgnoredApps"
         static let windowGap = "Preferences.windowGap"
         static let ignoredMonitors = "Preferences.ignoredMonitors"
+        static let neverArrangeDisplays = "Preferences.neverArrangeDisplays"
         static let autoQuit = "Preferences.autoQuit"
         static let autoQuitMinutes = "Preferences.autoQuitMinutes"
         static let autoQuitNever = "Preferences.autoQuitNever"
@@ -369,6 +370,14 @@ final class Preferences {
     var ignoredMonitors: [DisplayFingerprint] {
         didSet {
             if let data = try? JSONEncoder().encode(ignoredMonitors) { save(data, Key.ignoredMonitors) }
+        }
+    }
+
+    /// Sets of displays that no longer offer Arrange as Usual when plugged
+    /// in (Never Arrange on These Displays).
+    var neverArrangeDisplays: [ArrangeOffer.DisplaySet] {
+        didSet {
+            if let data = try? JSONEncoder().encode(neverArrangeDisplays) { save(data, Key.neverArrangeDisplays) }
         }
     }
 
@@ -685,6 +694,8 @@ final class Preferences {
         windowLearning = defaults.object(forKey: Key.windowLearning) as? Bool ?? true
         windowNeverPlace = defaults.stringArray(forKey: Key.windowNeverPlace) ?? []
         ignoredMonitors = defaults.data(forKey: Key.ignoredMonitors).flatMap { try? JSONDecoder().decode([DisplayFingerprint].self, from: $0) } ?? []
+        neverArrangeDisplays = defaults.data(forKey: Key.neverArrangeDisplays)
+            .flatMap { try? JSONDecoder().decode([ArrangeOffer.DisplaySet].self, from: $0) } ?? []
         clipboardMeaningSearch = defaults.object(forKey: Key.clipboardMeaningSearch) as? Bool ?? true
         snippetExpansion = defaults.object(forKey: Key.snippetExpansion) as? Bool ?? true
         snippetExpansionMode = defaults.string(forKey: Key.snippetExpansionMode).flatMap(SnippetExpansionMode.init(rawValue:)) ?? .immediately
@@ -747,7 +758,7 @@ final class Preferences {
     /// Keys a backup leaves out: this Mac's own state (setup done with its
     /// permissions, its screens, where the launcher sits on them, where
     /// backups go).
-    static let machineKeys: Set<String> = [Key.didCompleteSetup, Key.ignoredMonitors, Key.launcherPlace, Key.backupFolder, Key.imageTagsFolderPath,
+    static let machineKeys: Set<String> = [Key.didCompleteSetup, Key.ignoredMonitors, Key.neverArrangeDisplays, Key.launcherPlace, Key.backupFolder, Key.imageTagsFolderPath,
                                            Key.recorderFolderPath]
 
     private func save(_ value: Any, _ key: String) {

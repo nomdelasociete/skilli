@@ -7,8 +7,8 @@ the display prompt), and, when the user turns it on, a new window as it
 opens (**Usual places**). No layout to save first: the saved layouts
 stay, for the arrangements someone wants by name.
 
-Status: phase 1 (Learning, Arrange Windows) built; phases 2 to 5 not
-yet. "What skil.li already has" lists what came before it.
+Status: phases 1 (Learning, Arrange Windows) and 2 (Arrange as Usual in
+the display prompt) built; phases 3 to 5 not yet. "What skil.li already has" lists what came before it.
 
 ## Target
 
@@ -285,9 +285,11 @@ places learned: at least half of the visible windows would get a place.
 - **No saved layout matches**: the prompt shows with Arrange as Usual
   alone, where it showed nothing until now. ↩ arranges.
 - **Nothing learned for these displays**: no prompt, as today.
-- ⌘K on the row: Ignore Once (esc), Never Arrange on This Display (this
-  set of displays no longer gets the row; listed in Settings → Windows),
-  Ignore This Monitor (as today).
+- ⌘K on the row: Arrange as Usual (↩), Record New Layout Here…, Ignore
+  Once (esc), Never Arrange on These Displays (the displays connected
+  then no longer get the row; listed in Settings → Windows → Advanced,
+  Displays never arranged when plugged in), Ignore the monitors (as
+  today). Learning off: no row.
 - Same rules as the prompt today: a real plug, not a wake from sleep
   (`DisplayArrival`); one prompt on the biggest new display; the keyboard
   only if no key was typed in the last second; no timeout.

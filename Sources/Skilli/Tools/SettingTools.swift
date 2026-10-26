@@ -1000,6 +1000,16 @@ final class SettingTools {
             }
         }
         bindings["ignoredMonitors"] = monitors
+        var neverArranged = Binding(get: { [unowned self] in .list(self.preferences.neverArrangeDisplays.map(\.label)) })
+        neverArranged.remove = { [unowned self] text in
+            guard let set = self.preferences.neverArrangeDisplays.first(where: { Self.folded($0.label) == Self.folded(text) }) else {
+                throw Failure("No displays named “\(text)” are left out. Left out: \(self.preferences.neverArrangeDisplays.map(\.label).joined(separator: ", ")).")
+            }
+            return ListChange(item: set.label) { [unowned self] in
+                self.preferences.neverArrangeDisplays.removeAll { $0.key == set.key }
+            }
+        }
+        bindings["neverArrangeDisplays"] = neverArranged
         bindings["windowLayouts"] = Binding(get: { [unowned self] in .list(self.windowLayouts()) })
 
         // Calendar

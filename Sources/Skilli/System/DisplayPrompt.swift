@@ -3,16 +3,28 @@ import Carbon.HIToolbox
 import SkilliCore
 
 /// Asked in the middle of a display just plugged in: put back one of the
-/// layouts saved on it? ↑↓ picks, ↩ applies, esc ignores this once, ⌘K the
-/// rest (always, never, ignore this monitor, edit, record a new one). It
+/// layouts saved on it, or every window where the user usually puts it
+/// (Arrange as Usual, last)? ↑↓ picks, ↩ applies, esc ignores this once,
+/// ⌘K the rest (always, never, ignore this monitor, edit, record a new
+/// one; for Arrange as Usual, never on these displays). It
 /// takes the keyboard only when the user is not typing; a click does too.
 /// No time limit: it stays until answered or the display goes.
 @MainActor
 final class DisplayPrompt {
     struct Offer {
-        let layout: SavedWindowLayout
+        /// A saved layout; nil for Arrange as Usual.
+        let layout: SavedWindowLayout?
         let certainty: DisplayFingerprint.Certainty
         let exact: Bool
+        /// Arrange as Usual: the windows with a learned place, of those open.
+        var placed = 0
+        var total = 0
+
+        static func arrange(placed: Int, of total: Int) -> Offer {
+            Offer(layout: nil, certainty: .unit, exact: true, placed: placed, total: total)
+        }
+
+        var id: String { layout?.id ?? "arrange" }
     }
 
     var onApply: ((SavedWindowLayout) -> Void)?
@@ -21,6 +33,10 @@ final class DisplayPrompt {
     var onIgnoreMonitors: (([DisplayFingerprint]) -> Void)?
     var onEdit: ((SavedWindowLayout) -> Void)?
     var onRecord: (() -> Void)?
+    /// Arrange as Usual: Arrange Windows, now.
+    var onArrange: (() -> Void)?
+    /// Never Arrange on These Displays.
+    var onNeverArrange: (([DisplayFingerprint]) -> Void)?
 
     private(set) var offers: [Offer] = []
     /// The displays it asks about.
@@ -54,10 +70,10 @@ final class DisplayPrompt {
             hide()
             return
         }
-        let keep = self.offers.indices.contains(selected) ? self.offers[selected].layout.id : nil
+        let keep = self.offers.indices.contains(selected) ? self.offers[selected].id : nil
         self.offers = offers
         self.plugged = plugged
-        selected = offers.firstIndex { $0.layout.id == keep } ?? 0
+        selected = offers.firstIndex { $0.id == keep } ?? 0
         let panel = self.panel ?? makePanel()
         self.panel = panel
         actions.isHidden = true
@@ -70,7 +86,8 @@ final class DisplayPrompt {
         } else {
             panel.makeKeyAndOrderFront(nil)
         }
-        Log.trace("Display prompt: \(offers.count) layout\(offers.count == 1 ? "" : "s") for \(plugged.map(\.name).joined(separator: ", "))\(typing ? ", typing: keyboard left alone" : "")")
+        let layouts = offers.filter { $0.layout != nil }.count
+        Log.trace("Display prompt: \(layouts) layout\(layouts == 1 ? "" : "s")\(layouts < offers.count ? " and Arrange as Usual" : "") for \(plugged.map(\.name).joined(separator: ", "))\(typing ? ", typing: keyboard left alone" : "")")
     }
 
     /// Self-test hook: the question as PNG, as it shows on screen; else
@@ -148,7 +165,7 @@ final class DisplayPrompt {
         guard offers.indices.contains(selected) else { return }
         let layout = offers[selected].layout
         hide()
-        onApply?(layout)
+        if let layout { onApply?(layout) } else { onArrange?() }
     }
 
     func ignoreOnce() {
@@ -166,9 +183,12 @@ final class DisplayPrompt {
 
     func openActions() {
         guard offers.indices.contains(selected) else { return }
-        let chosen = offers[selected].layout
-        let sure = offers[selected].certainty == .unit
         let monitors = plugged.map(\.name).joined(separator: " and ")
+        guard let chosen = offers[selected].layout else {
+            openArrangeActions(monitors: monitors)
+            return
+        }
+        let sure = offers[selected].certainty == .unit
         // The layout's name heads the list: the titles stay short.
         var list = [LauncherAction(title: "Apply", symbol: "rectangle.3.group", key: .open) { [weak self] in self?.apply() }]
         // Without its own serial the display may be another unit: always
@@ -203,6 +223,33 @@ final class DisplayPrompt {
         // Sized first: the list lays itself out in the space it is given.
         layout(forActions: list.count)
         actions.show(list, for: chosen.name)
+    }
+
+    /// Arrange as Usual's: run it, record a layout instead, ignore once,
+    /// never on these displays, ignore the monitors.
+    private func openArrangeActions(monitors: String) {
+        let list = [
+            LauncherAction(title: "Arrange as Usual", symbol: SystemCommand.arrangeWindows.symbol, key: .open) { [weak self] in self?.apply() },
+            LauncherAction(title: "Record New Layout Here…", symbol: "record.circle") { [weak self] in
+                self?.hide()
+                self?.onRecord?()
+            },
+            LauncherAction(title: "Ignore Once", symbol: "xmark", group: .remove) { [weak self] in self?.ignoreOnce() },
+            LauncherAction(title: "Never Arrange on These Displays", symbol: "nosign", group: .remove) { [weak self] in
+                guard let self else { return }
+                let plugged = self.plugged
+                self.hide()
+                self.onNeverArrange?(plugged)
+            },
+            LauncherAction(title: "Ignore \(monitors)", symbol: "display.trianglebadge.exclamationmark", group: .remove) { [weak self] in
+                guard let self else { return }
+                let plugged = self.plugged
+                self.hide()
+                self.onIgnoreMonitors?(plugged)
+            }
+        ]
+        layout(forActions: list.count)
+        actions.show(list, for: "Arrange as Usual")
     }
 
     private func closeActions() {
@@ -241,7 +288,14 @@ final class DisplayPrompt {
         guard let panel, let root = panel.contentView, let glass else { return }
         let names = plugged.map(\.name)
         titleLabel.stringValue = "\(names.joined(separator: " and ")) plugged in"
-        subtitle.stringValue = offers.count == 1 ? "Put this layout's windows back?" : "Put one of these layouts' windows back?"
+        let layouts = offers.filter { $0.layout != nil }.count
+        subtitle.stringValue = switch (layouts, layouts < offers.count) {
+        case (0, _): "Put every window where you usually put it?"
+        case (1, false): "Put this layout's windows back?"
+        case (_, false): "Put one of these layouts' windows back?"
+        case (1, true): "Put this layout's windows back, or arrange them as usual?"
+        default: "Put one of these layouts' windows back, or arrange them as usual?"
+        }
         rows.forEach { $0.removeFromSuperview() }
         rows = offers.enumerated().map { offset, offer in
             let row = OfferRow(offer: offer)
@@ -334,13 +388,18 @@ private final class OfferRow: NSView {
 
     init(offer: DisplayPrompt.Offer) {
         super.init(frame: .zero)
-        name.stringValue = offer.layout.name
         name.font = Theme.Font.rowTitle
         name.lineBreakMode = .byTruncatingTail
-        var parts = [offer.layout.summary, "\(offer.layout.windows.count) window\(offer.layout.windows.count == 1 ? "" : "s")"]
-        if offer.exact { parts.append("made for these displays") }
-        if offer.certainty == .model { parts.append("same model, no serial to be sure") }
-        detail.stringValue = parts.joined(separator: " · ")
+        if let layout = offer.layout {
+            name.stringValue = layout.name
+            var parts = [layout.summary, "\(layout.windows.count) window\(layout.windows.count == 1 ? "" : "s")"]
+            if offer.exact { parts.append("made for these displays") }
+            if offer.certainty == .model { parts.append("same model, no serial to be sure") }
+            detail.stringValue = parts.joined(separator: " · ")
+        } else {
+            name.stringValue = "Arrange as Usual"
+            detail.stringValue = "\(offer.placed) of \(offer.total) window\(offer.total == 1 ? "" : "s") where you usually put them, learned on this Mac"
+        }
         detail.font = Theme.Font.rowAccessory
         detail.textColor = .secondaryLabelColor
         detail.lineBreakMode = .byTruncatingTail
@@ -348,7 +407,7 @@ private final class OfferRow: NSView {
         addSubview(detail)
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
-        setAccessibilityLabel(offer.layout.name)
+        setAccessibilityLabel(name.stringValue)
     }
 
     required init?(coder: NSCoder) { nil }
