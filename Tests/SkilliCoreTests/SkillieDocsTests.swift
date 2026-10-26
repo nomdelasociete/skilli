@@ -1,7 +1,7 @@
 @testable import SkilliCore
 import XCTest
 
-/// `docs/skillies/` is the skillies' reference (2026-10-26: "a detailed
+/// `skillies/docs/` is the skillies' reference (2026-10-26: "a detailed
 /// documentation, in md files in the repo, for maintenance"): every header
 /// key `ScriptCommand.parse` reads, every variable a skillie is told, every
 /// tool `"$SKILLI_CLI" call` can reach. One added without its line fails
@@ -21,29 +21,29 @@ final class SkillieDocsTests: XCTestCase {
     }
 
     func testEveryHeaderKeyIsInTheReference() {
-        let doc = Self.read("docs/skillies/header.md")
-        XCTAssertFalse(doc.isEmpty, "docs/skillies/header.md could not be read")
+        let doc = Self.read("skillies/docs/header.md")
+        XCTAssertFalse(doc.isEmpty, "skillies/docs/header.md could not be read")
         let source = Self.read("Sources/SkilliCore/ScriptCommand.swift")
         // values["title"], and the arguments' own fields (object["type"]).
         let keys = Set(Self.matches(#"values\["(\w+)"\]"#, in: source))
         let fields = Set(Self.matches(#"object\["(\w+)"\]"#, in: source))
         XCTAssertFalse(keys.isEmpty, "ScriptCommand.parse's keys could not be read")
         let missing = keys.union(fields).sorted().filter { !doc.contains("| `\($0)` |") }
-        XCTAssertEqual(missing, [], "docs/skillies/header.md: give each key its row")
+        XCTAssertEqual(missing, [], "skillies/docs/header.md: give each key its row")
     }
 
     func testEveryVariableASkillieIsToldIsDescribed() {
-        let doc = Self.read("docs/skillies/running.md")
+        let doc = Self.read("skillies/docs/running.md")
         // Every `static let … = "SKILLI_…"`: one added there is checked too.
         let variables = Self.matches(#"static let \w+ = "(SKILLI_\w+)""#, in: Self.read("Sources/SkilliCore/SkillieEnvironment.swift"))
         XCTAssertTrue(variables.contains(SkillieEnvironment.cli), "SkillieEnvironment's variables could not be read")
         let missing = variables.filter { !doc.contains("| `\($0)` |") }
-        XCTAssertEqual(missing, [], "docs/skillies/running.md: describe each in Environment")
+        XCTAssertEqual(missing, [], "skillies/docs/running.md: describe each in Environment")
     }
 
     func testEveryToolASkillieCanCallIsListed() {
-        let doc = Self.read("docs/skillies/calling-skilli.md")
-        XCTAssertFalse(doc.isEmpty, "docs/skillies/calling-skilli.md could not be read")
+        let doc = Self.read("skillies/docs/calling-skilli.md")
+        XCTAssertFalse(doc.isEmpty, "skillies/docs/calling-skilli.md could not be read")
         var names = SettingsTable.Tool.all
         for file in ["Sources/Skilli/Tools/SkilliTools.swift", "Sources/Skilli/Tools/ToolRightsTools.swift"] {
             let source = Self.read(file)
@@ -56,6 +56,6 @@ final class SkillieDocsTests: XCTestCase {
         }
         XCTAssertGreaterThan(names.count, 80, "the tools' names could not be read")
         let missing = names.filter { !doc.contains("| `\($0)` |") }
-        XCTAssertEqual(missing, [], "docs/skillies/calling-skilli.md: add each tool to its group's table")
+        XCTAssertEqual(missing, [], "skillies/docs/calling-skilli.md: add each tool to its group's table")
     }
 }

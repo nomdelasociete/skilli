@@ -164,6 +164,7 @@ public enum SettingsSearch {
         "agendaAlertWithoutCall": "agendaAlerts",
         "agendaHiddenCalendars": "",
         "githubAccount": "",
+        "githubServerSync": "githubAccount",
         "cleanShotTextLineBreaks": "",
         "appFiles": "",
         "scheduledAsks": "",

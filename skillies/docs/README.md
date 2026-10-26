@@ -11,8 +11,8 @@ JavaScript for Automation), Swift, Ruby, AppleScript… The header is
 Raycast's Script Command metadata under skil.li's name (`@skilli.` instead
 of `@raycast.`), so a Raycast script needs one word changed.
 
-This folder is the reference. It is kept next to the code: change it in the
-same pull request as the behaviour it describes.
+These pages are the reference. They are written next to the code, in the
+repository's `skillies/docs/` folder, and published on skil.li from there.
 
 | Page | What it answers |
 | --- | --- |
@@ -20,8 +20,7 @@ same pull request as the behaviour it describes.
 | [Header reference](header.md) | Every `@skilli.` key: title, mode, arguments, icon, confirmation, refresh… |
 | [How a skillie runs](running.md) | The process: interpreter, folder, environment, PATH, time limit, output, modes, errors |
 | [Calling skil.li from a skillie](calling-skilli.md) | `"$SKILLI_CLI" call <tool>`, `skilli://` links, and every tool a skillie can call |
-| [Community collection](../../skillies/README.md) | Contributing a skillie to the website, what runs on every Mac, recipes for skil.li's features |
-| [Skillie files](../skillie-files.md) | The `.skilli` file format and import links (design notes) |
+| [Community collection](../README.md) | Contributing a skillie to the website, what runs on every Mac, recipes for skil.li's features |
 
 ## A first skillie in two minutes
 
@@ -120,7 +119,7 @@ does not sandbox it. What it does do:
 - **An import link**: `skilli://skillies/import?url=https://example.com/the-script.sh`
   (up to 10 `url=`, https only, 256 KB each). Same sheet.
 - **The community collection** on the website comes from this repository's
-  [`skillies/`](../../skillies/README.md) folder: open a pull request there.
+  [`skillies/`](../README.md) folder: open a pull request there.
 
 ## Coming from Raycast
 
