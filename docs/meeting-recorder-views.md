@@ -612,13 +612,20 @@ Phase 3 changes none of the Moment's answers, checked one by one:
     Automation allowed, a tab on the meeting's address): "The
     meeting's tab comes forward as recording starts; a tab you pick
     later is recorded instead. Keep its window in sight."
-  - It cannot: "Bring the meeting's tab forward in Arc: its window is
-    recorded as it is." The reason in place of "in Arc": "in Firefox"
-    (a browser skil.li does not script), "no tab of Chrome is on the
-    meeting's address", "Chrome said no to skil.li · ⌘↩ opens
-    Automation" (refused in Privacy & Security → Automation). macOS's
-    question for Automation, never asked before, comes as the screen is
-    turned on (the card steps down), so ↩ never waits on it.
+  - It cannot, said with what to do:
+    - Arc, Firefox, a browser skil.li does not script: "Bring the
+      meeting's tab forward in Arc: its window is recorded as it is."
+    - No tab on the meeting's address (or the browser not open): "No
+      tab of Google Chrome is on the meeting's address: bring it
+      forward, its window is recorded as it is."
+    - Refused in Privacy & Security → Automation: "Google Chrome said
+      no to skil.li · ⌘↩ opens Automation. Bring the meeting's tab
+      forward: its window is recorded as it is."
+    - The script failed: "Google Chrome did not answer: bring the
+      meeting's tab forward, its window is recorded as it is."
+
+    macOS's question for Automation, never asked before, comes as the
+    screen is turned on (the card steps down), so ↩ never waits on it.
   - A window of an app (Zoom, Discord…): "Keep the call's window in
     sight: a minimized or hidden window gives no picture."
 - **⌘↩** opens the list of the permission a row says is missing (the
@@ -664,9 +671,11 @@ Phase 3 changes none of the Moment's answers, checked one by one:
     once known comes first.
   - **No picture**, the item says why, in place of the window's name:
     "Screen · Google Chrome is minimized: nothing recorded until it's
-    back", "… is hidden …", "Screen · Google Chrome stopped painting:
-    keep some of its window in sight" (fully covered, the same picture
-    for 5 s), "Screen · the window closed: pick another ▸". Measured
+    back", "… is hidden …", "… isn't on screen …" (on another desktop),
+    "Screen · Google Chrome stopped painting: keep some of its window
+    in sight" (covered whole, no new picture for 5 s since it was),
+    "Screen · the window closed: pick another ▸". Said after a second
+    (a window being minimized, a desktop changing). Measured
     (Chrome, Arc): a covered window that keeps painting is no failure,
     and a still slide in sight is none either: only a window covered
     whole and giving no new picture for 5 s is.
