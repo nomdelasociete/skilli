@@ -17565,14 +17565,17 @@ final class SelfTest {
         // user's, and the check is skipped.
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
         if !running.isEmpty {
-            let windows = running.reduce(0) { count, app in
+            // Read for sure, every instance: a read that fails is never taken
+            // for "no window".
+            let counts: [Int?] = running.map { app in
                 var value: CFTypeRef?
-                AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute as CFString, &value)
-                return count + ((value as? [AXUIElement])?.count ?? 0)
+                guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute as CFString, &value)
+                    == .success, let list = value as? [AXUIElement] else { return nil }
+                return list.count
             }
-            guard windows == 0 else {
-                checks.append(Check(name: name, passed: true, skipped: true, detail: "TextEdit is open with \(windows) window(s) (the test needs to launch it)",
-                                    latencyMs: nil))
+            guard counts.allSatisfy({ $0 == 0 }) else {
+                let detail = counts.contains(nil) ? "TextEdit is open and its windows could not be read" : "TextEdit is open with windows"
+                checks.append(Check(name: name, passed: true, skipped: true, detail: "\(detail) (the test needs to launch it)", latencyMs: nil))
                 return
             }
             for app in running { app.terminate() }
