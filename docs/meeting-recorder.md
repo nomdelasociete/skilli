@@ -7,7 +7,10 @@ built (PR #35). 2026-10-24: phase 2, the Moment below, built (PR #38).
 (Quit and sleep below), and the words said kept out of backups (Where
 it lives). 2026-10-25: phase 3, the webcam and the screen, being built;
 the Moment checked again for them and their views and states in
-`docs/meeting-recorder-views.md` ("Phase 3").
+`docs/meeting-recorder-views.md` ("Phase 3"). 2026-10-26: phase 4
+being built: its moment, views and states in the same file ("Phase
+4"), first the voices, import, editing and renaming, then Better
+transcription.
 
 Asked for: a meeting recorder like omarchy-meeting-recorder (an
 open-source recorder for Omarchy Linux): your microphone and the
