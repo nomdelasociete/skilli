@@ -764,6 +764,9 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     /// The line whose words are being edited, and the name being typed.
     private(set) var editingLine: Int?
     private(set) var renamingLine: Int?
+    /// Lines that came while a line was edited or renamed: shown once it
+    /// ends (a reload would take the editor's cell away).
+    private var linesLater: (lines: [TranscriptLine], names: [String: String], slides: [SlideLog.Slide])?
     private var heights: [Int: CGFloat] = [:]
     /// The lines' width as last laid out: their heights are measured at it.
     private var linesWidth: CGFloat = 0
@@ -864,6 +867,11 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     }
 
     func showLines(_ lines: [TranscriptLine], names: [String: String], slides: [SlideLog.Slide] = []) {
+        guard editingLine == nil, renamingLine == nil else {
+            linesLater = (lines, names, slides)
+            return
+        }
+        linesLater = nil
         self.lines = lines
         self.names = names
         self.slides = slides
@@ -900,6 +908,10 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
 
     /// A state in place of the lines (transcribing, importing).
     func showState(_ text: String) {
+        // The lines go: a line being edited or renamed is put back first.
+        linesLater = nil
+        endEditing(keep: false)
+        endRenaming(keep: false)
         lines = []
         select(nil)
         setRows([])
@@ -1136,6 +1148,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         guard let line = editingLine, line < rowOfLine.count,
               let cell = table.view(atColumn: 0, row: rowOfLine[line], makeIfNecessary: false) as? LineCell else {
             editingLine = nil
+            showLinesLater()
             return
         }
         editingLine = nil
@@ -1143,12 +1156,14 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         cell.endEditing()
         window?.makeFirstResponder(table)
         if keep { onEdited?(line, text) } else { table.reloadData(forRowIndexes: [rowOfLine[line]], columnIndexes: [0]) }
+        showLinesLater()
     }
 
     private func endRenaming(keep: Bool) {
         guard let line = renamingLine, line < rowOfLine.count,
               let cell = table.view(atColumn: 0, row: rowOfLine[line], makeIfNecessary: false) as? LineCell else {
             renamingLine = nil
+            showLinesLater()
             return
         }
         renamingLine = nil
@@ -1156,6 +1171,14 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         window?.makeFirstResponder(table)
         cell.endRenaming()
         if keep { onRenamed?(line, text) }
+        showLinesLater()
+    }
+
+    /// The lines that came meanwhile, unless the change just kept showed
+    /// newer ones.
+    private func showLinesLater() {
+        guard let later = linesLater else { return }
+        showLines(later.lines, names: later.names, slides: later.slides)
     }
 
     #if SKILLI_SELFTEST

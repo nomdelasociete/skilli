@@ -51,6 +51,9 @@ final class MeetingRecorder {
     private(set) var transcribing: Transcribing? {
         didSet { if transcribing != oldValue { onChange?() } }
     }
+    /// The one being made again: its record before, put back if skil.li
+    /// quits meanwhile.
+    private var transcribingBefore: MeetingRecord?
     /// The phase or a transcript changed: the menu bar, the launcher's row.
     var onChange: (() -> Void)?
     /// A transcript is done (or waits for a language): its window opens.
@@ -515,10 +518,18 @@ final class MeetingRecorder {
         if phase == .listening { stopListening() }
         if isRecording || phase == .stopping { stopNow() }
         // The one being made and those waiting their turn (one finishing
-        // meanwhile is written done).
-        var left = queue.map(\.0)
+        // meanwhile is written done). One to be made again keeps its
+        // transcript as it was: waiting, nothing of it was written; being
+        // made, its record before is put back.
+        var left = queue.filter { !$0.again }.map(\.0)
         queue = []
-        if let transcribing { left.insert(transcribing.folder, at: 0) }
+        if let transcribing {
+            if let before = transcribingBefore {
+                try? recordings.write(before, to: transcribing.folder)
+            } else {
+                left.insert(transcribing.folder, at: 0)
+            }
+        }
         for folder in left {
             if let record = recordings.read(folder) { leave(folder, record: record) }
         }
@@ -564,9 +575,16 @@ final class MeetingRecorder {
             // The job is this one before anything is awaited: another asked
             // meanwhile waits in the queue.
             transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0))
-            let setup = await transcriptSetup()
             // Made again: the record as it is before, put back if it fails.
             let before = again ? recordings.read(folder) : nil
+            transcribingBefore = before?.state == .done ? before : nil
+            let setup = await transcriptSetup()
+            // Quit meanwhile: closeForQuit left it as it should be.
+            if quitting {
+                transcribing = nil
+                transcribingBefore = nil
+                break
+            }
             var working = record
             working.state = .transcribing
             working.recorder = Recordings.ownProcess
@@ -595,6 +613,7 @@ final class MeetingRecorder {
                 Log.actions.error("Recorder: no transcript for “\(record.title, privacy: .private)” (\(error.localizedDescription, privacy: .public))")
             }
             transcribing = nil
+            transcribingBefore = nil
             // Quitting: its window is not opened as skil.li goes.
             if !quitting { onFinished?(folder) }
         }
