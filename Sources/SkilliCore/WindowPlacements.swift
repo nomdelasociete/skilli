@@ -352,3 +352,40 @@ public enum WindowArrangement {
         }.max { $0.saved < $1.saved }
     }
 }
+
+/// Arrange as Usual in the question a display plugged in asks
+/// (docs/smart-layout.md → Display plugged in): offered when what was
+/// learned places at least half of the windows open, on displays the user
+/// has not refused it for.
+public enum ArrangeOffer {
+    /// A set of displays connected together, as Never Arrange on These
+    /// Displays keeps it: who they are, and their names for Settings.
+    public struct DisplaySet: Codable, Equatable, Sendable {
+        /// `WindowPlacements.displaysKey` of the displays' keys.
+        public var key: String
+        public var names: [String]
+
+        public init(key: String, names: [String]) {
+            self.key = key
+            self.names = names
+        }
+
+        /// "Example 27 and Built-in Retina Display".
+        public var label: String { names.joined(separator: " and ") }
+    }
+
+    /// The displays connected, as one set.
+    public static func displaySet(_ displays: [DisplayFingerprint]) -> DisplaySet {
+        DisplaySet(key: WindowPlacements.displaysKey(displays.map(WindowPlacements.displayKey)), names: displays.map(\.name))
+    }
+
+    /// Worth asking: some windows have a place, at least half of them.
+    public static func offered(placed: Int, of total: Int) -> Bool {
+        placed > 0 && placed * 2 >= total
+    }
+
+    /// The row for these displays, unless refused for them.
+    public static func refused(_ displays: DisplaySet, in never: [DisplaySet]) -> Bool {
+        never.contains { $0.key == displays.key }
+    }
+}

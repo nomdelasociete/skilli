@@ -189,3 +189,23 @@ final class WindowPlacementsTests: XCTestCase {
         XCTAssertNil(WindowArrangement.layout(for: [browser], among: layouts, on: [other]))
     }
 }
+
+final class ArrangeOfferTests: XCTestCase {
+    func testOfferedWhenHalfTheWindowsHaveAPlace() {
+        XCTAssertTrue(ArrangeOffer.offered(placed: 2, of: 4))
+        XCTAssertTrue(ArrangeOffer.offered(placed: 1, of: 1))
+        XCTAssertFalse(ArrangeOffer.offered(placed: 1, of: 3))
+        XCTAssertFalse(ArrangeOffer.offered(placed: 0, of: 0))
+    }
+
+    func testRefusedForTheSameDisplaysInAnyOrder() {
+        let laptop = DisplayFingerprint(name: "Built-in", vendor: 1552, model: 41_000, serial: 0, builtIn: true, uuid: "A")
+        let big = DisplayFingerprint(name: "Example 27", vendor: 4268, model: 30_787, serial: 16_780_800, builtIn: false, uuid: "B")
+        let desk = ArrangeOffer.displaySet([laptop, big])
+        XCTAssertEqual(desk.label, "Built-in and Example 27")
+        XCTAssertTrue(ArrangeOffer.refused(ArrangeOffer.displaySet([big, laptop]), in: [desk]))
+        XCTAssertFalse(ArrangeOffer.refused(ArrangeOffer.displaySet([laptop]), in: [desk]))
+        let data = try! JSONEncoder().encode([desk])
+        XCTAssertEqual(try JSONDecoder().decode([ArrangeOffer.DisplaySet].self, from: data), [desk])
+    }
+}
