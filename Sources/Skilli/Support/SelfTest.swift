@@ -17550,7 +17550,7 @@ final class SelfTest {
     /// on, TextEdit launched puts its window there before anyone touches
     /// it; the setting off, the next launch is left where it opens.
     private func usualPlacesOnLaunch() async {
-        let name = "Usual places: on, an app launched gets its window where it was put the last 3 times; off, it is left where it opens"
+        let name = "Usual places: on, an app launched gets its window where it was put the last 3 times (the bottom right quarter); off, it is left where it opens"
         guard let learner = context.windowLearner else {
             record(name, false, "no window learner", nil)
             return
@@ -17561,7 +17561,7 @@ final class SelfTest {
             return
         }
         guard NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty else {
-            record(name, true, "skipped: TextEdit is already open (the test needs to launch it)", nil)
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "TextEdit is already open (the test needs to launch it)", latencyMs: nil))
             return
         }
         let preferences = context.preferences
@@ -17605,17 +17605,18 @@ final class SelfTest {
             configuration.activates = false
             _ = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration)
         }
-        // Learned: TextEdit's window on the left half of the menu bar's
-        // display, three times, on the displays there are now.
+        // Learned: TextEdit's window in the bottom right quarter of the menu
+        // bar's display, three times, on the displays there are now: where
+        // TextEdit never opens a window, so a move there is seen.
         let displays = Displays.current()
-        guard let main = displays.first, let left = WindowLayout.leftHalf.frame(in: main.visible) else {
+        guard let main = displays.first, let spot = WindowLayout.bottomRight.frame(in: main.visible) else {
             record(name, false, "no display", nil)
             return
         }
         let keys = displays.map { WindowPlacements.displayKey($0.fingerprint) }
         var seeded = WindowPlacements()
         for day in 1...3 {
-            seeded.record(.init(place: .of(left, in: main.visible), display: keys[0], title: files[0].lastPathComponent, how: .key,
+            seeded.record(.init(place: .of(spot, in: main.visible), display: keys[0], title: files[0].lastPathComponent, how: .key,
                                 at: Date.now.addingTimeInterval(-Double(day) * 3_600)),
                           bundleID: bundleID, displays: keys)
         }
@@ -17623,7 +17624,7 @@ final class SelfTest {
 
         preferences.usualPlaces = true
         await launch(files[0])
-        let placed = await waitUntil(timeout: 6) { window(files[0]).flatMap(frame).map { WindowLayout.matches($0, left) } ?? false } != nil
+        let placed = await waitUntil(timeout: 6) { window(files[0]).flatMap(frame).map { WindowLayout.matches($0, spot) } ?? false } != nil
         let placedFrame = window(files[0]).flatMap(frame)
         await quit()
 
@@ -17632,14 +17633,14 @@ final class SelfTest {
         let opened = await waitUntil(timeout: 6) { window(files[1]).flatMap(frame) != nil } != nil
         await pause(1_500)
         let offFrame = window(files[1]).flatMap(frame)
-        let leftAlone = opened && offFrame.map { !WindowLayout.matches($0, left) } ?? false
+        let leftAlone = opened && offFrame.map { !WindowLayout.matches($0, spot) } ?? false
         await quit()
 
         for file in files { try? FileManager.default.removeItem(at: file) }
         learner.restore(learned)
         (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces) = (gap, learning, usual)
         record(name, placed && leftAlone,
-               "on: placed on the left half: \(placed) (\(placedFrame.map(Self.describe) ?? "?")); off: opened \(opened), left where it opened: \(leftAlone) (\(offFrame.map(Self.describe) ?? "?"))",
+               "on: placed in the bottom right quarter: \(placed) (\(placedFrame.map(Self.describe) ?? "?")); off: opened \(opened), left where it opened: \(leftAlone) (\(offFrame.map(Self.describe) ?? "?"))",
                nil)
     }
 
