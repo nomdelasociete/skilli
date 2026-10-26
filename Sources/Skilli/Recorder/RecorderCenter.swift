@@ -451,7 +451,11 @@ final class RecorderCenter {
     /// The screen on for a recording ⌘R started: the meeting's window,
     /// once found, recorded from then on, its tab brought forward.
     private func addMeetingScreen(_ reading: MeetingMoment.Reading) async {
+        // The recording this window is for: another one started meanwhile
+        // never gets it.
+        let folder = recorder.folder
         let found = await findMeetingWindow(reading)
+        guard folder != nil, recorder.folder == folder else { return }
         meetingWindow = found.window
         guard let window = found.window, recorder.isRecording, !recorder.sources.screen else { return }
         await recorder.setScreen(window)

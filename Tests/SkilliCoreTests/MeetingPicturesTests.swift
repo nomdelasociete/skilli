@@ -184,6 +184,17 @@ final class SlideScheduleTests: XCTestCase {
         XCTAssertEqual(gaps.max() ?? 0, SlideSchedule.latest, accuracy: 0.26, "never more than two seconds apart")
     }
 
+    func testAChangeSeenWhileAReadingRanIsKept() {
+        var schedule = SlideSchedule()
+        _ = schedule.sample(grid(0), at: 0)
+        schedule.read(grid(0), at: 0, foundNew: true)
+        // Read at 1.0; the slide changes at 1.25 while it is being read.
+        _ = schedule.sample(grid(50, changing: 0.05), at: 1.0)
+        _ = schedule.sample(grid(200, changing: 0.05), at: 1.25)
+        schedule.read(grid(50, changing: 0.05), at: 1.0, foundNew: false)
+        XCTAssertEqual(schedule.sample(grid(200, changing: 0.05), at: 3.0), 1.25, "timed at its change, not at the next reading")
+    }
+
     func testASlideAfterAFlashIsTimedWithinTheReadingsInterval() {
         var schedule = SlideSchedule()
         _ = schedule.sample(grid(0), at: 0)

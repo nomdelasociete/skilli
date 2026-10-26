@@ -363,8 +363,10 @@ final class MeetingRecorder {
     /// transcript.
     func stop() async {
         guard let stopping = beginStopping() else { return }
-        // The pictures stop at this moment too: none placed past it.
-        let picturesClosed = madePictures.map { pictures in Task { await pictures.finish(at: stopping.at) } }
+        // The pictures stop at this moment too, none placed past it; they
+        // close by the sound's deadline.
+        let picturesCloseBy = DispatchTime.now() + 1 + TrackWriter.closingTime
+        let picturesClosed = madePictures.map { pictures in Task { await pictures.finish(at: stopping.at, closeBy: picturesCloseBy) } }
         #if SKILLI_SELFTEST
         // Self-test: its files take that long to close.
         if closingDelay > .zero { try? await Task.sleep(for: closingDelay) }
@@ -379,9 +381,13 @@ final class MeetingRecorder {
             lengths.append(closed.seconds)
             complete = complete && closed.complete
         }
-        // The pictures end at the same moment (none written: no file).
-        if let pictures = await picturesClosed?.value, pictures.webcam > 0 || pictures.screen > 0 {
-            Log.trace("Recorder: pictures closed, webcam \(Int(pictures.webcam)) s, screen \(Int(pictures.screen)) s, \(pictures.slides) slides")
+        // The pictures end at the same moment (none written: no file); a
+        // picture file not whole leaves the recording as a sound file does.
+        if let pictures = await picturesClosed?.value {
+            complete = complete && pictures.complete
+            if pictures.webcam > 0 || pictures.screen > 0 {
+                Log.trace("Recorder: pictures closed, webcam \(Int(pictures.webcam)) s, screen \(Int(pictures.screen)) s, \(pictures.slides) slides")
+            }
         }
         // skil.li quit meanwhile: closed there already.
         guard self.stopping?.folder == stopping.folder else { return }

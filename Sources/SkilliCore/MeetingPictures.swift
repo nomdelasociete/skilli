@@ -273,7 +273,8 @@ public struct SlideSchedule: Sendable {
     /// the reading before.
     public mutating func read(_ grid: [UInt8], at time: Double, foundNew: Bool) {
         lastRead = (grid, time)
-        jumpAt = nil
+        // A change seen while it was read (a later picture) is kept.
+        if jumpAt.map({ $0 <= time }) ?? true { jumpAt = nil }
         wait = foundNew ? Self.soonest : Self.latest
     }
 }
