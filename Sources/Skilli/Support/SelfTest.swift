@@ -18863,11 +18863,10 @@ final class SelfTest {
             try PropertyListSerialization.data(fromPropertyList: ["Preferences.selftestBackup": "older"], format: .xml, options: 0)
                 .write(to: olderRoot.appendingPathComponent("Settings.plist"))
             let older = destination.appendingPathComponent(olderName)
-            let ditto = Process()
-            ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-            ditto.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", olderRoot.path, older.path]
-            try ditto.run()
-            ditto.waitUntilExit()
+            guard await Self.toolOutput("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", olderRoot.path, older.path]) != nil else {
+                record(name, false, "the older backup could not be zipped", nil)
+                return
+            }
             let olderContents = try await backup.contents(of: older)
             try await backup.restore(older)
             let history = (try? String(contentsOf: source.appendingPathComponent("Clipboard/history.sqlite"), encoding: .utf8)) ?? ""
