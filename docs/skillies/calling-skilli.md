@@ -247,6 +247,7 @@ Each change asks in the card, every time.
 | --- | --- | --- |
 | `ask_user` | Asks you a question in the card; returns the answer. | `question`, `options?` (list) |
 | `notify` | Shows a short note in the card. | `message` |
+| `approve` | Claude Code's permission prompt for another server's tool. Offered only when an Act command's agent started the skillie; not meant to be called from a skillie. | `tool_name`, `input` |
 
 ## `skilli://` links
 

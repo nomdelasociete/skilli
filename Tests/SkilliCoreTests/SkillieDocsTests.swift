@@ -54,8 +54,6 @@ final class SkillieDocsTests: XCTestCase {
                 names += Self.matches(#"static let \#(constant) = "(\w+)""#, in: source)
             }
         }
-        // Claude Code's permission prompt: hidden from the model and from skillies.
-        names.removeAll { $0 == "approve" }
         XCTAssertGreaterThan(names.count, 80, "the tools' names could not be read")
         let missing = names.filter { !doc.contains("| `\($0)` |") }
         XCTAssertEqual(missing, [], "docs/skillies/calling-skilli.md: add each tool to its group's table")
