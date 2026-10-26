@@ -79,6 +79,11 @@ Add); skillies join them.
   by skil.li (`UTExportedTypeDeclarations`), conforming to
   `public.plain-text` so Quick Look shows the code; skil.li is its owner
   (`CFBundleDocumentTypes`, `LSHandlerRank` Owner, role Viewer).
+- Its icon: macOS's document sheet with skil.li's icon on it and "SKILLI"
+  under it (`UTTypeIcons`: `UTTypeIconBadgeName` AppIcon, `UTTypeIconText`).
+  `CFBundleTypeIconSystemGenerated` would draw the same but macOS ignores it
+  for a type that conforms to plain text: there it draws a text page (tried
+  on macOS 27 with a stand-in app, 2026-10-26).
 - Content: a skillie as the folder takes it (skillies/docs/header.md). Checked
   as the folder will read it: UTF-8, 256 KB at most, a `#!` line naming an
   absolute interpreter (skil.li runs a skillie by its shebang when it is
