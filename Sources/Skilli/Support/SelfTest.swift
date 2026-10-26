@@ -24143,16 +24143,20 @@ final class SelfTest {
         if !aborted { await picturesInAScratchChrome(center) }
     }
 
-    /// The Record card alone, light and dark (skil.li's own windows only:
-    /// another app's window over it on the test Mac is left out).
+    /// The Record card over the test window, light and dark (skil.li's own
+    /// windows only: another app's window over it on the test Mac is left
+    /// out).
     private func capturePicturesCard(_ center: RecorderCenter, as name: String) async {
         guard let directory = context.snapshotDirectory, let panel = center.cardWindow else { return }
-        let saved = panel.appearance
-        defer { panel.appearance = saved }
+        let saved = (panel.appearance, window.appearance)
+        defer { (panel.appearance, window.appearance) = saved }
         for (suffix, appearance) in GlassCheck.appearances {
             panel.appearance = appearance
+            window.appearance = appearance
             await pause(700)
-            if let png = await WindowCapture.png(of: [panel]) { try? png.write(to: directory.appendingPathComponent("\(name)-\(suffix).png")) }
+            if let png = await WindowCapture.png(of: [window, panel], cropped: panel) {
+                try? png.write(to: directory.appendingPathComponent("\(name)-\(suffix).png"))
+            }
         }
     }
 
@@ -24231,6 +24235,12 @@ final class SelfTest {
         // The webcam's row: on, its picture live.
         _ = await clickCardRow(center, .webcam)
         let webcamOn = await waitUntil(timeout: 3) { view.webcamLine == "FaceTime HD Camera" && center.recorder.pictures.webcam.sink.latestPicture != nil } != nil
+        // Diagnosis only (the check stays failed): does a second click take?
+        var secondClick = "not tried"
+        if !webcamOn {
+            _ = await clickCardRow(center, .webcam)
+            secondClick = await waitUntil(timeout: 2) { view.webcamLine == "FaceTime HD Camera" } != nil ? "turned it on" : "did nothing"
+        }
         // The screen's row: no meeting's window, its list opens; the slides
         // picked. A list that holds the test's own steps is closed in 8 s.
         let escape = DispatchWorkItem {
@@ -24247,7 +24257,7 @@ final class SelfTest {
         let screenOn = await waitUntil(timeout: 4) { view.screenLine == "skil.li · Slides" && center.recorder.pictures.screen.sink.latestPicture != nil } != nil
         await capturePicturesCard(center, as: "recorder-pictures-card")
         guard webcamOn, screenOn, await recordCardHasKeys(center, name) else {
-            record(name, false, "rows before “\(offBefore.0)” / “\(offBefore.1)”; webcam on \(webcamOn) “\(view.webcamLine)” (row at \(rows.webcam), sources \(center.recorder.sources), state \(center.recorder.pictures.webcam.state)), screen picked \(picked) from \(listedCount) menu items, on \(screenOn) “\(view.screenLine)” (row at \(rows.screen))", nil)
+            record(name, false, "rows before “\(offBefore.0)” / “\(offBefore.1)”; webcam on \(webcamOn) “\(view.webcamLine)” (row at \(rows.webcam), sources \(center.recorder.sources), state \(center.recorder.pictures.webcam.state), a second click \(secondClick), key \(center.cardWindow?.isKeyWindow == true), active \(NSApp.isActive)), screen picked \(picked) from \(listedCount) menu items, on \(screenOn) “\(view.screenLine)” (row at \(rows.screen))", nil)
             center.closeCardWithoutKeys()
             return
         }

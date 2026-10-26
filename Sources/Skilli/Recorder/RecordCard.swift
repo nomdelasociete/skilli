@@ -1120,6 +1120,9 @@ private final class SourceRow: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        #if SKILLI_SELFTEST
+        Log.trace("Recorder card: a click on \(title.stringValue) (clickable \(clickable))")
+        #endif
         if !chevron.isHidden, let onMenu, point.x >= device.frame.minX, point.x <= chevron.frame.maxX + 4 {
             onMenu()
         } else if clickable {
