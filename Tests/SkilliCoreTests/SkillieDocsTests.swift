@@ -34,8 +34,10 @@ final class SkillieDocsTests: XCTestCase {
 
     func testEveryVariableASkillieIsToldIsDescribed() {
         let doc = Self.read("docs/skillies/running.md")
-        let missing = [SkillieEnvironment.cli, SkillieEnvironment.socket, SkillieEnvironment.skillie]
-            .filter { !doc.contains("| `\($0)` |") }
+        // Every `static let … = "SKILLI_…"`: one added there is checked too.
+        let variables = Self.matches(#"static let \w+ = "(SKILLI_\w+)""#, in: Self.read("Sources/SkilliCore/SkillieEnvironment.swift"))
+        XCTAssertTrue(variables.contains(SkillieEnvironment.cli), "SkillieEnvironment's variables could not be read")
+        let missing = variables.filter { !doc.contains("| `\($0)` |") }
         XCTAssertEqual(missing, [], "docs/skillies/running.md: describe each in Environment")
     }
 
