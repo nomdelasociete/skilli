@@ -5496,6 +5496,20 @@ final class SelfTest {
         return AXUIElementPerformAction(target, kAXPressAction as CFString) == .success
     }
 
+    /// The button named `title` in the row that shows `text`: from that
+    /// text up to the nearest element holding such a button (a Form row).
+    private static func axButton(_ title: String, inRowShowing text: String) -> AXUIElement? {
+        guard var node = axElements(roles: [kAXStaticTextRole], where: { $0 == text }).last else { return nil }
+        for _ in 0..<6 {
+            var parent: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(node, kAXParentAttribute as CFString, &parent) == .success, let parent,
+                  CFGetTypeID(parent) == AXUIElementGetTypeID() else { return nil }
+            node = unsafeDowncast(parent, to: AXUIElement.self)
+            if let button = axButton(title, under: node) { return button }
+        }
+        return nil
+    }
+
     /// The last enabled button named `title` (title, value or description).
     private static func axButton(_ title: String, under root: AXUIElement? = nil) -> AXUIElement? {
         axElements(roles: [kAXButtonRole], under: root, where: { $0 == title }).filter(axEnabled).last
@@ -13292,15 +13306,16 @@ final class SelfTest {
 
         // Its row, in Settings → Skillies.
         settings.show(pane: .skillies)
-        _ = await waitUntil(timeout: 3) { Self.axButton("Record Shortcut") != nil }
-        let field = Self.axButton("Record Shortcut")
+        // Its own row's button, never another skillie's.
+        _ = await waitUntil(timeout: 3) { Self.axButton("Record Shortcut", inRowShowing: title) != nil }
+        let field = Self.axButton("Record Shortcut", inRowShowing: title)
         await captureSettingsBothWays(as: "settings-skillies-shortcut")
         let pressed = field.map { AXUIElementPerformAction($0, kAXPressAction as CFString) == .success } ?? false
         let recording = await waitUntil(timeout: 2) { store.recordingID != nil && store.recordingID == store.entryID(for: action) } != nil
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         let noneLeft = await waitUntil(timeout: 2) { store.recordingID == nil && entries().isEmpty } != nil
-        _ = await waitUntil(timeout: 2) { Self.axButton("Record Shortcut") != nil }
-        let again = Self.axButton("Record Shortcut")
+        _ = await waitUntil(timeout: 2) { Self.axButton("Record Shortcut", inRowShowing: title) != nil }
+        let again = Self.axButton("Record Shortcut", inRowShowing: title)
         let pressedAgain = again.map { AXUIElementPerformAction($0, kAXPressAction as CFString) == .success } ?? false
         _ = await waitUntil(timeout: 2) { store.recordingID != nil }
         await hyperChord(["b"], trigger: Self.ownTriggerKeyCode)

@@ -825,7 +825,7 @@ starts from it.
   menu could not be narrowed, its new row landed out of sight already
   recording): a sheet (`AddShortcutSheet`, `ShortcutChoice.all`, read as
   it opens) with a focused search over every command the menu listed,
-  each word in its title or section; ↑↓ and ↩, or a click, pick. Picked:
+  each word in its title or section; ↑↓ and ↩, or a double-click, pick. Picked:
   its row added without keys, not recording, Keys scrolled to it, glowing
   (`SettingsSearchModel.reveal(_:in:drawing:)`); left without keys, it
   goes when another is picked or Keys closes. `add_shortcut` takes them

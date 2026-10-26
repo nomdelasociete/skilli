@@ -62,7 +62,7 @@ struct ShortcutChoice: Identifiable {
 }
 
 /// Keys → Add Shortcut…: every command, found by typing a few letters of
-/// its name; ↑↓ and ↩ pick one, as a click does. Picking adds its row
+/// its name; ↑↓ and ↩ pick one, as a double-click does. Picking adds its row
 /// without keys: Keys shows it, the user records there.
 struct AddShortcutSheet: View {
     /// Read as the sheet opens: what exists now (a skillie just added).
@@ -118,7 +118,7 @@ struct AddShortcutSheet: View {
                         }
                     }
                     .onChange(of: selected) { if let selected { proxy.scrollTo(selected) } }
-                    // A click picks it, as ↩ does.
+                    // A click selects, a double-click picks it, as ↩ does.
                     .contextMenu(forSelectionType: String.self) { _ in } primaryAction: { ids in
                         if let id = ids.first { selected = id; choose() }
                     }

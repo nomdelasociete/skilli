@@ -218,7 +218,7 @@ struct SkilliesPane: View {
         .onChange(of: context.shortcuts.recordingID) { model.newShortcut.recordingEnded(context.shortcuts) }
         .onDisappear {
             if context.shortcuts.recordingID != nil { context.shortcuts.cancelRecording() }
-            model.newShortcut.recordingEnded(context.shortcuts)
+            model.newShortcut.recordingEnded(context.shortcuts, leaving: true)
         }
         // Added from a file or link: the list with it.
         .onChange(of: model.changed) { shown = skillies() }

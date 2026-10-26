@@ -87,6 +87,7 @@ final class CatalogPaneModel {
     private func close(_ store: ShortcutStore) {
         // Nothing may go on recording out of sight.
         if store.recordingID != nil { store.cancelRecording() }
+        newShortcut.recordingEnded(store, leaving: true)
         editing = nil
     }
 
@@ -165,9 +166,12 @@ final class NewShortcut {
         store.beginRecording(id)
     }
 
-    /// Recording ended (`ShortcutStore.recordingID` changed).
-    func recordingEnded(_ store: ShortcutStore) {
+    /// Recording ended (`ShortcutStore.recordingID` changed). Keys refused:
+    /// it stays, so its row says why, until the next try or `leaving`
+    /// (the pane, popover or window gone).
+    func recordingEnded(_ store: ShortcutStore, leaving: Bool = false) {
         guard let id = added, store.recordingID != id else { return }
+        if !leaving, store.lastError?.id == id { return }
         added = nil
         if store.config.shortcuts.first(where: { $0.id == id })?.keys == nil {
             store.remove(id)

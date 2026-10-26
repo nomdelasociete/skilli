@@ -11,14 +11,16 @@ already recording.
 
 - **Where the thing is, its shortcut is.** Settings → Skillies shows a
   shortcut field on each skillie (one that needs an argument opens the
-  launcher on it), as Apps and Catalog already do for their rows: "Record Shortcut" until it has keys. A click records there, under
-  the pointer; ⎋ leaves nothing behind. Keys stays the index of every
+  launcher on it), as Apps and Catalog already do for their rows:
+  "Record Shortcut" until it has keys. A click records there, under the
+  pointer; ⎋ leaves nothing behind. Keys stays the index of every
   shortcut (one feature, one pane).
 - **Keys → Add Shortcut… finds by typing.** A sheet with a search field,
   focused, over every command the menu listed (skil.li, SI commands,
   windows, Mac, sound, System Settings panes, launcher commands, layouts,
   projects, skillies, snippets, quicklinks, apps' commands, Shortcuts, an
-  app). Typing narrows it; ↑↓ and ↩ pick, or a click.
+  app). Typing narrows it; ↑↓ and ↩ pick, or a double-click (a click
+  selects, as in any Mac list).
 - **Picked, it is shown, not recorded.** The sheet closes, Keys scrolls to
   the new row and makes it glow, as Settings' search does; its field says
   "Record Shortcut". A click on it records. Nothing listens for keys the
@@ -49,7 +51,8 @@ already recording.
    - *The wrong command picked in the sheet*: its row glows with no keys
      and does nothing; left without keys, it goes when another is picked or
      Keys closes.
-   - *A key another shortcut holds*: refused while recording, as everywhere.
+   - *A key another shortcut holds*: refused while recording, as everywhere;
+     the reason stays on its row until the next try or the pane closes.
 
 ## Not in this change
 
