@@ -105,7 +105,9 @@ final class RecordCard {
         let asksMicrophone = AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined
         Task {
             language = await MeetingTranscriber.defaultLanguage(asked: askedLanguage)
-            if languages.isEmpty { languages = await MeetingTranscriber.languages() }
+            // Read each time: Better transcription's languages come and go
+            // with its download.
+            languages = await MeetingTranscriber.languages()
             guard content == .record else { return }
             view.setLanguages(languages, picked: language)
             updateLanguageNote()

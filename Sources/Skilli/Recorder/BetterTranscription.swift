@@ -229,6 +229,7 @@ final class BetterTranscription {
         case .notConnectedToInternet, .networkConnectionLost: "the network went away."
         case .timedOut: "huggingface.co stopped answering."
         case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed: "huggingface.co could not be reached."
+        case .badServerResponse: "huggingface.co answered with an error (busy, or the file moved)."
         default: error.localizedDescription
         }
     }
@@ -243,12 +244,13 @@ final class BetterTranscription {
             Task { @MainActor in self?.current = task as? URLSessionDownloadTask }
         }
         let downloaded: URL
+        let response: URLResponse
         let resumed = resumeData(for: file)
         do {
             if let resumed {
-                downloaded = try await session.download(resumeFrom: resumed, delegate: delegate).0
+                (downloaded, response) = try await session.download(resumeFrom: resumed, delegate: delegate)
             } else {
-                downloaded = try await session.download(from: file.url, delegate: delegate).0
+                (downloaded, response) = try await session.download(from: file.url, delegate: delegate)
             }
         } catch {
             let cancelled = Task.isCancelled || (error as? URLError)?.code == .cancelled
@@ -263,6 +265,13 @@ final class BetterTranscription {
             throw error
         }
         dropResumeData(for: file)
+        // An error page (429, 503, 404) comes as a file too: said as the
+        // server's, not as a wrong file; the next Download starts afresh.
+        if let status = (response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(status) {
+            try? FileManager.default.removeItem(at: downloaded)
+            Log.trace("Better transcription: \(file.name) answered \(status)")
+            throw URLError(.badServerResponse)
+        }
         let part = folder.appendingPathComponent(file.name + ".part")
         try? FileManager.default.removeItem(at: part)
         try FileManager.default.moveItem(at: downloaded, to: part)

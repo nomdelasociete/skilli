@@ -24070,6 +24070,10 @@ final class SelfTest {
         defer {
             context.preferences.voiceLanguage = language
             context.preferences.recorderBetterHintShown = hint
+            // What the checks downloaded (1.6 GB) and pointed at: gone.
+            BetterTranscription.testFiles = nil
+            if let folder = BetterTranscription.testFolder { try? FileManager.default.removeItem(at: folder) }
+            try? FileManager.default.removeItem(at: recorderScratch.appendingPathComponent("wrong-models", isDirectory: true))
         }
         context.preferences.voiceLanguage = "en-US"
         guard await betterTranscriptionDownloads() else { return }
