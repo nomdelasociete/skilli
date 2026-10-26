@@ -24369,7 +24369,7 @@ final class SelfTest {
         let urls = (me: folder.appendingPathComponent("me.m4a"), screen: folder.appendingPathComponent(RecorderPictures.screenFile),
                     webcam: folder.appendingPathComponent(RecorderPictures.webcamFile))
         let found = await Task.detached { Self.beeps(in: urls.me) }.value
-        let screenFlashes = await PictureCheck.flashes(in: urls.screen)
+        let screenFlashes = await PictureCheck.flashes(in: urls.screen, corner: SlidesWindow.flashRegion)
         let webcamFlashes = await PictureCheck.flashes(in: urls.webcam)
         let screenOffsets = PictureCheck.offsets(found, screenFlashes)
         let webcamOffsets = PictureCheck.offsets(found, webcamFlashes)

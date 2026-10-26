@@ -2349,10 +2349,10 @@ re-investigating.
   minimized, hidden, off screen, closed, covered whole with no new
   picture for 5 s, `WindowCover`): an orange mark in the menu bar and
   why in its menu, nothing else. Slides (`SlideReader`): the screen's
-  pictures sampled four times a second on a 32 × 20 brightness grid
+  pictures sampled four times a second on a 64 × 40 brightness grid
   (`SlideSchedule`), read by Vision when changed (once a second at
-  most, less while nothing new is found), new lines a slide at the
-  change (`SlideLog`, the window's own lines out at Stop) in
+  most, every two seconds while nothing new is found), lines with words
+  new since the last readings a slide at the last change (`SlideLog`, the window's own lines out at Stop) in
   `slides.json`, searched by `RecordingIndex` (`shown`, "On screen:
   …"), rows of the window's transcript. The window plays both beside
   the lines (`AVPlayer`s started at one host time,

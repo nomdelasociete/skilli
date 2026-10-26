@@ -224,56 +224,57 @@ extension PictureChange {
 
 /// When the screen's text is read (docs/meeting-recorder-views.md, phase 3,
 /// "Reading the slides"): the picture sampled four times a second as a
-/// small grid of its brightness; read when it changed since the last
-/// reading, at most once a second, less often while readings find nothing
-/// new (a video moving), at once again for a change of a quarter of the
-/// picture (a slide). The slide is timed at the biggest jump since the
-/// last reading (the picture changing most from one sample to the next:
-/// a slide, not a video moving around it). A still window gives no new
-/// picture: its reader samples the last one again as time goes on.
+/// grid of its brightness, fine enough that a slide whose text alone
+/// changes shows (a 64 × 40 grid: a line of text is many of its cells); read
+/// when it changed since the last reading, at most once a second, every
+/// two seconds at most while readings find nothing new (a video moving),
+/// so a slide is never read more than two seconds late. The slide is timed
+/// at the last change before the reading (a sample unlike the one before):
+/// between the two readings, so within their interval of the truth. A
+/// still window gives no new picture: its reader samples the last one
+/// again as time goes on.
 public struct SlideSchedule: Sendable {
     /// Grid size, sampled every this many seconds.
-    public static let columns = 32
-    public static let rows = 20
+    public static let columns = 64
+    public static let rows = 40
     public static let sampleEvery = 0.25
-    /// A change: this share of the grid; a slide: this one.
-    public static let change = 0.06
-    public static let bigChange = 0.25
-    /// Seconds between readings: one at least, doubled to eight while
-    /// readings find nothing new.
+    /// A change: this share of the grid's cells, each by more than
+    /// `level` of 255 (a corner's clock ticking is less).
+    public static let change = 0.015
+    public static let level = 8
+    /// Seconds between readings: one at least, two while readings find
+    /// nothing new.
     public static let soonest = 1.0
-    public static let latest = 8.0
+    public static let latest = 2.0
 
     private var lastRead: (grid: [UInt8], at: Double)?
     private var previous: [UInt8]?
-    /// The biggest jump since the last reading: how much, and when.
-    private var jump: (share: Double, at: Double)?
+    /// The last change since the last reading.
+    private var jumpAt: Double?
     private var wait = SlideSchedule.soonest
 
     public init() {}
+
+    static func changed(_ a: [UInt8], _ b: [UInt8]) -> Bool {
+        PictureChange.changedFraction(a, b, threshold: level) >= change
+    }
 
     /// A sample of the picture at `time` (the file's clock): when its text
     /// should be read now, the time the slide began; nil: not now.
     public mutating func sample(_ grid: [UInt8], at time: Double) -> Double? {
         defer { previous = grid }
-        if let previous {
-            let share = PictureChange.changedFraction(grid, previous)
-            if share >= Self.change, share >= jump?.share ?? 0 { jump = (share, time) }
-        }
+        if let previous, Self.changed(grid, previous) { jumpAt = time }
         guard let lastRead else { return time }
-        let since = PictureChange.changedFraction(grid, lastRead.grid)
-        guard since >= Self.change else { return nil }
-        if since >= Self.bigChange { wait = Self.soonest }
-        guard time - lastRead.at >= wait else { return nil }
-        return max(lastRead.at, jump?.at ?? time)
+        guard Self.changed(grid, lastRead.grid), time - lastRead.at >= wait else { return nil }
+        return max(lastRead.at, jumpAt ?? time)
     }
 
     /// The text of `grid` read at `time`; whether it held lines new since
     /// the reading before.
     public mutating func read(_ grid: [UInt8], at time: Double, foundNew: Bool) {
         lastRead = (grid, time)
-        jump = nil
-        wait = foundNew ? Self.soonest : min(Self.latest, wait * 2)
+        jumpAt = nil
+        wait = foundNew ? Self.soonest : Self.latest
     }
 }
 
@@ -319,7 +320,9 @@ public struct SlideLog: Sendable {
         for line in lines {
             let text = line.split(whereSeparator: \.isWhitespace).joined(separator: " ")
             let key = Self.folded(text)
-            guard key.count >= 2, folded.insert(key).inserted else { continue }
+            // Text has words: a number alone (a call's clock, a counter)
+            // is not a slide's.
+            guard text.unicodeScalars.filter(CharacterSet.letters.contains).count >= 2, folded.insert(key).inserted else { continue }
             if !shown.contains(key) { fresh.append(text) }
         }
         readings += 1

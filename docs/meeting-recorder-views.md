@@ -751,17 +751,18 @@ From the screen's own pictures, on this Mac (Vision's text
 recognition), nothing kept but the text:
 
 - Four times a second the picture is compared with the one last read
-  (its brightness on a 32 × 20 grid); when it changed, its text is
-  read, at most once a second, less often while readings find nothing
-  new (a video moving: up to every 8 s), at once again for a change of
-  a quarter of the picture.
-- The lines new since the last reading are a slide, timed at the
-  change: the picture that changed most from the one before since the
-  last reading (a slide, not a video moving around it; so a slide shown
-  at 1:15.4 is at 1:15.4 or a sample later; the check: within a
-  second). A still window gives no new picture: its last one is
-  compared again as time goes on, so a change seen while a reading
-  waited is read all the same.
+  (its brightness on a 64 × 40 grid: fine enough that a slide whose
+  text alone changes shows, a corner's clock ticking does not); when it
+  changed, its text is read, at most once a second, every two seconds
+  while readings find nothing new (a video moving).
+- The lines new since the last reading are a slide, timed at the last
+  change before the reading: between the two readings, so never more
+  than two seconds off, within a second when it is the only thing
+  changing (the check). A still window gives no new picture: its last
+  one is compared again as time goes on, so a change seen while a
+  reading waited is read all the same.
+- A line is text when it has words: a number alone (the call's clock,
+  a counter) is no slide's.
 - Lines seen in most of the recording's readings (the browser's tabs,
   the call's own buttons, the people's names under their videos) are
   taken out of every slide at Stop; a slide left with no line goes.
