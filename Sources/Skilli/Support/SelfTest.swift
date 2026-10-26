@@ -23597,13 +23597,21 @@ final class SelfTest {
             record(name, false, "no import's window with lines", nil)
             return
         }
+        // A card left by the import's tool calls is not under the click.
+        let popover = context.aiActions.popover
+        if popover.isVisible {
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            _ = await waitUntil(timeout: 8) { !popover.isVisible }
+        }
         guard await recordingWindowHasKeys(controller, name) else { return }
         guard let frame = controller.screenFrame(ofLine: 1) else {
             record(name, false, "line 2 not on screen", nil)
             return
         }
+        let cardBefore = popover.isVisible ? "a card “\(popover.shownTitle)” in front" : "no card"
         await click(frame)
         let clicked = await waitUntil(timeout: 2) { controller.selectedLine == 1 } != nil
+        let clickDetail = clicked ? "" : " (\(cardBefore); key window “\(NSApp.keyWindow?.title ?? "none")”, the line at \(Int(frame.midX)),\(Int(frame.midY)))"
         if controller.playing { await pressKey(nil, code: CGKeyCode(kVK_Space)) }
         await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
         let moved = await waitUntil(timeout: 1) { controller.selectedLine == 2 } != nil
@@ -23625,7 +23633,6 @@ final class SelfTest {
         let given = await waitUntil(timeout: 1) { controller.shownLines[2].speaker == next } != nil
         await pressKey(nil, code: CGKeyCode(kVK_Tab), flags: .maskShift)
         let back = await waitUntil(timeout: 1) { controller.shownLines[2].speaker == original.speaker } != nil
-        let popover = context.aiActions.popover
         await pressKey(nil, code: CGKeyCode(kVK_Delete), flags: .maskCommand)
         let deleted = await waitUntil(timeout: 2) { controller.shownLines.count == count - 1 && popover.isVisible } != nil
         let card = "“\(popover.shownTitle)”: \(popover.shownText.prefix(80))"
@@ -23643,7 +23650,7 @@ final class SelfTest {
         let passed = clicked && moved && hints.first == "Edit" && editing && edited && written && given && back && deleted
             && popover.shownTitle == "Line Deleted" && backInPlace && undone && redone && writtenAgain && letGo
         record(name, passed,
-               "clicked \(clicked), ↓ \(moved), hints \(hints.joined(separator: " · ")); ↩ edits \(editing), kept \(edited), written \(written); ⇥ to \(next.rawValue) \(given), ⇧⇥ back \(back); ⌘⌫ \(deleted) (card \(card)), its ⌘Z \(backInPlace); ⌘Z ×3 \(undone), ⇧⌘Z \(redone), on disk \(writtenAgain); esc \(letGo)",
+               "clicked \(clicked)\(clickDetail), ↓ \(moved), hints \(hints.joined(separator: " · ")); ↩ edits \(editing), kept \(edited), written \(written); ⇥ to \(next.rawValue) \(given), ⇧⇥ back \(back); ⌘⌫ \(deleted) (card \(card)), its ⌘Z \(backInPlace); ⌘Z ×3 \(undone), ⇧⌘Z \(redone), on disk \(writtenAgain); esc \(letGo)",
                nil)
     }
 
@@ -23792,10 +23799,12 @@ final class SelfTest {
         if let directory = context.snapshotDirectory, let window = panel.window {
             for (suffix, appearance) in GlassCheck.appearances {
                 window.appearance = appearance
+                controller.nsWindow.appearance = appearance
                 await pause(400)
                 if let png = await WindowCapture.png(of: window) { try? png.write(to: directory.appendingPathComponent("recorder-transcribe-again-\(suffix).png")) }
             }
             window.appearance = nil
+            controller.nsWindow.appearance = nil
         }
         await panel.pick(language: "fr-FR", engine: .macOS)
         panel.press()

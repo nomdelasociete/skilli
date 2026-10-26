@@ -138,7 +138,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         window.title = record.title
         view.header(title: record.title, about: MeetingTranscriber.about(record))
         // In person, the microphone holds the room: one lane, its name.
-        view.setLanes(record.speakers, lanes: Speaker.allCases.filter { !(record.unused ?? []).contains($0) })
+        view.setLanes(Self.laneNames(record, lines: transcript?.lines), lanes: Speaker.allCases.filter { !(record.unused ?? []).contains($0) })
         if let transcribing {
             view.showTranscribing(transcribing)
         } else if let transcript {
@@ -171,6 +171,15 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         if betterHint(record) {
             view.setHint("Names heard wrong? Better transcription gets two in three right, on this Mac: Settings → Recorder (1.6 GB download).")
         }
+    }
+
+    /// The lanes' names: the microphone's as the record has it ("Me",
+    /// "Room", "Sound"); the Mac's sound "Them", or its one voice's name
+    /// when the other side was one voice.
+    static func laneNames(_ record: MeetingRecord, lines: [TranscriptLine]?) -> [String: String] {
+        let others = Set((lines ?? []).map(\.speaker).filter { $0.track == .them })
+        let them = others == [.them] ? MeetingVoices.name(of: .them, in: record.speakers) : Speaker.them.title
+        return [Speaker.me.rawValue: record.speakers[Speaker.me.rawValue] ?? Speaker.me.title, Speaker.them.rawValue: them]
     }
 
     /// An import being made (its sound copied): "Importing… 30 %".
@@ -431,7 +440,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         record.edited = true
         save()
         view.update(lines: draft.lines, names: draft.names, select: select)
-        view.setLanes(record.speakers, lanes: Speaker.allCases.filter { !(record.unused ?? []).contains($0) })
+        view.setLanes(Self.laneNames(record, lines: draft.lines), lanes: Speaker.allCases.filter { !(record.unused ?? []).contains($0) })
         updateHints()
         onEdited?(folder)
     }
@@ -1396,6 +1405,8 @@ private final class LineCell: NSTableCellView {
         words.textColor = .labelColor
         words.isSelectable = false
         nameField.font = Self.speakerFont
+        nameField.drawsBackground = true
+        nameField.backgroundColor = .textBackgroundColor
         nameField.isHidden = true
         nameField.placeholderString = "Name"
         for subview in [speaker, time, words, nameField] { addSubview(subview) }
@@ -1478,7 +1489,7 @@ private final class LineCell: NSTableCellView {
         super.layout()
         let x = Self.padding
         speaker.frame = NSRect(x: x, y: Self.vertical, width: speakerWidth - 6, height: 17)
-        nameField.frame = NSRect(x: x - 3, y: Self.vertical - 3, width: min(240, bounds.width - x * 2), height: 22)
+        nameField.frame = NSRect(x: x - 3, y: Self.vertical - 3, width: max(160, speakerWidth + Self.timeWidth - 8), height: 22)
         time.frame = NSRect(x: x + speakerWidth, y: Self.vertical + 1, width: Self.timeWidth - 6, height: 16)
         let left = x + speakerWidth + Self.timeWidth
         words.frame = NSRect(x: left, y: Self.vertical, width: max(0, bounds.width - left - Self.padding), height: bounds.height - Self.vertical * 2)
@@ -1509,6 +1520,9 @@ private final class DropRing: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 12, yRadius: 12)
+        // The window's lines dimmed under it, so what it says reads.
+        NSColor.windowBackgroundColor.withAlphaComponent(0.88).setFill()
+        shape.fill()
         NSColor.controlAccentColor.withAlphaComponent(0.08).setFill()
         shape.fill()
         NSColor.controlAccentColor.setStroke()
@@ -1518,7 +1532,14 @@ private final class DropRing: NSView {
             .font: NSFont.systemFont(ofSize: 15, weight: .semibold), .foregroundColor: NSColor.controlAccentColor,
         ])
         let size = text.size()
-        text.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
+        var y = (bounds.height - size.height) / 2
+        if let symbol = Theme.symbol("square.and.arrow.down", pointSize: 30, weight: .medium) {
+            let tinted = symbol.tinted(.controlAccentColor)
+            y += (tinted.size.height + 10) / 2
+            tinted.draw(in: NSRect(x: (bounds.width - tinted.size.width) / 2, y: y - tinted.size.height - 10, width: tinted.size.width,
+                                   height: tinted.size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        }
+        text.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: y))
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
