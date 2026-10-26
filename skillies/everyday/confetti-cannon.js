@@ -113,14 +113,16 @@ function run() {
         }
     }
 
-    function piece(cannon) {
+    // `made`: when its group was made. One made after its turn in the
+    // burst leaves then, from its cannon, never halfway along its path.
+    function piece(cannon, made) {
         const [w, h, radius] = pick(shapes)
         const layer = $.CALayer.layer
         layer.bounds = $.NSMakeRect(0, 0, w, h)
         if (radius) layer.cornerRadius = radius
         layer.backgroundColor = pick(colors)
         layer.position = $.NSMakePoint(cannon.x + random(-70, 70), random(-80, -20))
-        const begin = now + random(0, 0.35)
+        const begin = Math.max(now + random(0, 0.35), made)
         for (const animation of [pick(cannon.paths), pick(spins), pick(flips)]) {
             animation.beginTime = begin
             layer.addAnimationForKey(animation, $())
@@ -131,11 +133,16 @@ function run() {
     const wait = seconds => $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(seconds))
     // The first pieces on screen at once; the rest made while they fly.
     more(4)
-    for (let i = 0; i < 20; i++) cannons.forEach(piece)
+    for (let i = 0; i < 20; i++) cannons.forEach(cannon => piece(cannon, now))
     window.orderFrontRegardless
     wait(0.01)
     more(28)
-    for (let i = 0; i < 90; i++) cannons.forEach(piece)
+    // In groups, each shown as it is made.
+    for (let group = 0; group < 6; group++) {
+        const made = $.CACurrentMediaTime()
+        for (let i = 0; i < 15; i++) cannons.forEach(cannon => piece(cannon, made))
+        wait(0.001)
+    }
     // The last of it fades as it falls away.
     wait(3.8)
     for (let step = 1; step <= 12; step++) {
