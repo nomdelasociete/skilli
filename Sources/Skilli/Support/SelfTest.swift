@@ -24404,6 +24404,8 @@ final class SelfTest {
         var them: [String: (them: [TranscriptWord], me: Int)] = [:]
         var kept: URL?
         var rows: [String] = []
+        // The calls that went through (rows also say those that did not).
+        var processed = 0
         var errors = (me: 0.0, meWords: 0, them: 0.0, themWords: 0)
         var given = (right: 0, of: 0)
         var engines: Set<String> = []
@@ -24451,6 +24453,7 @@ final class SelfTest {
             let right = Self.attribution(transcript.lines, track: .them, turns: truth.turns)
             given.right += right.right
             given.of += right.of
+            processed += 1
             rows.append(String(format: "%@ me %.1f them %.1f, %d voices, %.0f s", call.lastPathComponent, me.errors, other.errors,
                                Set(theirs.map(\.speaker)).count, seconds))
             if let out {
@@ -24465,10 +24468,10 @@ final class SelfTest {
         // Measured (whisper turbo, VAD, names): 10.8 per hundred words
         // against macOS's 17.9; numbers are left out here, so the gate is
         // loose, the kit's scorer gives the table.
-        let passed = rows.count == calls.count && engines == [TranscriptEngine.whisper.rawValue] && me <= 20 && other <= 15 && share >= 85
+        let passed = processed == calls.count && engines == [TranscriptEngine.whisper.rawValue] && me <= 20 && other <= 15 && share >= 85
         record(name, passed,
                String(format: "%d calls (%.0f min of tracks in %.0f s, ×%.0f real time), engine %@; errors per hundred words me %.1f (%d words), them %.1f (%d words), numbers left out; the other side's words to the right person %.1f %%; %@",
-                      rows.count, audio / 60, wall, audio / max(1, wall), engines.sorted().joined(separator: ","), me, errors.meWords, other,
+                      processed, audio / 60, wall, audio / max(1, wall), engines.sorted().joined(separator: ","), me, errors.meWords, other,
                       errors.themWords, share, rows.joined(separator: "; ")),
                nil)
         return (them, kept)

@@ -232,6 +232,11 @@ final class RecorderCenter {
     var isCardVisible: Bool { card.isVisible }
     var menuBar: RecorderIndicator { indicator }
     func window(for folder: URL) -> RecordingWindowController? { windows[Self.key(folder)] }
+
+    /// Better transcription downloaded: no window offers it any more.
+    func betterTranscriptionReady() {
+        for window in windows.values { window.hideBetterHint() }
+    }
     var openWindows: [RecordingWindowController] { Array(windows.values) }
 
     /// The launcher's row for the recording on now.

@@ -304,6 +304,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let madeBetterTranscription { return madeBetterTranscription }
         let store = BetterTranscription()
         store.onFailureOutOfSight = { [weak self] line in self?.aiActions.notify(line, caller: "Recorder", run: nil, seconds: 8) }
+        // A window still offering it (its taught-once line): the line goes.
+        store.onDownloaded = { [weak self] in self?.madeRecorderCenter?.betterTranscriptionReady() }
         madeBetterTranscription = store
         return store
     }

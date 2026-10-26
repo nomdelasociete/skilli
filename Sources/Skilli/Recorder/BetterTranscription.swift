@@ -83,6 +83,8 @@ final class BetterTranscription {
     var isShown = false
     /// A failure while the row is not shown (out of sight), said once.
     var onFailureOutOfSight: (String) -> Void = { _ in }
+    /// Downloaded and checked: what said to download it goes.
+    var onDownloaded: () -> Void = {}
     private var task: Task<Void, Never>?
     private var current: URLSessionDownloadTask?
     private var speed: (bytes: Int64, at: ContinuousClock.Instant)?
@@ -156,6 +158,7 @@ final class BetterTranscription {
                 self.current = nil
                 self.state = Self.isReady(in: self.folder, files: self.files) ? .downloaded : .notDownloaded
                 Log.trace("Better transcription: downloaded")
+                if self.state == .downloaded { self.onDownloaded() }
             } catch is CancellationError {
                 self.task = nil
                 self.current = nil

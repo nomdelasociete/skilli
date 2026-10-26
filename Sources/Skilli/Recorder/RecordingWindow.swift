@@ -181,6 +181,13 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     /// Better transcription taught once: the line at the bottom of the
     /// lines, in this window only.
+    /// Better transcription downloaded meanwhile: its line goes.
+    func hideBetterHint() {
+        guard betterHintShown else { return }
+        betterHintShown = false
+        view.setHint(nil)
+    }
+
     private func considerBetterHint() {
         guard !betterHintAsked, draft != nil, let betterHint else { return }
         betterHintAsked = true
