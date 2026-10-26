@@ -24187,18 +24187,19 @@ final class SelfTest {
         let kept = names.filter { !MeetingVoices.isStandard($0.value) }.allSatisfy { id, given in record?.speakers[id] == nil || record?.speakers[id] == given }
         // English again, for the window's last captures.
         controller.showTranscribeAgain()
+        var english = false
         if let back = controller.againPanel, await waitUntil(timeout: 5, { back.isLoaded }) != nil {
             await back.pick(language: "en-US", engine: .macOS)
             back.press()
-            _ = await waitUntil(timeout: 120) { center.recordings.transcript(folder)?.language == "en-US" && !controller.shownLines.isEmpty }
+            english = await waitUntil(timeout: 120) { center.recordings.transcript(folder)?.language == "en-US" && !controller.shownLines.isEmpty } != nil
         }
         await captureRecordingWindow(controller, as: "recorder-window-again")
         controller.close()
         let passed = languages.contains { $0.hasPrefix("English") } && languages.contains { $0.hasPrefix("French") } && engines == ["macOS"]
             && note == "Your changes to the lines are replaced." && showsProgress && madeAgain && record?.language == "fr-FR"
-            && record?.engine == TranscriptEngine.macOS.rawValue && record?.edited == nil && kept
+            && record?.engine == TranscriptEngine.macOS.rawValue && record?.edited == nil && kept && english
         self.record(name, passed,
-                    "\(languages.count) languages, engines \(engines), note “\(note)”; progress shown \(showsProgress), made again in \(record?.language ?? "?") with \(record?.engine ?? "?") \(madeAgain), edited \(record?.edited.map(String.init) ?? "nil"), names given kept \(kept) (\(record?.speakers ?? [:]))",
+                    "\(languages.count) languages, engines \(engines), note “\(note)”; progress shown \(showsProgress), made again in \(record?.language ?? "?") with \(record?.engine ?? "?") \(madeAgain), edited \(record?.edited.map(String.init) ?? "nil"), names given kept \(kept) (\(record?.speakers ?? [:])); then English again \(english)",
                     nil)
     }
 
