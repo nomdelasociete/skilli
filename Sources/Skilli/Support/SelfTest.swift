@@ -23937,8 +23937,12 @@ final class SelfTest {
             var buffer: CVPixelBuffer?
             CVPixelBufferCreate(nil, 64, 64, kCVPixelFormatType_32BGRA, nil, &buffer)
             guard let buffer else { return false }
-            while !input.isReadyForMoreMediaData { try? await Task.sleep(for: .milliseconds(5)) }
-            adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 10))
+            // A writer that failed is never ready again: not waited for.
+            while !input.isReadyForMoreMediaData {
+                guard writer.status == .writing else { return false }
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            guard adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 10)) else { return false }
         }
         input.markAsFinished()
         await writer.finishWriting()
