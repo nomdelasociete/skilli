@@ -13,6 +13,8 @@ supersede this record; update the relevant section when a choice changes.
 - [Brand kit](../assets/brand/README.md): ribbon geometry, material and native exports.
 - [Website README](../website/README.md): preview, build, publishing and metric sources.
 - [Skillies guide](../skillies/README.md): contributions and local installation.
+- [Skillies docs](../skillies/docs/README.md): the reference, published as
+  `/skillies/docs/` (generated from the Markdown; the website README says how).
 - Native code and relevant tests: what the product actually supports. Check current
   implementations before adding claims; the demos are illustrations, not evidence.
 
