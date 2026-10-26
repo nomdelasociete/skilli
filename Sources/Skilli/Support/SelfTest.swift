@@ -24137,10 +24137,23 @@ final class SelfTest {
         preferences.recorderWebcam = false
         preferences.recorderScreen = false
         slides.show(["skil.li", "Lumière · weekly review"])
-        slides.window.orderFront(nil)
+        slides.window.orderFrontRegardless()
         await picturesRecordSlidesInStep(center, slides, camera)
         if !aborted { await picturesSayAWindowWithoutPictures(center, slides) }
         if !aborted { await picturesInAScratchChrome(center) }
+    }
+
+    /// The Record card alone, light and dark (skil.li's own windows only:
+    /// another app's window over it on the test Mac is left out).
+    private func capturePicturesCard(_ center: RecorderCenter, as name: String) async {
+        guard let directory = context.snapshotDirectory, let panel = center.cardWindow else { return }
+        let saved = panel.appearance
+        defer { panel.appearance = saved }
+        for (suffix, appearance) in GlassCheck.appearances {
+            panel.appearance = appearance
+            await pause(700)
+            if let png = await WindowCapture.png(of: [panel]) { try? png.write(to: directory.appendingPathComponent("\(name)-\(suffix).png")) }
+        }
     }
 
     /// A real click on a row of the Record card.
@@ -24227,11 +24240,13 @@ final class SelfTest {
         _ = await clickCardRow(center, .screen)
         await pause(700)
         let (picked, listed) = await pickInOpenMenu("skil.li · Slides")
+        // The list names other apps' windows: only how many in the report.
+        let listedCount = listed.count
         escape.cancel()
         let screenOn = await waitUntil(timeout: 4) { view.screenLine == "skil.li · Slides" && center.recorder.pictures.screen.sink.latestPicture != nil } != nil
-        await captureRecordCard(center, as: "recorder-pictures-card")
+        await capturePicturesCard(center, as: "recorder-pictures-card")
         guard webcamOn, screenOn, await recordCardHasKeys(center, name) else {
-            record(name, false, "rows before “\(offBefore.0)” / “\(offBefore.1)”; webcam on \(webcamOn) “\(view.webcamLine)”, screen picked \(picked) from \(listed), on \(screenOn) “\(view.screenLine)”", nil)
+            record(name, false, "rows before “\(offBefore.0)” / “\(offBefore.1)”; webcam on \(webcamOn) “\(view.webcamLine)”, screen picked \(picked) from \(listedCount) menu items, on \(screenOn) “\(view.screenLine)”", nil)
             center.closeCardWithoutKeys()
             return
         }
@@ -24370,7 +24385,7 @@ final class SelfTest {
         cover.backgroundColor = .windowBackgroundColor
         cover.isOpaque = true
         cover.isReleasedWhenClosed = false
-        cover.orderFront(nil)
+        cover.orderFrontRegardless()
         let covered = await waitUntil(timeout: 9) { center.recorder.pictures.screen.problem == .stoppedPainting } != nil
         let coveredMenu = center.menuBar.menuTitles.first { $0.hasPrefix("Screen ·") } ?? ""
         cover.orderOut(nil)
@@ -24478,8 +24493,9 @@ final class SelfTest {
         let cover = NSWindow(contentRect: NSRect(x: bounds.minX - 30, y: screenHeight - bounds.maxY - 30, width: bounds.width + 60, height: bounds.height + 60),
                              styleMask: [.borderless], backing: .buffered, defer: false)
         cover.backgroundColor = .windowBackgroundColor
+        cover.isOpaque = true
         cover.isReleasedWhenClosed = false
-        cover.orderFront(nil)
+        cover.orderFrontRegardless()
         let stopped = await waitUntil(timeout: 10) { center.recorder.pictures.screen.problem == .stoppedPainting } != nil
         cover.orderOut(nil)
         let again = await waitUntil(timeout: 4) { center.recorder.pictures.screen.problem == nil } != nil

@@ -7,7 +7,8 @@ import AppKit
 import AVFoundation
 
 /// The test's slides: a dark window, its text large, white for a moment
-/// at each flash. Never key (the keys stay in the test window).
+/// at each flash. A normal window (another covers it, it minimizes),
+/// never made key (the keys stay in the test window).
 @MainActor
 final class SlidesWindow {
     let window: NSWindow
@@ -16,10 +17,9 @@ final class SlidesWindow {
     private var flashes = 0
 
     init(frame: NSRect) {
-        window = NSPanel(contentRect: frame, styleMask: [.titled, .nonactivatingPanel, .utilityWindow], backing: .buffered, defer: false)
+        window = NSWindow(contentRect: frame, styleMask: [.titled, .miniaturizable], backing: .buffered, defer: false)
         window.title = "Slides"
         window.isReleasedWhenClosed = false
-        window.hidesOnDeactivate = false
         window.level = .normal
         let content = NSView(frame: NSRect(origin: .zero, size: frame.size))
         content.wantsLayer = true

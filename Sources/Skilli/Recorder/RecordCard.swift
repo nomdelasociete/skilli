@@ -1115,6 +1115,9 @@ private final class SourceRow: NSView {
         if clickable { addCursorRect(bounds, cursor: .pointingHand) }
     }
 
+    /// The card does not activate skil.li: a row's first click acts.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { clickable }
+
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         if !chevron.isHidden, let onMenu, point.x >= device.frame.minX, point.x <= chevron.frame.maxX + 4 {

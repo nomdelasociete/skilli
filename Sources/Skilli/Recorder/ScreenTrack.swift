@@ -64,7 +64,10 @@ enum ScreenWindows {
         let onScreen = (info[kCGWindowIsOnscreen as String] as? NSNumber)?.boolValue ?? false
         guard onScreen else {
             let hidden = NSRunningApplication(processIdentifier: pid)?.isHidden ?? false
-            return PictureWatch.Look(onScreen: false, minimized: !hidden && hasMinimizedWindow(pid), appHidden: hidden)
+            // skil.li's own (the self-test's): asked of AppKit, not of
+            // Accessibility, which this same thread would have to answer.
+            let minimized = pid == getpid() ? NSApp.windows.contains { $0.windowNumber == Int(id) && $0.isMiniaturized } : hasMinimizedWindow(pid)
+            return PictureWatch.Look(onScreen: false, minimized: !hidden && minimized, appHidden: hidden)
         }
         let bounds = (info[kCGWindowBounds as String] as? NSDictionary).flatMap { CGRect(dictionaryRepresentation: $0 as CFDictionary) } ?? .zero
         // Normal windows in front of it, drawn opaque (a menu, the Dock, a
