@@ -364,6 +364,9 @@ final class BetterTranscription {
             try? putBack(moved)
             throw error
         }
+        // What a cancelled download kept goes too: the next Download starts
+        // afresh, not from data for files no longer there.
+        for file in files { dropResumeData(for: file) }
         state = .notDownloaded
         return moved
     }
