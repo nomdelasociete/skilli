@@ -57,6 +57,9 @@ final class MeetingRecorder {
     var onFinished: ((URL) -> Void)?
     /// It stopped by itself (the disk full): said in the card.
     var onStoppedByItself: ((String) -> Void)?
+    /// A transcript that could not be made again (the one before kept):
+    /// said in the card.
+    var onTranscriptFailed: ((String) -> Void)?
 
     /// Room for 10 s of each source, made when first listened to.
     private lazy var micInbox = AudioInbox()
@@ -86,7 +89,9 @@ final class MeetingRecorder {
     /// moved to its place (seconds), its own slip from the host clock.
     private(set) var resumeJumps: [Speaker: [Double]] = [:]
     /// Transcripts wait their turn: one at a time.
-    private var queue: [(URL, MeetingRecord)] = []
+    /// Transcripts waiting their turn; `again`: Transcribe Again, the
+    /// transcript before kept when it fails.
+    private var queue: [(URL, MeetingRecord, again: Bool)] = []
     /// A stop under way (`stopping`): told once its files are closed.
     private var closedWaiters: [CheckedContinuation<Void, Never>] = []
     /// skil.li quits: nothing starts any more, every transcript not made
@@ -461,16 +466,18 @@ final class MeetingRecorder {
     /// Makes `folder`'s transcript (one at a time), then opens it. A
     /// language this Mac cannot transcribe, or a failure: kept without one
     /// (`pending`), its window says why.
-    func transcribe(_ folder: URL, record: MeetingRecord) {
+    func transcribe(_ folder: URL, record: MeetingRecord, again: Bool = false) {
         guard !quitting else { return leave(folder, record: record) }
-        queue.append((folder, record))
+        queue.append((folder, record, again))
         guard transcribing == nil else { return }
         Task { await transcribeNext() }
     }
 
     private func transcribeNext() async {
         while !queue.isEmpty, !quitting {
-            let (folder, record) = queue.removeFirst()
+            let (folder, record, again) = queue.removeFirst()
+            // Made again: the record as it is before, put back if it fails.
+            let before = again ? recordings.read(folder) : nil
             transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0))
             var working = record
             working.state = .transcribing
@@ -486,6 +493,11 @@ final class MeetingRecorder {
                     }
                 }
                 try recordings.write(done, to: folder)
+            } catch where before?.state == .done && recordings.transcript(folder) != nil {
+                // Transcribe Again that failed: the transcript before stays.
+                if let before { try? recordings.write(before, to: folder) }
+                onTranscriptFailed?("The transcript was not made again: \(error.localizedDescription) The one before is kept.")
+                Log.actions.error("Recorder: “\(record.title, privacy: .private)” not transcribed again (\(error.localizedDescription, privacy: .public))")
             } catch {
                 var pending = working
                 pending.state = .pending

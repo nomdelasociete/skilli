@@ -166,6 +166,12 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
     /// Tracks never on while it was recorded (in person: the Mac's
     /// sound): no lane, nothing transcribed.
     public var unused: [Speaker]?
+    /// A line changed by hand in its window (phase 4): Transcribe Again
+    /// says it replaces the changes.
+    public var edited: Bool?
+    /// An import's file name ("Board call.m4a"): made from a file, not
+    /// recorded here.
+    public var imported: String?
 
     /// The calendar's event a recording is of: which occurrence, and when
     /// it ends (the call's end is watched from then).
@@ -220,6 +226,51 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         return try encoder.encode(self)
+    }
+}
+
+/// The engine a transcript is made with (docs/meeting-recorder.md,
+/// "Transcription"): macOS's own `SpeechTranscriber`, or whisper
+/// large-v3-turbo once Better transcription is downloaded. `meeting.json`
+/// keeps its raw value; phase 1 wrote "SpeechTranscriber" for macOS's.
+public enum TranscriptEngine: String, Codable, CaseIterable, Sendable {
+    case macOS
+    case whisper = "whisper-large-v3-turbo"
+
+    /// As `meeting.json` and Settings keep it, nil for none.
+    public init?(stored: String?) {
+        guard let stored else { return nil }
+        if stored == "SpeechTranscriber" {
+            self = .macOS
+        } else if let engine = TranscriptEngine(rawValue: stored) {
+            self = engine
+        } else {
+            return nil
+        }
+    }
+
+    /// As the user reads it.
+    public var title: String {
+        switch self {
+        case .macOS: "macOS"
+        case .whisper: "Better transcription"
+        }
+    }
+
+    /// The engine a transcript is made with when the user picked none
+    /// (Settings → Recorder's, `preferred`): Better transcription once
+    /// downloaded, the default from then on; macOS's otherwise.
+    public static func standard(preferred: TranscriptEngine?, whisperReady: Bool) -> TranscriptEngine {
+        guard whisperReady else { return .macOS }
+        return preferred ?? .whisper
+    }
+
+    /// The engines to try for a language, in order (docs/meeting-recorder.md,
+    /// "A language this Mac cannot transcribe"): the default first, then
+    /// the others this Mac has.
+    public static func order(standard: TranscriptEngine, whisperReady: Bool) -> [TranscriptEngine] {
+        let available = allCases.filter { $0 == .macOS || whisperReady }
+        return [standard] + available.filter { $0 != standard }
     }
 }
 

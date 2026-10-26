@@ -432,6 +432,21 @@ Your meetings recorded on this Mac, both sides, then written out.
   screen shows is read on this Mac and kept with its time
   (`slides.json`): the window plays both small beside the transcript,
   the slides among the lines.
+- **Voices told apart**: the track that holds several people (the other
+  side of a call, the room in person, an import) comes out with each
+  voice on its own lines (SpeakerKit, on this Mac, in a helper that is
+  gone once the transcript is made), Them 1, Them 2… until you name them.
+- **Editing the transcript**, in the recording's window: a line selected
+  (a click, ↑ ↓), ↩ edits its words in place, ⇥ gives it to the next
+  speaker (⇧⇥ the one before), ⌘⌫ deletes it (⌘Z for 10 s), ⌥↩ or a
+  click on a speaker's name renames it: the attendees first, and a name
+  another speaker has makes the two one (Me is kept). ⌘Z and ⇧⌘Z undo
+  and redo while the window is open; every change is written at once.
+  **Transcribe Again…** in the language and with the engine picked.
+- **Import Recording** (`import`): a sound or video file (a voice memo,
+  a call app's own recording) made a recording, transcribed on this Mac,
+  voices told apart; or drop the file on a recording's window. The file
+  stays where it is. Also `skilli://record/import` and `import_recording`.
 - **Search Recordings** (`recs`): by title, date, attendees, the words
   said and the text read on screen; the best two show in any search too.
 

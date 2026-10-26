@@ -830,3 +830,335 @@ among what they turn on.
 A browser's tab recorded whatever is in front (an extension: not
 planned), the whole display, the webcam's own sound (the microphone is
 the user's side), slides as chapters (phase 5).
+
+# Phase 4: voices, import, editing, Better transcription
+
+Spec, 2026-10-26, written before building from `docs/meeting-recorder.md`
+(Target, Transcription, Done, Privacy, and Measured's picks: SpeakerKit,
+whisper large-v3-turbo with its VAD and the names, the drop by word
+times). Built in two pull requests, one after the other: (a) the voices,
+import, editing and renaming, Transcribe Again; (b) the Better
+transcription download, its engine, and the echo drop measured with it.
+
+## The moment, again
+
+1. **When**, each case apart:
+   - **Voices told apart**: at Stop, while the transcript is made.
+     Nothing to reach for: a track that holds several people (the Mac's
+     sound in a call, the microphone in person, an imported file) comes
+     out with each voice on its own lines.
+   - **Import**: after a meeting recorded elsewhere (a phone's voice
+     memo, a call app's own recording, a video), at the desk, the file in
+     Finder or just downloaded.
+   - **Editing and renaming**: reading the transcript in the recording's
+     window after the meeting, before quoting it, sending it or keeping
+     it.
+   - **Transcribe Again**: a transcript in the wrong language, or made
+     before Better transcription was downloaded.
+   - **Better transcription**: when a transcript got names or words
+     wrong. Never at the meeting's moment: nothing about the call
+     depends on it, and 1.6 GB is not fetched while someone waits.
+2. **The path**:
+   - Voices: none, it is part of the transcript.
+   - Import: drop the file on a recording's window; Import Recording… in
+     the launcher (`import`, the Catalog); `skilli://record/import?file=…`;
+     `import_recording` for an agent or a skillie.
+   - Editing: in the recording's window, a line selected (a click, or
+     ↑ ↓): ↩ edits its words, ⇥ gives it to the next speaker (⇧⇥ the one
+     before), ⌘⌫ deletes it. Renaming: a click on a speaker's name, or ⌥↩
+     on the selected line.
+   - Transcribe Again: its button on the window's about line.
+   - Better transcription: Settings → Recorder, its own section.
+3. **Hint or push**: nothing is pushed. Better transcription is taught
+   once: the first recording's window that opens on a transcript made by
+   macOS's engine says it in one line at the bottom of its lines (below);
+   never again, in no other window, no badge. The download starts only
+   from its button. While it downloads, its progress shows in its row in
+   Settings → Recorder and nowhere else; Settings closed, it goes on. A
+   failure while Settings is closed is said once in the card (out of
+   sight); done, nothing is said (the next transcript is made with it).
+4. **Deterministic or AI**: SpeakerKit and whisper are models that run on
+   this Mac, in a helper started for the transcript (`skil.li
+   Transcriber`); nothing they hear or write leaves the Mac. No voice is
+   given a name by guess: the user names them (names put on voices from
+   what is said, by the user's AI, are phase 5). The download is one
+   request to huggingface.co for two files, nothing sent with it,
+   checked by their checksums; Settings → Privacy lists it.
+5. **Wrong**: an extra speaker (SpeakerKit's measured mistake): give it
+   a name already used, the two become one. A line on the wrong speaker:
+   ⇥. Words wrong: ↩. A line nobody said: ⌘⌫, ⌘Z brings it back. The
+   wrong language or engine: Transcribe Again, which says first that it
+   replaces the lines' changes. A wrong file imported: ⌘⌫ deletes that
+   recording (to the Trash, ⌘Z). A download not wanted: Cancel, or Remove
+   once done (to the Trash, ⌘Z for 10 s). whisper's two measured
+   failures (a line repeated right after itself, an attendee's name
+   written as a speaker label) are taken out by code after it.
+
+## Voices told apart
+
+- At Stop, after the words: the track that holds several people goes
+  through SpeakerKit (Argmax's, MIT; pyannote community-1 on Core ML),
+  the number of voices found by itself. In a call, the Mac's sound; in
+  person, the microphone (the room); an import's one track. The
+  microphone in a call is the user: never split.
+- Each word goes to the voice heard at its time (the voice's stretch
+  that holds the word's middle; none: the nearest within a second; else
+  the voice of the words around it). A phrase is cut where the voice
+  changes; the lines are then made as before.
+- **Names until the user gives one**: in a call, Me, then Them when one
+  voice is found, else Them 1, Them 2… in the order they first speak; in
+  person and in an import, Speaker 1, Speaker 2…; one voice alone in
+  person stays Room.
+- The colors: Me in the accent color; every other voice in the
+  secondary color (the names tell them apart).
+- Progress: the menu bar's ring and "Transcribing… 40 %" count the
+  voices in (the words first, then the voices).
+- SpeakerKit fails on a file (none seen): that track stays one voice,
+  logged; the transcript is made.
+- `skil.li Transcriber` is a helper inside the app, started for a
+  transcript and gone after it: SpeakerKit's memory (0.8 GB at most,
+  Measured) never counts against skil.li's. SpeakerKit's models (11 MB)
+  ship inside the app: nothing is downloaded for the voices.
+
+## Import
+
+- **Import Recording…** in the launcher (`import`, "importer"; in the
+  Catalog), or a file dropped on a recording's window: the open panel
+  lists sound and video files (m4a, mp3, wav, aiff, caf, mp4, mov,
+  m4v…). Several files dropped: one recording each, in order.
+- A recording is made of it in the Recordings folder, as a recording
+  made here: its title the file's name without its extension, its date
+  the file's creation date (else its last change), its sound as one
+  track (`me.m4a`, AAC, as the microphone's), a video's picture kept as
+  `screen.mp4` (it plays beside the lines, as phase 3's screen). The
+  file itself stays where it was, untouched.
+- Its window opens at once: "Importing… 30 %", then "Transcribing…
+  40 %", in the language Settings → Recorder sets (As Ask: Ask's), with
+  the default engine, voices told apart. The menu bar's ring shows it
+  too, as after a Stop.
+- **About line**: "Imported from Board call.m4a · Sun 12 Oct 2026, 09:30
+  · 48 min · English".
+- **Said**: a file with no sound ("“Holiday.mov” has no sound to
+  transcribe."), one that cannot be read, a disk full: in the card, the
+  recording not made. Nothing else is said: the window shows it.
+- While a meeting records: the import is made all the same; its
+  transcript waits for the recording's, one at a time.
+
+## The recording's window: a line selected
+
+```
+┌ Weekly design review ─────────────────────────────────────────────────┐
+│ Weekly design review                                                  │
+│ Wed 22 Oct 2026, 14:00 · 32 min · English · with …  Transcribe Again… │
+│                                                                       │
+│ ▶  12:04 / 32:10                                                      │
+│ Me    ▁▂▅▃▁  ▂▆▇▃▁       ▁▃▂          │                                │
+│ Them      ▃▆▅▂    ▁▂▆▇▅▃▂     ▅▆▃      │                               │
+│ ───────────────────────────────────────────────────────────────────── │
+│ Me       0:00  Hello everyone, can you all hear me?                   │
+│ Paul     0:04  Yes, loud and clear.                                   │
+│(Them 2   0:07  I can hear you. Ingrid, are you with us?)              │  selected: ring
+│ Me       0:16  That's fine, Ingrid, we don't need to see you…         │
+│ ───────────────────────────────────────────────────────────────────── │
+│ Edit ↩   Next Speaker ⇥   Rename ⌥↩   Copy Line ⌘C   Delete Line ⌘⌫    │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+- **Selecting**: a click on a line selects it and plays from its start
+  (as before); ↑ ↓ move the selection without playing; esc lets go of
+  it. The selected line has a 1.5 pt ring in the accent color, the
+  selection capsule's shape; the line playing keeps its lit capsule (a
+  line can be both).
+- **The keys say what they do now**, in the hint bar: with a line
+  selected, "Edit ↩ · Next Speaker ⇥ · Rename ⌥↩ · Copy Line ⌘C ·
+  Delete Line ⌘⌫" (space still plays); without, as before ("Play space ·
+  Copy Transcript ⌘C · Show in Finder ⌘↩ · Delete ⌘⌫": the recording).
+  ⌘⌫ removes what is selected, as in Finder: the line when one is, the
+  recording when none is.
+- **⌘Z** in the window undoes the last change to its lines (an edit, a
+  speaker, a name, a line deleted), ⇧⌘Z redoes, as long as the window is
+  open. Every change is written at once (`transcript.json`,
+  `transcript.md`, `meeting.json`, the words' search index); nothing is
+  said.
+
+### Edit ↩
+
+- ↩ (or a double-click): the line's words become a field in place, the
+  caret at the end; ↩ keeps, esc puts back what was there, a click
+  elsewhere keeps. Emptied, the line is deleted (as ⌘⌫).
+- The words kept keep their times (the same words at the start and the
+  end of the line); new words share the time of what they replace.
+  `meeting.json`'s `edited` turns true: Transcribe Again says it
+  replaces the changes.
+
+### Next Speaker ⇥
+
+- The line goes to the next speaker in the speakers' order (Me first,
+  then as they first speak), around to the first; ⇧⇥ the one before.
+  It stays selected: ⇥ again moves it on. It keeps its place and time;
+  it is not joined to the lines around it.
+
+### Delete Line ⌘⌫
+
+- Gone at once; the undo card says "Line Deleted" with its first words
+  in bold, Undo ⌘Z for 10 s (`UndoableDeletes`); after the card, ⌘Z in
+  the window still brings it back. The selection moves to the next
+  line.
+
+### Rename ⌥↩
+
+A click on a speaker's name in any line, or ⌥↩ on the selected line,
+opens a menu under the name:
+
+```
+Rename “Them 2”                   (title, disabled)
+──────────
+Paul Arnaud                       the attendees not yet given
+Anna Lindqvist
+──────────
+Camille — joins Camille's lines   names already given: merges
+Me — joins your lines
+──────────
+Other Name…                       typed in place, ↩ keeps
+```
+
+- For Me: the user's own name first (My Card in Contacts, when allowed),
+  then the same list.
+- A name given renames that speaker on every line. Two speakers given
+  the same name (case and accents aside) become one: the renamed one's
+  lines go to the other, which keeps its name and its place in the
+  order. When one of the two is Me, Me is kept (its color, its track):
+  the user's own name is never given away. A speaker given the user's own
+  name joins Me.
+- ⌘Z in the window undoes a rename or a merge, its lines back to the
+  speaker they had.
+
+### Copy Line ⌘C
+
+- The selected line as `transcript.md` writes it ("**Paul** · 0:04" and
+  its words); without a selection, the whole transcript as before.
+
+## Transcribe Again
+
+On the about line's right, "Transcribe Again…" (not while a transcript
+is being made); a panel under it:
+
+```
+┌─────────────────────────────────────────────┐
+│ Transcribe again                            │
+│ Language    English ⌃⌄                      │
+│ Engine      Better transcription ⌃⌄         │  macOS · Better transcription
+│ Your changes to the lines are replaced.     │  only when there are
+│ Cancel esc                  ( Transcribe ↩ )│
+└─────────────────────────────────────────────┘
+```
+
+- **Used as picked**: the language and the engine chosen, never another
+  in their place. The languages listed are the chosen engine's.
+- **One that cannot be used** says why under the menus, and Transcribe
+  dims: "Better transcription isn't downloaded: Settings → Recorder
+  offers it." (a click opens it); "Italian can't be transcribed by
+  macOS's engine on this Mac." The transcript stays as it is.
+- ↩: the window shows "Transcribing… 40 %"; the transcript before stays
+  on disk until the new one is written. A transcript that cannot be made
+  again leaves the one before in place, and the card says why ("The
+  transcript was not made again: … The one before is kept."). A pending
+  one stays pending.
+- The names given are kept for the voices found again in the same
+  order; `edited` goes back to false; `meeting.json`'s `engine` and
+  `language` are the ones used.
+- Engine names, everywhere the user reads them: "macOS" (macOS's own
+  `SpeechTranscriber`) and "Better transcription" (whisper
+  large-v3-turbo).
+
+## Better transcription (Settings → Recorder)
+
+Its own section, after Sources:
+
+```
+Better transcription                                 [Download (1.6 GB)]
+    whisper large-v3-turbo, on this Mac: 40 % fewer errors than
+    macOS's engine, two names in three right. Downloaded from
+    huggingface.co, nothing sent. For the recorder only.
+```
+
+States of the row, by what is happening:
+
+| State | The row | The button(s) |
+|---|---|---|
+| Not downloaded | the text above | Download (1.6 GB) |
+| Not enough room | "1.7 GB free needed on this Mac: 0.9 GB left." in orange | Download (dimmed) |
+| Downloading | a progress bar, "412 MB of 1.6 GB · about 3 min left" | Cancel |
+| Checking | "Checking the file…" (its checksum: a few seconds) | – |
+| Stopped (network, quit) | "The download stopped: the network went away." in orange | Resume (from where it stopped) |
+| Wrong file | "The file downloaded is not the one expected (another checksum): nothing was kept." in orange | Download |
+| Downloaded | "Downloaded · 1.6 GB · whisper large-v3-turbo" | Remove |
+
+- **Engine**, under it once downloaded: Better transcription (the
+  default from then on) or macOS. Not downloaded: no engine row, macOS
+  is used.
+- **Download**: the model (1,624,555,275 bytes) and its VAD's (885,098
+  bytes), from huggingface.co at a fixed revision, into
+  `~/Library/Application Support/skil.li/Models/` (never in a backup).
+  Each file's SHA-256 is checked before it is kept; a wrong one is
+  thrown away. skil.li quits while downloading: what came is kept and
+  Resume goes on from there.
+- **Remove**: the model to the Trash at once, the undo card says "Better
+  Transcription Removed", Undo ⌘Z for 10 s; the engine goes back to
+  macOS.
+- **Taught once** (the moment, above): at the bottom of the first
+  recording's window that opens on a transcript made by macOS's engine,
+  one line in the secondary color: "Names heard wrong? Better
+  transcription gets two in three right, on this Mac: Settings →
+  Recorder (1.6 GB download)." A click opens the pane. Never again
+  (`Preferences.recorderBetterHintShown`).
+- Every setting is an agent's too (`set_setting recorderEngine`); the
+  download itself is the user's click only (1.6 GB of their disk).
+
+## The engine at work (whisper)
+
+- In `skil.li Transcriber`: whisper.cpp 1.9.5 (MIT, Metal), the full
+  model, its Silero VAD on, the names as its prompt ("Attendees: Paul
+  Arnaud, Anna Lindqvist. Also: …." in English, "Participants : … Aussi :
+  …." in French; 450 characters at most: the event's attendees, then the
+  user's contacts in Dictate's order) carried to every 30-second window.
+  Peak memory about 2 GB, in the helper only.
+- **Times on the recording's clock**: whisper's word times are read with
+  its VAD's cuts added back (whisper.cpp's own mapping,
+  `whisper_full_get_token_t0`), so they line up with the other track's;
+  then the drop by word times takes the other side's words out of the
+  user's, as with macOS's engine. Measured with whisper in phase 4 (To
+  check).
+- **After it**: a segment equal to the one before goes; an attendee's
+  name followed by a colon at a segment's start or after a sentence's
+  end goes ("Camille Kerjean : …").
+- Words: whisper's tokens joined into words (a token starting with a
+  space starts a word), each word's time from its first token's start to
+  its last's end.
+
+## Said, and not said (phase 4)
+
+- Not said: the voices found, a line edited or given to another
+  speaker, a speaker renamed or merged, an import started (its window
+  opens), the download done or cancelled.
+- Said: a line deleted (the undo card), the model removed (the undo
+  card), an import that could not be made (the card), a transcript not
+  made again (the card), the download failing while Settings is closed
+  (the card, once), not enough room (its row).
+
+## The files (phase 4)
+
+- `transcript.json` version 2: a line's `speaker` is a voice: `me`,
+  `them`, `them2`, `them3`… on a call's sides, `s1`, `s2`… on one track
+  (in person, an import). Version 1 files read as before.
+- `meeting.json`: `speakers` names every voice; `engine` is `macOS` or
+  `whisper-large-v3-turbo` (`SpeechTranscriber`, the name phase 1 wrote,
+  reads as `macOS`); `edited` once a line was changed by hand;
+  `imported` the file's name for an import.
+
+## Not in phase 4
+
+Names put on voices by the user's AI, chapters, the summary, ⌘K's
+actions in the window (Transcribe Again gets its key there), the q5_0
+model (worse on a bad line, Measured), a voice's lines joined when two
+speakers merge (each line keeps its place).

@@ -78,6 +78,16 @@ final class UndoableDeletes {
         }
     }
 
+    /// ⌘⌫ on a line of a recording's window (phase 4): gone at once (the
+    /// window wrote it); ⌘Z brings it back where it was, even after later
+    /// changes there (`undo` says false when the window is closed).
+    func transcriptLine(_ words: String, undo: @escaping @MainActor () -> Bool) {
+        let first = words.split(separator: " ").prefix(8).joined(separator: " ")
+        offer("Line Deleted", UndoDelete.details(first + (first.count < words.count ? "…" : ""), "")) {
+            guard undo() else { throw Failure(message: "The line can't come back: its recording's window was closed.") }
+        }
+    }
+
     /// ⌘K → Delete Layout and Settings → Windows: the layout and its
     /// shortcuts; ⌘Z puts both back.
     func layout(_ layout: SavedWindowLayout, in arranger: WindowArranger, shortcuts: ShortcutStore) {

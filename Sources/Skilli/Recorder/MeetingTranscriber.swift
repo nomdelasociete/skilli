@@ -7,11 +7,17 @@ import Speech
 /// "Transcription"): macOS's `SpeechTranscriber`, given no names (it reads
 /// none: Measured), each track alone, every word with its time. Then the
 /// other side's words the microphone heard again are taken out of the
-/// user's (no headphones), and the two tracks become one transcript by
-/// time: `transcript.md`, `transcript.json`. Audio never leaves the Mac;
-/// macOS downloads a language's model once.
+/// user's (no headphones), the voices of the track that holds several
+/// people told apart (SpeakerKit, in `skil.li Transcriber`: phase 4), and
+/// the tracks become one transcript by time: `transcript.md`,
+/// `transcript.json`. Audio never leaves the Mac; macOS downloads a
+/// language's model once.
 enum MeetingTranscriber {
-    static let engine = "SpeechTranscriber"
+    static let engine = TranscriptEngine.macOS.rawValue
+
+    /// The share of the progress the voices take, when a track is split
+    /// (SpeakerKit runs at about 380 times real time: Measured).
+    private static let voicesShare = 0.15
 
     struct Failure: LocalizedError {
         let message: String
@@ -75,22 +81,65 @@ enum MeetingTranscriber {
             unused.contains(speaker) ? 0 : (try? AVAudioFile(forReading: url)).map { Double($0.length) / $0.processingFormat.sampleRate } ?? 0
         }
         let total = max(1, lengths.reduce(0, +))
+        let split = splitTrack(record)
+        let words = split == nil ? 1 : 1 - voicesShare
         step(.transcribing(0))
-        let mine = unused.contains(.me) ? [] : try await phrases(of: me, locale: locale) { done in step(.transcribing(done * lengths[0] / total)) }
+        let mine = unused.contains(.me) ? []
+            : try await phrases(of: me, locale: locale) { done in step(.transcribing(words * done * lengths[0] / total)) }
         let theirs = unused.contains(.them) ? []
-            : try await phrases(of: them, locale: locale) { done in step(.transcribing((lengths[0] + done * lengths[1]) / total)) }
+            : try await phrases(of: them, locale: locale) { done in step(.transcribing(words * (lengths[0] + done * lengths[1]) / total)) }
         let (kept, dropped) = MeetingTranscript.droppingEcho(mine, heard: theirs.flatMap { $0 })
-        let lines = MeetingTranscript.lines(me: kept, them: theirs)
+        var voiced = kept.map { (Voice.me, $0) } + theirs.map { (Voice.them, $0) }
+        var names = MeetingVoices.names(of: [.me, .them])
+        if let split {
+            let phrases = split == .me ? kept : theirs
+            let id: (Int) -> Voice = split == .me ? { Voice.single($0) } : { Voice.them($0) }
+            let track = folder.appendingPathComponent(split.file)
+            let wordsDone: Double = words
+            let progress: @Sendable (Double) -> Void = { done in step(.transcribing(wordsDone + (1 - wordsDone) * done)) }
+            let stretches = await voices(of: track, progress: progress)
+            var (told, found) = MeetingVoices.split(phrases, stretches: stretches ?? [], id: id)
+            // In person, one voice alone stays the room's (Me's lane, "Room").
+            if split == .me, found.count == 1, record.imported == nil {
+                told = told.map { (Voice.me, $0.1) }
+                found = [.me]
+            }
+            voiced = (split == .me ? [] : kept.map { (Voice.me, $0) }) + told
+            names = MeetingVoices.names(of: found)
+        }
+        let lines = MeetingTranscript.lines(voiced)
         var done = record
         done.state = .done
         done.engine = engine
         done.echoDropped = dropped
         done.recorder = nil
+        done.edited = nil
+        done.speakers = MeetingVoices.keepingGiven(record.speakers, fresh: names.merging([Voice.me.rawValue: Speaker.me.title]) { a, _ in a })
         let file = MeetingTranscript.File(language: record.language, engine: engine, lines: lines)
         try file.encoded().write(to: folder.appendingPathComponent("transcript.json"), options: .atomic)
         try markdown(done, lines: lines).write(to: folder.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)
         Log.trace("Recorder: transcript of “\(record.title)”: \(lines.count) lines, \(dropped) words heard again left out")
         return done
+    }
+
+    /// The track whose voices are told apart: in a call, the Mac's sound
+    /// (the microphone is the user); in person and in an import, the one
+    /// track. Nil when neither is used.
+    static func splitTrack(_ record: MeetingRecord) -> Speaker? {
+        let unused = Set(record.unused ?? [])
+        if unused.contains(.them) { return unused.contains(.me) ? nil : .me }
+        return .them
+    }
+
+    /// A track's voices (SpeakerKit, in `skil.li Transcriber`); nil when
+    /// they could not be told apart (the track then stays one voice).
+    private static func voices(of track: URL, progress: @escaping @Sendable (Double) -> Void) async -> [MeetingVoices.Stretch]? {
+        do {
+            return try await TranscriberHelper.voices(of: track, progress: progress)
+        } catch {
+            Log.actions.error("Recorder: voices not told apart in \(track.lastPathComponent, privacy: .public) (\(error.localizedDescription, privacy: .public))")
+            return nil
+        }
     }
 
     /// `transcript.md`, with the line saying when, how long, which language.
@@ -99,11 +148,14 @@ enum MeetingTranscriber {
     }
 
     /// "Wednesday 22 October 2026, 14:00 · 32 min · English · with Paul,
-    /// Anna and 2 others".
+    /// Anna and 2 others"; an import starts with "Imported from Board
+    /// call.m4a".
     static func about(_ record: MeetingRecord) -> String {
         let when = record.started.formatted(.dateTime.weekday(.wide).day().month(.wide).year().hour().minute())
         let people = MeetingPeople.sentence(record.attendees)
-        return ([when, length(record.seconds), shortName(of: record.language)] + (people.isEmpty ? [] : ["with \(people)"])).joined(separator: " · ")
+        let source = record.imported.map { ["Imported from \($0)"] } ?? []
+        return (source + [when, length(record.seconds), shortName(of: record.language)] + (people.isEmpty ? [] : ["with \(people)"]))
+            .joined(separator: " · ")
     }
 
     /// "45 s", "32 min", "1 h 05".

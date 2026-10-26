@@ -428,6 +428,7 @@ public enum FeatureCatalog {
             command(.copyAvailability, .stayOnTop, "Copies your free time in the next five working days"),
             command(.recordMeeting, .stayOnTop, "Records a call, then transcribes it on this Mac: “rec Weekly sync” names it"),
             command(.searchRecordings, .stayOnTop, "Finds a recording by its title, its date, who was in it or the words said"),
+            command(.importRecording, .stayOnTop, "A sound or video file made a recording, transcribed here, voices told apart"),
             command(.reminders, .stayOnTop, "Lists what you have to do, and checks it off"),
             CatalogEntry(id: "catalog.remind", title: "Remind Me", oneLine: "Adds a reminder said in one line: “remind me to call Paul at 9am”",
                          group: .stayOnTop, symbol: "checklist", prefix: ReminderRequest.word + " ", run: .type(ReminderRequest.word + " ", hint: nil),

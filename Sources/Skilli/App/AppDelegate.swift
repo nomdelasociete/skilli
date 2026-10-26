@@ -530,6 +530,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         runner.onAlwaysDo = { [toolSettings] goal, app in toolSettings.trustDoLink(goal: goal, app: app, title: "Do It Here") }
         runner.openRecordCard = { [weak self] title in self?.recorderCenter.showCard(title: title, fromOutside: true) }
+        runner.openImport = { [weak self] file in self?.recorderCenter.importRecording(selecting: file) }
         runner.recordingTitle = { [weak self] in
             guard let recorder = self?.madeRecorderCenter?.recorder, recorder.isRecording else { return nil }
             return recorder.title
@@ -1802,6 +1803,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             aiActions.showAgenda(.availability)
         case .recordMeeting:
             recorderCenter.showCard(title: nil)
+        case .importRecording:
+            recorderCenter.importRecording()
         case .killProcess, .clipboardHistory, .searchSnippets, .emoji, .searchGIFs, .switchWindow, .searchMenus, .searchTabs, .searchFiles, .searchProjects, .searchHistory, .searchRecordings,
              .homebrew, .searchContacts, .agenda, .reminders, .github, .catalog:
             // Handled in the launcher: it turns into that mode.
