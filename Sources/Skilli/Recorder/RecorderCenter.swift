@@ -443,10 +443,10 @@ final class RecorderCenter {
                 let found = await self.findMeetingWindow(reading)
                 self.meetingWindow = found.window
                 start.screen = found.window
-                if let meetingTab = self.meetingTab, found.window != nil { _ = MeetingTabSelect.select(meetingTab.tab, in: meetingTab.bundleID) }
             }
             do {
                 try await self.recorder.record(start)
+                self.bringMeetingTabForward()
             } catch {
                 self.starting = false
                 self.notify("The recording could not start: \(error.localizedDescription)")
@@ -579,8 +579,10 @@ final class RecorderCenter {
     private func begin(title: String, language: String, meeting: RecordCard.Meeting?) {
         do {
             let reading = meeting?.reading ?? MeetingMoment.Reading(kind: .nothing, event: nil, app: nil, sources: recorder.sources, title: nil)
-            bringMeetingTabForward()
             try recorder.begin(Self.start(reading, title: title, language: language, sources: recorder.sources))
+            // Recording from ↩: the tab then (a browser slow to answer
+            // never delays the start).
+            bringMeetingTabForward()
             preferences.recorderConsentShown = true
             began(reading)
             if meeting?.joins == true, let event = reading.event { join(event) }

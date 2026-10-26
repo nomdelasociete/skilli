@@ -38,6 +38,9 @@ final class PictureTrackWriter: @unchecked Sendable {
     private var black: CVPixelBuffer?
     private var failed = false
     private var finished = false
+    /// When the source last went off: a picture shown before it, arriving
+    /// late, is not written after the black one.
+    private var blankedAt: Double?
     /// Pictures written, and left out while the encoder was behind.
     private(set) var written = 0
     private(set) var dropped = 0
@@ -82,6 +85,7 @@ final class PictureTrackWriter: @unchecked Sendable {
     /// A picture from the source (any queue).
     func append(_ picture: Picture) {
         queue.async {
+            if let blankedAt = self.blankedAt, picture.time <= blankedAt { return }
             self.latest = picture.pixels
             guard let time = self.timeline.place(picture.time) else { return }
             self.write(picture.pixels, at: time, waiting: false)
@@ -93,6 +97,7 @@ final class PictureTrackWriter: @unchecked Sendable {
     func blank(at time: Double) {
         queue.async {
             guard let black = self.blackPicture() else { return }
+            self.blankedAt = time
             self.latest = black
             guard let at = self.timeline.place(time) else { return }
             self.write(black, at: at, waiting: true)

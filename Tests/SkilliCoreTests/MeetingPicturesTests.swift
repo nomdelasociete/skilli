@@ -116,6 +116,12 @@ final class PictureWatchTests: XCTestCase {
         XCTAssertNil(chrome.update(.init(), lastPicture: 5.5, now: 12), "uncovered: in sight again, even with the same picture")
     }
 
+    func testAWindowWhoseStreamStoppedIsClosedAtOnce() {
+        var watch = PictureWatch()
+        watch.closed()
+        XCTAssertEqual(watch.problem, .closed)
+    }
+
     func testAWindowGoneIsClosed() {
         var watch = PictureWatch()
         _ = watch.update(.init(exists: false), lastPicture: 0, now: 0)
@@ -165,6 +171,24 @@ final class SlideScheduleTests: XCTestCase {
         let gaps = zip(readings.dropFirst(), readings).map { $0 - $1 }
         XCTAssertEqual(gaps.last ?? 0, SlideSchedule.latest, accuracy: 0.26, "eight seconds apart once nothing new was found")
         XCTAssertLessThan(readings.count, 10)
+    }
+
+    func testASlideAmongAMovingVideoIsTimedAtItsOwnChange() {
+        var schedule = SlideSchedule()
+        _ = schedule.sample(grid(0), at: 0)
+        schedule.read(grid(0), at: 0, foundNew: false)
+        // A tenth of the picture moving on every sample, a slide (half the
+        // picture) at 1.5 s: the reading after it is timed at the slide.
+        var value: UInt8 = 0
+        var start: Double?
+        for step in 1...12 {
+            let time = Double(step) * 0.25
+            value = value == 0 ? 100 : 0
+            var picture = grid(value, changing: 0.1)
+            if time >= 1.5 { picture = picture.enumerated().map { $0.offset >= picture.count / 2 ? 250 : $0.element } }
+            if let found = schedule.sample(picture, at: time), start == nil { start = found }
+        }
+        XCTAssertEqual(start, 1.5)
     }
 
     func testABigChangeIsReadAtOnceAgain() {

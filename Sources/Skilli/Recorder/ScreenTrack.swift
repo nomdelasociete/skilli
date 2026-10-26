@@ -82,7 +82,11 @@ enum ScreenWindows {
     /// window list says only that it is not on screen).
     private static func hasMinimizedWindow(_ pid: pid_t) -> Bool {
         var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXWindowsAttribute as CFString, &value) == .success,
+        let app = AXUIElementCreateApplication(pid)
+        // Once a second on the main thread: an app slow to answer is not
+        // waited for.
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
               let windows = value as? [AXUIElement] else { return false }
         return windows.contains { window in
             var minimized: CFTypeRef?
@@ -179,6 +183,8 @@ final class ScreenTrack {
     private var recording = false
     private var watch = PictureWatch()
     private var watchTimer: Timer?
+    /// Each start and stop: a start overtaken while it awaited gives up.
+    private var generation = 0
     private var lastSeen: Double?
     /// The state or the problem changed: the card, the menu bar.
     var onChange: (() -> Void)?
@@ -196,6 +202,8 @@ final class ScreenTrack {
     /// Starts `window`'s pictures (another one before: stopped). Screen
     /// Recording never asked: macOS asks now.
     func start(_ window: ScreenWindow) async {
+        generation += 1
+        let mine = generation
         stopStream()
         // skil.li's own window needs no Screen Recording (the self-test's).
         let own = Self.ownWindow(window)
@@ -207,6 +215,7 @@ final class ScreenTrack {
         do {
             let content = own ? try await SCShareableContent.currentProcess
                 : try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
+            guard mine == generation else { return }
             guard let target = content.windows.first(where: { $0.windowID == window.id }) else {
                 state = .failed("the window closed")
                 onChange?()
@@ -224,6 +233,11 @@ final class ScreenTrack {
                 DispatchQueue.main.async { MainActor.assumeIsolated { self?.stopped(error) } }
             }
             try await stream.startCapture()
+            // Stopped, or another window started, while this one started.
+            guard mine == generation else {
+                try? await stream.stopCapture()
+                return
+            }
             self.stream = stream
             state = .on(window)
             watch = PictureWatch()
@@ -231,6 +245,7 @@ final class ScreenTrack {
             startWatching()
             Log.trace("Recorder: the screen records a window of \(window.app)")
         } catch {
+            guard mine == generation else { return }
             state = Self.isAllowed ? .failed(error.localizedDescription) : .denied
             Log.actions.error("Recorder: the screen did not start (\(error.localizedDescription, privacy: .public))")
         }
@@ -239,6 +254,7 @@ final class ScreenTrack {
 
     /// The pictures stop, the window let go.
     func stop() {
+        generation += 1
         stopStream()
         state = .off
         onChange?()
@@ -248,10 +264,12 @@ final class ScreenTrack {
     /// 1920 wide at most), to `writer` and `reader`.
     func record(into writer: PictureTrackWriter, reading reader: SlideReader?) async {
         recording = true
-        sink.record(into: writer, reading: reader)
         if fileSize == nil { fileSize = (writer.width, writer.height) }
-        guard let stream else { return }
-        try? await stream.updateConfiguration(configuration(width: writer.width, height: writer.height))
+        // At the file's size first: the card's small pictures are neither
+        // written nor read.
+        if let stream { try? await stream.updateConfiguration(configuration(width: writer.width, height: writer.height)) }
+        guard recording else { return }
+        sink.record(into: writer, reading: reader)
     }
 
     /// The file's size for a window of `width` × `height` pixels.
@@ -312,7 +330,7 @@ final class ScreenTrack {
         stream = nil
         // The window gone: the watch says so; anything else, as a failure.
         if let window, ScreenWindows.window(window.id) == nil {
-            watch.update(PictureWatch.Look(exists: false), lastPicture: sink.lastPictureTime, now: HostClock.now + PictureWatch.holdFor)
+            watch.closed()
         } else {
             state = .failed(error.localizedDescription)
         }

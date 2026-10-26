@@ -200,8 +200,9 @@ or System Settings quits it to apply a permission (Quit & Reopen).
    and goes through at once: no question in its way (MANIFESTO 6: what is
    kept needs no question).
 3. **Neither hint nor push**: the recording is stopped as Stop stops it,
-   both tracks closed at the same moment (whole files: about a second, the
-   last buffers), `meeting.json` written `stopped`. Its transcript is left
+   every track on (the sound's two, the webcam and the screen when on)
+   closed at the same moment (whole files: about a second, the last
+   buffers), `meeting.json` written `stopped`. Its transcript is left
    for the next launch, made then a few seconds in without asking, the
    menu bar's ring showing it while it is made; done, no window opens (it
    was not asked for at that moment): the recording is in the launcher
@@ -231,8 +232,8 @@ user's act or the battery's.
    Resume ↩, Stop ⌘↩ (stops and transcribes), Keep Paused esc. Resume
    and Stop are also where they always are, the red dot's menu.
 3. **Paused, then a push at wake**: as the Mac goes to sleep the
-   recording is paused, both tracks at the same moment, as Pause does
-   (the time asleep and the time paused after it are in neither track).
+   recording is paused, every track on at the same moment, as Pause does
+   (the time asleep and the time paused after it are in no track).
    Nothing resumes by itself: whoever is in the room at wake has not
    agreed to be recorded then. The card at wake is a push, because the
    rest of a meeting that goes on is lost if missed and due now, and the
