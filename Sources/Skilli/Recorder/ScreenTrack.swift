@@ -188,6 +188,9 @@ final class ScreenTrack {
     private(set) var state: State = .off
     let sink = ScreenSink()
     private var stream: SCStream?
+    /// The window's filter, as the stream started: a picture of it at the
+    /// file's size on demand.
+    private var filter: SCContentFilter?
     /// The file's size, set by the first window recorded.
     private(set) var fileSize: (width: Int, height: Int)?
     /// The window's own size in pixels, as the stream started.
@@ -235,6 +238,7 @@ final class ScreenTrack {
                 return
             }
             let filter = SCContentFilter(desktopIndependentWindow: target)
+            self.filter = filter
             let scale = CGFloat(filter.pointPixelScale)
             let width = Int(filter.contentRect.width * scale), height = Int(filter.contentRect.height * scale)
             windowPixels = (width, height)
@@ -290,6 +294,19 @@ final class ScreenTrack {
         guard width > 0, height > 0 else { return (1280, 800) }
         let scale = min(1, Double(widest) / Double(width))
         return (Int(Double(width) * scale) / 2 * 2, Int(Double(height) * scale) / 2 * 2)
+    }
+
+    /// The window now at the file's size, at once (a still window gives
+    /// the stream no new picture after its size changes: the file's first
+    /// one would be the card's small one, blurred).
+    func fullPicture() async -> CVPixelBuffer? {
+        guard let filter, window != nil else { return nil }
+        let size = plannedSize
+        let configuration = configuration(width: size.width, height: size.height)
+        configuration.width = size.width
+        configuration.height = size.height
+        guard let sample = try? await SCScreenshotManager.captureSampleBuffer(contentFilter: filter, configuration: configuration) else { return nil }
+        return CMSampleBufferGetImageBuffer(sample)
     }
 
     /// The size the file has, or will have if the window on now starts it.

@@ -106,7 +106,13 @@ final class RecorderPictures {
     private func recordScreen(held: CVPixelBuffer?) async {
         guard let folder else { return }
         if screenWriter == nil {
-            screenWriter = makeWriter(Self.screenFile, size: screen.plannedSize, perSecond: ScreenTrack.perSecond, held: held)
+            // The window at the file's size for its first picture; the
+            // card's small one only when it cannot be had.
+            let full = await screen.fullPicture()
+            guard self.folder == folder else { return }
+            if screenWriter == nil {
+                screenWriter = makeWriter(Self.screenFile, size: screen.plannedSize, perSecond: ScreenTrack.perSecond, held: full ?? held)
+            }
         }
         if slides == nil {
             // Pictures far smaller than the file's (the card's) are not read.
