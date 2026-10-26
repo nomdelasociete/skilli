@@ -522,6 +522,7 @@ final class SelfTest {
                 arrangeWindowsLearnsAndPutsBack,
                 windowLayoutsAndSwitching,
                 displayPromptArrangesAsUsual,
+                usualPlacesOnLaunch,
                 layoutOpensAFileAndALink,
                 layoutDeleteUndoes
             ])
@@ -5197,6 +5198,7 @@ final class SelfTest {
         await arrangeWindowsLearnsAndPutsBack()
         await windowLayoutsAndSwitching()
         await displayPromptArrangesAsUsual()
+        await usualPlacesOnLaunch()
         await layoutOpensAFileAndALink()
         await browserTabsAreFound()
         await filesGatheredBySpotlight()
@@ -17585,6 +17587,130 @@ final class SelfTest {
         "\(Int(rect.minX)),\(Int(rect.minY)) \(Int(rect.width))×\(Int(rect.height))"
     }
 
+    /// Usual places (docs/smart-layout.md, phase 3): with three learned
+    /// placements of TextEdit's window on the left half and the setting
+    /// on, TextEdit launched puts its window there before anyone touches
+    /// it; the setting off, the next launch is left where it opens.
+    private func usualPlacesOnLaunch() async {
+        let name = "Usual places: on, an app launched gets its window where it was put the last 3 times (the bottom right quarter); off, it is left where it opens"
+        guard let learner = context.windowLearner else {
+            record(name, false, "no window learner", nil)
+            return
+        }
+        let bundleID = "com.apple.TextEdit"
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            record(name, false, "TextEdit not installed", nil)
+            return
+        }
+        // The check needs to launch TextEdit: one left open with no window
+        // (nothing in it to lose) is quit first; one with windows is the
+        // user's, and the check is skipped.
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        if !running.isEmpty {
+            // Read for sure, every instance: a read that fails is never taken
+            // for "no window".
+            let counts: [Int?] = running.map { app in
+                var value: CFTypeRef?
+                guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute as CFString, &value)
+                    == .success, let list = value as? [AXUIElement] else { return nil }
+                return list.count
+            }
+            guard counts.allSatisfy({ $0 == 0 }) else {
+                let detail = counts.contains(nil) ? "TextEdit is open and its windows could not be read" : "TextEdit is open with windows"
+                checks.append(Check(name: name, passed: true, skipped: true, detail: "\(detail) (the test needs to launch it)", latencyMs: nil))
+                return
+            }
+            for app in running { app.terminate() }
+            guard await waitUntil(timeout: 4, { running.allSatisfy(\.isTerminated) }) != nil else {
+                record(name, false, "TextEdit, open with no window, did not quit", nil)
+                return
+            }
+        }
+        let preferences = context.preferences
+        let learned = learner.placements
+        let (gap, learning, usual, never) = (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces, preferences.windowNeverPlace)
+        let marker = Int.random(in: 1000...9999)
+        let files = ["on", "off"].map { FileManager.default.temporaryDirectory.appendingPathComponent("skilli-usual-\($0)-\(marker).txt") }
+        // Put back on every way out, early returns included.
+        defer {
+            for file in files { try? FileManager.default.removeItem(at: file) }
+            learner.restore(learned)
+            (preferences.windowGap, preferences.windowLearning, preferences.usualPlaces, preferences.windowNeverPlace) = (gap, learning, usual, never)
+        }
+        preferences.windowGap = 0
+        preferences.windowLearning = true
+        // Never place would rightly leave TextEdit alone.
+        preferences.windowNeverPlace.removeAll { $0 == bundleID }
+        for file in files { try? "usual".write(to: file, atomically: true, encoding: .utf8) }
+        func window(_ file: URL) -> AXUIElement? {
+            guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return nil }
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXWindowsAttribute as CFString, &value) == .success,
+                  let list = value as? [AXUIElement] else { return nil }
+            return list.first { element in
+                var title: CFTypeRef?
+                AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &title)
+                return (title as? String)?.contains(file.deletingPathExtension().lastPathComponent) == true
+            }
+        }
+        func frame(_ element: AXUIElement) -> CGRect? {
+            var position: CFTypeRef?
+            var size: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &position) == .success,
+                  AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &size) == .success, let position, let size else { return nil }
+            var point = CGPoint.zero
+            var extent = CGSize.zero
+            AXValueGetValue(position as! AXValue, .cgPoint, &point)
+            AXValueGetValue(size as! AXValue, .cgSize, &extent)
+            return CGRect(origin: point, size: extent)
+        }
+        /// TextEdit quit (the test opened it), its windows with it.
+        func quit() async {
+            let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            for app in apps { app.terminate() }
+            _ = await waitUntil(timeout: 4) { apps.allSatisfy(\.isTerminated) }
+        }
+        func launch(_ file: URL) async {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            _ = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration)
+        }
+        // Learned: TextEdit's window in the bottom right quarter of the menu
+        // bar's display, three times, on the displays there are now: where
+        // TextEdit never opens a window, so a move there is seen.
+        let displays = Displays.current()
+        guard let main = displays.first, let spot = WindowLayout.bottomRight.frame(in: main.visible) else {
+            record(name, false, "no display", nil)
+            return
+        }
+        let keys = displays.map { WindowPlacements.displayKey($0.fingerprint) }
+        var seeded = WindowPlacements()
+        for day in 1...3 {
+            seeded.record(.init(place: .of(spot, in: main.visible), display: keys[0], title: files[0].lastPathComponent, how: .key,
+                                at: Date.now.addingTimeInterval(-Double(day) * 3_600)),
+                          bundleID: bundleID, displays: keys)
+        }
+        learner.restore(seeded)
+
+        preferences.usualPlaces = true
+        await launch(files[0])
+        let placed = await waitUntil(timeout: 6) { window(files[0]).flatMap(frame).map { WindowLayout.matches($0, spot) } ?? false } != nil
+        let placedFrame = window(files[0]).flatMap(frame)
+        await quit()
+
+        preferences.usualPlaces = false
+        await launch(files[1])
+        let opened = await waitUntil(timeout: 6) { window(files[1]).flatMap(frame) != nil } != nil
+        await pause(1_500)
+        let offFrame = window(files[1]).flatMap(frame)
+        let leftAlone = opened && offFrame.map { !WindowLayout.matches($0, spot) } ?? false
+        await quit()
+
+        record(name, placed && leftAlone,
+               "on: placed in the bottom right quarter: \(placed) (\(placedFrame.map(Self.describe) ?? "?")); off: opened \(opened), left where it opened: \(leftAlone) (\(offFrame.map(Self.describe) ?? "?"))",
+               nil)
+    }
+
     /// Arrange as Usual (docs/smart-layout.md, phase 2): with a learned
     /// place for every window open (where it is, so only the test's own
     /// moves) and TextEdit's on the left half, a display offered as plugged
@@ -19913,12 +20039,15 @@ final class SelfTest {
 
     /// Skillies from the self-test's own folder: listed with their
     /// metadata; "say hello" + Return shows the last line; a text and a
-    /// dropdown argument filled in the launcher reach the script; inline
-    /// shows its line in the row; a failure says its last line; a script
-    /// without the executable bit runs through its shebang; a Raycast
-    /// Script Command imported becomes one; agents list, create and run.
+    /// dropdown argument filled in the launcher reach the script; a key
+    /// bound to one with arguments asks them in the launcher, one with
+    /// none runs; inline shows its line in the row, and in the menu bar
+    /// its image icon as an image, never its file name; a failure says its
+    /// last line; a script without the executable bit runs through its
+    /// shebang; a Raycast Script Command imported becomes one; agents
+    /// list, create and run.
     private func scriptCommandsRun() async {
-        let name = "Skillies: listed, run from the launcher (last line, arguments with a dropdown, inline line), failures and shebang, the Running… card unless showsRunning false; Raycast import; agents create, list and run"
+        let name = "Skillies: listed, run from the launcher (last line, arguments with a dropdown, inline line) and by key (arguments asked in the launcher), the menu bar's image icon, failures and shebang, the Running… card unless showsRunning false; Raycast import; agents create, list and run"
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/skillies", isDirectory: true)
         let raycast = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/raycast", isDirectory: true)
         for url in [folder, raycast] { try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true) }
@@ -19931,7 +20060,12 @@ final class SelfTest {
         }
         write("hello.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Say Hello Selftest\n# @skilli.mode compact\n# @skilli.icon 👋\necho first line\necho \"Hello from a script\"\n")
         write("greet.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Greet Someone Selftest\n# @skilli.mode fullOutput\n# @skilli.argument1 { \"type\": \"text\", \"placeholder\": \"Name\" }\n# @skilli.argument2 { \"type\": \"dropdown\", \"placeholder\": \"Mood\", \"data\": [{\"title\": \"Happy\", \"value\": \"happy\"}, {\"title\": \"Calm\", \"value\": \"calm\"}] }\necho \"Hi $1, you look $2\"\n")
-        write("clock.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Selftest Clock\n# @skilli.mode inline\n# @skilli.refreshTime 10s\necho tick-\(marker)\n")
+        write("clock.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Selftest Clock\n# @skilli.mode inline\n# @skilli.refreshTime 10s\n# @skilli.icon clock.png\necho tick-\(marker)\n")
+        // Its image icon, beside it: the menu bar draws it, never its name.
+        if let tiff = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)?.tiffRepresentation,
+           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+            try? png.write(to: folder.appendingPathComponent("clock.png"))
+        }
         write("fail.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Failing Selftest\n# @skilli.mode compact\necho \"Something broke\"\nexit 3\n")
         write("plain.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Not Executable Selftest\n# @skilli.mode silent\necho shebang-\(marker)\n", executable: false)
         write("slow.sh", "#!/bin/bash\n# @skilli.schemaVersion 1\n# @skilli.title Slow Selftest\n# @skilli.mode compact\nsleep 1.5\necho slow-\(marker)\n")
@@ -19988,6 +20122,27 @@ final class SelfTest {
         details.append("arguments asked: \(asked), ↩ without one said so: \(missingSaid), footer \(argumentFooter), ⇥ its actions, no Ask: \(tabActions), dropdown: \(dropdown), output: \(greeted)")
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
 
+        // A key bound to it (`script:<path>`): the launcher asks its
+        // arguments; one with none runs at once.
+        guard await focusTestWindow() else { return }
+        _ = await waitUntil(timeout: 1) { !popover.isVisible }
+        var keyAsks = false
+        if let greet = library.all().first(where: { $0.title == "Greet Someone Selftest" }) {
+            context.actions.perform(.mac(.script(greet)), triggeredAt: .now)
+            keyAsks = await waitUntil(timeout: 1) { launcher.isVisible && launcher.isInScript } != nil && !popover.isVisible
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            _ = await waitUntil(timeout: 1) { !launcher.isInScript }
+            if launcher.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        }
+        var keyRuns = false
+        if let sayHello = library.all().first(where: { $0.title == "Say Hello Selftest" }) {
+            guard await focusTestWindow() else { return }
+            context.actions.perform(.mac(.script(sayHello)), triggeredAt: .now)
+            keyRuns = await waitUntil(timeout: 4) { popover.isVisible && popover.shownText == "Hello from a script" } != nil && !launcher.isVisible
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        }
+        details.append("key: arguments asked in the launcher \(keyAsks), none: ran \(keyRuns)")
+
         // Inline: the row shows its line once read.
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
@@ -20004,7 +20159,7 @@ final class SelfTest {
         if let clock { preferences.skilliesInMenuBar = [clock.path] }
         let shownInMenuBar = await waitUntil(timeout: 4) {
             clock.flatMap { self.context.menuBarSkillies.shown[$0.path] } == "tick-\(marker)"
-        } != nil
+        } != nil && clock.map { self.context.menuBarSkillies.withImage.contains($0.path) } == true
         // Settings → Skillies with them listed: the inline one's switch is on.
         context.settings.show(pane: .skillies)
         let switchOn = await waitUntil(timeout: 2) { self.context.settings.switchStates().contains(true) } != nil
@@ -20078,7 +20233,7 @@ final class SelfTest {
         }
         await closeSettings()
 
-        record(name, listed && hello && lastLine && asked && missingSaid && argumentFooter == ["Next ↩", "Actions ⌘K"] && tabActions && dropdown && greeted && inline && inlineRow && shownInMenuBar && switchOn && goneFromMenuBar && failed && shebang && runningCard && importOK
+        record(name, listed && hello && lastLine && asked && missingSaid && argumentFooter == ["Next ↩", "Actions ⌘K"] && tabActions && dropdown && greeted && keyAsks && keyRuns && inline && inlineRow && shownInMenuBar && switchOn && goneFromMenuBar && failed && shebang && runningCard && importOK
                && created.hasPrefix("Created the skillie “Selftest Echo”") && duplicate && toolListed && toolRun == "Hi Max, you look calm"
                && echoed == "made-zebra" && missing, details.joined(separator: "; "), nil)
     }
@@ -25265,7 +25420,7 @@ final class SelfTest {
     /// slowly): no transcript starts, `meeting.json` stays as it was while
     /// recording, and the Unfinished Recording card offers it at once.
     private func recorderStopStuckOffersIt() async {
-        let name = "Recorder: a Stop whose files cannot be finished whole in time (finishing, encoder, slow encoder stuck; a writer not completed) starts no transcript, leaves meeting.json as it was and offers the recording at once as never stopped"
+        let name = "Recorder: a Stop whose files cannot be finished whole in time (finishing, encoder, slow encoder stuck; a writer not completed) starts no transcript, leaves meeting.json as it was and offers the recording at once as never stopped (after a recording on then, once it stops)"
         guard let center = context.recorder() else {
             record(name, false, "no recorder", nil)
             return
@@ -25316,6 +25471,34 @@ final class SelfTest {
                 rest.state = .pending
                 try? center.recordings.write(rest, to: folder)
             }
+        }
+
+        // One left so while another records: held back, offered once that
+        // one stops.
+        center.recorder.standIn(microphone: clip, alsoLeaveOut: [])
+        await center.recorder.listen()
+        if let folder = try? center.recordings.makeFolder(title: "Left meanwhile", started: .now),
+           (try? center.recorder.begin(title: "Meanwhile", language: "en-US")) != nil {
+            let left = MeetingRecord(title: "Left meanwhile", started: .now, language: "en-US", recorder: Recordings.ownProcess)
+            try? center.recordings.write(left, to: folder)
+            center.offerAtOnceForTest(folder, record: left)
+            await pause(1500)
+            let heldBack = !center.isCardVisible
+            center.control(.stop)
+            let offeredAfter = await waitUntil(timeout: 10) { center.isCardVisible && center.cardView.eyebrowText == "UNFINISHED RECORDING" } != nil
+            let named = center.cardView.name
+            if offeredAfter { center.closeCardWithoutKeys() }
+            _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil }
+            center.openWindows.forEach { $0.close() }
+            var rest = left
+            rest.state = .pending
+            try? center.recordings.write(rest, to: folder)
+            passed = passed && heldBack && offeredAfter && named == "Left meanwhile"
+            details.append("asked while recording: held back \(heldBack), offered once it stopped \(offeredAfter) (“\(named)”)")
+        } else {
+            center.recorder.stopListening()
+            passed = false
+            details.append("asked while recording: did not record")
         }
         record(name, passed, details.joined(separator: "; "), nil)
     }
@@ -26026,6 +26209,7 @@ final class SelfTest {
         if !aborted { await momentMenuBarRecords(center, book) }
         if !aborted { await momentRedDotSwitchesSources(center, book) }
         if !aborted { await momentCallEndOffersStop(center, book) }
+        if !aborted { await momentUnfinishedWaitsForTheStart(center, book) }
         if !aborted { await momentBrowserCallsMicrophone(center, book) }
         if !aborted { await momentSearchRecordings(center) }
         if !aborted { await momentRecorderPane(center) }
@@ -26034,6 +26218,66 @@ final class SelfTest {
 
     /// The links a Join would have opened.
     private var momentOpened: [URL] = []
+
+    /// A recording left unfinished (a Stop that could not finish its
+    /// files) while ⌘R starts another: no card while that one starts or
+    /// records; offered once it stops.
+    private func momentUnfinishedWaitsForTheStart(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: an unfinished recording found while ⌘R starts one shows no card while it starts or records, and is offered once it stops, or at once when the start fails"
+        let consent = context.preferences.recorderConsentShown
+        defer {
+            context.preferences.recorderConsentShown = consent
+            center.startDelay = .zero
+            center.startFails = false
+        }
+        context.preferences.recorderConsentShown = true
+        let event = momentEvent("st-moment-unfinished", "Starting sync", in: -60, link: false, location: "Online")
+        book.testEvents = [event]
+        guard let folder = try? center.recordings.makeFolder(title: "Found while starting", started: .now) else {
+            record(name, false, "no folder", nil)
+            return
+        }
+        var left = MeetingRecord(title: "Found while starting", started: .now, language: "en-US", recorder: Recordings.ownProcess)
+        try? center.recordings.write(left, to: folder)
+        center.startDelay = .seconds(2)
+        center.recordMeeting(event, joining: false)
+        center.offerAtOnceForTest(folder, record: left)
+        await pause(1000)
+        let heldWhileStarting = !center.isCardVisible && !center.recorder.isRecording
+        let recording = await waitUntil(timeout: 6) { center.recorder.isRecording } != nil
+        await pause(1000)
+        let heldWhileRecording = !center.isCardVisible
+        _ = await momentStop(center)
+        let offered = await waitUntil(timeout: 5) { center.isCardVisible && center.cardView.eyebrowText == "UNFINISHED RECORDING" } != nil
+        let named = center.cardView.name
+        if offered { center.closeCardWithoutKeys() }
+        center.openWindows.forEach { $0.close() }
+        left.state = .pending
+        try? center.recordings.write(left, to: folder)
+
+        // The start fails: offered right after, nothing recording.
+        var failedOffered = false, heldWhileFailing = false, failedNamed = ""
+        if let other = try? center.recordings.makeFolder(title: "Found while failing", started: .now) {
+            var second = MeetingRecord(title: "Found while failing", started: .now, language: "en-US", recorder: Recordings.ownProcess)
+            try? center.recordings.write(second, to: other)
+            center.startFails = true
+            center.recordMeeting(event, joining: false)
+            center.offerAtOnceForTest(other, record: second)
+            await pause(1000)
+            heldWhileFailing = !center.isCardVisible
+            failedOffered = await waitUntil(timeout: 4) { center.isCardVisible && center.cardView.eyebrowText == "UNFINISHED RECORDING" } != nil
+                && !center.recorder.isRecording
+            failedNamed = center.cardView.name
+            if failedOffered { center.closeCardWithoutKeys() }
+            second.state = .pending
+            try? center.recordings.write(second, to: other)
+        }
+        book.testEvents = []
+        record(name, heldWhileStarting && recording && heldWhileRecording && offered && named == "Found while starting"
+               && heldWhileFailing && failedOffered && failedNamed == "Found while failing",
+               "while starting: no card \(heldWhileStarting); recording \(recording), no card \(heldWhileRecording); once stopped: offered \(offered) “\(named)”; a start that fails: no card while it starts \(heldWhileFailing), offered right after \(failedOffered) “\(failedNamed)”",
+               nil)
+    }
 
     /// A stand-in meeting: `seconds` from now (before: negative), a Meet
     /// link or `location`, two invented people.

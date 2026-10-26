@@ -28,7 +28,10 @@ final class SkillieFileTests: XCTestCase {
         XCTAssertEqual(SkillieFile.fileName("Confetti Cannon.skilli", title: "x", program: "swift"), "confetti-cannon.swift")
         XCTAssertEqual(SkillieFile.fileName("…!.skilli", title: "Café Time", program: "node"), "cafe-time.js")
         XCTAssertEqual(SkillieFile.fileName(".skilli", title: "", program: "ruby"), "skillie.rb")
-        XCTAssertEqual(SkillieFile.fileName("notes.skilli", title: "x", program: "osascript"), "notes", "another program: no extension")
+        XCTAssertEqual(SkillieFile.fileName("confetti-cannon.skilli", title: "x", program: "osascript", language: "JavaScript"),
+                       "confetti-cannon.js", "JavaScript for Automation")
+        XCTAssertEqual(SkillieFile.fileName("notes.skilli", title: "x", program: "osascript"), "notes.applescript")
+        XCTAssertEqual(SkillieFile.fileName("notes.skilli", title: "x", program: "tclsh"), "notes", "another program: no extension")
         XCTAssertEqual(SkillieFile.fileName("tool.v2.skilli", title: "x", program: "zsh"), "tool-v2.sh")
     }
 
@@ -39,6 +42,18 @@ final class SkillieFileTests: XCTestCase {
         XCTAssertEqual(SkillieFile.program(of: "#! /usr/bin/swift\n"), "swift")
         XCTAssertNil(SkillieFile.program(of: "#!bash\n"), "not an absolute path")
         XCTAssertNil(SkillieFile.program(of: "# @skilli.title No shebang\n"))
+        XCTAssertEqual(SkillieFile.program(of: "#!/usr/bin/osascript -l JavaScript\n"), "osascript")
+        XCTAssertEqual(SkillieFile.language(of: "#!/usr/bin/osascript -l JavaScript\n// @skilli.title -l Other"), "JavaScript")
+        XCTAssertNil(SkillieFile.language(of: "#!/usr/bin/osascript\n"))
+    }
+
+    func testTheCollectionsConfettiCannonIsAddedAsJavaScript() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("skillies/everyday/confetti-cannon.js")
+        let checked = try SkillieFile.check(Data(contentsOf: url), name: "confetti-cannon.skilli")
+        XCTAssertEqual(checked.fileName, "confetti-cannon.js")
+        XCTAssertEqual(checked.command.title, "Confetti Cannon")
+        XCTAssertFalse(checked.command.showsRunning)
     }
 
     func testWhatIsNotASkillieSaysWhy() {

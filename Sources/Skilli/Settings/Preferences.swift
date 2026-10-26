@@ -145,6 +145,7 @@ final class Preferences {
         static let autoQuitNever = "Preferences.autoQuitNever"
         static let windowLearning = "Preferences.windowLearning"
         static let windowNeverPlace = "Preferences.windowNeverPlace"
+        static let usualPlaces = "Preferences.usualPlaces"
         static let clipboardMeaningSearch = "Preferences.clipboardMeaningSearch"
         static let snippetExpansion = "Preferences.snippetExpansion"
         static let snippetExpansionMode = "Preferences.snippetExpansionMode"
@@ -184,6 +185,7 @@ final class Preferences {
         static let launcherEnglishInput = "Preferences.launcherEnglishInput"
         static let quicklinkReuseTab = "Preferences.quicklinkReuseTab"
         static let relayPublicURL = "Preferences.relayPublicURL"
+        static let githubServerSync = "Preferences.githubServerSync"
         static let backupFolder = "Preferences.backupFolder"
         static let backupSchedule = "Preferences.backupSchedule"
         static let backupKeep = "Preferences.backupKeep"
@@ -384,6 +386,12 @@ final class Preferences {
     /// Learn where you put windows (Arrange Windows): on by default.
     var windowLearning: Bool {
         didSet { save(windowLearning, Key.windowLearning) }
+    }
+
+    /// Place new windows where you usually put them (Usual places): off by
+    /// default, on only when the user turns it on.
+    var usualPlaces: Bool {
+        didSet { save(usualPlaces, Key.usualPlaces) }
     }
 
     /// Never place (bundle ids): Arrange leaves their windows, nothing is
@@ -602,6 +610,13 @@ final class Preferences {
         }
     }
 
+    /// Server sync (Settings → GitHub): pull requests and notifications
+    /// read from the relay's copy, never from this Mac. Off by default; on
+    /// only from the pane, after the user's consent.
+    var githubServerSync: Bool {
+        didSet { save(githubServerSync, Key.githubServerSync) }
+    }
+
     /// Today's reminders in the menu bar (hidden when there are none).
     var remindersMenuBar: RemindersMenuBar {
         didSet { save(remindersMenuBar.rawValue, Key.remindersMenuBar) }
@@ -724,6 +739,7 @@ final class Preferences {
         autoQuitNever = defaults.stringArray(forKey: Key.autoQuitNever) ?? []
         windowLearning = defaults.object(forKey: Key.windowLearning) as? Bool ?? true
         windowNeverPlace = defaults.stringArray(forKey: Key.windowNeverPlace) ?? []
+        usualPlaces = defaults.bool(forKey: Key.usualPlaces)
         ignoredMonitors = defaults.data(forKey: Key.ignoredMonitors).flatMap { try? JSONDecoder().decode([DisplayFingerprint].self, from: $0) } ?? []
         neverArrangeDisplays = defaults.data(forKey: Key.neverArrangeDisplays)
             .flatMap { try? JSONDecoder().decode([ArrangeOffer.DisplaySet].self, from: $0) } ?? []
@@ -779,6 +795,7 @@ final class Preferences {
         launcherEnglishInput = defaults.object(forKey: Key.launcherEnglishInput) as? Bool ?? false
         quicklinkReuseTab = defaults.object(forKey: Key.quicklinkReuseTab) as? Bool ?? false
         relayPublicURL = defaults.string(forKey: Key.relayPublicURL) ?? ""
+        githubServerSync = defaults.object(forKey: Key.githubServerSync) as? Bool ?? false
         backupFolder = defaults.string(forKey: Key.backupFolder) ?? ""
         backupSchedule = defaults.string(forKey: Key.backupSchedule).flatMap(BackupSchedule.init(rawValue:)) ?? .weekly
         backupKeep = defaults.object(forKey: Key.backupKeep) as? Int ?? 10
@@ -790,7 +807,7 @@ final class Preferences {
     /// permissions, its screens, where the launcher sits on them, where
     /// backups go).
     static let machineKeys: Set<String> = [Key.didCompleteSetup, Key.ignoredMonitors, Key.neverArrangeDisplays, Key.launcherPlace, Key.backupFolder, Key.imageTagsFolderPath,
-                                           Key.recorderFolderPath]
+                                           Key.recorderFolderPath, Key.githubServerSync]
 
     private func save(_ value: Any, _ key: String) {
         defaults.set(value, forKey: key)

@@ -103,6 +103,45 @@ final class WindowPlacementsTests: XCTestCase {
         XCTAssertEqual(second.first?.place.layout, WindowLayout.rightHalf.rawValue)
     }
 
+    func testSureNeedsThreeRecentPlacementsAndMostOfTheWeight() {
+        var book = WindowPlacements()
+        let window = WindowPlacements.Window(bundleID: editor, title: "")
+        book.record(placed(.leftHalf, daysAgo: 3), bundleID: editor, displays: ["ext"])
+        book.record(placed(.leftHalf, daysAgo: 2), bundleID: editor, displays: ["ext"])
+        XCTAssertNil(book.sure(for: window, displays: ["ext"], at: now))
+        book.record(placed(.leftHalf, daysAgo: 1), bundleID: editor, displays: ["ext"])
+        XCTAssertEqual(book.sure(for: window, displays: ["ext"], at: now)?.place.layout, WindowLayout.leftHalf.rawValue)
+        // Moved elsewhere lately: not sure until confirmed again.
+        book.record(placed(.rightHalf, daysAgo: 0.5), bundleID: editor, displays: ["ext"])
+        XCTAssertNil(book.sure(for: window, displays: ["ext"], at: now))
+        for _ in 0..<3 { book.record(placed(.leftHalf), bundleID: editor, displays: ["ext"]) }
+        XCTAssertNotNil(book.sure(for: window, displays: ["ext"], at: now))
+        // Other displays: never sure from a stand-in.
+        XCTAssertNil(book.sure(for: window, displays: ["other"], at: now))
+    }
+
+    func testSureTellsAnAppsWindowsApartAndNeverFromAnEmptyTitle() {
+        var book = WindowPlacements()
+        for _ in 0..<3 {
+            book.record(placed(.leftHalf, title: "Inbox — Work — Example Browser"), bundleID: browser, displays: ["ext"])
+            book.record(placed(.rightHalf, title: "Recipes — Personal — Example Browser"), bundleID: browser, displays: ["ext"])
+        }
+        // The same window again: its title tells, sure.
+        let work = book.sure(for: .init(bundleID: browser, title: "Inbox — Work — Example Browser"), displays: ["ext"], at: now)
+        XCTAssertEqual(work?.place.layout, WindowLayout.leftHalf.rawValue)
+        // Only one word in common: a guess Arrange may make, not sure enough to move a window unasked.
+        XCTAssertNil(book.sure(for: .init(bundleID: browser, title: "Mail — Work — Example Browser"), displays: ["ext"], at: now))
+        XCTAssertNil(book.sure(for: .init(bundleID: browser, title: ""), displays: ["ext"], at: now))
+    }
+
+    func testUntouched() {
+        XCTAssertTrue(UsualPlace.untouched(appearedAgo: 0.4, keyAgo: 5, clickAgo: 5, mouseDown: false))
+        XCTAssertFalse(UsualPlace.untouched(appearedAgo: 2, keyAgo: 5, clickAgo: 5, mouseDown: false))
+        XCTAssertFalse(UsualPlace.untouched(appearedAgo: 0.4, keyAgo: 0.1, clickAgo: 5, mouseDown: false))
+        XCTAssertFalse(UsualPlace.untouched(appearedAgo: 0.4, keyAgo: 5, clickAgo: 0.2, mouseDown: false))
+        XCTAssertFalse(UsualPlace.untouched(appearedAgo: 0.4, keyAgo: 5, clickAgo: 5, mouseDown: true))
+    }
+
     func testOtherDisplaysStandInAtHalfTheirWeight() {
         var book = WindowPlacements()
         book.record(placed(.leftTwoThirds, on: "ext"), bundleID: editor, displays: ["built-in", "ext"])

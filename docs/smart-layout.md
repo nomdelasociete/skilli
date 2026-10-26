@@ -7,8 +7,9 @@ the display prompt), and, when the user turns it on, a new window as it
 opens (**Usual places**). No layout to save first: the saved layouts
 stay, for the arrangements someone wants by name.
 
-Status: phases 1 (Learning, Arrange Windows) and 2 (Arrange as Usual in
-the display prompt) built; phases 3 to 5 not yet. "What skil.li already has" lists what came before it.
+Status: phases 1 (Learning, Arrange Windows), 2 (Arrange as Usual in the
+display prompt) and 3 (Usual places on launch, off by default) built;
+phases 4 and 5 not yet. "What skil.li already has" lists what came before it.
 
 ## Target
 

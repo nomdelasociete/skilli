@@ -64,6 +64,10 @@ final class ActionRunner {
             launcher.toggle(into: .gifs, triggeredAt: triggeredAt)
         case .pasteInSequence:
             onPasteInSequence?()
+        case .mac(.script(let command)) where command.needsArguments:
+            // Not run with an empty argument: the launcher asks them, as
+            // for a link that leaves them out.
+            launcher.run(fromLink: FeatureCatalog.entry(command))
         case .mac(let action):
             onMac?(action)
         case .windowLayout(let id):

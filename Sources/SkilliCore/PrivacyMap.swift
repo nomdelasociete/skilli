@@ -221,6 +221,19 @@ public enum PrivacyMap {
         sends: "Your sign-in with each request, and what you do there: merge, update a branch, mark read.",
         when: "While the strip under the search field, “pr” or an agent shows them: every minute, every 15 s while checks run.",
         pane: "github")
+    /// Server sync on: GitHub is asked only for what the user does.
+    public static let githubActions = Flow(
+        "githubActions", "Pull request actions",
+        sends: "Your sign-in with what you do there: merge, update a branch, mark read; and to check which account this Mac uses for the relay.",
+        when: "When you do it, and once per relay token for the check; pull requests and notifications are read by the relay (Server sync).",
+        pane: "github")
+    /// Settings → GitHub → Server sync: the relay reads GitHub for the
+    /// user's Macs (`GitHubServerInbox`, `RelayInbox`).
+    public static let serverSync = Flow(
+        "serverSync", "Server sync",
+        sends: "This Mac's relay token. The relay reads your pull requests and notifications on GitHub with the authorization you gave it in your browser, and keeps one encrypted copy for your Macs.",
+        when: "While GitHub shows: the relay's copy every minute and when a pull request changes; the relay asks GitHub at most once a minute for all your Macs.",
+        pane: "github")
     /// Settings → GitHub → Advanced → Live updates from: the user's relay.
     public static let relay = Flow(
         "relay", "Live updates",
@@ -279,8 +292,8 @@ public enum PrivacyMap {
 
     /// Every flow, once.
     public static let all: [Flow] = [ask, commands, followUps, mail, fieldWords, plannedSteps, agent, scheduled, continueIn, rightsHelp]
-        + deciding + [fallback, imagesCopied, imagesFolder, linkPreviews, github, relay, gifs, betterTranscription, servers, webhooks, agents, places,
-                      speedTest]
+        + deciding + [fallback, imagesCopied, imagesFolder, linkPreviews, github, githubActions, serverSync, relay, gifs, betterTranscription, servers,
+                      webhooks, agents, places, speedTest]
 
     /// Said once, above the list: the promise, then what it means.
     public static let statement = "Only what is listed below, only when it says, only to these places."
@@ -353,6 +366,8 @@ public enum PrivacyMap {
         public var githubLogin: String?
         /// The relay's host, when one is set with its token.
         public var relayHost: String?
+        /// Settings → GitHub → Server sync is on.
+        public var githubServerSync = false
         public var servers: [String] = []
         public var webhooks: [String] = []
         /// The user has rules for agents (Settings → Ask → Your Rules).
@@ -439,8 +454,10 @@ public enum PrivacyMap {
             }
         case .github:
             if setup.githubLogin != nil {
-                rows.append(Row(github))
-                if let host = setup.relayHost { rows.append(Row(relay, note: host)) }
+                rows.append(Row(setup.githubServerSync ? githubActions : github))
+                // Server sync on: said even when this Mac's relay access is gone.
+                if setup.githubServerSync { rows.append(Row(serverSync, note: setup.relayHost)) }
+                else if let host = setup.relayHost { rows.append(Row(relay, note: host)) }
             }
         case .klipy:
             rows.append(Row(gifs, isOn: setup.gifSearch))
@@ -809,6 +826,12 @@ public enum PrivacyMap {
     static func githubLine(_ setup: Setup) -> PaneLine {
         guard setup.githubLogin != nil else {
             return PaneLine(text: "Nothing leaves this Mac: you are not signed in to GitHub.", more: "privacy")
+        }
+        if setup.githubServerSync {
+            return PaneLine(text: "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read) and to check which "
+                            + "account this Mac uses for the relay; \(setup.relayHost ?? "the relay") reads "
+                            + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.",
+                            more: "privacy")
         }
         var text = "GitHub gets your sign-in with each read, every minute while the strip or “pr” shows, and what you do there: merge, "
             + "update a branch, mark read"

@@ -159,6 +159,7 @@ extension PrivacyMap.Setup {
             if github.hasRelayToken || github.relayDevice.canRevoke, let origin = RelayAddress.origin(environment.isEmpty ? preferences.relayPublicURL : environment) {
                 setup.relayHost = origin.host() ?? origin.absoluteString
             }
+            setup.githubServerSync = preferences.githubServerSync
         }
         setup.servers = context.toolSettings.servers.map(\.name)
         setup.webhooks = context.toolSettings.customTools.map(\.name)

@@ -79,7 +79,7 @@ Add); skillies join them.
   by skil.li (`UTExportedTypeDeclarations`), conforming to
   `public.plain-text` so Quick Look shows the code; skil.li is its owner
   (`CFBundleDocumentTypes`, `LSHandlerRank` Owner, role Viewer).
-- Content: a skillie as the folder takes it (skillies/README.md). Checked
+- Content: a skillie as the folder takes it (docs/skillies/header.md). Checked
   as the folder will read it: UTF-8, 256 KB at most, a `#!` line naming an
   absolute interpreter (skil.li runs a skillie by its shebang when it is
   not executable), title and mode in the first 60 lines within 8 KB,
@@ -87,7 +87,8 @@ Add); skillies join them.
 - Added as `<name>.<ext>` in the skillies folder, executable: the file's
   own name without `.skilli` (a link's: the last part of its address), in
   lowercase words joined by hyphens; the extension from the shebang (bash,
-  sh, zsh → `sh`, python → `py`, node → `js`, swift, ruby → `rb`; another
+  sh, zsh → `sh`, python → `py`, node → `js`, swift, ruby → `rb`,
+  osascript → `js` with `-l JavaScript`, `applescript` otherwise; another
   interpreter: none). A name another skillie has becomes `name-2`.
 
 ## The link
