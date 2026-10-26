@@ -113,7 +113,7 @@ Mac mini, driven from here:
 |---|---|---|
 | This Mac, any time | Unit tests, builds | `./script/build_and_run.sh test` |
 | This Mac, any time (no keys, no windows; restarts skil.li ~2 s) | Clipboard store, search, OCR; setup drawn off screen; live decisions (Ask, emoji, clipboard and files by meaning, nothing written) | `./script/build_and_run.sh selftest clipboard` / `selftest setup` / `selftest decide` |
-| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote` (all) |
+| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote pictures` (the recorder's webcam and screen: a stand-in camera, a slides window, a scratch Chrome, ~3 min), `remote` (all) |
 
 Nothing else that opens skil.li runs on the developer's Mac: `selftest` refuses other
 scopes and `benchmark` refuses outright unless `SKILLI_LOCAL_UI=1` (a Mac
@@ -340,7 +340,7 @@ SkilliCore (framework + SwiftPM library, no AppKit)
 | `Sources/Skilli/Support/Benchmark.swift` | `--benchmark` report |
 | `Sources/Skilli/Support/SelfTest.swift` | `--selftest` end-to-end driver |
 | `Sources/Skilli/App/UndoableDeletes.swift` | Every delete of the user's data: at once, Undo ⌘Z for 10 s in the card (`offerUndo`) |
-| `Sources/Skilli/Recorder/*` | The meeting recorder: `MeetingRecorder` (the two tracks, pause, stop, sources on or off), `MacSoundTap` + `MicrophoneTrack` + `TrackWriter` (sources and files), `MeetingTranscriber`, `RecordCard`, `RecorderIndicator` (menu bar), `RecordingWindow`, `RecorderCenter` (what the rest of the app calls; the moment, the call's end), `RecordingLibrary` + `RecordingIndex` (the list, the words said) |
+| `Sources/Skilli/Recorder/*` | The meeting recorder: `MeetingRecorder` (the two tracks, pause, stop, sources on or off), `MacSoundTap` + `MicrophoneTrack` + `TrackWriter` (sources and files), `MeetingTranscriber`, `RecordCard`, `RecorderIndicator` (menu bar), `RecordingWindow`, `RecorderCenter` (what the rest of the app calls; the moment, the call's end), `RecordingLibrary` + `RecordingIndex` (the list, the words said and the text read on screen); phase 3: `RecorderPictures` (the webcam and the screen together), `WebcamTrack`, `ScreenTrack` + `ScreenWindows`, `PictureTrackWriter`, `SlideReader`, `MeetingTabSelect` |
 | `Sources/SkilliCore/MeetingMoment.swift` | The recorder's moment: the five cases, a place, call apps, `CallEndWatch`, `RecordingRetention`, `RecordingSearch` |
 | `Sources/SkilliCore/*` | Pure logic, unit-tested |
 
@@ -1248,7 +1248,10 @@ starts from it.
 - Settings → Backup (`BackupCenter`, `BackupPlan` in SkilliCore): a plain
   zip ("skil.li Backup 2026-10-15 at 09.05.12.zip", made with `ditto` as
   the Finder does) of `~/Library/Application Support/skil.li` (never
-  `mcp.sock`, never the clipboard history: 2026-10-15) and the
+  `mcp.sock`, never the clipboard history: 2026-10-15; never the
+  recordings: 2026-10-24; never the words said in them,
+  `recordings-index.sqlite` and its `-wal`, `-shm`, `-journal`:
+  2026-10-25; all by exact name, `BackupPlan.neverCopied`) and the
   `Preferences.*` defaults in `Settings.plist`, minus this Mac's own state
   (`Preferences.machineKeys`: setup done, screens, launcher place, backup
   folder). API keys and sensitive form fields stay in the Keychain: never
@@ -1267,7 +1270,10 @@ starts from it.
 - "Back Up skil.li Now" in the launcher: out of sight, so one line says
   where it went; without a folder it opens Settings → Backup.
 - `selftest backup` works on scratch copies only (folder, defaults suite,
-  destination): no keys, no windows.
+  destination): no keys, no windows. It checks that no transcript's text
+  is anywhere in a backup's zip (the index open in WAL mode), that a
+  restore leaves the index as it is, and that an index SQLite cannot read
+  is made again from the transcripts (`RecordingIndex`).
 
 ### Interactions: the six rules
 
@@ -2219,8 +2225,19 @@ re-investigating.
   and at each change (`MeetingRecord`: state, the recorder's pid and
   start). At launch (normal mode, 4 s in, off the main thread) a folder
   still `recording`/`paused`/`transcribing` whose process is gone is
-  offered in the card (Save ↩, Later esc, Discard ⌘⌫); nothing is made
-  unless one is found. The menu bar while recording (`RecorderIndicator`):
+  offered in the card (Save ↩, Later esc, Discard ⌘⌫); one `stopped`
+  is transcribed without asking and without opening its window
+  (`RecorderCenter.left(in:)`, `pickUp`); nothing is made unless one is
+  found. Quit and sleep (2026-10-25, the spec's "Quit and sleep"): a quit
+  with a recording on answers `applicationShouldTerminate` with
+  `.terminateLater` (`MeetingRecorder.quitReply`), closes it as Stop does
+  (both files whole, about a second), writes it `stopped` and replies;
+  a transcript being made or waiting is left `stopped` too; never a
+  question, never transcribed at the quit. `NSWorkspace.willSleepNotification`
+  pauses a recording on (`RecorderCenter.macWillSleep`); at
+  `didWakeNotification` nothing resumes, the card offers Resume ↩, Stop
+  ⌘↩, Keep Paused esc (`RecordCard.Content.slept`), never taking the
+  keys; one the user paused shows nothing. The menu bar while recording (`RecorderIndicator`):
   a red dot, the time, both sides' waves (mic up, Mac down), hollow dot
   and still clock when paused; its menu pauses, resumes, stops; after
   Stop a ring fills while the transcript is made. Transcript
@@ -2243,7 +2260,10 @@ re-investigating.
   plays the other side, a file stands in for the microphone through the
   same engine): a call's transcript against its script, the tracks in
   step across a pause, a recording never stopped (`Skilli
-  recorderchild`, SIGKILLed), links and tools; `recorder-*.png`.
+  recorderchild`, SIGKILLed), one quit (the same child sent SIGTERM, which
+  goes through `NSApp.terminate` and `quitReply` as in skil.li), a sleep
+  and a wake (macOS's notifications posted: the test Mac cannot be woken
+  without a person), links and tools; `recorder-*.png`.
 - The recorder's moment (phase 2, 2026-10-24; docs/meeting-recorder.md's
   Moment, its views in docs/meeting-recorder-views.md "Phase 2"): the
   five cases are code, never a model (`MeetingMoment.read` in
@@ -2296,6 +2316,41 @@ re-investigating.
   user's, a scratch Chrome's WebRTC page mapped to Chrome for real, the
   call's end, search, the pane, retention and the move;
   `recorder-*.png`, `settings-recorder*.png`.
+- The recorder's webcam and screen (phase 3, 2026-10-25; its views in
+  docs/meeting-recorder-views.md "Phase 3"): both off until turned on
+  (the Record card's rows, the red dot's menu, Settings → Recorder's
+  `recorderWebcam`/`recorderScreen`, `set_recording_source`); the screen
+  never in person (`MeetingMoment.Sources`). `RecorderPictures` runs
+  them with the sound: each picture at its host time (the camera's
+  clock converted, `CMSyncConvertTime`; ScreenCaptureKit's display
+  time), cut at the same host moments (`PictureTimeline` in SkilliCore:
+  start, pauses, stop; the picture on screen at a cut held over it),
+  H.264 in fragments of a second (`PictureTrackWriter`: `webcam.mp4`
+  1280 × 720 at 30, `screen.mp4` 1920 wide at 15; a file never given a
+  picture removed; off: black from then). The screen is one window
+  (`ScreenTrack`, `SCContentFilter(desktopIndependentWindow:)`; small
+  and four a second while the card shows it): the meeting's (the call's
+  app's front window; in a browser the window holding the meeting's tab,
+  found by its room, `MeetingTab`, and selected without a reload or the
+  browser brought forward, `MeetingTabSelect`; Arc, Firefox, no tab,
+  Automation refused: the card says what to do) or one picked from the
+  window list (`ScreenWindows`, skil.li's own left out). Once a second
+  the window list says whether it still gives pictures (`PictureWatch`:
+  minimized, hidden, off screen, closed, covered whole with no new
+  picture for 5 s, `WindowCover`): an orange mark in the menu bar and
+  why in its menu, nothing else. Slides (`SlideReader`): the screen's
+  pictures sampled four times a second on a 32 × 20 brightness grid
+  (`SlideSchedule`), read by Vision when changed (once a second at
+  most, less while nothing new is found), new lines a slide at the
+  change (`SlideLog`, the window's own lines out at Stop) in
+  `slides.json`, searched by `RecordingIndex` (`shown`, "On screen:
+  …"), rows of the window's transcript. The window plays both beside
+  the lines (`AVPlayer`s started at one host time,
+  `setRate(_:time:atHostTime:)`). Camera and Screen Recording asked
+  only when turned on (the card steps down meanwhile); no camera, no
+  question. `remote pictures` (Mac mini): a stand-in camera
+  (`StandInCamera`, the mini has none) and a slides window, a scratch
+  Chrome's window covered; `recorder-pictures-*.png`.
 - Reminders (`ReminderItem`, `ReminderRequest`, `RemindersRequest`,
   `Reminders` in SkilliCore, `ReminderBook`; Permission `.reminders`):
   every list the Reminders app has, through EventKit, asked for at first

@@ -1,12 +1,14 @@
-// The meeting recorder's crash, for the self-test: compiled only with
-// SKILLI_SELFTEST, never in a release.
+// The meeting recorder's crash and quit, for the self-test: compiled only
+// with SKILLI_SELFTEST, never in a release.
 #if SKILLI_SELFTEST
 import AppKit
 
 /// `Skilli recorderchild <recordings folder> <me.wav>`: records as skil.li
 /// does (the Mac's sound, a file standing in for the microphone) until it is
 /// killed, so the self-test finds a recording never stopped, as a crash or
-/// a power cut leaves one. Prints its folder once it records.
+/// a power cut leaves one; or until it is sent SIGTERM, which quits it as
+/// skil.li quits (`NSApp.terminate`, then the recorder's `quitReply`).
+/// Prints its folder once it records.
 @MainActor
 enum RecorderChild {
     static func runIfRequested(_ arguments: [String]) -> Int32? {
@@ -15,6 +17,13 @@ enum RecorderChild {
         app.setActivationPolicy(.prohibited)
         let root = URL(fileURLWithPath: arguments[2]), me = URL(fileURLWithPath: arguments[3])
         let recorder = MeetingRecorder(recordings: Recordings(root: root))
+        let delegate = Delegate(recorder: recorder)
+        app.delegate = delegate
+        // As skil.li hears `pkill`: the quit goes through NSApp.
+        signal(SIGTERM, SIG_IGN)
+        let terminate = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        terminate.setEventHandler { MainActor.assumeIsolated { NSApp.terminate(nil) } }
+        terminate.resume()
         Task { @MainActor in
             recorder.standIn(microphone: me, alsoLeaveOut: [])
             await recorder.listen()
@@ -28,8 +37,21 @@ enum RecorderChild {
                 exit(1)
             }
         }
-        withExtendedLifetime(recorder) { app.run() }
+        withExtendedLifetime((recorder, delegate, terminate)) { app.run() }
         return 0
+    }
+
+    /// Answers a quit as skil.li's `AppDelegate` does.
+    private final class Delegate: NSObject, NSApplicationDelegate {
+        let recorder: MeetingRecorder
+
+        init(recorder: MeetingRecorder) {
+            self.recorder = recorder
+        }
+
+        func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+            recorder.quitReply()
+        }
     }
 }
 #endif

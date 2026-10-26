@@ -5,9 +5,11 @@ import SkilliCore
 
 /// A recording's window (docs/meeting-recorder-views.md): a window, not a
 /// card, since it is read and played. The player with both sides'
-/// waveforms, then the transcript, a line each, Me or Them; a click plays
-/// from a line, the line playing is lit and followed. Built when opened,
-/// released when closed.
+/// waveforms, then the transcript, a line each, Me or Them, the slides
+/// read on screen among them at their time; a click plays from a line,
+/// the line playing is lit and followed. The webcam and the screen play
+/// small beside it, in step (phase 3). Built when opened, released when
+/// closed.
 @MainActor
 final class RecordingWindowController: NSObject, NSWindowDelegate {
     let folder: URL
@@ -15,6 +17,9 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private let window: RecordingWindow
     private let view = RecordingView()
     private var player: AVPlayer?
+    /// The screen's and the webcam's players, kept in step with the
+    /// sound's (one host time to start them all).
+    private var pictures: [AVPlayer] = []
     /// Loading it: once, however often the window is shown meanwhile.
     private var loadingPlayer = false
     private var observer: Any?
@@ -27,7 +32,11 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     init(folder: URL, record: MeetingRecord, transcript: MeetingTranscript.File?) {
         self.folder = folder
         self.record = record
-        window = RecordingWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 640),
+        // With pictures it opens wider: the column beside the lines.
+        let pictured = [RecorderPictures.screenFile, RecorderPictures.webcamFile].contains {
+            FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
+        }
+        window = RecordingWindow(contentRect: NSRect(x: 0, y: 0, width: pictured ? 1020 : 760, height: 640),
                                  styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         super.init()
         window.isReleasedWhenClosed = false
@@ -54,6 +63,10 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var spaceHint: String? { view.spaceHint }
     var shownLanes: [String] { view.shownLanes }
     var shownAbout: String { view.aboutText }
+    var shownSlides: [SlideLog.Slide] { view.slides }
+    var shownPictures: Int { view.pictureCount }
+    /// Where the screen's and the webcam's players are, and the sound's.
+    var pictureTimes: [Double] { pictures.map { $0.currentTime().seconds } }
     /// Where a line is on screen (AppKit's coordinates), to click it.
     func screenFrame(ofLine row: Int) -> NSRect? { view.screenFrame(ofLine: row) }
 
@@ -68,7 +81,10 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         if let transcribing {
             view.showTranscribing(transcribing)
         } else if let transcript {
-            view.showLines(transcript.lines)
+            view.showLines(transcript.lines, slides: Self.slides(in: folder))
+        } else if record.state == .transcribing || record.state == .stopped {
+            // Its turn not come yet (another being made, or the launch's).
+            view.showWaiting()
         } else {
             view.showPending(language: record.language)
         }
@@ -77,6 +93,11 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     func present() {
         Foreground.bring(window)
+    }
+
+    /// The slides read on screen, from `slides.json` (none: empty).
+    nonisolated static func slides(in folder: URL) -> [SlideLog.Slide] {
+        (try? Data(contentsOf: folder.appendingPathComponent(RecorderPictures.slidesFile))).flatMap { try? SlideLog.decode($0) } ?? []
     }
 
     func close() {
@@ -100,10 +121,31 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             }
             guard let self else { return }
             let player = AVPlayer(playerItem: AVPlayerItem(asset: composition))
+            player.automaticallyWaitsToMinimizeStalling = false
             self.player = player
+            // The screen and the webcam, each its own player on its own
+            // layer, started with the sound at one host time.
+            var layers: [(AVPlayerLayer, CGSize)] = []
+            for name in [RecorderPictures.screenFile, RecorderPictures.webcamFile] {
+                let url = self.folder.appendingPathComponent(name)
+                guard FileManager.default.fileExists(atPath: url.path) else { continue }
+                let asset = AVURLAsset(url: url)
+                guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+                      let size = try? await track.load(.naturalSize), size.width > 0 else { continue }
+                let picture = AVPlayer(playerItem: AVPlayerItem(asset: asset))
+                picture.automaticallyWaitsToMinimizeStalling = false
+                picture.isMuted = true
+                picture.actionAtItemEnd = .pause
+                self.pictures.append(picture)
+                layers.append((AVPlayerLayer(player: picture), size))
+            }
+            self.view.setPictures(layers)
             self.view.duration = max(self.record.seconds, composition.duration.seconds.isFinite ? composition.duration.seconds : 0)
             self.observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 20), queue: .main) { [weak self] time in
-                MainActor.assumeIsolated { self?.view.played(to: time.seconds, playing: (self?.player?.rate ?? 0) > 0) }
+                MainActor.assumeIsolated {
+                    self?.view.played(to: time.seconds, playing: (self?.player?.rate ?? 0) > 0)
+                    self?.keepPicturesInStep()
+                }
             }
             self.view.played(to: 0, playing: false)
         }
@@ -117,18 +159,51 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         guard let player else { return }
         if player.rate > 0 {
             player.pause()
+            pictures.forEach { $0.pause() }
+            let at = player.currentTime()
+            pictures.forEach { $0.seek(to: at, toleranceBefore: .zero, toleranceAfter: .zero) }
         } else {
-            if let item = player.currentItem, item.currentTime() >= item.duration, item.duration.isNumeric { player.seek(to: .zero) }
-            player.play()
+            var from = player.currentTime()
+            if let item = player.currentItem, from >= item.duration, item.duration.isNumeric { from = .zero }
+            playAll(from: from)
         }
         view.played(to: player.currentTime().seconds, playing: player.rate > 0)
     }
 
     func seek(to seconds: Double, play: Bool) {
         guard let player else { return }
-        player.seek(to: CMTime(seconds: max(0, seconds), preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
-        if play { player.play() }
+        let time = CMTime(seconds: max(0, seconds), preferredTimescale: 600)
+        if play || player.rate > 0 {
+            playAll(from: time)
+        } else {
+            for each in [player] + pictures { each.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) }
+        }
         view.played(to: seconds, playing: play || player.rate > 0)
+    }
+
+    /// Every player from `time`, started at the same host time a moment
+    /// from now: the pictures in step with the sound.
+    private func playAll(from time: CMTime) {
+        guard let player else { return }
+        let host = CMTimeAdd(CMClockGetTime(CMClockGetHostTimeClock()), CMTime(value: 1, timescale: 20))
+        for each in [player] + pictures {
+            each.setRate(1, time: time, atHostTime: host)
+        }
+    }
+
+    /// While playing, a picture more than a frame off the sound (a file
+    /// that ended and held, a seek still on its way) is put back in step.
+    private func keepPicturesInStep() {
+        guard let player, player.rate > 0, !pictures.isEmpty else { return }
+        let now = player.currentTime()
+        for picture in pictures {
+            guard let item = picture.currentItem, item.duration.isNumeric else { continue }
+            let wanted = min(now.seconds, item.duration.seconds)
+            if abs(picture.currentTime().seconds - wanted) > 0.07, now.seconds < item.duration.seconds {
+                let host = CMTimeAdd(CMClockGetTime(CMClockGetHostTimeClock()), CMTime(value: 1, timescale: 20))
+                picture.setRate(1, time: CMTimeAdd(now, CMTime(value: 1, timescale: 20)), atHostTime: host)
+            }
+        }
     }
 
     /// Each side's loudest sample per bucket, 0…1: the waveform.
@@ -172,6 +247,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             onShowFolder?(folder)
         case (.command, kVK_Delete):
             player?.pause()
+            pictures.forEach { $0.pause() }
             onDelete?(folder, record)
         default:
             return false
@@ -196,6 +272,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         player?.pause()
+        pictures.forEach { $0.pause() }
+        pictures = []
         if let observer { player?.removeTimeObserver(observer) }
         observer = nil
         player = nil
@@ -239,6 +317,25 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     private let transcribeButton = NSButton(title: "Transcribe", target: nil, action: nil)
     private let hints = HintBar()
     private(set) var lines: [TranscriptLine] = []
+    /// What the table shows: the lines said and the slides read, by time.
+    private enum Row {
+        case said(TranscriptLine)
+        case shown(SlideLog.Slide)
+
+        var start: Double {
+            switch self {
+            case .said(let line): line.start
+            case .shown(let slide): slide.start
+            }
+        }
+    }
+
+    private var rows: [Row] = []
+    /// Each line said, its row.
+    private var rowOfLine: [Int] = []
+    private(set) var slides: [SlideLog.Slide] = []
+    private let picturesColumn = PicturesColumn()
+    var pictureCount: Int { picturesColumn.count }
     private var speakerNames: [String: String] = [:]
     /// Self-test hook: the lanes, by name.
     var shownLanes: [String] { waveform.lanesShown.map { speakerNames[$0.rawValue] ?? $0.title } }
@@ -309,7 +406,8 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         transcribeButton.keyEquivalent = "\r"
         transcribeButton.target = self
         transcribeButton.action = #selector(transcribePressed)
-        for subview in [title, about, playButton, time, waveform, topLine, scroll, state, languageMenu, transcribeButton, bottomLine, hints] as [NSView] {
+        for subview in [title, about, playButton, time, waveform, topLine, scroll, picturesColumn, state, languageMenu, transcribeButton, bottomLine,
+                        hints] as [NSView] {
             addSubview(subview)
         }
         updateTime(playing: false)
@@ -323,14 +421,16 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         about.stringValue = line
     }
 
-    func showLines(_ lines: [TranscriptLine]) {
+    func showLines(_ lines: [TranscriptLine], slides: [SlideLog.Slide] = []) {
         self.lines = lines
+        self.slides = slides
+        setRows(lines.map(Row.said) + slides.map(Row.shown))
         heights = [:]
         table.reloadData()
-        table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<lines.count))
+        table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<rows.count))
         scroll.isHidden = false
-        state.isHidden = !lines.isEmpty
-        state.stringValue = lines.isEmpty ? "Nothing was said, or nothing the engine could hear." : ""
+        state.isHidden = !rows.isEmpty
+        state.stringValue = rows.isEmpty ? "Nothing was said, or nothing the engine could hear." : ""
         languageMenu.isHidden = true
         transcribeButton.isHidden = true
         hints.setHints(lines.isEmpty ? [("Play", "space"), ("Show in Finder", "⌘↩"), ("Delete", "⌘⌫")]
@@ -340,6 +440,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
 
     func showTranscribing(_ step: MeetingTranscriber.Step) {
         lines = []
+        setRows([])
         table.reloadData()
         scroll.isHidden = true
         state.isHidden = false
@@ -353,10 +454,25 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         needsLayout = true
     }
 
+    /// Its transcript waits its turn.
+    func showWaiting() {
+        lines = []
+        setRows([])
+        table.reloadData()
+        scroll.isHidden = true
+        state.isHidden = false
+        state.stringValue = "Waiting to be transcribed…"
+        languageMenu.isHidden = true
+        transcribeButton.isHidden = true
+        hints.setHints([("Play", "space"), ("Show in Finder", "⌘↩"), ("Delete", "⌘⌫")])
+        needsLayout = true
+    }
+
     /// No transcript: the language this Mac could not transcribe, and the
     /// ones it can.
     func showPending(language: String) {
         lines = []
+        setRows([])
         table.reloadData()
         scroll.isHidden = true
         state.isHidden = false
@@ -376,11 +492,27 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         needsLayout = true
     }
 
-    func screenFrame(ofLine row: Int) -> NSRect? {
-        guard row < lines.count, let window else { return nil }
+    /// The rows by time (a slide before the line said as it showed),
+    /// each line's row noted.
+    private func setRows(_ unsorted: [Row]) {
+        rows = unsorted.enumerated().sorted { a, b in
+            a.element.start != b.element.start ? a.element.start < b.element.start : a.offset < b.offset
+        }.map(\.element)
+        rowOfLine = rows.indices.filter { if case .said = rows[$0] { true } else { false } }
+    }
+
+    func screenFrame(ofLine line: Int) -> NSRect? {
+        guard line < rowOfLine.count, let window else { return nil }
+        let row = rowOfLine[line]
         table.scrollRowToVisible(row)
         let rect = table.convert(table.rect(ofRow: row), to: nil)
         return window.convertToScreen(rect)
+    }
+
+    /// The screen's and the webcam's players' layers, beside the lines.
+    func setPictures(_ layers: [(AVPlayerLayer, CGSize)]) {
+        picturesColumn.set(layers)
+        needsLayout = true
     }
 
     func setPeaks(me: [Float], them: [Float]) {
@@ -409,11 +541,11 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         guard line != litLine else { return }
         let previous = litLine
         litLine = line
-        for row in [previous, line].compactMap({ $0 }) where row < lines.count {
-            (table.rowView(atRow: row, makeIfNecessary: false) as? LineRowView)?.isLit = row == line
+        for index in [previous, line].compactMap({ $0 }) where index < rowOfLine.count {
+            (table.rowView(atRow: rowOfLine[index], makeIfNecessary: false) as? LineRowView)?.isLit = index == line
         }
-        if playing, let line, scrolledAt.map({ Date.now.timeIntervalSince($0) > 3 }) ?? true {
-            table.scrollRowToVisible(line)
+        if playing, let line, line < rowOfLine.count, scrolledAt.map({ Date.now.timeIntervalSince($0) > 3 }) ?? true {
+            table.scrollRowToVisible(rowOfLine[line])
         }
     }
 
@@ -442,24 +574,31 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
 
     // MARK: - Lines
 
-    func numberOfRows(in tableView: NSTableView) -> Int { lines.count }
+    func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let cell = tableView.makeView(withIdentifier: LineCell.identifier, owner: nil) as? LineCell ?? LineCell()
-        cell.show(lines[row], name: speakerNames[lines[row].speaker.rawValue])
+        switch rows[row] {
+        case .said(let line): cell.show(line, name: speakerNames[line.speaker.rawValue])
+        case .shown(let slide): cell.show(slide)
+        }
         return cell
     }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let rowView = LineRowView()
-        rowView.isLit = row == litLine
+        rowView.isLit = litLine.map { $0 < rowOfLine.count && rowOfLine[$0] == row } ?? false
         return rowView
     }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         if let height = heights[row] { return height }
         // Before the first layout: the window's starting width.
-        let height = LineCell.height(of: lines[row], width: linesWidth > 0 ? linesWidth : 712)
+        let text: String = switch rows[row] {
+        case .said(let line): line.text
+        case .shown(let slide): LineCell.text(of: slide)
+        }
+        let height = LineCell.height(of: text, width: linesWidth > 0 ? linesWidth : 712)
         heights[row] = height
         return height
     }
@@ -468,9 +607,9 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     /// its start again).
     @objc private func lineClicked() {
         let row = table.clickedRow
-        guard row >= 0, row < lines.count else { return }
+        guard row >= 0, row < rows.count else { return }
         scrolledAt = nil
-        onSeek?(lines[row].start, true)
+        onSeek?(rows[row].start, true)
     }
 
     // MARK: - Layout
@@ -502,14 +641,19 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         bottomLine.frame = NSRect(x: 0, y: bottom, width: width, height: 1)
         hints.frame = NSRect(x: inset, y: bottom + 12, width: inner, height: 20)
         hints.setHints(hints.shown)
-        scroll.frame = NSRect(x: inset - 12, y: y + 1, width: inner + 24, height: max(0, bottom - y - 1))
-        let columnWidth = scroll.contentSize.width
-        if columnWidth != linesWidth {
-            linesWidth = columnWidth
-            table.tableColumns.first?.width = columnWidth
+        // The pictures' column on the right, beside the lines.
+        let columnWidth = picturesColumn.count > 0 ? PicturesColumn.width : 0
+        picturesColumn.isHidden = columnWidth == 0
+        picturesColumn.frame = NSRect(x: width - inset - columnWidth, y: y + 16, width: columnWidth, height: max(0, bottom - y - 32))
+        let linesInner = columnWidth > 0 ? inner - columnWidth - 20 : inner
+        scroll.frame = NSRect(x: inset - 12, y: y + 1, width: linesInner + 24, height: max(0, bottom - y - 1))
+        let tableWidth = scroll.contentSize.width
+        if tableWidth != linesWidth {
+            linesWidth = tableWidth
+            table.tableColumns.first?.width = tableWidth
             // Wrapped lines take another height at another width.
             heights = [:]
-            table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<lines.count))
+            table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<rows.count))
         }
         let stateHeight = state.isHidden ? 0 : (state.stringValue as NSString).boundingRect(
             with: NSSize(width: min(inner, 460), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading],
@@ -587,12 +731,28 @@ private final class LineCell: NSTableCellView {
         speaker.textColor = line.speaker == .me ? .controlAccentColor : .secondaryLabelColor
         time.stringValue = MeetingTranscript.clock(line.start)
         words.stringValue = line.text
+        words.textColor = .labelColor
         needsLayout = true
     }
 
-    static func height(of line: TranscriptLine, width: CGFloat) -> CGFloat {
+    /// A slide read on screen: "Screen", its lines joined, quieter than
+    /// what was said.
+    func show(_ slide: SlideLog.Slide) {
+        speaker.stringValue = "Screen"
+        speaker.textColor = .tertiaryLabelColor
+        time.stringValue = MeetingTranscript.clock(slide.start)
+        words.stringValue = Self.text(of: slide)
+        words.textColor = .secondaryLabelColor
+        needsLayout = true
+    }
+
+    static func text(of slide: SlideLog.Slide) -> String {
+        slide.lines.joined(separator: " · ")
+    }
+
+    static func height(of text: String, width: CGFloat) -> CGFloat {
         let textWidth = max(80, width - padding * 2 - speakerWidth - timeWidth)
-        let measured = (line.text as NSString).boundingRect(with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
+        let measured = (text as NSString).boundingRect(with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
                                                             options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: textFont]).height
         return ceil(max(measured, 17)) + vertical * 2
     }
@@ -604,6 +764,49 @@ private final class LineCell: NSTableCellView {
         time.frame = NSRect(x: x + Self.speakerWidth, y: Self.vertical + 1, width: Self.timeWidth - 6, height: 16)
         let left = x + Self.speakerWidth + Self.timeWidth
         words.frame = NSRect(x: left, y: Self.vertical, width: max(0, bounds.width - left - Self.padding), height: bounds.height - Self.vertical * 2)
+    }
+}
+
+/// The screen and the webcam beside the lines (phase 3): the screen at
+/// its own shape across the column, the webcam under it at half its
+/// width, corners of 10 pt, black behind the picture.
+private final class PicturesColumn: NSView {
+    static let width: CGFloat = 260
+    private var shown: [(view: NSView, size: CGSize)] = []
+
+    var count: Int { shown.count }
+
+    override var isFlipped: Bool { true }
+
+    func set(_ layers: [(AVPlayerLayer, CGSize)]) {
+        shown.forEach { $0.view.removeFromSuperview() }
+        shown = layers.map { layer, size in
+            let view = NSView()
+            view.wantsLayer = true
+            view.layer?.backgroundColor = NSColor.black.cgColor
+            view.layer?.cornerRadius = 10
+            view.layer?.masksToBounds = true
+            layer.videoGravity = .resizeAspect
+            view.layer?.addSublayer(layer)
+            addSubview(view)
+            return (view, size)
+        }
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        var y: CGFloat = 0
+        for (index, picture) in shown.enumerated() {
+            // The first (the screen, or the webcam alone) across; a second
+            // (the webcam under the screen) at half the width.
+            let width = index == 0 ? bounds.width : (bounds.width / 2).rounded()
+            let ratio = picture.size.width > 0 ? picture.size.height / picture.size.width : 9.0 / 16
+            let height = min((width * ratio).rounded(), max(0, bounds.height - y))
+            picture.view.frame = NSRect(x: 0, y: y, width: width, height: height)
+            picture.view.layer?.sublayers?.first?.frame = picture.view.bounds
+            y += height + 12
+        }
     }
 }
 

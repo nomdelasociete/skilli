@@ -58,7 +58,7 @@ enum Permission: String, CaseIterable, Identifiable, Sendable {
         case .pasteboard: "clipboard history"
         case .fullDiskAccess: "Safari's history"
         case .inputMonitoring: "shortcuts"
-        case .camera: "checking your camera before a meeting"
+        case .camera: "checking your camera before a meeting, and recording it"
         case .bluetooth: "connecting your devices"
         }
     }
@@ -67,7 +67,7 @@ enum Permission: String, CaseIterable, Identifiable, Sendable {
     var turnsOn: String {
         switch self {
         case .accessibility: "The Hyper Key and every shortcut, reading and replacing the text you select, snippets as you type, moving windows, menus and doing it here."
-        case .screenRecording: "Doing it here reads the words a window shows when its app tells Accessibility little, and shows Jev one picture of that window when they say too little. A recorded meeting's other side, the Mac's sound, kept on this Mac."
+        case .screenRecording: "Doing it here reads the words a window shows when its app tells Accessibility little, and shows Jev one picture of that window when they say too little. A recorded meeting's other side, the Mac's sound, and its window when you turn the screen on, its text read there: all kept on this Mac."
         case .microphone: "Ask by Voice (✦V), Dictate (✦D) and your side of a recorded meeting. What you say becomes text on this Mac."
         case .calendar: "Your next meeting and its alerts, the agenda, events said in one sentence."
         case .reminders: "“Remind me…”, your to-dos to check off, today's in the menu bar."
@@ -75,7 +75,7 @@ enum Permission: String, CaseIterable, Identifiable, Sendable {
         case .pasteboard: "Clipboard history (✦C) reads what you copy without macOS asking each time."
         case .fullDiskAccess: "Safari's pages in Browser History."
         case .inputMonitoring: "Shortcuts, only if they do not work with Accessibility on."
-        case .camera: "Check Camera & Mic in the meeting card: you, before you join. Nothing is recorded."
+        case .camera: "Check Camera & Mic in the meeting card: you, before you join, nothing recorded. Your webcam in a recorded meeting, when you turn it on, kept on this Mac."
         case .bluetooth: "Connecting and disconnecting AirPods, keyboards and speakers paired with this Mac."
         }
     }

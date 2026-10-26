@@ -55,8 +55,32 @@ final class BackupPlanTests: XCTestCase {
                        ["31 settings", "2 snippets", "1 command", "3 quicklinks", "1 window layout", "your shortcuts"])
     }
 
-    func testTheClipboardHistoryAndRecordingsAreNeverBackedUp() {
-        XCTAssertEqual(BackupPlan.neverCopied, ["mcp.sock", "Clipboard", "Recordings"])
+    func testTheClipboardHistoryRecordingsAndTheirWordsAreNeverBackedUp() {
+        XCTAssertEqual(BackupPlan.neverCopied, [
+            "mcp.sock", "Clipboard", "Recordings",
+            "recordings-index.sqlite", "recordings-index.sqlite-wal", "recordings-index.sqlite-shm", "recordings-index.sqlite-journal",
+        ])
+    }
+
+    func testARestoreLeavesTheWordsSaidAlone() {
+        // The index on this Mac stays as it is; one in a backup made before
+        // it was left out (with its WAL files) is not brought back.
+        let index = ["recordings-index.sqlite", "recordings-index.sqlite-wal", "recordings-index.sqlite-shm"]
+        let plan = BackupPlan.restore(current: ["snippets", "Recordings"] + index + ["recordings-index.sqlite-journal"],
+                                      backup: ["snippets", "quicklinks.json"] + index)
+        XCTAssertEqual(plan.remove, ["snippets"])
+        XCTAssertEqual(plan.copy, ["snippets", "quicklinks.json"])
+    }
+
+    func testOnlyTheExactNamesAreLeftOut() {
+        // Named like the index or the recordings, but the user's own: backed
+        // up and restored like the rest.
+        let lookalikes = ["recordings-index.sqlite.bak", "old recordings-index.sqlite", "recordings-index.sqlite-wal.txt", "Recordings 2",
+                          "recordings", "Clipboard notes.md", "mcp.sock.old"]
+        XCTAssertTrue(lookalikes.allSatisfy { !BackupPlan.neverCopied.contains($0) })
+        let plan = BackupPlan.restore(current: lookalikes, backup: lookalikes)
+        XCTAssertEqual(plan.remove, lookalikes)
+        XCTAssertEqual(plan.copy, lookalikes)
     }
 
     func testARestoreLeavesTheRecordingsAlone() {

@@ -5,7 +5,8 @@ import SkilliCore
 /// The meeting recorder (docs/meeting-recorder.md, phase 1): the
 /// microphone and the Mac's sound as two tracks, written as they come,
 /// each by its own clock; pause, stop, then the transcript on this Mac.
-/// Made the first time it is needed, never at launch.
+/// The webcam and the screen (phase 3, `RecorderPictures`) by the same
+/// moments. Made the first time it is needed, never at launch.
 @MainActor
 final class MeetingRecorder {
     /// The live recording.
@@ -32,6 +33,8 @@ final class MeetingRecorder {
         /// The call's app, by name.
         var app: String?
         var place: String?
+        /// The screen's window, when the screen is on (the meeting's).
+        var screen: ScreenWindow?
     }
 
     /// A transcript being made, for the menu bar.
@@ -69,6 +72,8 @@ final class MeetingRecorder {
     private(set) var sources = MeetingMoment.Sources.both
     /// The tracks on at some moment of the recording on now.
     private var everOn: Set<Speaker> = []
+    /// The webcam and the screen, made the first time one is on.
+    private var madePictures: RecorderPictures?
     private var writers: [Speaker: TrackWriter] = [:]
     private(set) var folder: URL?
     private(set) var record: MeetingRecord?
@@ -82,12 +87,29 @@ final class MeetingRecorder {
     private(set) var resumeJumps: [Speaker: [Double]] = [:]
     /// Transcripts wait their turn: one at a time.
     private var queue: [(URL, MeetingRecord)] = []
+    /// A stop under way (`stopping`): told once its files are closed.
+    private var closedWaiters: [CheckedContinuation<Void, Never>] = []
+    /// skil.li quits: nothing starts any more, every transcript not made
+    /// is left for the next launch.
+    private(set) var quitting = false
+    /// The quit's close, once asked (macOS may ask twice).
+    private var quitClose: Task<Void, Never>?
 
     init(recordings: Recordings) {
         self.recordings = recordings
     }
 
     var isRecording: Bool { phase == .recording || phase == .paused }
+
+    /// The webcam and the screen (phase 3): made when first asked for.
+    var pictures: RecorderPictures {
+        if let madePictures { return madePictures }
+        let made = RecorderPictures()
+        made.onChange = { [weak self] in self?.onChange?() }
+        made.onFailure = { [weak self] said in self?.stoppedByItself(said) }
+        madePictures = made
+        return made
+    }
     var title: String { record?.title ?? "" }
 
     /// Seconds recorded, the pauses taken out.
@@ -108,14 +130,17 @@ final class MeetingRecorder {
     // MARK: - The card
 
     /// The Record card opened (or ⌘R pressed): the sources on run, their
-    /// meters live, nothing kept. The microphone is asked for when macOS
-    /// never asked. A source off is not started (in person, the Mac's
-    /// sound: no tap, no question).
-    func listen(sources: MeetingMoment.Sources = .both) async {
+    /// meters live (the webcam's and the screen's pictures), nothing kept.
+    /// The microphone is asked for when macOS never asked. A source off is
+    /// not started (in person, the Mac's sound: no tap, no question); the
+    /// screen is on only with a window to record.
+    func listen(sources: MeetingMoment.Sources = .both, screen window: ScreenWindow? = nil) async {
         guard phase == .idle else { return }
         phase = .listening
         sourcesStarted = false
         self.sources = sources
+        // The screen with a window to record, or off (one picked later).
+        self.sources.screen = sources.screen && window != nil
         for inbox in [micInbox, macInbox] {
             inbox.keeping = false
             inbox.resetMeters()
@@ -124,6 +149,9 @@ final class MeetingRecorder {
         // can leave out.
         if sources.microphone { await microphone.start() }
         if sources.macSound { startMacSound() }
+        if sources.webcam || window != nil {
+            await pictures.listen(webcam: sources.webcam, screen: window)
+        }
         sourcesStarted = true
         // Closed while macOS asked.
         if phase != .listening, !isRecording { stopSources() }
@@ -168,6 +196,25 @@ final class MeetingRecorder {
         onChange?()
     }
 
+    /// The webcam on or off, in the card or the red dot's menu: for the
+    /// rest of the recording (off: black in its file from then on).
+    func setWebcam(_ on: Bool) async {
+        guard phase == .listening || isRecording, on != sources.webcam else { return }
+        sources.webcam = on
+        await pictures.setWebcam(on)
+        onChange?()
+    }
+
+    /// The screen's window (nil: off), in the card or the red dot's menu:
+    /// another one goes on in the same file.
+    func setScreen(_ window: ScreenWindow?) async {
+        guard phase == .listening || isRecording else { return }
+        guard window != nil || sources.screen else { return }
+        sources.screen = window != nil
+        await pictures.setScreen(window)
+        onChange?()
+    }
+
     /// The card closed without ↩.
     func stopListening() {
         guard phase == .listening else { return }
@@ -179,6 +226,7 @@ final class MeetingRecorder {
         sourcesStarted = false
         microphone.stop()
         macSound.stop()
+        madePictures?.stopAll()
         micInbox.keeping = false
         macInbox.keeping = false
     }
@@ -194,7 +242,7 @@ final class MeetingRecorder {
     /// card in between.
     func record(_ starting: Start) async throws {
         guard phase == .idle else { throw Failure(message: isRecording ? "A recording is on already." : "The Record card is open.") }
-        await listen(sources: starting.sources)
+        await listen(sources: starting.sources, screen: starting.screen)
         guard phase == .listening else { throw Failure(message: "The recording was stopped before it started.") }
         do {
             try begin(starting)
@@ -210,6 +258,7 @@ final class MeetingRecorder {
     }
 
     func begin(_ starting: Start) throws {
+        guard !quitting else { throw Failure(message: "skil.li is quitting.") }
         guard phase == .listening else { throw Failure(message: phase == .idle ? "The Record card is not open." : "A recording is on already.") }
         let started = Date.now
         let typed = starting.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -235,9 +284,11 @@ final class MeetingRecorder {
                 }
                 writers[speaker] = writer
             }
+            try madePictures?.begin(folder: folder, start: start)
         } catch {
             writers.values.forEach { $0.cancel() }
             writers = [:]
+            madePictures?.cancel()
             try? FileManager.default.removeItem(at: folder)
             throw error
         }
@@ -269,6 +320,7 @@ final class MeetingRecorder {
         guard phase == .recording, var record, let folder else { return }
         let now = HostClock.now
         writers.values.forEach { $0.pause(at: now) }
+        madePictures?.pause(at: now)
         pausedAt = now
         record.state = .paused
         record.pauses.append(.init(at: max(0, now - start - pausedTotal), seconds: 0))
@@ -281,6 +333,7 @@ final class MeetingRecorder {
         guard phase == .paused, var record, let folder, let pausedAt else { return }
         let now = HostClock.now
         writers.values.forEach { $0.resume(at: now) }
+        madePictures?.resume(at: now)
         pausedTotal += now - pausedAt
         self.pausedAt = nil
         if let last = record.pauses.indices.last { record.pauses[last].seconds = now - pausedAt }
@@ -309,6 +362,10 @@ final class MeetingRecorder {
             lengths.append(await writer.finish(at: now, waitingForSource: on))
             jumps[speaker] = writer.resumeJumps
         }
+        // The pictures end at the same moment (none written: no file).
+        if let pictures = await madePictures?.finish(at: now), pictures.webcam > 0 || pictures.screen > 0 {
+            Log.trace("Recorder: pictures closed, webcam \(Int(pictures.webcam)) s, screen \(Int(pictures.screen)) s, \(pictures.slides) slides")
+        }
         // A track never on (in person, the Mac's sound): no lane, nothing
         // transcribed; the microphone then holds the whole room.
         let unused = Speaker.allCases.filter { !everOn.contains($0) }
@@ -329,6 +386,66 @@ final class MeetingRecorder {
         phase = .idle
         Log.trace("Recorder: “\(record.title)” stopped, \(Int(record.seconds)) s (me \(lengths.first ?? 0), them \(lengths.last ?? 0))")
         transcribe(folder, record: record)
+        let waiting = closedWaiters
+        closedWaiters = []
+        waiting.forEach { $0.resume() }
+    }
+
+    // MARK: - Quitting
+
+    /// `applicationShouldTerminate`'s answer (docs/meeting-recorder.md,
+    /// "Quit and sleep"): at once when no recording is on (a transcript
+    /// being made or waiting is left for the next launch); else later,
+    /// once the recording is closed as Stop closes it, both files whole
+    /// (about a second), when the app is told it may quit. Nothing asked.
+    func quitReply() -> NSApplication.TerminateReply {
+        if quitClose != nil { return .terminateLater }
+        guard isRecording || phase == .stopping else {
+            closeForQuitNow()
+            return .terminateNow
+        }
+        quitClose = Task {
+            await closeForQuit()
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
+    /// skil.li quits: a recording on is stopped as Stop stops it (its files
+    /// closed, `meeting.json` written), a stop under way finishes, and every
+    /// transcript not made yet is left `stopped` for the next launch.
+    func closeForQuit() async {
+        quitting = true
+        if phase == .listening { stopListening() }
+        if isRecording {
+            await stop()
+        } else if phase == .stopping {
+            await withCheckedContinuation { closedWaiters.append($0) }
+        }
+        closeForQuitNow()
+    }
+
+    /// The part that does not wait: no recording on. The card's sources
+    /// stopped; the transcript being made and those waiting their turn
+    /// left for the next launch (one finishing meanwhile is written done).
+    private func closeForQuitNow() {
+        quitting = true
+        if phase == .listening { stopListening() }
+        var left = queue.map(\.0)
+        queue = []
+        if let transcribing { left.insert(transcribing.folder, at: 0) }
+        for folder in left {
+            if let record = recordings.read(folder) { leave(folder, record: record) }
+        }
+    }
+
+    /// Kept for the next launch's transcript: `stopped`, nobody's.
+    private func leave(_ folder: URL, record: MeetingRecord) {
+        var record = record
+        record.state = .stopped
+        record.recorder = nil
+        try? recordings.write(record, to: folder)
+        Log.trace("Recorder: “\(record.title)” left for the next launch's transcript")
     }
 
     /// A track could not be written (the disk full): what was recorded is
@@ -345,13 +462,14 @@ final class MeetingRecorder {
     /// language this Mac cannot transcribe, or a failure: kept without one
     /// (`pending`), its window says why.
     func transcribe(_ folder: URL, record: MeetingRecord) {
+        guard !quitting else { return leave(folder, record: record) }
         queue.append((folder, record))
         guard transcribing == nil else { return }
         Task { await transcribeNext() }
     }
 
     private func transcribeNext() async {
-        while !queue.isEmpty {
+        while !queue.isEmpty, !quitting {
             let (folder, record) = queue.removeFirst()
             transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0))
             var working = record
@@ -377,7 +495,8 @@ final class MeetingRecorder {
                 Log.actions.error("Recorder: no transcript for “\(record.title, privacy: .private)” (\(error.localizedDescription, privacy: .public))")
             }
             transcribing = nil
-            onFinished?(folder)
+            // Quitting: its window is not opened as skil.li goes.
+            if !quitting { onFinished?(folder) }
         }
     }
 
@@ -414,6 +533,11 @@ final class MeetingRecorder {
     func standIn(microphone file: URL?, alsoLeaveOut pids: [pid_t]) {
         microphone.standIn = file
         macSound.alsoLeftOut = pids
+    }
+
+    /// Self-test: a camera drawn here stands in for one (nil: the real one).
+    func standIn(camera: StandInCamera?) {
+        pictures.webcam.standIn = camera
     }
     #endif
 }

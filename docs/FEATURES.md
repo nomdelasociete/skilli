@@ -141,7 +141,8 @@ A copy of everything skil.li keeps, in a folder you choose.
 
 - **Back Up skil.li Now**: saves your settings and files (snippets,
   commands, layouts, skillies…) to the folder; never the clipboard
-  history nor the meeting recordings. From the launcher or Settings.
+  history nor the meeting recordings, nor the words said in them. From
+  the launcher or Settings.
 - **Scheduled backups** and **Restore** from a backup.
 
 Settings: Back up to · How often · Keep · Back Up Now · Backups.
@@ -414,16 +415,29 @@ Your meetings recorded on this Mac, both sides, then written out.
   by line, Me and Them (Room in person); a click plays from a line; ⌘C
   copies it, ⌘⌫ deletes the recording (⌘Z brings it back). Without
   headphones, the other side the microphone heard again is left out of
-  your lines. One never stopped (skil.li quit, a power cut) is offered at
-  the next launch: Save, Later or Discard. Nothing leaves the Mac. Also
+  your lines. Quitting skil.li (a logout too) stops it whole, its
+  transcript made at the next launch without asking. The Mac asleep (the
+  lid closed) pauses it, never resumed by itself: at wake a card offers
+  Resume ↩ or Stop ⌘↩. One never stopped (a crash, a power cut) is
+  offered at the next launch: Save, Later or Discard. Nothing leaves the
+  Mac. Also
   `skilli://record` and the Meeting Recorder tools (`record_meeting`,
   `stop_recording`…).
-- **Search Recordings** (`recs`): by title, date, attendees, and the
-  words said; the best two show in any search too.
+- **The webcam and the screen**, off until you turn them on (a click in
+  the card, the red dot's menu, or on by default in Settings): the
+  webcam, and the meeting's window (in a browser, the window holding its
+  tab, which comes forward without a reload) or one you pick, recorded
+  in step with the sound. The menu bar says when that window gives no
+  picture (minimized, hidden, covered whole and still). The text the
+  screen shows is read on this Mac and kept with its time
+  (`slides.json`): the window plays both small beside the transcript,
+  the slides among the lines.
+- **Search Recordings** (`recs`): by title, date, attendees, the words
+  said and the text read on screen; the best two show in any search too.
 
 Settings: Record ⌘R on the meeting card · Microphone · The Mac's sound
-· Language · Keep recordings in · Delete after · the recordings, by
-month.
+· Webcam · Screen · Language · Keep recordings in · Delete after · the
+recordings, by month.
 
 <!-- pane: reminders -->
 ## Reminders
