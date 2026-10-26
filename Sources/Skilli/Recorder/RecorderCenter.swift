@@ -117,6 +117,32 @@ final class RecorderCenter {
     /// The meeting's tab, when it can be brought forward as recording
     /// starts (a browser that skil.li scripts).
     private var meetingTab: (tab: Quicklink.OpenTab, bundleID: String)?
+    /// Each Record card shown: a window lookup answering for an earlier
+    /// card (or another recording) gives up.
+    private var cardSession = 0
+
+    /// What a window lookup found: the window, the card's line, whether
+    /// ⌘↩ opens Automation, the meeting's tab when it can come forward.
+    private struct FoundWindow {
+        var window: ScreenWindow?
+        var note: String?
+        var automation = false
+        var tab: (tab: Quicklink.OpenTab, bundleID: String)?
+    }
+
+    /// The card and the recording a lookup is for, as it starts.
+    private var lookupMoment: (card: Int, folder: URL?) { (cardSession, recorder.folder) }
+
+    /// Whether the card and the recording are still those `moment` named.
+    private func still(_ moment: (card: Int, folder: URL?)) -> Bool {
+        moment.card == cardSession && moment.folder == recorder.folder
+    }
+
+    /// A lookup's answer, for the card or the recording on now.
+    private func use(_ found: FoundWindow) {
+        meetingWindow = found.window
+        meetingTab = found.tab
+    }
     /// Open windows by their folder's path, however the URL was written
     /// (`/var/…` or `/private/var/…`, a trailing slash or not).
     private var windows: [String: RecordingWindowController] = [:]
@@ -222,6 +248,7 @@ final class RecorderCenter {
         let name = title ?? reading.title ?? (reading.kind == .callWithoutEvent ? reading.app.map { MeetingMoment.callTitle($0, at: .now) } : nil)
         meetingWindow = nil
         meetingTab = nil
+        cardSession += 1
         card.showRecord(title: name, askedLanguage: askedLanguage, consent: !preferences.recorderConsentShown, fromOutside: fromOutside, meeting: meeting)
         startScreenForCard(reading)
     }
@@ -254,28 +281,29 @@ final class RecorderCenter {
     /// tab (`MeetingTabSelect`; macOS's question for Automation, never
     /// asked, comes now). Nil: no window known (in person, nothing to go
     /// on, an app not running yet).
-    private func findMeetingWindow(_ reading: MeetingMoment.Reading) async -> (window: ScreenWindow?, note: String?, automation: Bool) {
-        meetingTab = nil
+    /// Nothing is changed here: the caller applies the answer (`use`)
+    /// once it knows it is still for the same card and recording.
+    private func findMeetingWindow(_ reading: MeetingMoment.Reading) async -> FoundWindow {
         #if SKILLI_SELFTEST
         if let standIn = standInMeetingWindow {
             try? await Task.sleep(for: standIn.after)
-            return (standIn.window, nil, false)
+            return FoundWindow(window: standIn.window)
         }
         #endif
-        guard reading.kind != .inPerson, let app = reading.app, app.pid != 0 else { return (nil, nil, false) }
+        guard reading.kind != .inPerson, let app = reading.app, app.pid != 0 else { return FoundWindow() }
         let front = MicrophoneUse.frontWindow(of: app.pid).flatMap(ScreenWindows.window)
         guard MeetingTabSelect.isBrowser(app.bundleID), let link = reading.event?.meeting?.url else {
-            return (front, front == nil ? nil : "Keep the call's window in sight: a minimized or hidden window gives no picture.", false)
+            return FoundWindow(window: front, note: front == nil ? nil : "Keep the call's window in sight: a minimized or hidden window gives no picture.")
         }
         let asks = BrowserTabReuse.browsers[app.bundleID] != nil && AutomationAccess.state(of: app.bundleID) == .notAsked
         let plan = await card.whileMacOSAsks(asks && card.isVisible) { await MeetingTabSelect.plan(for: link, in: app) }
         switch plan {
         case .tab(let tab, let id):
-            meetingTab = (tab, app.bundleID)
-            let window = id.flatMap(ScreenWindows.window) ?? front
-            return (window, "The meeting's tab comes forward as recording starts; a tab you pick later is recorded instead. Keep its window in sight.", false)
+            return FoundWindow(window: id.flatMap(ScreenWindows.window) ?? front,
+                               note: "The meeting's tab comes forward as recording starts; a tab you pick later is recorded instead. Keep its window in sight.",
+                               tab: (tab, app.bundleID))
         case .cannot(let line, let automation):
-            return (front, line, automation)
+            return FoundWindow(window: front, note: line, automation: automation)
         }
     }
 
@@ -299,8 +327,10 @@ final class RecorderCenter {
                 return
             }
             Task {
+                let asked = lookupMoment
                 let found = await findMeetingWindow(card.meetingReading ?? self.reading ?? moment(for: nil))
-                meetingWindow = found.window
+                guard still(asked) else { return }
+                use(found)
                 if let window = found.window {
                     await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(window) }
                     card.setScreenNote(found.note, automation: found.automation)
@@ -328,8 +358,10 @@ final class RecorderCenter {
             if !on {
                 await recorder.setScreen(nil)
             } else if !sources.screen {
+                let asked = lookupMoment
                 let found = await findMeetingWindow(card.meetingReading ?? reading ?? moment(for: nil))
-                meetingWindow = found.window
+                guard still(asked) else { throw MeetingRecorder.Failure(message: "The recording changed while its window was looked for: nothing turned on.") }
+                use(found)
                 guard let window = found.window else {
                     throw MeetingRecorder.Failure(message: "No meeting's window is known: pick one in the Record card or the red dot's menu (Screen).")
                 }
@@ -368,8 +400,11 @@ final class RecorderCenter {
     private func startScreenForCard(_ reading: MeetingMoment.Reading) {
         guard reading.sources.screen else { return }
         Task {
+            let asked = lookupMoment
             let found = await findMeetingWindow(reading)
-            meetingWindow = found.window
+            // Another card opened meanwhile (this one closed): not its window.
+            guard still(asked) else { return }
+            use(found)
             guard let window = found.window, recorder.phase == .listening, card.content == .record else { return }
             await card.whileMacOSAsks(!ScreenTrack.isAllowed) { await recorder.setScreen(window) }
             card.setScreenNote(found.note, automation: found.automation)
@@ -453,10 +488,10 @@ final class RecorderCenter {
     private func addMeetingScreen(_ reading: MeetingMoment.Reading) async {
         // The recording this window is for: another one started meanwhile
         // never gets it.
-        let folder = recorder.folder
+        let asked = lookupMoment
         let found = await findMeetingWindow(reading)
-        guard folder != nil, recorder.folder == folder else { return }
-        meetingWindow = found.window
+        guard asked.folder != nil, still(asked) else { return }
+        use(found)
         guard let window = found.window, recorder.isRecording, !recorder.sources.screen else { return }
         await recorder.setScreen(window)
         bringMeetingTabForward()

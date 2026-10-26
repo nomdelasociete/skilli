@@ -179,6 +179,10 @@ final class RecorderPictures {
     /// none written), and whether every file was finished whole.
     func finish(at stop: Double, closeBy: DispatchTime) async -> (webcam: Double, screen: Double, slides: Int, complete: Bool) {
         session += 1
+        // Not recording from now on: a source turned on while the files
+        // close gets no file of its own (nothing would close it).
+        let folder = self.folder
+        self.folder = nil
         let (webcamWriter, screenWriter, slides) = (webcamWriter, screenWriter, slides)
         self.webcamWriter = nil
         self.screenWriter = nil
@@ -197,7 +201,6 @@ final class RecorderPictures {
         let kept = await slides?.finish(at: stop) ?? []
         let (webcamFile, screenFile) = await (webcamClosed, screenClosed)
         if let folder, kept.isEmpty { try? FileManager.default.removeItem(at: folder.appendingPathComponent(Self.slidesFile)) }
-        folder = nil
         pauses = []
         return (webcamFile.seconds, screenFile.seconds, kept.count, webcamFile.complete && screenFile.complete)
     }
