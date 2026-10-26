@@ -496,6 +496,10 @@ final class AIActionController {
                     guard let picked = await ask(prompt, position: (1, 1)), let index = options.firstIndex(of: picked) else { return }
                     route = shown[index]
                     Log.trace("Ask \(challenged ? "named \(decision.services)" : "was unsure (\(Int(decision.confidence * 100))%)"); the user chose \(route.rawValue)")
+                } else if !AskRouter.fits(route, decision) {
+                    // The menus or an app under the bar: the one route left
+                    // runs, not an app at 10 % opened.
+                    route = possible.first ?? .act
                 }
             }
             if route == .rewrite, read == nil { route = .answer }

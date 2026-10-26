@@ -20298,7 +20298,9 @@ final class SelfTest {
                             }
                             let asks = decision.confidence < 0.5 && decision.routes.first?.route == decision.route && possible.count > 1
                             if asks { asked[index] += 1 }
-                            if asks ? possible.prefix(3).contains(request.route) : decision.route == request.route { reached[index] += 1 }
+                            // Not asked: the route decided, or the one left when it does not fit (as Ask runs it).
+                            let runs = AskRouter.fits(decision.route, decision, bar: bar.1) ? decision.route : possible.first ?? .act
+                            if asks ? possible.prefix(3).contains(request.route) : runs == request.route { reached[index] += 1 }
                         }
                     }
                     if decision?.route == request.route, request.item == nil || item(decision) == request.item {
