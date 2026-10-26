@@ -36,6 +36,9 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private var history = TranscriptHistory()
     /// The transcript's own language and engine, written back with it.
     private var made: (language: String, engine: String)?
+    /// The lines are shown: none while a transcript is made (again) or an
+    /// import copies, when ⌘Z and edits would be written over.
+    private var linesShown = false
     /// The user's own name (My Card), offered first for Me; read once.
     private var ownName: String?
     var onClose: ((RecordingWindowController) -> Void)?
@@ -170,7 +173,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         } else {
             view.showPending(language: record.language)
         }
-        view.canTranscribeAgain = transcribing == nil && transcript != nil
+        linesShown = transcribing == nil && transcript != nil
+        view.canTranscribeAgain = linesShown
         updateHints()
         if player == nil, !loadingPlayer { loadPlayer() }
     }
@@ -198,6 +202,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// An import being made (its sound copied): "Importing… 30 %".
     func showImporting(_ done: Double) {
         view.showState("Importing… \(Int((done * 100).rounded())) %")
+        linesShown = false
         view.canTranscribeAgain = false
         updateHints()
     }
@@ -434,7 +439,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     }
 
     private func updateHints() {
-        view.updateHints(canUndo: history.canUndo)
+        view.updateHints(canUndo: linesShown && history.canUndo)
     }
 
     // MARK: - Editing (phase 4)
@@ -478,7 +483,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     /// ↩ kept in a line's field: its words as typed (emptied: deleted).
     private func edit(_ line: Int, text: String) {
-        guard var draft else { return }
+        guard linesShown, var draft else { return }
         let edit = draft.setText(text, at: line)
         self.draft = draft
         if case .delete? = edit {
@@ -490,7 +495,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     /// ⇥: the line to the next speaker (⇧⇥ the one before).
     private func moveSpeaker(line: Int, step: Int) {
-        guard var draft else { return }
+        guard linesShown, var draft else { return }
         let edit = draft.moveSpeaker(at: line, step: step)
         self.draft = draft
         apply(edit, select: line)
@@ -498,7 +503,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     /// ⌘⌫ on a selected line: gone at once, the undo card offers it back.
     private func deleteLine(_ line: Int) {
-        guard var draft else { return }
+        guard linesShown, var draft else { return }
         let edit = draft.delete(at: line)
         self.draft = draft
         deleted(edit, line: line)
@@ -516,20 +521,20 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// The undo card's ⌘Z: that delete undone, wherever it is in the
     /// changes.
     private func revert(id: Int, select: Int) -> Bool {
-        guard var draft, history.revert(id: id, in: &draft) else { return false }
+        guard linesShown, var draft, history.revert(id: id, in: &draft) else { return false }
         self.draft = draft
         changed(select: select)
         return true
     }
 
     func undo() {
-        guard var draft, let edit = history.undo(&draft) else { return }
+        guard linesShown, var draft, let edit = history.undo(&draft) else { return }
         self.draft = draft
         changed(select: Self.line(of: edit))
     }
 
     func redo() {
-        guard var draft, let edit = history.redo(&draft) else { return }
+        guard linesShown, var draft, let edit = history.redo(&draft) else { return }
         self.draft = draft
         changed(select: Self.line(of: edit).map { min($0, max(0, draft.lines.count - 1)) })
     }
@@ -602,7 +607,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// The speaker of `line` given `name` (merged into another of that
     /// name).
     func rename(line: Int, to name: String) {
-        guard var draft, draft.lines.indices.contains(line) else { return }
+        guard linesShown, var draft, draft.lines.indices.contains(line) else { return }
         let edit = draft.rename(draft.lines[line].speaker, to: name, ownName: ownName)
         self.draft = draft
         apply(edit, select: line)
