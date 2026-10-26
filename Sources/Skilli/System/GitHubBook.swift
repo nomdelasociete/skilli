@@ -415,6 +415,8 @@ final class GitHubBook {
                 } else {
                     inboxResult = nil
                 }
+                // Again after the first read: server sync may have come on during it.
+                guard accountGeneration == generation, !serverSync, !Task.isCancelled else { return }
                 let answer = askNotifications ? try await client.notifications(token: token, since: since) : nil
                 guard accountGeneration == generation, !Task.isCancelled else { return }
                 apply(login: inboxResult?.login, pullRequests: inboxResult?.pullRequests, notifications: answer)

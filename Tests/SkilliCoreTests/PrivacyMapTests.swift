@@ -341,14 +341,16 @@ final class PrivacyMapTests: XCTestCase {
         var setup = everything
         setup.githubServerSync = true
         XCTAssertEqual(PrivacyMap.line(for: "github", setup)?.text,
-                       "GitHub gets your sign-in only for what you do there: merge, update a branch, mark read; relay.example.com reads "
+                       "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read) and to check which "
+                           + "account this Mac uses for the relay; relay.example.com reads "
                            + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.")
         XCTAssertEqual(ids(.github, setup), ["githubActions", "serverSync"])
         XCTAssertEqual(ids(.github, everything), ["github", "relay"])
         // This Mac's relay access gone, server sync still on: said all the same.
         setup.relayHost = nil
         XCTAssertEqual(PrivacyMap.line(for: "github", setup)?.text,
-                       "GitHub gets your sign-in only for what you do there: merge, update a branch, mark read; the relay reads "
+                       "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read) and to check which "
+                           + "account this Mac uses for the relay; the relay reads "
                            + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.")
         XCTAssertEqual(ids(.github, setup), ["githubActions", "serverSync"])
     }

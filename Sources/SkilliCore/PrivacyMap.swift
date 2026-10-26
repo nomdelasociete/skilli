@@ -223,8 +223,8 @@ public enum PrivacyMap {
     /// Server sync on: GitHub is asked only for what the user does.
     public static let githubActions = Flow(
         "githubActions", "Pull request actions",
-        sends: "Your sign-in with what you do there: merge, update a branch, mark read.",
-        when: "When you do it; pull requests and notifications are read by the relay (Server sync).",
+        sends: "Your sign-in with what you do there: merge, update a branch, mark read; and to check which account this Mac uses for the relay.",
+        when: "When you do it, and once per relay token for the check; pull requests and notifications are read by the relay (Server sync).",
         pane: "github")
     /// Settings → GitHub → Server sync: the relay reads GitHub for the
     /// user's Macs (`GitHubServerInbox`, `RelayInbox`).
@@ -815,7 +815,8 @@ public enum PrivacyMap {
             return PaneLine(text: "Nothing leaves this Mac: you are not signed in to GitHub.", more: "privacy")
         }
         if setup.githubServerSync {
-            return PaneLine(text: "GitHub gets your sign-in only for what you do there: merge, update a branch, mark read; \(setup.relayHost ?? "the relay") reads "
+            return PaneLine(text: "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read) and to check which "
+                            + "account this Mac uses for the relay; \(setup.relayHost ?? "the relay") reads "
                             + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.",
                             more: "privacy")
         }
