@@ -6,7 +6,7 @@ import re
 
 LIST_ITEM = re.compile(r'( *)(-|\d+\.) (.*)')
 HEADING = re.compile(r'(#{1,6}) +(.*?) *#*$')
-FENCE = re.compile(r'```(\w*)$')
+FENCE = re.compile(r'(`{3,})(\w*)$')
 TABLE_RULE = re.compile(r'\|? *:?-+:? *(\| *:?-+:? *)*\|?$')
 CODE_SPAN = re.compile(r'(`+)(.+?)\1')
 LINK = re.compile(r'\[([^\]]+)\]\(([^)\s]+)\)')
@@ -77,10 +77,11 @@ class Page:
                 i += 1
                 continue
             if fence := FENCE.match(line.strip()):
-                language = fence.group(1)
+                marker, language = fence.groups()
                 body = []
                 i += 1
-                while i < len(lines) and lines[i].strip() != '```':
+                # Closed by as many backticks or more, and nothing else.
+                while i < len(lines) and not (set(lines[i].strip()) == {'`'} and len(lines[i].strip()) >= len(marker)):
                     body.append(lines[i])
                     i += 1
                 i += 1

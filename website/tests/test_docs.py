@@ -67,6 +67,21 @@ class Markdown(unittest.TestCase):
         self.assertEqual(html, '<ol><li><strong>One.</strong>\n<ul><li>a</li><li>b</li></ul></li>'
                                '<li><p>Two:</p>\n<pre data-language="bash"><code>echo &quot;&lt;hi&gt;&quot;</code></pre></li></ol>')
 
+    def test_a_fence_closes_with_as_many_backticks_or_more(self):
+        html = render('```\n``\ncode\n````\n\n## After\n')
+        self.assertEqual(html, '<pre><code>``\ncode</code></pre>\n<h2 id="after"><a class="anchor" href="#after">After</a></h2>')
+        html = render('````md\n```\ninside\n```\n````\n')
+        self.assertEqual(html, '<pre data-language="md"><code>```\ninside\n```</code></pre>')
+
+    def test_preview_pages_are_not_published(self):
+        stale = build.ROOT / 'website/skillies/docs/removed.html'
+        stale.parent.mkdir(parents=True, exist_ok=True)
+        stale.write_text('old')
+        self.addCleanup(stale.unlink)
+        build.build()
+        self.assertFalse((build.ROOT / 'dist/site/skillies/docs/removed.html').exists())
+        self.assertTrue((build.ROOT / 'dist/site/skillies/docs/index.html').exists())
+
     def test_tables_keep_pipes_inside_code(self):
         html = render('| Key | Value |\n| --- | --- |\n| `a|b` | **x** |\n')
         self.assertIn('<td><code>a|b</code></td><td><strong>x</strong></td>', html)

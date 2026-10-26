@@ -239,6 +239,9 @@ def build(preview=False):
             relative = path.relative_to(ROOT / 'website')
             if path.is_symlink() or any(p in ('font-preview', 'experiments', '__pycache__', 'files', 'tests') for p in relative.parts):
                 continue
+            # What --preview generated: render_docs writes the pages afresh, a removed one stays out.
+            if relative.parts[:2] == ('skillies', 'docs'):
+                continue
             if path.is_file() and path.suffix in ('.html', '.css', '.js', '.png', '.jpg', '.svg', '.woff2', '.woff', '.otf', '.ttf', '.txt', '.md') and not path.name.endswith('.template.html') and path.name not in ('README.md', 'social-preview.html', 'robots.txt'):
                 dest = output / relative
                 dest.parent.mkdir(parents=True, exist_ok=True)
