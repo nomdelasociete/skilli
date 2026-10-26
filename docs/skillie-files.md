@@ -87,7 +87,8 @@ Add); skillies join them.
 - Added as `<name>.<ext>` in the skillies folder, executable: the file's
   own name without `.skilli` (a link's: the last part of its address), in
   lowercase words joined by hyphens; the extension from the shebang (bash,
-  sh, zsh → `sh`, python → `py`, node → `js`, swift, ruby → `rb`; another
+  sh, zsh → `sh`, python → `py`, node → `js`, swift, ruby → `rb`,
+  osascript → `js` with `-l JavaScript`, `applescript` otherwise; another
   interpreter: none). A name another skillie has becomes `name-2`.
 
 ## The link

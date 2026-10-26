@@ -33,7 +33,8 @@ changes need no application tests.
 
 Output: `dist/site`. This includes the landing page, catalog, fonts and brand
 assets. Restricted local font trials are excluded. The public JSON catalog at
-`/website/skillies/catalog.json` has stable IDs, metadata, relative download URLs
+`/website/skillies/catalog.json` has stable IDs, metadata (with `requires`: what
+to install first, `xcode-tools` or `homebrew:<formula>`), relative download URLs
 and SHA-256 hashes. It is available for future consumers; the native app does
 not currently fetch it.
 

@@ -8,13 +8,16 @@ previews, downloads and `catalog.json` are generated from these exact files.
 
 1. Fork this repository. Add one script at `skillies/<category>/<unique-name>.sh`
    (also supported: `.py`, `.js`, `.rb`, `.swift`). Use lowercase hyphenated names.
+   Prefer what runs on every Mac (below): a skillie that needs nothing installed
+   works for everyone who adds it.
 2. Start with a shebang and the `@skilli` header from an existing example.
    Include `schemaVersion 1`, `title`, `description`, `packageName` and `mode`.
    Keep metadata within the first 60 lines and 8 KB, as required by the app.
 3. Include the full MIT license and your copyright notice in the script, so the
    license travels with a downloaded file. Only submit code you can license.
 4. Document required applications, external runtimes, network access and effects
-   in the description or script comments. Do not embed credentials or personal
+   in the description or script comments. Say what it calls that macOS does not
+   have with `@skilli.requires` (below). Do not embed credentials or personal
    paths. Use arguments for user input (up to three `@skilli.argumentN` JSON
    declarations). Set `@skilli.needsConfirmation true` for commands that change
    or delete data. This asks before the whole script; it is not a sandbox.
@@ -34,6 +37,42 @@ and builds the site; **it does not execute contributed scripts**. A merge to
 [`website/README.md`](../website/README.md)). By hand, after the build:
 `npx wrangler@4.151.3 deploy --config website/wrangler.jsonc`. A new skillie
 needs no manual website edit beyond that publish.
+
+## What runs on every Mac
+
+A skillie runs with what is on the Mac. The website reads its shebang and
+`@skilli.requires`, and its card says "Nothing to install" or what is
+needed first.
+
+- **Nothing to install**: `/bin/sh`, `/bin/bash`, `/bin/zsh`; `/usr/bin/perl`;
+  `/usr/bin/osascript`, AppleScript or, with `#!/usr/bin/osascript -l
+  JavaScript`, JavaScript for Automation. That one reaches Cocoa and Core
+  Animation (`ObjC.import('Cocoa')`): windows, layers, animations. The
+  Confetti Cannon (`everyday/confetti-cannon.js`) is one. Tools such as
+  `open`, `curl`, `jq`, `shasum`, `defaults` and `screencapture` are there
+  too. `/usr/bin/ruby` is there but old (2.6): avoid it.
+- **Xcode's Command Line Tools** (`xcode-select --install`): `swift`,
+  `python3`, `git`, `make`, `clang`. `/usr/bin` has them as stubs: until
+  the tools are installed, macOS offers to install them and the skillie
+  does not run.
+- **Homebrew**: Node, a newer Python, and the rest.
+
+The shebang says the first part (`#!/usr/bin/swift`: the Command Line
+Tools; `#!/usr/bin/env node`: Node from Homebrew). What the script calls
+itself is said in its header, comma-separated:
+
+```bash
+# It runs git:
+# @skilli.requires xcode-tools
+```
+
+```bash
+# It runs ffmpeg and jq from Homebrew:
+# @skilli.requires homebrew:ffmpeg, homebrew:jq
+```
+
+`xcode-tools` and `homebrew:<formula>` are the only values; the website
+build refuses others.
 
 ## Act in apps, and wait for the step
 

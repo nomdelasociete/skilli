@@ -3373,7 +3373,8 @@ re-investigating.
   most, a shebang naming an absolute path, title and mode in the first
   8 KB, schemaVersion 1); what is not one says why, nothing to add.
   Added as the file's own name in hyphenated words, the extension from
-  the shebang (`sh`, `py`, `js`, `swift`, `rb`, else none), executable; a
+  the shebang (`sh`, `py`, `js` for node or `osascript -l JavaScript`,
+  `swift`, `rb`, `applescript`, else none), executable; a
   name taken becomes "name-2". The same title as one of the user's:
   Replace, written over that file in place (its path kept: keys, menu bar
   line, learning follow); exactly the same text: "Already in your
