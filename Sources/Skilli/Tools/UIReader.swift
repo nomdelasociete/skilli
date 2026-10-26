@@ -64,10 +64,10 @@ final class UIReader {
     }
 
     /// The element's label and its value now (not the snapshot's: a field
-    /// filled since has text), for what may not be taken back ("Send", a
-    /// field that has text).
+    /// filled since has text; nil when Accessibility cannot read it), for
+    /// what may not be taken back ("Send", a field that has text).
     func label(_ id: String) -> (label: String, value: String?)? {
-        elements[id].map { ($0.label, Self.value($0.element) ?? $0.value) }
+        elements[id].map { ($0.label, Self.value($0.element)) }
     }
 
     /// The front window of `pid` as `read` sees it, with the window's frame

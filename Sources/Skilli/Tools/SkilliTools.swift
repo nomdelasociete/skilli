@@ -708,15 +708,16 @@ final class SkilliTools {
 
     /// A step on the screen that may not be taken back: a button that
     /// sends, deletes, pays or overwrites (`ScreenControl.isRisky`), a field
-    /// that has text filled over, or Return, Enter or Delete pressed. It
-    /// asks even once the run was allowed.
+    /// that has text (or cannot be read) filled over, or Return, Enter or
+    /// Delete pressed. It asks even once the run was allowed.
     func mayNotBeUndone(_ name: String, arguments: [String: Any]) -> Bool {
         let element = (arguments["id"] as? String).flatMap(ui.label)
         switch name {
         case "press_ui":
             return element.map { ScreenControl.isRisky($0.label) } ?? true
         case "set_ui_value":
-            return element.map { ScreenControl.isRisky($0.label) || !($0.value ?? "").isEmpty } ?? true
+            // A value that cannot be read may be text: it asks.
+            return element.map { ScreenControl.isRisky($0.label) || $0.value?.isEmpty != true } ?? true
         case "press_keys":
             let keys = ((arguments["keys"] as? String) ?? "").lowercased()
             return ["return", "enter", "delete", "backspace"].contains { keys.contains($0) }
