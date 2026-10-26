@@ -20,8 +20,9 @@ change this page when that function changes.
 
 ## How it is read
 
-- Only the first **60 non-blank lines**, and only the first **8 KB** of
-  the file.
+- Only the first **60 non-empty lines** (an empty line is skipped; a line
+  of only spaces or tabs counts), and only the first **8 KB** of the
+  file.
 - A header line starts with `#` or `//` (spaces before it are fine), then
   `@skilli.<key>`, at least one space, then the value to the end of the
   line. Block comments (`/* */`, AppleScript's `--`) are not read: use `//`

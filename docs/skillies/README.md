@@ -58,7 +58,7 @@ and the new skillie is in the launcher at once.
 - `~/Library/Application Support/skil.li/skillies`, and one level of
   subfolders in it (`tools/deploy.sh`). Deeper folders are not read.
 - Hidden files and Raycast's `*.template.*` files are left out.
-- A file is a skillie when its first 60 non-blank lines (within the first 8 KB) give
+- A file is a skillie when its first 60 non-empty lines (within the first 8 KB) give
   at least `@skilli.title` and `@skilli.mode`. Anything else in the folder
   (a README, a helper script, an image for an icon) is ignored.
 - Settings → Skillies lists them, grouped by `@skilli.packageName`, with a
@@ -138,7 +138,7 @@ differs:
 
 | Symptom | Cause |
 | --- | --- |
-| Not in the launcher | Its title or mode is missing, the mode is not one of `silent`, `compact`, `fullOutput`, `inline`, the header is after the 60th non-blank line, `schemaVersion` is not 1, or the file is two folders deep. |
+| Not in the launcher | Its title or mode is missing, the mode is not one of `silent`, `compact`, `fullOutput`, `inline`, the header is after the 60th non-empty line (lines of only spaces count), `schemaVersion` is not 1, or the file is two folders deep. |
 | "… is not executable: chmod +x …" | The file is not executable and its first line is not a `#!` naming an absolute path. |
 | A command is "not found" | skil.li's PATH is not your shell's: it has Homebrew's folders and the system's, not what your `.zshrc` adds. Use full paths or set PATH in the script. |
 | It stops after two minutes | The 120-second limit, which also stops what the script started in the background. Hand long work to macOS (`open` an app or a URL). See [running.md](running.md#the-time-limit). |
