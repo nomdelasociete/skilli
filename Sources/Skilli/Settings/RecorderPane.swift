@@ -321,7 +321,7 @@ private struct BetterTranscriptionSection: View {
             } label: {
                 LabelDetail("Better transcription", detail)
             }
-            .settingAnchor("recorderBetterTranscription")
+            .settingAnchor("section.betterTranscription")
             if case .downloading(let received, let total, let line) = better.state {
                 VStack(alignment: .leading, spacing: 4) {
                     ProgressView(value: Double(received), total: Double(max(1, total)))

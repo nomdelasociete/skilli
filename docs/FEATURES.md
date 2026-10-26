@@ -443,6 +443,13 @@ Your meetings recorded on this Mac, both sides, then written out.
   another speaker has makes the two one (Me is kept). ⌘Z and ⇧⌘Z undo
   and redo while the window is open; every change is written at once.
   **Transcribe Again…** in the language and with the engine picked.
+- **Better transcription**, a download in Settings → Recorder (1.6 GB,
+  from huggingface.co, nothing sent): whisper large-v3-turbo on this Mac,
+  40 % fewer errors than macOS's engine and two names in three right, the
+  event's attendees and your contacts given as names to expect. Once
+  downloaded, the default engine (Settings → Recorder → Engine); Remove
+  puts it in the Trash (⌘Z brings it back). The first recording's window
+  made with macOS's engine says it once.
 - **Import Recording** (`import`): a sound or video file (a voice memo,
   a call app's own recording) made a recording, transcribed on this Mac,
   voices told apart; or drop the file on a recording's window. The file
@@ -451,8 +458,8 @@ Your meetings recorded on this Mac, both sides, then written out.
   said and the text read on screen; the best two show in any search too.
 
 Settings: Record ⌘R on the meeting card · Microphone · The Mac's sound
-· Webcam · Screen · Language · Keep recordings in · Delete after · the
-recordings, by month.
+· Webcam · Screen · Language · Better transcription · Engine · Keep
+recordings in · Delete after · the recordings, by month.
 
 <!-- pane: reminders -->
 ## Reminders

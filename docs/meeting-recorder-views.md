@@ -500,7 +500,7 @@ Recordings
   in the secondary color); a click opens its window; its menu (⋯ or a
   right click): Open, Show in Finder, Delete (Undo ⌘Z for 10 s).
 - No engine row yet: one engine until phase 4's "Better
-  transcription" download.
+  transcription" download (its section, phase 4).
 - Every setting is an agent's too (`set_setting`), under its own name.
 
 ## Said, and not said (phase 2)
