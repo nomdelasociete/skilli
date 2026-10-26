@@ -24247,6 +24247,7 @@ final class SelfTest {
         if !aborted { await momentMenuBarRecords(center, book) }
         if !aborted { await momentRedDotSwitchesSources(center, book) }
         if !aborted { await momentCallEndOffersStop(center, book) }
+        if !aborted { await momentUnfinishedWaitsForTheStart(center, book) }
         if !aborted { await momentBrowserCallsMicrophone(center, book) }
         if !aborted { await momentSearchRecordings(center) }
         if !aborted { await momentRecorderPane(center) }
@@ -24255,6 +24256,46 @@ final class SelfTest {
 
     /// The links a Join would have opened.
     private var momentOpened: [URL] = []
+
+    /// A recording left unfinished (a Stop that could not finish its
+    /// files) while ⌘R starts another: no card while that one starts or
+    /// records; offered once it stops.
+    private func momentUnfinishedWaitsForTheStart(_ center: RecorderCenter, _ book: CalendarBook) async {
+        let name = "Recorder's moment: an unfinished recording found while ⌘R starts one shows no card while it starts or records, and is offered once it stops"
+        let consent = context.preferences.recorderConsentShown
+        defer {
+            context.preferences.recorderConsentShown = consent
+            center.startDelay = .zero
+        }
+        context.preferences.recorderConsentShown = true
+        let event = momentEvent("st-moment-unfinished", "Starting sync", in: -60, link: false, location: "Online")
+        book.testEvents = [event]
+        guard let folder = try? center.recordings.makeFolder(title: "Found while starting", started: .now) else {
+            record(name, false, "no folder", nil)
+            return
+        }
+        var left = MeetingRecord(title: "Found while starting", started: .now, language: "en-US", recorder: Recordings.ownProcess)
+        try? center.recordings.write(left, to: folder)
+        center.startDelay = .seconds(2)
+        center.recordMeeting(event, joining: false)
+        center.offerAtOnceForTest(folder, record: left)
+        await pause(1000)
+        let heldWhileStarting = !center.isCardVisible && !center.recorder.isRecording
+        let recording = await waitUntil(timeout: 6) { center.recorder.isRecording } != nil
+        await pause(1000)
+        let heldWhileRecording = !center.isCardVisible
+        _ = await momentStop(center)
+        let offered = await waitUntil(timeout: 5) { center.isCardVisible && center.cardView.eyebrowText == "UNFINISHED RECORDING" } != nil
+        let named = center.cardView.name
+        if offered { center.closeCardWithoutKeys() }
+        center.openWindows.forEach { $0.close() }
+        left.state = .pending
+        try? center.recordings.write(left, to: folder)
+        book.testEvents = []
+        record(name, heldWhileStarting && recording && heldWhileRecording && offered && named == "Found while starting",
+               "while starting: no card \(heldWhileStarting); recording \(recording), no card \(heldWhileRecording); once stopped: offered \(offered) “\(named)”",
+               nil)
+    }
 
     /// A stand-in meeting: `seconds` from now (before: negative), a Meet
     /// link or `location`, two invented people.

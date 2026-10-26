@@ -267,6 +267,9 @@ final class RecorderCenter {
         Task { [weak self] in
             guard let self else { return }
             let language = await MeetingTranscriber.defaultLanguage(asked: self.askedLanguage)
+            #if SKILLI_SELFTEST
+            if self.startDelay > .zero { try? await Task.sleep(for: self.startDelay) }
+            #endif
             self.start(reading, title: reading.title ?? "", language: language, sources: reading.sources, joining: joining)
         }
     }
@@ -583,8 +586,11 @@ final class RecorderCenter {
         }
     }
 
+    /// The next one never stopped, in the card: only while nothing records
+    /// or starts to (a ⌘R start under way included); else `changed()`
+    /// offers it once the recorder is idle.
     private func offerNext() {
-        guard !card.isVisible, !recorder.isRecording, !unfinished.isEmpty else { return }
+        guard !card.isVisible, recorder.phase == .idle, !starting, !unfinished.isEmpty else { return }
         let (folder, record) = unfinished.removeFirst()
         Log.trace("Recorder: “\(record.title)” was never stopped: offered")
         card.showUnfinished(folder, record: record)
@@ -604,6 +610,10 @@ final class RecorderCenter {
 
     /// Self-test: what the card shows now.
     var cardContent: RecordCard.Content? { card.content }
+
+    /// Self-test: ⌘R's recording takes this long to start (an unfinished
+    /// one found meanwhile).
+    var startDelay: Duration = .zero
 
     /// Self-test: a Stop that could not finish `folder`'s files, as the
     /// recorder reports it.
