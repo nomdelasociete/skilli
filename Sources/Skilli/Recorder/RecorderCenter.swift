@@ -279,6 +279,7 @@ final class RecorderCenter {
         switch source {
         case .webcam:
             let on = !recorder.sources.webcam
+            Log.trace("Recorder: the webcam turned \(on ? "on" : "off")")
             let asks = on && AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined
                 && (AVCaptureDevice.systemPreferredCamera ?? AVCaptureDevice.default(for: .video)) != nil
             Task { await card.whileMacOSAsks(asks && card.isVisible) { await recorder.setWebcam(on) } }

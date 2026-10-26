@@ -24227,6 +24227,7 @@ final class SelfTest {
         }
         guard await recordCardHasKeys(center, name) else { return }
         let offBefore = (view.webcamLine, view.screenLine)
+        let rows = (webcam: view.screenFrame(of: .webcam) ?? .zero, screen: view.screenFrame(of: .screen) ?? .zero)
         // The webcam's row: on, its picture live.
         _ = await clickCardRow(center, .webcam)
         let webcamOn = await waitUntil(timeout: 3) { view.webcamLine == "FaceTime HD Camera" && center.recorder.pictures.webcam.sink.latestPicture != nil } != nil
@@ -24246,7 +24247,7 @@ final class SelfTest {
         let screenOn = await waitUntil(timeout: 4) { view.screenLine == "skil.li · Slides" && center.recorder.pictures.screen.sink.latestPicture != nil } != nil
         await capturePicturesCard(center, as: "recorder-pictures-card")
         guard webcamOn, screenOn, await recordCardHasKeys(center, name) else {
-            record(name, false, "rows before “\(offBefore.0)” / “\(offBefore.1)”; webcam on \(webcamOn) “\(view.webcamLine)”, screen picked \(picked) from \(listedCount) menu items, on \(screenOn) “\(view.screenLine)”", nil)
+            record(name, false, "rows before “\(offBefore.0)” / “\(offBefore.1)”; webcam on \(webcamOn) “\(view.webcamLine)” (row at \(rows.webcam), sources \(center.recorder.sources), state \(center.recorder.pictures.webcam.state)), screen picked \(picked) from \(listedCount) menu items, on \(screenOn) “\(view.screenLine)” (row at \(rows.screen))", nil)
             center.closeCardWithoutKeys()
             return
         }
