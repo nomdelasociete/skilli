@@ -70,7 +70,7 @@ and the new skillie is in the launcher at once.
 | From | How | Notes |
 | --- | --- | --- |
 | The launcher | Type its title, ↩ | Arguments are asked one after the other in the launcher. An inline one shows its line right in its row. |
-| A key | Settings → Keys → Add Shortcut → Skillies | Like any other command. A key passes no arguments: give one only to a skillie without required arguments. |
+| A key | Settings → Keys → Add Shortcut → Skillies | Like any other command. One with a required argument opens the launcher to ask it; one without runs at once. |
 | Ask | Say what it does | Skillies that need no argument are among the commands Ask can pick. |
 | Your agents | `list_skillies`, `run_skillie`, `create_skillie` | Through skil.li's MCP server (Claude Code, Codex…). See [calling-skilli.md](calling-skilli.md). |
 | A link | `skilli://skillie/<path in the folder>?arg=…` | From another app, Shortcuts, a Stream Deck, a web page. Asked first; see below. ⌘K → Copy Link on its row gives it. |

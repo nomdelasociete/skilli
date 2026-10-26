@@ -18,8 +18,9 @@ key, Ask, an agent, a link, the menu bar). The code: `ScriptLibrary.run`
    - From a link with fewer values than required, the launcher asks for
      all of them (the link's values are not kept). `arg=` with nothing
      after it passes an empty value.
-   - From a key, none are asked: the script gets empty strings. Give a key
-     only to a skillie without required arguments.
+   - From a key: a skillie with a required argument opens the launcher on
+     its first one, as from the launcher; one whose arguments are all
+     optional (or that has none) runs at once, with empty strings.
    - An agent calling `run_skillie` without a required one gets an error
      naming it.
 
@@ -121,8 +122,8 @@ An inline skillie with no arguments is read without anyone running it:
   background and its row updates.
 - **In the menu bar** (Settings → Skillies → In the menu bar): at once,
   then every `refreshTime` (1 minute by default, 10 s at least). The menu
-  bar shows its emoji icon and its line, 32 characters at most in all
-  (an image icon shows as its file name there: use an emoji); a click
+  bar shows its icon and its line: an emoji before the line (32
+  characters at most in all), an image file as a small picture; a click
   shows the whole line, Refresh Now, and Remove from Menu Bar.
 
 Neither asks first, even with `needsConfirmation`, and the exit status is
