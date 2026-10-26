@@ -15704,6 +15704,8 @@ final class SelfTest {
                 } != nil
                 guard settled, popover.phase == .approving else { break }
                 approvals += 1
+                await pause(250)
+                await saveScreenshot(of: popover.window, as: capture.replacingOccurrences(of: ".png", with: "-approval-\(approvals).png"))
                 await pressKey(nil, code: CGKeyCode(kVK_Return))
                 await pause(500)
             }
@@ -20277,6 +20279,11 @@ final class SelfTest {
                 var right: [AskRoute: Int] = [:], total: [AskRoute: Int] = [:]
                 var misses: [String] = []
                 var slowest: Duration = .zero
+                // When the card asks "What should I do?" (as Ask does: under
+                // 50 %, more than one route that fits), by how likely a menu
+                // item or an app must be to be offered; the old bar is any.
+                let bars: [(String, Double)] = [("any", .leastNonzeroMagnitude), ("10 %", 0.1), ("25 %", 0.25), ("50 %", 0.5)]
+                var asked = Array(repeating: 0, count: bars.count), reached = Array(repeating: 0, count: bars.count)
                 for request in cases {
                     let start = ContinuousClock.now
                     let decision = await AskRouter.decide(request.text, hasSelection: request.selected, app: "Finder", menu: menu, apps: apps,
@@ -20284,6 +20291,16 @@ final class SelfTest {
                                                           services: services, keys: [provider: key])
                     slowest = max(slowest, .now - start)
                     total[request.route, default: 0] += 1
+                    if let decision {
+                        for (index, bar) in bars.enumerated() {
+                            let possible = decision.routes.map(\.route).filter { route in
+                                AskRouter.fits(route, decision, bar: bar.1) && (route != .rewrite || request.selected)
+                            }
+                            let asks = decision.confidence < 0.5 && decision.routes.first?.route == decision.route && possible.count > 1
+                            if asks { asked[index] += 1 }
+                            if asks ? possible.prefix(3).contains(request.route) : decision.route == request.route { reached[index] += 1 }
+                        }
+                    }
                     if decision?.route == request.route, request.item == nil || item(decision) == request.item {
                         right[request.route, default: 0] += 1
                     } else {
@@ -20296,6 +20313,7 @@ final class SelfTest {
                 let perRoute = AskRoute.allCases.compactMap { route in total[route].map { "\(route.rawValue) \(right[route] ?? 0)/\($0)" } }
                 record(name, Double(count) >= 0.9 * Double(cases.count),
                        "\(count)/\(cases.count) (\(count * 100 / max(cases.count, 1)) %): " + perRoute.joined(separator: ", ")
+                           + "; the card asks, by bar: " + bars.indices.map { "\(bars[$0].0) \(asked[$0]) (wanted route reached \(reached[$0]))" }.joined(separator: ", ")
                            + (listsMisses && !misses.isEmpty ? "; missed: " + misses.joined(separator: "; ") : "")
                            + "; slowest \(Int(slowest.milliseconds)) ms",
                        slowest.milliseconds)

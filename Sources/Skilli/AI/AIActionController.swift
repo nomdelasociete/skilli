@@ -474,9 +474,8 @@ final class AIActionController {
                 var possible = decision.routes.map(\.route).filter { candidate in
                     switch candidate {
                     case .rewrite: read != nil
-                    case .find: !decision.menu.isEmpty
-                    case .open: !decision.apps.isEmpty
-                    case .command: (decision.command != nil || decision.appAction != nil) && systemCommands != nil
+                    case .find, .open: AskRouter.fits(candidate, decision)
+                    case .command: AskRouter.fits(.command, decision) && systemCommands != nil
                     case .timer: startTimer != nil
                     case .plans: calendar != nil || reminders != nil
                     case .contact: contacts != nil

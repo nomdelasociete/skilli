@@ -32,6 +32,8 @@ final class UIReader {
 
     /// The last snapshot's elements, by id: what press and fill act on.
     private var elements: [String: Element] = [:]
+    /// The app of the last snapshot: what the card names.
+    private var app = ""
 
     /// Containers of rows: only their first rows are read.
     nonisolated private static let lists: Set<String> = ["AXList", "AXTable", "AXOutline", "AXGrid", "AXColumn", "AXBrowser"]
@@ -49,7 +51,22 @@ final class UIReader {
     func read(pid: pid_t) -> (app: String, window: String, elements: [Element]) {
         let snapshot = Self.snapshot(pid: pid)
         elements = Dictionary(uniqueKeysWithValues: snapshot.elements.map { ($0.id, $0) })
+        app = snapshot.app
         return (snapshot.app, snapshot.window, snapshot.elements)
+    }
+
+    /// `button “Desktop & Dock” in System Settings`: what the card says a
+    /// press or a fill acts on, never its id. Nil for an id not read.
+    func describe(_ id: String) -> String? {
+        guard let element = elements[id] else { return nil }
+        let name = element.label.isEmpty ? element.role : "\(element.role) “\(element.label)”"
+        return app.isEmpty ? name : "\(name) in \(app)"
+    }
+
+    /// The element's label and value, for what may not be taken back
+    /// ("Send", a field that has text).
+    func label(_ id: String) -> (label: String, value: String?)? {
+        elements[id].map { ($0.label, $0.value) }
     }
 
     /// The front window of `pid` as `read` sees it, with the window's frame

@@ -284,8 +284,15 @@ final class MCPService {
         let custom = settings.customTool(named: name)
         let call = ApprovalRules.Call(tool: name, title: definition.title, description: custom?.instructions ?? definition.description,
                                       kind: Self.kind(risk), caller: caller, arguments: ToolCallSummary.arguments(arguments))
+        // A run's steps on the screen are allowed once: the first asks, the
+        // others run, except what may not be taken back. Not when the user
+        // asks for every tool (Ask Every Time).
+        let screenStep = definition.group == .screen && run != nil && settings.mode != .ask
+            && !tools.mayNotBeUndone(name, arguments: arguments)
+        var detail = tools.cardSummary(of: definition, arguments: arguments)
+        if screenStep { detail += "\n\nAllows this request's next steps on screen too, except sending, deleting, paying or overwriting." }
         switch await gate(name, fullName: MCPToolInfo.fullName(server: Self.serverName, tool: name), title: definition.title,
-                          detail: SkilliTools.summary(of: definition, arguments: arguments), risk: risk, call: call, caller: caller, run: run) {
+                          detail: detail, risk: risk, call: call, caller: caller, run: run, screenStep: screenStep) {
         case .go:
             break
         case .declined:
@@ -432,8 +439,12 @@ final class MCPService {
     /// rule, asked in the card (naming the rule that asked; no Always then,
     /// the rule would ask again), or run (the rule that let it run said
     /// under its step). A blocked tool is refused before this.
+    /// `screenStep`: a run's step on the screen that can be taken back.
+    /// Allowed, it allows the run's next ones (`AgentContext.screenAllowed`),
+    /// which then run unless one of the user's rules asks or refuses.
     private func gate(_ name: String, fullName: String, title: String, detail: @autoclosure () -> String, risk: ToolRisk,
-                      call: @autoclosure () -> ApprovalRules.Call, caller: String, run: AgentContext?) async -> Gate {
+                      call: @autoclosure () -> ApprovalRules.Call, caller: String, run: AgentContext?,
+                      screenStep: Bool = false) async -> Gate {
         justAllowed = nil
         let ruled = await ruled(name, risk: risk, call: call())
         switch ruled.decision {
@@ -441,6 +452,9 @@ final class MCPService {
             if let reason = ruled.reason { presenter?.ruleApplied(reason.line, tool: fullName, run: run) }
             Log.actions.notice("Tool \(name, privacy: .public) refused by a rule")
             return .refused(ruled.reason?.rule?.said ?? "")
+        case .ask where screenStep && run?.screenAllowed == true && ruled.reason == nil:
+            Log.trace("Tool \(name) allowed with this run's first step on screen")
+            return .go
         case .ask:
             let once = ruled.reason != nil
             switch await presenter?.approve(title, detail: detail(), caller: caller, run: run, once: once, reason: ruled.reason?.line) ?? .deny {
@@ -452,6 +466,7 @@ final class MCPService {
             case .always, .allow:
                 break
             }
+            if screenStep { run?.screenAllowed = true }
             justAllowed = name
             return .go
         case .run:
