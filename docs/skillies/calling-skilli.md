@@ -7,7 +7,7 @@ A skillie reaches skil.li's features in two ways:
 | Waits | No: fire and forget | Yes: until the tool answers |
 | Result | None | Text on standard output, exit status |
 | Asked first | By the link rules (what could change the Mac asks) | By your approval mode and the tool's right |
-| Works outside skil.li | Yes, from anything that opens a URL | Only in a skillie skil.li runs (or with `--socket`) |
+| Works outside skil.li | Yes, from anything that opens a URL | Yes, as `Skilli call` from Terminal ([below](#outside-a-skillie)); `$SKILLI_CLI` itself is set only in a skillie skil.li runs, and `--socket` picks another skil.li |
 
 Recipes for each feature (CleanShot, windows, Keep Awake, the recorder,
 Shortcuts…) are in the collection's guide:

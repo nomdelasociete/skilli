@@ -465,15 +465,19 @@ public enum FeatureCatalog {
     /// Shortcuts' own glyph, where its icon is not drawn.
     public static let shortcutSymbol = "square.2.layers.3d"
 
+    /// A skillie's entry: what a key bound to one that asks arguments
+    /// opens, as its row in the "?" does.
+    public static func entry(_ skillie: ScriptCommand) -> CatalogEntry {
+        CatalogEntry(id: "script:\(skillie.path)", title: skillie.title,
+                     oneLine: skillie.description.isEmpty ? "Your skillie" : skillie.description, group: .yours, symbol: "terminal",
+                     run: .skillie(skillie.path), keywords: [skillie.packageName])
+    }
+
     private static func yours(_ input: Input) -> [CatalogEntry] {
         let skillies = input.skillies.isEmpty
             ? [CatalogEntry(id: "catalog.skillies", title: "Skillies", oneLine: "Turns your own scripts into commands you run from here",
                             group: .yours, symbol: "terminal", run: .settings("skillies"), keywords: ["scripts", "skillie", "raycast"])]
-            : input.skillies.map { skillie in
-                CatalogEntry(id: "script:\(skillie.path)", title: skillie.title,
-                             oneLine: skillie.description.isEmpty ? "Your skillie" : skillie.description, group: .yours, symbol: "terminal",
-                             run: .skillie(skillie.path), keywords: [skillie.packageName])
-            }
+            : input.skillies.map(entry)
         let links = input.quicklinks.isEmpty
             ? [CatalogEntry(id: "catalog.quicklinks", title: "Quicklinks", oneLine: "Searches a site from here: its keyword, then what to find",
                             group: .yours, symbol: "link", run: .settings("catalog/quicklinks"), keywords: ["quicklink", "web", "search", "lien"])]

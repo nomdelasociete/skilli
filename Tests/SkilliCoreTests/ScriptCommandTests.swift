@@ -84,6 +84,41 @@ final class ScriptCommandTests: XCTestCase {
         XCTAssertEqual(ScriptCommand.make(title: "Hi", description: "", mode: .silent, language: .node, code: "console.log(1)").text.split(separator: "\n")[1], "// @skilli.schemaVersion 1")
     }
 
+    func testIconsAndRequiredArguments() throws {
+        func command(_ icon: String, _ arguments: String = "") throws -> ScriptCommand {
+            try XCTUnwrap(ScriptCommand.parse("""
+            #!/bin/bash
+            # @skilli.schemaVersion 1
+            # @skilli.title Clock
+            # @skilli.mode inline
+            # @skilli.icon \(icon)
+            \(arguments)
+            """, path: "/Users/me/skillies/clock.sh"))
+        }
+        let emoji = try command("⏰")
+        XCTAssertEqual(emoji.emojiIcon, "⏰")
+        XCTAssertNil(emoji.iconImagePath)
+        for drawnAsEmoji in ["©️", "1️⃣", "❤️"] {
+            XCTAssertEqual(try command(drawnAsEmoji).emojiIcon, drawnAsEmoji)
+            XCTAssertNil(try command(drawnAsEmoji).iconImagePath)
+        }
+        XCTAssertNil(try command("©").emojiIcon, "a plain text character")
+        let image = try command("clock.png")
+        XCTAssertNil(image.emojiIcon)
+        XCTAssertEqual(image.iconImagePath, "/Users/me/skillies/clock.png")
+        XCTAssertEqual(try command("/Users/me/Pictures/clock.png").iconImagePath, "/Users/me/Pictures/clock.png")
+        XCTAssertNil(try command("https://example.com/clock.png").iconImagePath)
+        XCTAssertNil(try command("https://example.com/clock.png").emojiIcon)
+
+        XCTAssertFalse(emoji.needsArguments)
+        XCTAssertTrue(try command("⏰", #"# @skilli.argument1 { "type": "text", "placeholder": "City" }"#).needsArguments)
+        XCTAssertFalse(try command("⏰", #"# @skilli.argument1 { "type": "text", "placeholder": "City", "optional": true }"#).needsArguments)
+
+        // A key bound to it opens the same entry as its row in the "?".
+        XCTAssertEqual(FeatureCatalog.entry(image).id, "script:/Users/me/skillies/clock.sh")
+        XCTAssertEqual(FeatureCatalog.entry(image).run, .skillie("/Users/me/skillies/clock.sh"))
+    }
+
     func testOutputLines() {
         XCTAssertEqual(ScriptCommand.lastLine("one\ntwo\n\n  \n"), "two")
         XCTAssertEqual(ScriptCommand.lastLine(""), "")

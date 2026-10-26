@@ -3369,7 +3369,10 @@ re-investigating.
   `run_skillie` is always allowed. Ask: skillies that need no argument
   join the command question as `script0`…; one that fits (≥ 60 %) beats
   the agent, asked first under 85 %. Shortcuts: Add Shortcut → Skillies
-  (`script:<path>`). Agents: `list_skillies`, `run_skillie` (arguments in
+  (`script:<path>`); one with a required argument opens the launcher on
+  its chip (`ActionRunner`, `run(fromLink:)`), never empty. Menu bar: an
+  emoji icon before the line, an image file as the item's image
+  (`ScriptCommand.emojiIcon`, `iconImagePath`). Agents: `list_skillies`, `run_skillie` (arguments in
   order; a missing one refused), `create_skillie`. `selftest scripts`
   (scratch folder; a real Haiku agent writes one).
 - Skillie files (docs/skillie-files.md; `SkillieFile`, `SkillieImportLink`
