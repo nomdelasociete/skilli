@@ -57,6 +57,38 @@ class CatalogTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'duplicate slug'):
             build.catalog(self.source)
 
+    def test_the_card_says_what_to_install_first(self):
+        original = self.path.read_text()
+        cases = [
+            ('#!/bin/sh', '', [], 'Nothing to install', 'Shell'),
+            ('#!/usr/bin/swift', '', ['xcode-tools'], 'Needs Xcode Command Line Tools', 'Shell'),
+            ('#!/usr/bin/env python3', '', ['xcode-tools'], 'Needs Xcode Command Line Tools', 'Shell'),
+            ('#!/usr/bin/env node', '', ['homebrew:node'], 'Needs node from Homebrew', 'Shell'),
+            ('#!/bin/sh', '# @skilli.requires xcode-tools, homebrew:jq\n', ['xcode-tools', 'homebrew:jq'],
+             'Needs Xcode Command Line Tools, jq from Homebrew', 'Shell'),
+            ('#!/usr/bin/osascript -l JavaScript', '', [], 'Nothing to install', 'JavaScript for Automation'),
+            ('#!/usr/bin/osascript', '', [], 'Nothing to install', 'AppleScript'),
+        ]
+        for shebang, extra, requires, label, language in cases:
+            with self.subTest(shebang=shebang, extra=extra):
+                self.path.write_text(original.replace('#!/bin/sh', shebang, 1).replace('# MIT License', extra + '# MIT License', 1))
+                entries = build.catalog(self.source)
+                self.assertEqual(entries[0]['requires'], requires)
+                target = self.root / 'out'
+                build.render(entries, build.ROOT / 'website/skillies/index.template.html', target)
+                page = (target / 'index.html').read_text()
+                self.assertIn(label, page)
+                self.assertIn(f'<span>{language} · MIT</span>', page)
+
+    def test_unknown_requirements_and_relative_shebangs_fail(self):
+        original = self.path.read_text()
+        for text in [original.replace('# MIT License', '# @skilli.requires python\n# MIT License', 1),
+                     original.replace('#!/bin/sh', '#!sh', 1)]:
+            with self.subTest(text=text[:80]):
+                self.path.write_text(text)
+                with self.assertRaises(ValueError):
+                    build.catalog(self.source)
+
     def test_symlinks_fail(self):
         self.path.unlink()
         self.path.symlink_to(build.ROOT / 'skillies/everyday/week-number.sh')

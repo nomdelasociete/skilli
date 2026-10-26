@@ -5,6 +5,7 @@
 # @skilli.packageName Developer
 # @skilli.description Show the current branch and changed files in a Git project.
 # @skilli.argument1 {"type":"text","placeholder":"Project folder"}
+# @skilli.requires xcode-tools
 # MIT License
 #
 # Copyright (c) 2026 skil.li contributors

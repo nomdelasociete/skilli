@@ -10,6 +10,47 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUG = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*')
+# What macOS itself has (skillies/README.md, "What runs on every Mac").
+SHIPPED = {'sh', 'bash', 'zsh', 'dash', 'osascript', 'perl', 'ruby', 'awk'}
+# /usr/bin stubs that only work once Xcode's Command Line Tools are installed.
+XCODE_TOOLS = {'swift', 'git'}
+REQUIREMENT = re.compile(r'xcode-tools|homebrew:[a-z0-9][a-z0-9+@._-]*')
+
+
+def program(code):
+    """`#!/usr/bin/env python3` → ('python3', []); `#!/usr/bin/osascript -l JavaScript` →
+    ('osascript', ['-l', 'JavaScript']). None without an absolute path, which skil.li needs."""
+    parts = code.split('\n', 1)[0][2:].split()
+    if not parts or not parts[0].startswith('/'):
+        return None
+    name, rest = parts[0].rsplit('/', 1)[-1], parts[1:]
+    if name == 'env':
+        words = [w for w in rest if not w.startswith('-') and '=' not in w]
+        if not words:
+            return None
+        name, rest = words[0].rsplit('/', 1)[-1], []
+    return name, rest
+
+
+def requirements(name, declared):
+    """What has to be installed first: its interpreter's, then what it says it calls."""
+    found = []
+    if name in XCODE_TOOLS or name.startswith('python'):
+        found.append('xcode-tools')
+    elif name not in SHIPPED:
+        found.append(f'homebrew:{name}')
+    for token in filter(None, (t.strip() for t in declared.split(','))):
+        if not REQUIREMENT.fullmatch(token):
+            raise ValueError(f'unknown requirement {token!r}: xcode-tools or homebrew:<formula>')
+        if token not in found:
+            found.append(token)
+    return found
+
+
+def needs_label(found):
+    if not found:
+        return 'Nothing to install'
+    return 'Needs ' + ', '.join('Xcode Command Line Tools' if r == 'xcode-tools' else f'{r[9:]} from Homebrew' for r in found)
 
 
 def catalog(source):
@@ -28,6 +69,9 @@ def catalog(source):
         code = data.decode('utf-8')
         if not code.startswith('#!'):
             raise ValueError(f'{path}: missing shebang')
+        runs = program(code)
+        if runs is None:
+            raise ValueError(f'{path}: the shebang must name an absolute path (#!/bin/sh, #!/usr/bin/env python3)')
         metadata = {}
         for line in data[:8192].decode('utf-8', errors='ignore').splitlines()[:60]:
             match = re.match(r'\s*(?:#|//)\s*@skilli\.(\w+)\s+(.+)', line)
@@ -57,9 +101,14 @@ def catalog(source):
                 arguments.append(value['placeholder'])
         if any(k.startswith('argument') and k not in ('argument1', 'argument2', 'argument3') for k in metadata):
             raise ValueError(f'{path}: at most three arguments are supported')
+        try:
+            requires = requirements(runs[0], metadata.get('requires', ''))
+        except ValueError as error:
+            raise ValueError(f'{path}: {error}') from None
         entries.append(dict(id=slug, category=category, title=metadata['title'], description=metadata['description'],
                             package=metadata['packageName'], mode=metadata['mode'], arguments=arguments,
-                            needsConfirmation=metadata.get('needsConfirmation') == 'true', license='MIT',
+                            needsConfirmation=metadata.get('needsConfirmation') == 'true', requires=requires,
+                            program=runs[0], arguments_of_program=runs[1], license='MIT',
                             # A .skilli file: the script itself, which skil.li opens to add it (docs/skillie-files.md).
                             download=f'files/{slug}.skilli', source=f'skillies/{category}/{path.name}',
                             sha256=hashlib.sha256(data).hexdigest(), code=code, path=path))
@@ -76,7 +125,13 @@ def render(entries, template, target):
         args = ' · '.join(item['arguments']) or 'No arguments'
         if item['needsConfirmation']:
             args += ' · Asks before running'
+        args += ' · ' + needs_label(item['requires'])
         language = {'.sh': 'Shell', '.py': 'Python', '.js': 'JavaScript', '.rb': 'Ruby', '.swift': 'Swift'}[item['path'].suffix]
+        if item['program'] == 'osascript':
+            # `osascript -l JavaScript`: the language its shebang names, AppleScript otherwise.
+            flags = item['arguments_of_program']
+            named = flags[flags.index('-l') + 1] if '-l' in flags[:-1] else 'AppleScript'
+            language = 'JavaScript for Automation' if named == 'JavaScript' else named
         search = esc(' '.join((item['title'], item['description'], item['package'])).lower())
         cards.append(f'''<article class="skillie-entry" id="{slug}" data-category="{item['category']}" data-search="{search}">
 <div class="skillie-meta">{esc(item['package'])} <span>{language} · MIT</span></div>
@@ -94,7 +149,7 @@ def render(entries, template, target):
     for item in entries:
         shutil.copyfile(item['path'], target / item['download'])
     (target / 'index.html').write_text(page)
-    public = [{k: v for k, v in item.items() if k not in ('path', 'code')} for item in entries]
+    public = [{k: v for k, v in item.items() if k not in ('path', 'code', 'program', 'arguments_of_program')} for item in entries]
     (target / 'catalog.json').write_text(json.dumps({'schemaVersion': 1, 'skillies': public}, ensure_ascii=False, indent=2) + '\n')
 
 
