@@ -164,6 +164,10 @@ final class TrackWriter: @unchecked Sendable {
         case finishing
         /// The encoder never takes another sample.
         case encoder
+        /// The encoder takes nothing while recording (a backlog builds),
+        /// then each sample slowly at the close: the backlog would outlast
+        /// the deadline.
+        case slow
     }
 
     var stalls: Stall?
@@ -286,14 +290,17 @@ final class TrackWriter: @unchecked Sendable {
     /// What is pending to the encoder, 100 ms at a time (`all`: the rest
     /// too, at the end).
     /// What is pending to the encoder, 100 ms at a time (`all`: the rest
-    /// too, at the end, waited for until `deadline`). Whether all that was
-    /// due went.
+    /// too, at the end, until `deadline`: a backlog the encoder takes too
+    /// slowly, or not at all, is left there). Whether all that was due went.
     @discardableResult
     private func flush(all: Bool, until deadline: DispatchTime = .distantFuture) -> Bool {
         var start = 0
         // What went is taken off once, after (a long silence is many pieces).
         defer { pending.removeFirst(start) }
         while pending.count - start >= Self.piece + (all ? 0 : Self.heldBack) || (all && start < pending.count) {
+            // At the end, never past the deadline: the rest is left out, as
+            // after a crash.
+            if all, DispatchTime.now() >= deadline { return false }
             guard writer.status == .writing else {
                 fail()
                 return false
@@ -301,10 +308,13 @@ final class TrackWriter: @unchecked Sendable {
             guard encoderIsReady else {
                 // The encoder is behind: kept for the next turn, never lost
                 // (at the end, waited for until the deadline).
-                guard all, DispatchTime.now() < deadline else { return !all }
+                guard all else { return true }
                 Thread.sleep(forTimeInterval: 0.01)
                 continue
             }
+            #if SKILLI_SELFTEST
+            if stalls == .slow, closingStarted { Thread.sleep(forTimeInterval: 0.2) }
+            #endif
             let count = min(Self.piece, pending.count - start)
             guard let buffer = sampleBuffer(from: start, count: count), input.append(buffer) else {
                 fail()
@@ -319,6 +329,7 @@ final class TrackWriter: @unchecked Sendable {
     private var encoderIsReady: Bool {
         #if SKILLI_SELFTEST
         if stalls == .encoder, closingStarted { return false }
+        if stalls == .slow, !closingStarted { return false }
         #endif
         return input.isReadyForMoreMediaData
     }

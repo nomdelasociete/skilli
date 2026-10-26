@@ -3,7 +3,7 @@
 #if SKILLI_SELFTEST
 import AppKit
 
-/// `Skilli recorderchild <recordings folder> <me.wav> [finishing|encoder]`: records as
+/// `Skilli recorderchild <recordings folder> <me.wav> [finishing|encoder|slow]`: records as
 /// skil.li does (the Mac's sound, a file standing in for the microphone)
 /// until it is killed, so the self-test finds a recording never stopped, as
 /// a crash or a power cut leaves one; or until it is sent SIGTERM, which

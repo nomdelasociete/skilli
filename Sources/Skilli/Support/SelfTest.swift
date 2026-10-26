@@ -23829,7 +23829,7 @@ final class SelfTest {
     /// offered as unfinished). Then the next launch's pick-up: its
     /// transcript made without a card and without opening its window.
     private func recorderQuitClosesItWhole() async {
-        let name = "Recorder: skil.li quit while recording (another skil.li sent SIGTERM) closes both tracks whole before it exits, left stopped, never offered as unfinished; the next launch makes its transcript without a card or a window; a file stuck as it closes (finishing or encoder) leaves it offered as never stopped"
+        let name = "Recorder: skil.li quit while recording (another skil.li sent SIGTERM) closes both tracks whole before it exits, left stopped, never offered as unfinished; the next launch makes its transcript without a card or a window; a file stuck as it closes (finishing, encoder, slow encoder) leaves it offered as never stopped"
         guard let center = context.recorder() else {
             record(name, false, "no recorder", nil)
             return
@@ -23867,13 +23867,14 @@ final class SelfTest {
         let noWindow = center.openWindows.isEmpty
         let noCard = !center.isCardVisible
         let haveCall = FileManager.default.fileExists(atPath: Self.recorderCalls.appendingPathComponent("en01/me.wav").path)
-        // A file stuck as it closes (its finishing never says it is done, or
-        // the encoder never takes the rest): the quit still ends within the
+        // A file stuck as it closes (its finishing never says it is done, the
+        // encoder never takes the rest, or takes it too slowly for the
+        // deadline): the quit still ends within the
         // 5 s, the recording left as it was, offered at the next launch as
         // never stopped, never transcribed unasked.
         var stalls: [String] = []
         var stallPassed = true
-        for kind in [TrackWriter.Stall.finishing, .encoder] {
+        for kind in [TrackWriter.Stall.finishing, .encoder, .slow] {
             guard let stuck = await recordInAnotherSkilli(root: root, me: me, them: them, seconds: 4, ending: SIGTERM, stalls: kind) else {
                 stallPassed = false
                 stalls.append("\(kind.rawValue) stuck: the child did not record")
