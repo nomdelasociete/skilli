@@ -152,8 +152,9 @@ when closed.
 
 ## An unfinished recording
 
-At launch, a recording that was never stopped (skil.li quit, the Mac
-lost power): what was written is kept (the files are readable up to the
+At launch, a recording that was never stopped (skil.li crashed, the Mac
+lost power), or at once after a Stop whose files could not be finished
+within 5 s: what was written is kept (the files are readable up to the
 last second). The Record card's place and frame:
 
 ```
@@ -583,9 +584,11 @@ Phase 3 changes none of the Moment's answers, checked one by one:
    setting.
 2. **The path**: the same keys. ⌘R on the meeting card, the launcher's
    row or the menu bar records with the case's sources plus the webcam
-   and the screen as Settings → Recorder has them; the Record card's
-   rows turn either on with a click; the red dot's menu, during the
-   call.
+   and the screen as Settings → Recorder has them: the sound from the
+   key, the screen joining once the meeting's window is found
+   (Automation's question, a browser slow to answer never delay the
+   sound); the Record card's rows turn either on with a click; the red
+   dot's menu, during the call.
 3. **Hint or push**: nothing new is pushed. One thing is said that the
    user would not see otherwise: a screen that stops giving pictures
    (Measured: a minimized or hidden window gives none; Chrome's, fully
@@ -750,17 +753,18 @@ From the screen's own pictures, on this Mac (Vision's text
 recognition), nothing kept but the text:
 
 - Four times a second the picture is compared with the one last read
-  (its brightness on a 32 × 20 grid); when it changed, its text is
-  read, at most once a second, less often while readings find nothing
-  new (a video moving: up to every 8 s), at once again for a change of
-  a quarter of the picture.
-- The lines new since the last reading are a slide, timed at the
-  change: the picture that changed most from the one before since the
-  last reading (a slide, not a video moving around it; so a slide shown
-  at 1:15.4 is at 1:15.4 or a sample later; the check: within a
-  second). A still window gives no new picture: its last one is
-  compared again as time goes on, so a change seen while a reading
-  waited is read all the same.
+  (its brightness on a 64 × 40 grid: fine enough that a slide whose
+  text alone changes shows, a corner's clock ticking does not); when it
+  changed, its text is read, at most once a second, every two seconds
+  while readings find nothing new (a video moving).
+- The lines new since the last reading are a slide, timed at the last
+  change before the reading: between the two readings, so never more
+  than two seconds off, within a second when it is the only thing
+  changing (the check). A still window gives no new picture: its last
+  one is compared again as time goes on, so a change seen while a
+  reading waited is read all the same.
+- A line is text when it has words: a number alone (the call's clock,
+  a counter) is no slide's.
 - Lines seen in most of the recording's readings (the browser's tabs,
   the call's own buttons, the people's names under their videos) are
   taken out of every slide at Stop; a slide left with no line goes.

@@ -19194,7 +19194,7 @@ final class SelfTest {
             let listed = backup.backups()
             let contents = try await backup.contents(of: url)
             let expected = ["1 setting", "2 snippets", "2 quicklinks", "1 window layout"]
-            let zipped = Self.zipEntries(url) ?? []
+            let zipped = await Self.zipEntries(url) ?? []
             let noClipboard = !zipped.isEmpty && !zipped.contains { $0.contains("/Clipboard/") || $0.hasSuffix("mcp.sock") }
 
             try files.removeItem(at: source.appendingPathComponent("snippets/sign.md"))
@@ -19219,11 +19219,10 @@ final class SelfTest {
             try PropertyListSerialization.data(fromPropertyList: ["Preferences.selftestBackup": "older"], format: .xml, options: 0)
                 .write(to: olderRoot.appendingPathComponent("Settings.plist"))
             let older = destination.appendingPathComponent(olderName)
-            let ditto = Process()
-            ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-            ditto.arguments = ["-c", "-k", "--sequesterRsrc", "--keepParent", olderRoot.path, older.path]
-            try ditto.run()
-            ditto.waitUntilExit()
+            guard await Self.toolOutput("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", olderRoot.path, older.path]) != nil else {
+                record(name, false, "the older backup could not be zipped", nil)
+                return
+            }
             let olderContents = try await backup.contents(of: older)
             try await backup.restore(older)
             let history = (try? String(contentsOf: source.appendingPathComponent("Clipboard/history.sqlite"), encoding: .utf8)) ?? ""
@@ -19240,23 +19239,18 @@ final class SelfTest {
     }
 
     /// The paths a zip holds (`zipinfo -1`), or nil.
-    private static func zipEntries(_ zip: URL) -> [String]? {
-        guard let text = toolOutput("/usr/bin/zipinfo", ["-1", zip.path]) else { return nil }
-        return String(decoding: text, as: UTF8.self).split(separator: "\n").map(String.init)
+    private static func zipEntries(_ zip: URL) async -> [String]? {
+        await toolOutput("/usr/bin/zipinfo", ["-1", zip.path])?.split(separator: "\n").map(String.init)
     }
 
-    /// What `tool` writes with `arguments`, nil when it fails.
-    private static func toolOutput(_ tool: String, _ arguments: [String]) -> Data? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: tool)
-        process.arguments = arguments
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        guard (try? process.run()) != nil else { return nil }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return process.terminationStatus == 0 ? data : nil
+    /// What `tool` writes with `arguments` (as text), nil when it fails. Run
+    /// off the main thread (`ChildProcess.run`): waiting for it here would
+    /// spin a nested run loop where a timer's `MainActor.assumeIsolated`
+    /// crashes the Swift runtime.
+    private static func toolOutput(_ tool: String, _ arguments: [String]) async -> String? {
+        guard let run = try? await ChildProcess.run(URL(fileURLWithPath: tool), arguments, withErrors: false, timeout: 120), run.status == 0
+        else { return nil }
+        return run.output
     }
 
     /// The words said in recordings never reach a backup
@@ -19307,11 +19301,11 @@ final class SelfTest {
             preferences.backupKeep = 10
 
             let url = try await backup.backUpNow()
-            let zipped = Self.zipEntries(url) ?? []
+            let zipped = await Self.zipEntries(url) ?? []
             let indexInZip = zipped.filter { entry in RecordingSearch.indexFiles.contains { entry.hasSuffix("/" + $0) } }
             let lookalikeKept = zipped.contains { $0.hasSuffix("/recordings-index.sqlite.bak") }
-            let unzipped = Self.toolOutput("/usr/bin/unzip", ["-p", url.path]) ?? Data()
-            let noWords = !unzipped.isEmpty && !String(decoding: unzipped, as: UTF8.self).contains("elephant")
+            let unzipped = await Self.toolOutput("/usr/bin/unzip", ["-p", url.path]) ?? ""
+            let noWords = !unzipped.isEmpty && !unzipped.contains("elephant")
 
             // Restored: this Mac's index as it was.
             try await backup.restore(url)
@@ -19329,7 +19323,7 @@ final class SelfTest {
             try PropertyListSerialization.data(fromPropertyList: ["Preferences.selftestBackup": "older"], format: .xml, options: 0)
                 .write(to: olderRoot.appendingPathComponent("Settings.plist"))
             let olderZip = destination.appendingPathComponent(olderName)
-            guard Self.toolOutput("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", olderRoot.path, olderZip.path]) != nil else {
+            guard await Self.toolOutput("/usr/bin/ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", olderRoot.path, olderZip.path]) != nil else {
                 record(name, false, "the older backup could not be zipped", nil)
                 return
             }
@@ -19347,10 +19341,27 @@ final class SelfTest {
             remade.sync(root: recordings, folders: [folder.lastPathComponent])
             let rebuilt = !remade.search("elephant").isEmpty
 
+            // A database whose pages after the first are damaged: SQLite
+            // opens it, then a read finds the damage; made again at once.
+            let pagesURL = garbage.appendingPathComponent("pages.sqlite")
+            do {
+                let whole = RecordingIndex(url: pagesURL)
+                whole.sync(root: recordings, folders: [folder.lastPathComponent])
+                _ = whole.search("elephant")
+            }
+            if let handle = try? FileHandle(forWritingTo: pagesURL) {
+                try handle.seek(toOffset: 4096)
+                try handle.write(contentsOf: Data(repeating: 0xA5, count: 16_384))
+                try handle.close()
+            }
+            let damaged = RecordingIndex(url: pagesURL)
+            damaged.sync(root: recordings, folders: [folder.lastPathComponent])
+            let readAgain = !damaged.search("elephant").isEmpty
+
             let passed = indexed && present.contains(RecordingSearch.indexFile + "-wal") && indexInZip.isEmpty && lookalikeKept && noWords
-                && keptAfterRestore && olderLeftOut && rebuilt
+                && keptAfterRestore && olderLeftOut && rebuilt && readAgain
             record(name, passed,
-                   "index with the words \(indexed), beside it \(present); in the zip: index files \(indexInZip), the look-alike kept \(lookalikeKept), no transcript text \(noWords) (\(zipped.count) entries, \(unzipped.count) bytes unzipped); after restore the index kept \(keptAfterRestore); an older backup's index left out \(olderLeftOut); an unreadable index made again \(rebuilt)",
+                   "index with the words \(indexed), beside it \(present); in the zip: index files \(indexInZip), the look-alike kept \(lookalikeKept), no transcript text \(noWords) (\(zipped.count) entries, \(unzipped.count) characters unzipped); after restore the index kept \(keptAfterRestore); an older backup's index left out \(olderLeftOut); an unreadable index made again \(rebuilt); one damaged under a read made again \(readAgain)",
                    nil)
         } catch {
             record(name, false, error.localizedDescription, nil)
@@ -24044,6 +24055,7 @@ final class SelfTest {
         if !aborted { await recorderPausesBothTracksTogether() }
         if !aborted { await recorderOffersOneNeverStopped() }
         if !aborted { await recorderQuitClosesItWhole() }
+        if !aborted { await recorderStopStuckOffersIt() }
         if !aborted { await recorderSleepPausesUntilResumed() }
         if !aborted { await recorderFromLinksAndTools() }
     }
@@ -24705,12 +24717,14 @@ final class SelfTest {
     /// standing in for the microphone and `them` played as the other side,
     /// for `seconds`, then is sent `ending`: SIGKILL (a crash, a power cut)
     /// or SIGTERM (a quit, as `pkill`: through `NSApp.terminate`, as the
-    /// menu's Quit or a logout). Nil when it never recorded.
-    private func recordInAnotherSkilli(root: URL, me: URL, them: URL, seconds: Double, ending: Int32) async -> ChildRecording? {
+    /// menu's Quit or a logout). `stalls`: what gets stuck as its files
+    /// close. Nil when it never recorded.
+    private func recordInAnotherSkilli(root: URL, me: URL, them: URL, seconds: Double, ending: Int32,
+                                       stalls: TrackWriter.Stall? = nil) async -> ChildRecording? {
         guard let executable = Bundle.main.executablePath else { return nil }
         let child = Process()
         child.executableURL = URL(fileURLWithPath: executable)
-        child.arguments = ["recorderchild", root.path, me.path]
+        child.arguments = ["recorderchild", root.path, me.path] + (stalls.map { [$0.rawValue] } ?? [])
         let output = Pipe()
         child.standardOutput = output
         let exited = DispatchSemaphore(value: 0)
@@ -24765,7 +24779,7 @@ final class SelfTest {
     /// offered as unfinished). Then the next launch's pick-up: its
     /// transcript made without a card and without opening its window.
     private func recorderQuitClosesItWhole() async {
-        let name = "Recorder: skil.li quit while recording (another skil.li sent SIGTERM) closes both tracks whole before it exits, left stopped, never offered as unfinished; the next launch makes its transcript without a card or a window"
+        let name = "Recorder: skil.li quit while recording (another skil.li sent SIGTERM) closes both tracks whole before it exits, left stopped, never offered as unfinished; the next launch makes its transcript without a card or a window; a file stuck or failing as it closes (finishing, encoder, slow encoder, a writer not completed) leaves it offered as never stopped"
         guard let center = context.recorder() else {
             record(name, false, "no recorder", nil)
             return
@@ -24803,20 +24817,110 @@ final class SelfTest {
         let noWindow = center.openWindows.isEmpty
         let noCard = !center.isCardVisible
         let haveCall = FileManager.default.fileExists(atPath: Self.recorderCalls.appendingPathComponent("en01/me.wav").path)
+        // A file stuck as it closes (its finishing never says it is done, the
+        // encoder never takes the rest, or takes it too slowly for the
+        // deadline): the quit still ends within the
+        // 5 s, the recording left as it was, offered at the next launch as
+        // never stopped, never transcribed unasked.
+        var stalls: [String] = []
+        var stallPassed = true
+        for kind in [TrackWriter.Stall.finishing, .encoder, .slow, .failing] {
+            guard let stuck = await recordInAnotherSkilli(root: root, me: me, them: them, seconds: 4, ending: SIGTERM, stalls: kind) else {
+                stallPassed = false
+                stalls.append("\(kind.rawValue) stuck: the child did not record")
+                continue
+            }
+            let leftAs = center.recordings.read(stuck.folder)
+            let next = await RecorderCenter.left(in: root)
+            let offeredAgain = next.unfinished.contains { $0.0.standardizedFileURL == stuck.folder.standardizedFileURL }
+            let madeUnasked = next.toTranscribe.contains { $0.0.standardizedFileURL == stuck.folder.standardizedFileURL }
+            stallPassed = stallPassed && stuck.reason == .exit && stuck.status == 0 && (stuck.ended ?? 99) < TrackWriter.closingTime + 1.5
+                && leftAs?.state == .recording && offeredAgain && !madeUnasked
+            stalls.append(String(format: "%@ stuck: exit %@, meeting.json “%@”, offered as never stopped %@, transcribed unasked %@", kind.rawValue,
+                                 stuck.ended.map { String(format: "%.2f s", $0) } ?? "never", leftAs?.state.rawValue ?? "nothing", "\(offeredAgain)",
+                                 "\(madeUnasked)"))
+            // Not offered by a later check.
+            if var rest = leftAs {
+                rest.state = .pending
+                try? center.recordings.write(rest, to: stuck.folder)
+            }
+        }
+        let stall = stalls.joined(separator: "; ")
         let passed = quitClean && whole && stopped && notUnfinished && toMake.count == 1 && !offered && ring && made && after?.state == .done
-            && (!haveCall || lines > 0) && noWindow && noCard
+            && (!haveCall || lines > 0) && noWindow && noCard && stallPassed
         record(name, passed,
-               String(format: "recorded %.2f s, SIGTERM → exit %@ (%@ %d); tracks %.2f s / %.2f s, meeting.json %.2f s “%@”, its recorder %@, unfinished %@; found for the next launch's transcript %d, offered %@; transcribing at once %@, made %@ (“%@”, %d lines), window %@, card %@",
+               String(format: "recorded %.2f s, SIGTERM → exit %@ (%@ %d); tracks %.2f s / %.2f s, meeting.json %.2f s “%@”, its recorder %@, unfinished %@; found for the next launch's transcript %d, offered %@; transcribing at once %@, made %@ (“%@”, %d lines), window %@, card %@; %@",
                       child.recorded, child.ended.map { String(format: "%.2f s", $0) } ?? "never", child.reason == .exit ? "exit" : "signal", child.status,
                       lengths.me, lengths.them, left?.seconds ?? 0, left?.state.rawValue ?? "nothing", left?.recorder == nil ? "none" : "kept",
                       "\(!notUnfinished)", toMake.count, "\(offered)", "\(ring)", "\(made)", after?.state.rawValue ?? "?", lines,
-                      noWindow ? "none" : "opened", noCard ? "none" : "shown"),
+                      noWindow ? "none" : "opened", noCard ? "none" : "shown", stall),
                nil)
         // Not found again by a later check.
         if after?.state != .done, var rest = after {
             rest.state = .pending
             try? center.recordings.write(rest, to: folder)
         }
+    }
+
+    /// A Stop whose files cannot be finished in time (docs/meeting-recorder.md,
+    /// "Quit and sleep"; the self-test's stalls: the finishing never calls
+    /// back, the encoder takes nothing more, or a backlog it takes too
+    /// slowly): no transcript starts, `meeting.json` stays as it was while
+    /// recording, and the Unfinished Recording card offers it at once.
+    private func recorderStopStuckOffersIt() async {
+        let name = "Recorder: a Stop whose files cannot be finished whole in time (finishing, encoder, slow encoder stuck; a writer not completed) starts no transcript, leaves meeting.json as it was and offers the recording at once as never stopped"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let clip = recorderScratch.appendingPathComponent("stuck-me.wav")
+        _ = Self.clip(nil, seconds: 20, beeps: [1, 2, 3], to: clip)
+        center.openWindows.forEach { $0.close() }
+        var details: [String] = []
+        var passed = true
+        for kind in [TrackWriter.Stall.finishing, .encoder, .slow, .failing] {
+            center.recorder.standIn(microphone: clip, alsoLeaveOut: [])
+            center.recorder.stalls = kind
+            await center.recorder.listen()
+            do {
+                try center.recorder.begin(title: "Stuck \(kind.rawValue)", language: "en-US")
+            } catch {
+                center.recorder.stalls = nil
+                center.recorder.stopListening()
+                passed = false
+                details.append("\(kind.rawValue): did not record (\(error.localizedDescription))")
+                continue
+            }
+            // Only this recording's writers stall (set as it began).
+            center.recorder.stalls = nil
+            try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
+            guard let folder = center.recorder.folder else {
+                passed = false
+                details.append("\(kind.rawValue): no folder")
+                continue
+            }
+            await pause(3000)
+            let stopped = ContinuousClock.now
+            center.control(.stop)
+            let offered = await waitUntil(timeout: TrackWriter.closingTime + 4) {
+                center.isCardVisible && center.cardView.eyebrowText == "UNFINISHED RECORDING"
+            } != nil
+            let took = (ContinuousClock.now - stopped).milliseconds / 1000
+            let left = center.recordings.read(folder)
+            let noTranscript = center.recorder.transcribing == nil
+                && !FileManager.default.fileExists(atPath: folder.appendingPathComponent("transcript.json").path)
+            let ok = offered && took < TrackWriter.closingTime + 2.5 && left?.state == .recording && noTranscript && center.recorder.phase == .idle
+            passed = passed && ok
+            details.append(String(format: "%@: card %@ after %.2f s, meeting.json “%@”, no transcript %@, idle %@", kind.rawValue, "\(offered)", took,
+                                  left?.state.rawValue ?? "nothing", "\(noTranscript)", "\(center.recorder.phase == .idle)"))
+            // Later (esc): not offered again in this run.
+            if offered { center.closeCardWithoutKeys() }
+            if var rest = left {
+                rest.state = .pending
+                try? center.recordings.write(rest, to: folder)
+            }
+        }
+        record(name, passed, details.joined(separator: "; "), nil)
     }
 
     /// The Mac goes to sleep while recording (docs/meeting-recorder.md,
@@ -25041,10 +25145,28 @@ final class SelfTest {
         preferences.recorderWebcam = false
         preferences.recorderScreen = false
         slides.show(["skil.li", "Lumière · weekly review"])
-        slides.window.orderFront(nil)
+        slides.window.orderFrontRegardless()
         await picturesRecordSlidesInStep(center, slides, camera)
         if !aborted { await picturesSayAWindowWithoutPictures(center, slides) }
+        if !aborted { await picturesCommandRDoesNotWaitForTheWindow(center, slides) }
         if !aborted { await picturesInAScratchChrome(center) }
+    }
+
+    /// The Record card over the test window, light and dark (skil.li's own
+    /// windows only: another app's window over it on the test Mac is left
+    /// out).
+    private func capturePicturesCard(_ center: RecorderCenter, as name: String) async {
+        guard let directory = context.snapshotDirectory, let panel = center.cardWindow else { return }
+        let saved = (panel.appearance, window.appearance)
+        defer { (panel.appearance, window.appearance) = saved }
+        for (suffix, appearance) in GlassCheck.appearances {
+            panel.appearance = appearance
+            window.appearance = appearance
+            await pause(700)
+            if let png = await WindowCapture.png(of: [window, panel], cropped: panel) {
+                try? png.write(to: directory.appendingPathComponent("\(name)-\(suffix).png"))
+            }
+        }
     }
 
     /// A real click on a row of the Record card.
@@ -25054,7 +25176,10 @@ final class SelfTest {
         // On the row's title, left of its picture and of the ⌃⌄.
         let point = CGPoint(x: frame.minX + 40, y: screenHeight - frame.midY)
         let source = CGEventSource(stateID: .hidSystemState)
-        for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
+        // The pointer there first, as a hand gets there before it clicks.
+        CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+        await pause(300)
+        for type in [CGEventType.leftMouseDown, .leftMouseUp] {
             CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
             await pause(60)
         }
@@ -25118,17 +25243,33 @@ final class SelfTest {
         }
         guard await recordCardHasKeys(center, name) else { return }
         let offBefore = (view.webcamLine, view.screenLine)
+        let rows = (webcam: view.screenFrame(of: .webcam) ?? .zero, screen: view.screenFrame(of: .screen) ?? .zero)
         // The webcam's row: on, its picture live.
         _ = await clickCardRow(center, .webcam)
         let webcamOn = await waitUntil(timeout: 3) { view.webcamLine == "FaceTime HD Camera" && center.recorder.pictures.webcam.sink.latestPicture != nil } != nil
-        // The screen's row: no meeting's window, its list opens; the slides picked.
+        // Diagnosis only (the check stays failed): does a second click take?
+        var secondClick = "not tried"
+        if !webcamOn {
+            _ = await clickCardRow(center, .webcam)
+            secondClick = await waitUntil(timeout: 2) { view.webcamLine == "FaceTime HD Camera" } != nil ? "turned it on" : "did nothing"
+        }
+        // The screen's row: no meeting's window, its list opens; the slides
+        // picked. A list that holds the test's own steps is closed in 8 s.
+        let escape = DispatchWorkItem {
+            let source = CGEventSource(stateID: .hidSystemState)
+            for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap) }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 8, execute: escape)
         _ = await clickCardRow(center, .screen)
         await pause(700)
         let (picked, listed) = await pickInOpenMenu("skil.li · Slides")
+        // The list names other apps' windows: only how many in the report.
+        let listedCount = listed.count
+        escape.cancel()
         let screenOn = await waitUntil(timeout: 4) { view.screenLine == "skil.li · Slides" && center.recorder.pictures.screen.sink.latestPicture != nil } != nil
-        await captureRecordCard(center, as: "recorder-pictures-card")
+        await capturePicturesCard(center, as: "recorder-pictures-card")
         guard webcamOn, screenOn, await recordCardHasKeys(center, name) else {
-            record(name, false, "rows before “\(offBefore.0)” / “\(offBefore.1)”; webcam on \(webcamOn) “\(view.webcamLine)”, screen picked \(picked) from \(listed), on \(screenOn) “\(view.screenLine)”", nil)
+            record(name, false, "rows before “\(offBefore.0)” / “\(offBefore.1)”; webcam on \(webcamOn) “\(view.webcamLine)” (row at \(rows.webcam), sources \(center.recorder.sources), state \(center.recorder.pictures.webcam.state), a second click \(secondClick), key \(center.cardWindow?.isKeyWindow == true), active \(NSApp.isActive)), screen picked \(picked) from \(listedCount) menu items, on \(screenOn) “\(view.screenLine)” (row at \(rows.screen))", nil)
             center.closeCardWithoutKeys()
             return
         }
@@ -25167,7 +25308,7 @@ final class SelfTest {
         let urls = (me: folder.appendingPathComponent("me.m4a"), screen: folder.appendingPathComponent(RecorderPictures.screenFile),
                     webcam: folder.appendingPathComponent(RecorderPictures.webcamFile))
         let found = await Task.detached { Self.beeps(in: urls.me) }.value
-        let screenFlashes = await PictureCheck.flashes(in: urls.screen)
+        let screenFlashes = await PictureCheck.flashes(in: urls.screen, corner: SlidesWindow.flashRegion)
         let webcamFlashes = await PictureCheck.flashes(in: urls.webcam)
         let screenOffsets = PictureCheck.offsets(found, screenFlashes)
         let webcamOffsets = PictureCheck.offsets(found, webcamFlashes)
@@ -25267,7 +25408,7 @@ final class SelfTest {
         cover.backgroundColor = .windowBackgroundColor
         cover.isOpaque = true
         cover.isReleasedWhenClosed = false
-        cover.orderFront(nil)
+        cover.orderFrontRegardless()
         let covered = await waitUntil(timeout: 9) { center.recorder.pictures.screen.problem == .stoppedPainting } != nil
         let coveredMenu = center.menuBar.menuTitles.first { $0.hasPrefix("Screen ·") } ?? ""
         cover.orderOut(nil)
@@ -25284,6 +25425,51 @@ final class SelfTest {
         record(name, !before.contains("no picture") && minimized && said.contains("the screen gives no picture") && screenLine.contains("is minimized") && back
                && covered && coveredMenu.contains("stopped painting") && uncovered && webcamOff && screenOff && files.count == 2,
                "before “\(before)”; minimized: said \(minimized), label “\(said)”, menu “\(screenLine)”; back \(back); covered: \(covered) “\(coveredMenu)”, uncovered \(uncovered); webcam off \(webcamOff), screen off \(screenOff); files \(files)",
+               nil)
+    }
+
+    /// ⌘R with the screen on, the meeting's window found only 2 s later (a
+    /// browser slow to answer, Automation's question): the sound records
+    /// from the key, the screen joins once its window is found, in the same
+    /// recording (its file's first picture then).
+    private func picturesCommandRDoesNotWaitForTheWindow(_ center: RecorderCenter, _ slides: SlidesWindow) async {
+        let name = "Recorder's pictures: ⌘R with the screen on, the meeting's window found 2 s later: the sound records from the key (within 200 ms), the screen joins the same recording once found"
+        let silence = recorderScratch.appendingPathComponent("silence.wav")
+        _ = Self.clip(nil, seconds: 120, beeps: [], to: silence)
+        center.recorder.standIn(microphone: silence, alsoLeaveOut: [])
+        center.standInMicrophone(.none)
+        context.preferences.recorderWebcam = false
+        context.preferences.recorderScreen = true
+        guard let window = ScreenWindows.window(CGWindowID(slides.window.windowNumber)) else {
+            record(name, false, "the slides window is not in the window list", nil)
+            return
+        }
+        center.standInMeetingWindow = (window, .seconds(2))
+        defer {
+            center.standInMeetingWindow = nil
+            center.standInMicrophone(nil)
+        }
+        let event = momentEvent("st-pictures-key", "Design sync", in: -60, link: false)
+        let pressed = ContinuousClock.now
+        center.recordMeeting(event, joining: false)
+        let soundAfter = await waitUntil(timeout: 3) { center.recorder.isRecording }
+        let screenAfter = await waitUntil(timeout: 6) { center.recorder.sources.screen && center.recorder.pictures.screen.window?.id == window.id }
+            .map { _ in ContinuousClock.now - pressed }
+        await pause(2000)
+        guard let folder = center.recorder.folder else {
+            record(name, false, "nothing recorded (\(center.recorder.phase))", nil)
+            return
+        }
+        await momentStop(center)
+        center.openWindows.forEach { $0.close() }
+        let screenFile = folder.appendingPathComponent(RecorderPictures.screenFile)
+        let first = await PictureCheck.firstPicture(in: screenFile)
+        let lengths = (me: trackLength(folder.appendingPathComponent("me.m4a")), screen: await PictureCheck.length(screenFile))
+        let sound = soundAfter.map { Double($0.components.seconds) + Double($0.components.attoseconds) / 1e18 } ?? 99
+        let joined = screenAfter.map { Double($0.components.seconds) + Double($0.components.attoseconds) / 1e18 } ?? 99
+        record(name, sound <= 0.2 && joined >= 1.8 && joined < 4 && (first ?? 0) >= 1.5 && abs(lengths.screen - lengths.me) <= 0.15,
+               String(format: "recording after %.0f ms, the screen joined after %.2f s; screen.mp4's first picture at %@ s, %.2f s long (me %.2f s)",
+                      sound * 1000, joined, first.map { String(format: "%.2f", $0) } ?? "none", lengths.screen, lengths.me),
                nil)
     }
 
@@ -25375,8 +25561,9 @@ final class SelfTest {
         let cover = NSWindow(contentRect: NSRect(x: bounds.minX - 30, y: screenHeight - bounds.maxY - 30, width: bounds.width + 60, height: bounds.height + 60),
                              styleMask: [.borderless], backing: .buffered, defer: false)
         cover.backgroundColor = .windowBackgroundColor
+        cover.isOpaque = true
         cover.isReleasedWhenClosed = false
-        cover.orderFront(nil)
+        cover.orderFrontRegardless()
         let stopped = await waitUntil(timeout: 10) { center.recorder.pictures.screen.problem == .stoppedPainting } != nil
         cover.orderOut(nil)
         let again = await waitUntil(timeout: 4) { center.recorder.pictures.screen.problem == nil } != nil

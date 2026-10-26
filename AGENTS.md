@@ -2231,11 +2231,23 @@ re-investigating.
   is transcribed without asking and without opening its window
   (`RecorderCenter.left(in:)`, `pickUp`); nothing is made unless one is
   found. Quit and sleep (2026-10-25, the spec's "Quit and sleep"): a quit
-  with a recording on answers `applicationShouldTerminate` with
-  `.terminateLater` (`MeetingRecorder.quitReply`), closes it as Stop does
-  (both files whole, about a second), writes it `stopped` and replies;
-  a transcript being made or waiting is left `stopped` too; never a
-  question, never transcribed at the quit. `NSWorkspace.willSleepNotification`
+  with a recording on closes it as Stop does in `applicationShouldTerminate`
+  before answering `.terminateNow` (`MeetingRecorder.closeForQuit`: both
+  files whole, the main thread held about a second while the writers
+  finish on their own queues; never `.terminateLater` with a Task, which
+  never runs when the quit comes from a job of the main queue: AppKit's
+  wait for the answer runs inside that job), writes it `stopped`; a
+  transcript being made or waiting is left `stopped` too; never a
+  question, never transcribed at the quit. A file not encoded and
+  finished 5 s in (`TrackWriter.closeNow(until:)` says nil; the final
+  flush itself stops at that deadline, a Stop's too): `meeting.json` stays
+  as it was while recording, offered at the next launch as never stopped.
+  A Stop's close has one 5 s deadline too (both tracks, after their last
+  buffers): `TrackWriter.finish` says whether the file is complete (whole,
+  finished in time, the writer `completed`: its finishing also calls back
+  on a writer that failed, whose error is logged); if not,
+  no transcript, `meeting.json` untouched, and `onLeftUnfinished` has the
+  card offer it at once (Save, Later, Discard). `NSWorkspace.willSleepNotification`
   pauses a recording on (`RecorderCenter.macWillSleep`); at
   `didWakeNotification` nothing resumes, the card offers Resume ↩, Stop
   ⌘↩, Keep Paused esc (`RecordCard.Content.slept`), never taking the
@@ -2341,10 +2353,10 @@ re-investigating.
   minimized, hidden, off screen, closed, covered whole with no new
   picture for 5 s, `WindowCover`): an orange mark in the menu bar and
   why in its menu, nothing else. Slides (`SlideReader`): the screen's
-  pictures sampled four times a second on a 32 × 20 brightness grid
+  pictures sampled four times a second on a 64 × 40 brightness grid
   (`SlideSchedule`), read by Vision when changed (once a second at
-  most, less while nothing new is found), new lines a slide at the
-  change (`SlideLog`, the window's own lines out at Stop) in
+  most, every two seconds while nothing new is found), lines with words
+  new since the last readings a slide at the last change (`SlideLog`, the window's own lines out at Stop) in
   `slides.json`, searched by `RecordingIndex` (`shown`, "On screen:
   …"), rows of the window's transcript. The window plays both beside
   the lines (`AVPlayer`s started at one host time,

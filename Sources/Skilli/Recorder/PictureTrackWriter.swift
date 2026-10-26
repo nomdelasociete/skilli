@@ -41,6 +41,10 @@ final class PictureTrackWriter: @unchecked Sendable {
     /// When the source last went off: a picture shown before it, arriving
     /// late, is not written after the black one.
     private var blankedAt: Double?
+    /// Once closed, its length and whether it is whole; those waiting for
+    /// a close under way.
+    private var closedLength: (seconds: Double, complete: Bool)?
+    private var closeWaiters: [@Sendable (Double, Bool) -> Void] = []
     /// Pictures written, and left out while the encoder was behind.
     private(set) var written = 0
     private(set) var dropped = 0
@@ -117,29 +121,92 @@ final class PictureTrackWriter: @unchecked Sendable {
     }
 
     /// Stopped at host time `stop`: the file ends there, its last picture
-    /// held to it. Its length in seconds; a file that never got a picture
-    /// is removed (0).
-    func finish(at stop: Double) async -> Double {
-        await withCheckedContinuation { (done: CheckedContinuation<Double, Never>) in
-            queue.async {
-                guard !self.finished else { return done.resume(returning: 0) }
-                self.finished = true
-                let end = self.timeline.finish(at: stop)
-                self.latest = nil
-                guard self.written > 0, !self.failed, self.writer.status == .writing else {
-                    if self.written == 0 {
-                        self.writer.cancelWriting()
-                        try? FileManager.default.removeItem(at: self.url)
-                    }
-                    return done.resume(returning: self.written > 0 ? end : 0)
-                }
-                self.writer.endSession(atSourceTime: CMTime(seconds: end, preferredTimescale: 600))
-                self.input.markAsFinished()
-                self.writer.finishWriting {
-                    done.resume(returning: end)
-                }
+    /// held to it, waited for until `deadline` at most. Its length in
+    /// seconds (0: none written, the file removed), and whether it was
+    /// finished whole (`complete`: in time, the writer saying so; a file
+    /// never made is complete).
+    func finish(at stop: Double, closeBy deadline: DispatchTime) async -> (seconds: Double, complete: Bool) {
+        let finished = DispatchSemaphore(value: 0)
+        let result = Closed()
+        queue.async {
+            self.close(at: stop) { seconds, complete in
+                result.set(seconds, complete)
+                finished.signal()
             }
         }
+        return await withCheckedContinuation { (done: CheckedContinuation<(seconds: Double, complete: Bool), Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let inTime = finished.wait(timeout: deadline) == .success
+                let closed = result.value
+                done.resume(returning: (closed.seconds, inTime && closed.complete))
+            }
+        }
+    }
+
+    /// The stop's moment, at once: no picture placed past it.
+    func markStop(at stop: Double) {
+        queue.sync { _ = timeline.finish(at: stop) }
+    }
+
+    /// skil.li quits: closed at `stop` now, waited for until `deadline` at
+    /// most (the main thread held, as the sound's). Its length; nil when
+    /// the file was not finished whole by then (it plays up to its last
+    /// fragment, as after a crash).
+    func closeNow(at stop: Double, until deadline: DispatchTime) -> Double? {
+        let finished = DispatchSemaphore(value: 0)
+        let result = Closed()
+        queue.sync {
+            close(at: stop) { seconds, complete in
+                result.set(seconds, complete)
+                finished.signal()
+            }
+        }
+        guard finished.wait(timeout: deadline) == .success, result.value.complete else { return nil }
+        return result.value.seconds
+    }
+
+    private final class Closed: @unchecked Sendable {
+        private let lock = NSLock()
+        private var closed = (seconds: 0.0, complete: false)
+        var value: (seconds: Double, complete: Bool) { lock.withLock { closed } }
+        func set(_ seconds: Double, _ complete: Bool) { lock.withLock { closed = (seconds, complete) } }
+    }
+
+    /// On the writer's queue: the file ended at `stop`, `done` told its
+    /// length and whether it is whole once finished (a close already under
+    /// way: once it is).
+    private func close(at stop: Double, done: @escaping @Sendable (Double, Bool) -> Void) {
+        guard !finished else {
+            if let closedLength { done(closedLength.seconds, closedLength.complete) } else { closeWaiters.append(done) }
+            return
+        }
+        finished = true
+        let end = timeline.finish(at: stop)
+        latest = nil
+        guard written > 0, !failed, writer.status == .writing else {
+            if written == 0 {
+                writer.cancelWriting()
+                try? FileManager.default.removeItem(at: url)
+            }
+            // None written: nothing to be whole. One that failed: it plays
+            // up to its last fragment, not whole.
+            closed(written > 0 ? end : 0, complete: written == 0, done)
+            return
+        }
+        writer.endSession(atSourceTime: CMTime(seconds: end, preferredTimescale: 600))
+        input.markAsFinished()
+        writer.finishWriting {
+            // Finished is not whole: the writer says which (Apple's rule).
+            self.queue.async { self.closed(end, complete: self.writer.status == .completed, done) }
+        }
+    }
+
+    private func closed(_ length: Double, complete: Bool, _ done: @Sendable (Double, Bool) -> Void) {
+        closedLength = (length, complete)
+        done(length, complete)
+        let waiting = closeWaiters
+        closeWaiters = []
+        waiting.forEach { $0(length, complete) }
     }
 
     /// Nothing kept: the recording never started for real.

@@ -57,14 +57,19 @@ enum ScreenWindows {
     /// How window `id` of `pid` looks now: there or closed, on screen or
     /// minimized or hidden, covered whole by normal windows in front of it.
     static func look(_ id: CGWindowID, pid: pid_t) -> PictureWatch.Look {
-        guard let info = (CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]])?.first,
-              (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value == id else {
-            return PictureWatch.Look(exists: false)
-        }
-        let onScreen = (info[kCGWindowIsOnscreen as String] as? NSNumber)?.boolValue ?? false
-        guard onScreen else {
-            let hidden = NSRunningApplication(processIdentifier: pid)?.isHidden ?? false
-            return PictureWatch.Look(onScreen: false, minimized: !hidden && hasMinimizedWindow(pid), appHidden: hidden)
+        let info = (CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]])?
+            .first { ($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value == id }
+        let onScreen = info.flatMap { ($0[kCGWindowIsOnscreen as String] as? NSNumber)?.boolValue } ?? false
+        guard let info, onScreen else {
+            // Not on screen, or out of the list (a minimized window may
+            // leave it): minimized, hidden, elsewhere, or closed.
+            let app = NSRunningApplication(processIdentifier: pid)
+            guard let app, !app.isTerminated else { return PictureWatch.Look(exists: false) }
+            // skil.li's own (the self-test's): asked of AppKit, not of
+            // Accessibility, which this same thread would have to answer.
+            let minimized = pid == getpid() ? NSApp.windows.contains { $0.windowNumber == Int(id) && $0.isMiniaturized } : hasMinimizedWindow(pid)
+            if info == nil, !minimized, !app.isHidden { return PictureWatch.Look(exists: false) }
+            return PictureWatch.Look(onScreen: false, minimized: !app.isHidden && minimized, appHidden: app.isHidden)
         }
         let bounds = (info[kCGWindowBounds as String] as? NSDictionary).flatMap { CGRect(dictionaryRepresentation: $0 as CFDictionary) } ?? .zero
         // Normal windows in front of it, drawn opaque (a menu, the Dock, a
@@ -105,6 +110,10 @@ final class ScreenSink: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked S
     private var reader: SlideReader?
     private var latest: CVPixelBuffer?
     private var lastPicture: Double?
+    /// The last picture's brightness grid: a picture the same as the one
+    /// before is no new picture (Chrome covered whole gives the same one
+    /// again and again, Measured).
+    private var lastGrid: [UInt8]?
     /// The stream stopped by itself (the window closed, the permission
     /// taken away): on the stream's queue.
     var onStopped: (@Sendable (Error) -> Void)?
@@ -124,6 +133,7 @@ final class ScreenSink: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked S
         lock.withLock {
             latest = nil
             lastPicture = nil
+            lastGrid = nil
         }
     }
 
@@ -134,9 +144,11 @@ final class ScreenSink: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked S
         guard let raw = info?[.status] as? Int, SCFrameStatus(rawValue: raw) == .complete else { return }
         let time = (info?[.displayTime] as? UInt64).map(HostClock.seconds) ?? CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
         let picture = Picture(pixels: pixels, time: time)
+        let grid = SlideReader.grid(pixels)
         let (writer, reader) = lock.withLock { () -> (PictureTrackWriter?, SlideReader?) in
             latest = pixels
-            lastPicture = time
+            if lastGrid.map({ PictureChange.changedFraction(grid, $0, threshold: 4) > 0 }) ?? true { lastPicture = time }
+            lastGrid = grid
             return (self.writer, self.reader)
         }
         writer?.append(picture)
@@ -176,6 +188,9 @@ final class ScreenTrack {
     private(set) var state: State = .off
     let sink = ScreenSink()
     private var stream: SCStream?
+    /// The window's filter, as the stream started: a picture of it at the
+    /// file's size on demand.
+    private var filter: SCContentFilter?
     /// The file's size, set by the first window recorded.
     private(set) var fileSize: (width: Int, height: Int)?
     /// The window's own size in pixels, as the stream started.
@@ -186,6 +201,7 @@ final class ScreenTrack {
     /// Each start and stop: a start overtaken while it awaited gives up.
     private var generation = 0
     private var lastSeen: Double?
+    private var lastLook: PictureWatch.Look?
     /// The state or the problem changed: the card, the menu bar.
     var onChange: (() -> Void)?
 
@@ -222,6 +238,7 @@ final class ScreenTrack {
                 return
             }
             let filter = SCContentFilter(desktopIndependentWindow: target)
+            self.filter = filter
             let scale = CGFloat(filter.pointPixelScale)
             let width = Int(filter.contentRect.width * scale), height = Int(filter.contentRect.height * scale)
             windowPixels = (width, height)
@@ -277,6 +294,19 @@ final class ScreenTrack {
         guard width > 0, height > 0 else { return (1280, 800) }
         let scale = min(1, Double(widest) / Double(width))
         return (Int(Double(width) * scale) / 2 * 2, Int(Double(height) * scale) / 2 * 2)
+    }
+
+    /// The window now at the file's size, at once (a still window gives
+    /// the stream no new picture after its size changes: the file's first
+    /// one would be the card's small one, blurred).
+    func fullPicture() async -> CVPixelBuffer? {
+        guard let filter, window != nil else { return nil }
+        let size = plannedSize
+        let configuration = configuration(width: size.width, height: size.height)
+        configuration.width = size.width
+        configuration.height = size.height
+        guard let sample = try? await SCScreenshotManager.captureSampleBuffer(contentFilter: filter, configuration: configuration) else { return nil }
+        return CMSampleBufferGetImageBuffer(sample)
     }
 
     /// The size the file has, or will have if the window on now starts it.
@@ -356,7 +386,12 @@ final class ScreenTrack {
             lastSeen = seen
             watch.pictured()
         }
-        watch.update(ScreenWindows.look(window.id, pid: window.pid), lastPicture: seen, now: HostClock.now)
+        let look = ScreenWindows.look(window.id, pid: window.pid)
+        if look != lastLook {
+            Log.trace("Recorder: the screen's window: \(look.exists ? look.onScreen ? look.coveredWhole ? "covered whole" : "in sight" : "not on screen" : "gone")")
+            lastLook = look
+        }
+        watch.update(look, lastPicture: seen, now: HostClock.now)
         if watch.problem != before {
             Log.trace("Recorder: the screen \(watch.problem.map { "gives no picture (\($0.rawValue))" } ?? "gives pictures again")")
             onChange?()

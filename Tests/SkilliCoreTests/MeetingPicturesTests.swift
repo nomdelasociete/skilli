@@ -153,13 +153,25 @@ final class SlideScheduleTests: XCTestCase {
         XCTAssertEqual(schedule.sample(grid(200), at: 1.0), 0.5, "read once a second at most, timed when the picture changed")
     }
 
-    func testAMovingVideoIsReadLessAndLessOften() {
+    func testOnlyTheTextChangingIsAChange() {
+        var schedule = SlideSchedule()
+        _ = schedule.sample(grid(0), at: 0)
+        schedule.read(grid(0), at: 0, foundNew: true)
+        // A line of text: 3 % of the grid's cells.
+        XCTAssertEqual(schedule.sample(grid(60, changing: 0.03), at: 1.25), 1.25)
+        // A corner's clock: a few cells.
+        var still = SlideSchedule()
+        _ = still.sample(grid(0), at: 0)
+        still.read(grid(0), at: 0, foundNew: true)
+        XCTAssertNil(still.sample(grid(60, changing: 0.004), at: 1.25))
+    }
+
+    func testAMovingVideoIsReadEveryTwoSeconds() {
         var schedule = SlideSchedule()
         var time = 0.0
         var readings: [Double] = []
         var value: UInt8 = 0
         while time < 30 {
-            // A tenth of the picture moves on every sample.
             value = value == 0 ? 100 : 0
             let picture = grid(value, changing: 0.1)
             if schedule.sample(picture, at: time) != nil {
@@ -169,37 +181,29 @@ final class SlideScheduleTests: XCTestCase {
             time += SlideSchedule.sampleEvery
         }
         let gaps = zip(readings.dropFirst(), readings).map { $0 - $1 }
-        XCTAssertEqual(gaps.last ?? 0, SlideSchedule.latest, accuracy: 0.26, "eight seconds apart once nothing new was found")
-        XCTAssertLessThan(readings.count, 10)
+        XCTAssertEqual(gaps.max() ?? 0, SlideSchedule.latest, accuracy: 0.26, "never more than two seconds apart")
     }
 
-    func testASlideAmongAMovingVideoIsTimedAtItsOwnChange() {
+    func testAChangeSeenWhileAReadingRanIsKept() {
         var schedule = SlideSchedule()
         _ = schedule.sample(grid(0), at: 0)
-        schedule.read(grid(0), at: 0, foundNew: false)
-        // A tenth of the picture moving on every sample, a slide (half the
-        // picture) at 1.5 s: the reading after it is timed at the slide.
-        var value: UInt8 = 0
-        var start: Double?
-        for step in 1...12 {
-            let time = Double(step) * 0.25
-            value = value == 0 ? 100 : 0
-            var picture = grid(value, changing: 0.1)
-            if time >= 1.5 { picture = picture.enumerated().map { $0.offset >= picture.count / 2 ? 250 : $0.element } }
-            if let found = schedule.sample(picture, at: time), start == nil { start = found }
-        }
-        XCTAssertEqual(start, 1.5)
+        schedule.read(grid(0), at: 0, foundNew: true)
+        // Read at 1.0; the slide changes at 1.25 while it is being read.
+        _ = schedule.sample(grid(50, changing: 0.05), at: 1.0)
+        _ = schedule.sample(grid(200, changing: 0.05), at: 1.25)
+        schedule.read(grid(50, changing: 0.05), at: 1.0, foundNew: false)
+        XCTAssertEqual(schedule.sample(grid(200, changing: 0.05), at: 3.0), 1.25, "timed at its change, not at the next reading")
     }
 
-    func testABigChangeIsReadAtOnceAgain() {
+    func testASlideAfterAFlashIsTimedWithinTheReadingsInterval() {
         var schedule = SlideSchedule()
         _ = schedule.sample(grid(0), at: 0)
-        schedule.read(grid(0), at: 0, foundNew: false)
-        _ = schedule.sample(grid(100, changing: 0.1), at: 2)
-        schedule.read(grid(100, changing: 0.1), at: 2, foundNew: false)
-        // Waiting 4 s now; a slide changes a quarter of the picture.
-        XCTAssertNil(schedule.sample(grid(100, changing: 0.12), at: 3.5))
-        XCTAssertEqual(schedule.sample(grid(250), at: 3.75), 3.75)
+        schedule.read(grid(0), at: 0, foundNew: true)
+        // A white flash at 0.25, gone at 0.5; the slide at 0.75.
+        _ = schedule.sample(grid(255), at: 0.25)
+        _ = schedule.sample(grid(0), at: 0.5)
+        _ = schedule.sample(grid(90, changing: 0.05), at: 0.75)
+        XCTAssertEqual(schedule.sample(grid(90, changing: 0.05), at: 1.0), 0.75, "the last change, not the flash")
     }
 }
 
@@ -229,9 +233,9 @@ final class SlideLogTests: XCTestCase {
         XCTAssertEqual(kept.map(\.start), [0, 10])
     }
 
-    func testLinesTooShortAreNoText() {
+    func testLinesWithoutWordsAreNoText() {
         var log = SlideLog()
-        XCTAssertEqual(log.read(["•", "|", "A", "OK"], at: 0)?.lines, ["OK"])
+        XCTAssertEqual(log.read(["•", "|", "A", "OK", "12:04", "28", "Revenue up 12 %"], at: 0)?.lines, ["OK", "Revenue up 12 %"])
     }
 
     func testSlidesRoundTripAsJSON() throws {

@@ -52,8 +52,9 @@ enum WindowCapture {
 
     /// Self-test hook: several of skil.li's windows together as they show
     /// on the display (a window and its popover), the rest left out;
-    /// `withMenu`: the menu open over them too.
-    static func png(of windows: [NSWindow], withMenu: Bool = false) async -> Data? {
+    /// `withMenu`: the menu open over them too; `cropped`: only that
+    /// window's place (a card's glass over the test window behind it).
+    static func png(of windows: [NSWindow], withMenu: Bool = false, cropped: NSWindow? = nil) async -> Data? {
         // A status item's window has a number past CGWindowID's range: left out.
         let ids = Set(windows.compactMap { $0.windowNumber > 0 ? CGWindowID(exactly: $0.windowNumber) : nil })
         do {
@@ -65,7 +66,8 @@ enum WindowCapture {
             guard let first = targets.first,
                   let display = content.displays.first(where: { $0.frame.intersects(first.frame) }) ?? content.displays.first
             else { return nil }
-            let union = targets.dropFirst().reduce(first.frame) { $0.union($1.frame) }
+            let crop = cropped.flatMap { window in targets.first { $0.windowID == CGWindowID(exactly: window.windowNumber) }?.frame }
+            let union = crop ?? targets.dropFirst().reduce(first.frame) { $0.union($1.frame) }
             let filter = SCContentFilter(display: display, including: targets)
             let configuration = SCStreamConfiguration()
             configuration.sourceRect = union.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
