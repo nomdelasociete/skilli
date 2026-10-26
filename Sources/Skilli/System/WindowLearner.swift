@@ -41,6 +41,8 @@ final class WindowLearner {
     var leftOut: () -> Set<String> = { [] }
     /// Points between windows: a place with the gap is still that place.
     var gap: () -> CGFloat = { 0 }
+    /// What was learned changed (Usual places watches the apps it may place).
+    var onChange: (() -> Void)?
 
     /// Where each window was at the last reading.
     private var seen: [Key: CGRect] = [:]
@@ -208,6 +210,7 @@ final class WindowLearner {
             title: reading.title, document: reading.document, rank: reading.rank, with: beside, how: how, at: .now)
         placements.record(placement, bundleID: bundleID, displays: displays.map { WindowPlacements.displayKey($0.fingerprint) })
         saveSoon()
+        onChange?()
         return true
     }
 
@@ -297,6 +300,7 @@ final class WindowLearner {
         let was = placements
         placements = WindowPlacements()
         generation += 1
+        onChange?()
         save()
         return was
     }
@@ -304,6 +308,7 @@ final class WindowLearner {
     func restore(_ placements: WindowPlacements) {
         self.placements = placements
         generation += 1
+        onChange?()
         save()
     }
 

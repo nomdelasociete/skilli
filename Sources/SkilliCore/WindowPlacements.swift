@@ -259,6 +259,13 @@ public struct WindowPlacements: Codable, Equatable, Sendable {
         return best
     }
 
+    /// Enough placements of this app on these very displays for one of its
+    /// windows to ever be sure: whether a new window of it is worth
+    /// watching for.
+    public func mayBeSure(bundleID: String, displays: [String]) -> Bool {
+        (entries[Self.key(bundleID, displays)]?.count ?? 0) >= Self.sureCount
+    }
+
     /// How many placements, and how much of the weight, a sure place holds.
     public static let sureCount = 3
     public static let sureShare = 0.7
