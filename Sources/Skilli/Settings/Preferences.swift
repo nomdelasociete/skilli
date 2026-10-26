@@ -757,7 +757,7 @@ final class Preferences {
     /// permissions, its screens, where the launcher sits on them, where
     /// backups go).
     static let machineKeys: Set<String> = [Key.didCompleteSetup, Key.ignoredMonitors, Key.launcherPlace, Key.backupFolder, Key.imageTagsFolderPath,
-                                           Key.recorderFolderPath]
+                                           Key.recorderFolderPath, Key.githubServerSync]
 
     private func save(_ value: Any, _ key: String) {
         defaults.set(value, forKey: key)

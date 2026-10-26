@@ -25,10 +25,11 @@ public enum RelayInboxFailure: Error, Equatable, Sendable {
     case deviceExpired
     /// 428: server sync is not authorized (or was deleted): the browser again.
     case authorizationRequired
-    /// 429: too many requests from this account.
-    case limited(until: Date)
+    /// 429: too many requests from this account. `until`: the relay's
+    /// `Retry-After`; nil without one (the caller's backoff decides).
+    case limited(until: Date?)
     /// 503, the network, or GitHub's limits behind the relay.
-    case unavailable(until: Date)
+    case unavailable(until: Date?)
     /// Malformed, incomplete or from an older relay.
     case invalidResponse
     /// For another GitHub account than this Mac's.
@@ -208,16 +209,16 @@ public struct RelayInboxClient: Sendable {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw RelayInboxFailure.unavailable(until: now().addingTimeInterval(30))
+            throw RelayInboxFailure.unavailable(until: nil)
         }
         try Task.checkCancellation()
-        let wait = max(5, reply.retryAfter ?? 60)
+        let until = reply.retryAfter.map { now().addingTimeInterval(max(5, $0)) }
         switch reply.status {
         case expect: return reply
         case 401: throw RelayInboxFailure.deviceExpired
         case 428: throw RelayInboxFailure.authorizationRequired
-        case 429: throw RelayInboxFailure.limited(until: now().addingTimeInterval(wait))
-        case 500...599: throw RelayInboxFailure.unavailable(until: now().addingTimeInterval(wait))
+        case 429: throw RelayInboxFailure.limited(until: until)
+        case 500...599: throw RelayInboxFailure.unavailable(until: until)
         default: throw RelayInboxFailure.invalidResponse
         }
     }

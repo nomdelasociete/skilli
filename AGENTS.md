@@ -1252,7 +1252,7 @@ starts from it.
   `mcp.sock`, never the clipboard history: 2026-10-15) and the
   `Preferences.*` defaults in `Settings.plist`, minus this Mac's own state
   (`Preferences.machineKeys`: setup done, screens, launcher place, backup
-  folder). API keys and sensitive form fields stay in the Keychain: never
+  folder, GitHub server sync: consent given on each Mac). API keys and sensitive form fields stay in the Keychain: never
   in a backup.
 - The folder is the user's choice (iCloud Drive offered first); how often
   (only when asked, every day, week, month) and how many stay (5, 10, 30,

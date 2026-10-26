@@ -345,6 +345,12 @@ final class PrivacyMapTests: XCTestCase {
                            + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.")
         XCTAssertEqual(ids(.github, setup), ["githubActions", "serverSync"])
         XCTAssertEqual(ids(.github, everything), ["github", "relay"])
+        // This Mac's relay access gone, server sync still on: said all the same.
+        setup.relayHost = nil
+        XCTAssertEqual(PrivacyMap.line(for: "github", setup)?.text,
+                       "GitHub gets your sign-in only for what you do there: merge, update a branch, mark read; the relay reads "
+                           + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.")
+        XCTAssertEqual(ids(.github, setup), ["githubActions", "serverSync"])
     }
 
     func testBackupSaysWhereBackupsGoAndWhoSyncsThem() {

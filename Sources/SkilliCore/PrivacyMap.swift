@@ -446,7 +446,9 @@ public enum PrivacyMap {
         case .github:
             if setup.githubLogin != nil {
                 rows.append(Row(setup.githubServerSync ? githubActions : github))
-                if let host = setup.relayHost { rows.append(Row(setup.githubServerSync ? serverSync : relay, note: host)) }
+                // Server sync on: said even when this Mac's relay access is gone.
+                if setup.githubServerSync { rows.append(Row(serverSync, note: setup.relayHost)) }
+                else if let host = setup.relayHost { rows.append(Row(relay, note: host)) }
             }
         case .klipy:
             rows.append(Row(gifs, isOn: setup.gifSearch))
@@ -812,8 +814,8 @@ public enum PrivacyMap {
         guard setup.githubLogin != nil else {
             return PaneLine(text: "Nothing leaves this Mac: you are not signed in to GitHub.", more: "privacy")
         }
-        if setup.githubServerSync, let host = setup.relayHost {
-            return PaneLine(text: "GitHub gets your sign-in only for what you do there: merge, update a branch, mark read; \(host) reads "
+        if setup.githubServerSync {
+            return PaneLine(text: "GitHub gets your sign-in only for what you do there: merge, update a branch, mark read; \(setup.relayHost ?? "the relay") reads "
                             + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.",
                             more: "privacy")
         }

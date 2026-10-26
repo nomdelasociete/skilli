@@ -25,7 +25,8 @@ public enum GitHubServerHold: Equatable, Sendable {
 }
 
 /// Paces one kind of relay read: the relay's `Retry-After` when it gives
-/// one, else a backoff from 30 s to 15 min. Never zero, so no loop.
+/// one, else a backoff from 30 s to 15 min that grows with each failure in
+/// a row (a 503 without the header, the network). Never zero, so no loop.
 public struct RelayReadPacer: Sendable, Equatable {
     public private(set) var notBefore = Date.distantPast
     public private(set) var failures = 0
@@ -45,7 +46,8 @@ public struct RelayReadPacer: Sendable, Equatable {
         failures = min(failures + 1, 6)
         let backoff = now.addingTimeInterval(min(15 * 60, 30 * pow(2, Double(failures - 1))))
         notBefore = switch failure {
-        case .limited(let until), .unavailable(let until): max(until, now.addingTimeInterval(5))
+        case .limited(let until?), .unavailable(let until?): max(until, now.addingTimeInterval(5))
+        case .limited(nil), .unavailable(nil): backoff
         // Nothing changes until the user authorizes; checked now and then
         // for another Mac's authorization, never with a new browser page.
         case .authorizationRequired: now.addingTimeInterval(5 * 60)
@@ -269,8 +271,7 @@ public final class GitHubServerInbox {
         case .deviceExpired: .deviceExpired
         case .authorizationRequired: .authorizationRequired
         case .wrongAccount: .wrongAccount
-        case .limited(let until), .unavailable(let until): .paused(until: until)
-        case .invalidResponse: .paused(until: inbox ? self.inbox.notBefore : notes.notBefore)
+        case .limited, .unavailable, .invalidResponse: .paused(until: inbox ? self.inbox.notBefore : notes.notBefore)
         }
         // Without an authorization, or for another account, nothing read
         // under it stays on screen.
@@ -288,6 +289,10 @@ public final class GitHubServerInbox {
         notesTask?.cancel()
         inboxTask = nil
         notesTask = nil
+        // Reads asked for the dropped answers go with them.
+        inboxAgain = false
+        refreshAgain = false
+        notesAgain = false
         pullRequests = nil
         login = nil
         notifications = nil

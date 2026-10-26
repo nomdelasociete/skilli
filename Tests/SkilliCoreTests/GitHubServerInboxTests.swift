@@ -285,6 +285,57 @@ final class GitHubServerInboxTests: XCTestCase {
         XCTAssertEqual(pacer.notBefore.timeIntervalSince(now), 5, "never zero")
     }
 
+    func testRepeated503sWithoutRetryAfterAndNetworkFailuresBackOffFurther() async {
+        await relay.answer("GET /inbox", RelayHTTPReply(status: 503, data: Data()))
+        let inbox = inbox()
+        var waits: [TimeInterval] = []
+        for _ in 0..<4 {
+            inbox.readInbox()
+            await settle(inbox)
+            waits.append(inbox.inbox.notBefore.timeIntervalSince(clock.now))
+            clock.advance(waits.last! + 1)
+        }
+        XCTAssertEqual(waits, [30, 60, 120, 240], "without Retry-After, the backoff grows")
+        guard case .paused(let until)? = inbox.inboxHold else { return XCTFail("paused") }
+        XCTAssertEqual(until, inbox.inbox.notBefore)
+
+        let offline = RelayInboxAccess(authority: URL(string: "https://access.relay.example")!, browser: URL(string: "https://auth.relay.example")!,
+                                       token: "v2.device-access", subject: "10", send: { _ in throw URLError(.notConnectedToInternet) })
+        let clock = clock
+        let network = GitHubServerInbox(client: { var client = RelayInboxClient(access: offline); client.now = { clock.now }; return client },
+                                        now: { clock.now })
+        waits = []
+        for _ in 0..<3 {
+            network.readInbox()
+            await settle(network)
+            waits.append(network.inbox.notBefore.timeIntervalSince(clock.now))
+            clock.advance(waits.last! + 1)
+        }
+        XCTAssertEqual(waits, [30, 60, 120])
+    }
+
+    func testAMacThatLostItsAccessForgetsTheReadsItWasAskedFor() async {
+        await relay.answer("POST /inbox", snapshot([pullRequest(1)]))
+        await relay.answer("GET /inbox", snapshot([pullRequest(1)]))
+        await relay.hold("GET /inbox")
+        let inbox = inbox()
+        inbox.readInbox()
+        await Task.yield()
+        inbox.readInbox(refresh: true)
+        subject = "11"
+        await relay.release("GET /inbox")
+        try? await Task.sleep(for: .milliseconds(20))
+        await settle(inbox)
+        XCTAssertEqual(inbox.inboxHold, .macNotReady)
+        subject = "10"
+        inbox.readInbox()
+        await settle(inbox)
+        let refreshes = await relay.count("POST /inbox")
+        let reads = await relay.count("GET /inbox")
+        XCTAssertEqual(refreshes, 0, "no stale refresh spends the relay's budget")
+        XCTAssertEqual(reads, 2)
+    }
+
     func test401AsksThisMacsAccessToRenew() async {
         await relay.answer("GET /inbox", RelayHTTPReply(status: 401, data: Data()))
         let inbox = inbox()

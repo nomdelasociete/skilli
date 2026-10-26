@@ -530,8 +530,9 @@ final class GitHubBook {
         case .deviceExpired: GitHubServerHold.deviceExpired.message
         case .authorizationRequired: GitHubServerHold.authorizationRequired.message
         case .wrongAccount: GitHubServerHold.wrongAccount.message
-        case .limited(let until), .unavailable(let until):
+        case .limited(let until?), .unavailable(let until?):
             "Server sync is not available right now. Try again after \(until.formatted(date: .omitted, time: .shortened))."
+        case .limited(nil), .unavailable(nil): "Server sync is not available right now. Try again in a moment."
         case .invalidResponse: "The relay did not answer as expected: it may not offer server sync yet."
         }
     }
