@@ -8,8 +8,8 @@ opens (**Usual places**). No layout to save first: the saved layouts
 stay, for the arrangements someone wants by name.
 
 Status: phases 1 (Learning, Arrange Windows), 2 (Arrange as Usual in the
-display prompt) and 3 (Usual places on launch, off by default) built;
-phases 4 and 5 not yet. "What skil.li already has" lists what came before it.
+display prompt), 3 (Usual places on launch, off by default) and 4 (Usual
+places for new windows of apps already running) built; phase 5 not yet. "What skil.li already has" lists what came before it.
 
 ## Target
 
@@ -325,11 +325,14 @@ title alone unless the app's windows are told apart by rank.
 - **An app launched** (`NSWorkspace` launch): `AXWait` on that app for
   its first window created (4 s), as applying a layout does today. No
   standing observer.
-- **A new window in a running app**: needs `kAXWindowCreatedNotification`
-  on the apps that may open one. Observers only on the apps that have a
-  sure place (usually a handful), added when their place becomes sure and
-  removed when they quit. Phase 4, after measuring memory and CPU with
-  20 apps observed (To check before building).
+- **A new window in a running app**: a `kAXWindowCreatedNotification`
+  observer only on the running apps with at least 3 placements on these
+  very displays (`WindowPlacements.mayBeSure`: the ones that may ever be
+  sure), kept up to date as the setting, Never place, what was learned,
+  the apps and the displays change; removed when they quit. The window
+  then goes through the same rules (sure, untouched), its rank among the
+  app's windows counted. Measured before building (Measured, below): no
+  cost seen.
 
 **Moved away within 30 s**: the place loses its sure state for that
 window in this context (the user's move is learned as usual), and Usual
@@ -417,11 +420,21 @@ new window. Listed in Settings → Privacy (`PrivacyMap`) with its switch.
   words left after removing the ones every title has still tell windows
   apart (a browser's profile name, a project's name); with a real week of
   titles, on the Mac.
-- Memory and CPU of `kAXWindowCreatedNotification` observers on 20 apps
-  (phase 4), against the idle budget (< 25 MB).
+- ~~Memory and CPU of `kAXWindowCreatedNotification` observers on 20 apps
+  (phase 4)~~: measured, below.
 - The 1.5 s, 24 pt, 70 % and 3-placement thresholds on a real week of
   use: placements logged with the guess Arrange would have made, before
   Usual places is built.
+
+## Measured
+
+**Window-created observers at rest** (2026-10-26, the test Mac, `selftest
+windows` → `usualPlacesObserversCost`): 17 apps running, one observer on
+each, skil.li at rest 15 s without then 15 s with: footprint 111.81 →
+111.80 MB (no change), CPU 11.0 → 9.1 ms per 15 s (noise), wakeups 57 →
+63 per 15 s (about 0.4 a second more). Far under the budget (1 MB, 1 %
+CPU); and Usual places observes only the apps with enough placements,
+usually a handful.
 
 ## Decided
 

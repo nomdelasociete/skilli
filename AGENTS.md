@@ -3042,7 +3042,15 @@ re-investigating.
   `UsualPlace.untouched` (under 1.5 s old, no key or click since, mouse
   up); `WindowManager.remember` keeps where it opened for ✦W R. A move
   away is learned as usual and makes it unsure. `selftest windows`
-  (`usualPlacesOnLaunch`).
+  (`usualPlacesOnLaunch`). New windows of running apps: a
+  `kAXWindowCreatedNotification` observer only on the apps with 3
+  placements on these displays (`WindowPlacements.mayBeSure`), refreshed
+  when the setting, Never place, the learner (`WindowLearner.onChange`),
+  the apps or the displays change; the same `place(...)` rules, a window
+  seen twice (launch and observer) handled once. Measured at rest with an
+  observer on all 17 apps of the test Mac: no memory or CPU change
+  (`usualPlacesObserversCost`, `Metrics.cpu`). `selftest windows`
+  (`usualPlacesForNewWindows`).
 - File search (`FileSearch`, `FileMeaning` in SkilliCore): Search Files
   or "f " / "file " / "fichier " turns the launcher into Spotlight's files
   (a green chip). Typing searches names (every word, case and accents
