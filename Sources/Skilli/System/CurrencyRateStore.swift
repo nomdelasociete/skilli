@@ -106,13 +106,7 @@ final class CurrencyRateStore {
                 // every show or wake before then (network return still asks).
                 unreachable = rates == nil
                 retryAfter = Date.now.addingTimeInterval(600)
-                if rates == nil, !retryPending {
-                    retryPending = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 600) { [weak self] in
-                        self?.retryPending = false
-                        self?.refreshIfDue()
-                    }
-                }
+                if rates == nil { scheduleRetry() }
             }
             onChange?()
             if readAgain {
@@ -120,6 +114,19 @@ final class CurrencyRateStore {
                 retryAfter = .distantPast
                 refreshIfDue()
             }
+        }
+    }
+
+    /// One timer for the first table, at `retryAfter`; moved later
+    /// meanwhile (another read failed), it waits for the new time.
+    private func scheduleRetry() {
+        guard !retryPending else { return }
+        retryPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(retryAfter.timeIntervalSinceNow, 1)) { [weak self] in
+            guard let self else { return }
+            self.retryPending = false
+            if Date.now < self.retryAfter { return self.scheduleRetry() }
+            self.refreshIfDue()
         }
     }
 
