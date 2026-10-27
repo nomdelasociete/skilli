@@ -25014,7 +25014,7 @@ final class SelfTest {
         let attendees = Array(items.dropFirst().prefix(3))
         // Picked: the first attendee for the first voice, then the same name for the second.
         let picked = await pickName(controller, line: first, item: attendees.first ?? "")
-        let renamed = controller.shownNames[them[0].rawValue] == attendees.first
+        let renamed = await waitUntil(timeout: 2) { controller.shownNames[them[0].rawValue] == attendees.first } != nil
         let secondCount = controller.shownLines.filter { $0.speaker == them[1] }.count
         let firstCount = controller.shownLines.filter { $0.speaker == them[0] }.count
         let merged = await pickName(controller, line: second, item: "\(attendees.first ?? "") — joins \(attendees.first ?? "")’s lines")
@@ -25052,7 +25052,7 @@ final class SelfTest {
             && items.contains("Me — joins your lines") && items.last == "Other Name…" && picked && renamed && merged && mergedRight && other
             && fieldShown && typed && joinedMe && meKept && unjoined && unmerged && saved
         record(name, passed,
-               "menu \(items.joined(separator: " | ")); renamed \(renamed), merged \(mergedRight) (\(firstCount)+\(secondCount) lines); Other Name… field \(fieldShown), typed \(typed); own name joins Me \(joinedMe), Me kept \(meKept); ⌘Z unjoins \(unjoined), unmerges \(unmerged); written \(saved)",
+               "menu \(items.joined(separator: " | ")); picked \(picked), renamed \(renamed), merged \(mergedRight) (\(firstCount)+\(secondCount) lines); Other Name… field \(fieldShown), typed \(typed); own name joins Me \(joinedMe), Me kept \(meKept); ⌘Z unjoins \(unjoined), unmerges \(unmerged); written \(saved)",
                nil)
     }
 
@@ -25073,7 +25073,10 @@ final class SelfTest {
     /// it (as a click on it does). False when the menu or the item was not
     /// there.
     private func pickName(_ controller: RecordingWindowController, line: Int, item: String) async -> Bool {
-        guard let frame = controller.screenFrame(ofLine: line) else { return false }
+        // A menu still closing (a capture's, the last pick's) would take
+        // the click.
+        guard await waitUntil(timeout: 2, { controller.renameMenu == nil }) != nil,
+              let frame = controller.screenFrame(ofLine: line) else { return false }
         await click(frame)
         if controller.playing { await pressKey(nil, code: CGKeyCode(kVK_Space)) }
         let guardTimer = escapeLater(10)
@@ -25091,15 +25094,17 @@ final class SelfTest {
         return true
     }
 
-    /// Transcribe Again on en01, edited: its panel (the languages, the
-    /// engine, the changes said replaced), French picked: made in French
-    /// with macOS's engine, the names given kept; then English again.
+    /// Transcribe Again on en01, edited: its panel (the languages, both
+    /// engines, the changes said replaced; Better transcription not
+    /// downloaded says so and Transcribe dims), French picked: made in
+    /// French with macOS's engine, the names given kept; then English again.
     private func transcribeAgainAsPicked(_ folder: URL) async {
-        let name = "Recorder phase 4: Transcribe Again in the language and engine picked (its panel says the changes are replaced), the names given kept"
+        let name = "Recorder phase 4: Transcribe Again in the language and engine picked (its panel lists both engines, says the changes are replaced, that Better transcription is not downloaded, and waits while an action runs, Transcribe dimmed), the names given kept"
         guard let center = context.recorder(), let controller = center.window(for: folder) else {
             record(name, false, "no window", nil)
             return
         }
+        defer { controller.close() }
         guard await recordingWindowHasKeys(controller, name) else { return }
         let names = center.recordings.read(folder)?.speakers ?? [:]
         controller.showTranscribeAgain()
@@ -25118,12 +25123,37 @@ final class SelfTest {
             window.appearance = nil
             controller.nsWindow.appearance = nil
         }
+        // An action begun meanwhile (a link's, a tool's): Transcribe dims
+        // and says why, the panel open; back once it is done.
+        controller.showWork("Writing the summary with Claude · Haiku…")
+        let busyNote = panel.shownNote, busyCan = panel.canTranscribe
+        controller.showWork(nil)
+        // Its transcript being made meanwhile (waiting its turn): the same.
+        var makingSaid = false
+        if let now = center.recordings.read(folder) {
+            controller.show(now, transcript: nil, waiting: true)
+            makingSaid = !panel.canTranscribe && panel.shownNote == "Its transcript is being made: Transcribe Again once it is done."
+            controller.show(now, transcript: center.recordings.transcript(folder))
+        }
+        let busySaid = !busyCan && busyNote == "Writing the summary with Claude · Haiku: Transcribe Again once it is done."
+            && makingSaid && panel.canTranscribe && panel.shownNote == note
+        // Better transcription: listed; not downloaded, it says why and
+        // Transcribe dims (downloaded, it can be picked).
+        await panel.pick(language: nil, engine: .whisper)
+        let whisperReady = BetterTranscription.isReady()
+        let whisperNote = panel.shownNote, whisperCan = panel.canTranscribe
+        let whisperSaid = whisperReady ? whisperCan
+            : !whisperCan && whisperNote == "Better transcription isn't downloaded: Settings → Recorder offers it."
         await panel.pick(language: "fr-FR", engine: .macOS)
         panel.press()
         let showsProgress = await waitUntil(timeout: 10) { controller.shownState.hasPrefix("Transcribing") } != nil
         let madeAgain = await waitUntil(timeout: 120) { center.recordings.transcript(folder)?.language == "fr-FR" && !controller.shownLines.isEmpty } != nil
         let record = center.recordings.read(folder)
-        let kept = names.filter { !MeetingVoices.isStandard($0.value) }.allSatisfy { id, given in record?.speakers[id] == nil || record?.speakers[id] == given }
+        // Each named voice found again keeps its name (one not found again
+        // has none to keep); at least one is.
+        let voicesNow = Set(center.recordings.transcript(folder)?.lines.map(\.speaker.rawValue) ?? [])
+        let given = names.filter { !MeetingVoices.isStandard($0.value) && voicesNow.contains($0.key) }
+        let kept = !given.isEmpty && given.allSatisfy { id, name in record?.speakers[id] == name }
         // English again, for the window's last captures.
         controller.showTranscribeAgain()
         var english = false
@@ -25133,12 +25163,12 @@ final class SelfTest {
             english = await waitUntil(timeout: 120) { center.recordings.transcript(folder)?.language == "en-US" && !controller.shownLines.isEmpty } != nil
         }
         await captureRecordingWindow(controller, as: "recorder-window-again")
-        controller.close()
-        let passed = languages.contains { $0.hasPrefix("English") } && languages.contains { $0.hasPrefix("French") } && engines == ["macOS"]
+        let passed = languages.contains { $0.hasPrefix("English") } && languages.contains { $0.hasPrefix("French") }
+            && engines == ["macOS", "Better transcription"] && whisperSaid && busySaid
             && note == "Your changes to the lines are replaced." && showsProgress && madeAgain && record?.language == "fr-FR"
             && record?.engine == TranscriptEngine.macOS.rawValue && record?.edited == nil && kept && english
         self.record(name, passed,
-                    "\(languages.count) languages, engines \(engines), note “\(note)”; progress shown \(showsProgress), made again in \(record?.language ?? "?") with \(record?.engine ?? "?") \(madeAgain), edited \(record?.edited.map(String.init) ?? "nil"), names given kept \(kept) (\(record?.speakers ?? [:])); then English again \(english)",
+                    "\(languages.count) languages, engines \(engines), note “\(note)”; Better transcription \(whisperReady ? "downloaded" : "not downloaded"): “\(whisperNote)”, Transcribe \(whisperCan ? "on" : "dimmed") \(whisperSaid); an action meanwhile: “\(busyNote)”, Transcribe \(busyCan ? "on" : "dimmed"), the transcript being made \(makingSaid), back after it \(busySaid); progress shown \(showsProgress), made again in \(record?.language ?? "?") with \(record?.engine ?? "?") \(madeAgain), edited \(record?.edited.map(String.init) ?? "nil"), names given kept \(kept) (\(record?.speakers ?? [:])); then English again \(english)",
                     nil)
     }
 

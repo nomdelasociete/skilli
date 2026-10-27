@@ -26,6 +26,9 @@ final class RecordingFollowUps {
     /// The window shown again as its recording is now (its transcript, or
     /// where one being made again is: `RecorderCenter`).
     var reshow: (URL) -> Void = { _ in }
+    /// Its transcript being made again (Transcribe Again), or waiting its
+    /// turn to be: what is read from it now would be replaced.
+    var isBeingMade: (URL) -> Bool = { _ in false }
     /// One line in the card: a failure, said once.
     var notify: (String) -> Void = { _ in }
     /// The mail app with a new message (the recap); the self-test watches.
@@ -112,6 +115,7 @@ final class RecordingFollowUps {
         }
         let key = Self.key(folder)
         if let busy = working[key] { throw Failure(message: "one at a time, and this one is \(busy.prefix(1).lowercased() + busy.dropFirst())") }
+        if isBeingMade(folder) { throw Failure(message: "its transcript is being made again. Try once it is done.") }
         // Taken before the first wait (Reminders' question, My Card), given
         // back once the action is done: one at a time, all the way.
         working[key] = Self.starting(action)
@@ -151,6 +155,10 @@ final class RecordingFollowUps {
         // One at a time per recording, Ask too.
         if let busy = working[Self.key(folder)] {
             notify("The question was not answered: one at a time, and this one is \(busy.prefix(1).lowercased() + busy.dropFirst())")
+            return
+        }
+        if isBeingMade(folder) {
+            notify("The question was not answered: its transcript is being made again. Ask once it is done.")
             return
         }
         askInCard(record.title, MeetingFollowUp.askRequest(question, transcript: text(of: record, transcript, in: folder)))
