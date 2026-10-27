@@ -198,6 +198,7 @@ final class RelayDeviceSessionTests: XCTestCase {
         let restored = session(vault, RelayReplies([]))
         XCTAssertEqual(restored.installationCount, 0)
         await assertVerified(restored, token: "v2.rotated", origin: origin)
+        XCTAssertEqual(restored.message, "GitHub account verified. No account for live updates.")
     }
 
     func testANonNumericInstallationIsStillRefused() async throws {
