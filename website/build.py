@@ -235,10 +235,12 @@ def docs_asset(src, book='docs'):
     if src.startswith(('http://', 'https://')):
         return {'src': src, 'dark': None, 'size': None}
     folder = BOOKS[book][0]
-    written = folder / src
-    path = written.resolve()
-    # A symbolic link is never copied to the site (render_docs): refused here, not published broken.
-    if folder.resolve() not in path.parents or not path.is_file() or written.is_symlink():
+    path = (folder / src).resolve()
+    # A symbolic link, the file's or a folder's on the way, is never copied to the
+    # site (render_docs): refused here, not published broken. Without one, the
+    # resolved path is the written one.
+    written = Path(posixpath.normpath((folder.resolve() / src).as_posix()))
+    if folder.resolve() not in path.parents or not path.is_file() or path != written:
         raise ValueError(f'{folder.relative_to(ROOT).as_posix()}: {src} is not a file in the book\'s folder')
     dark = path.with_name(f'{path.stem}-dark{path.suffix}')
     if dark.is_symlink():

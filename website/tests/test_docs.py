@@ -182,6 +182,12 @@ class Markdown(unittest.TestCase):
         self.addCleanup(link.unlink)
         with self.assertRaises(ValueError):
             build.docs_asset('images/linked.png', 'guides')
+        folder = build.ROOT / 'website/guides/images/alias'
+        folder.symlink_to('.')
+        self.addCleanup(folder.unlink)
+        with self.assertRaises(ValueError):
+            build.docs_asset('images/alias/welcome.png', 'guides')
+        self.assertEqual(build.docs_asset('images/welcome.png', 'guides')['dark'], 'images/welcome-dark.png')
 
     def test_a_dark_twin_shows_in_dark_mode(self):
         page = Page(lambda href: href, lambda src: {'src': src, 'dark': 'a-dark.png', 'size': (400, 300)})
