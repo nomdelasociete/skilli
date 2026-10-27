@@ -2508,7 +2508,24 @@ re-investigating.
   tokens that do not expire: renewing them would need a client secret) and
   its public client id in `GitHubOAuth.publishedClientID`
   (`GITHUB_OAUTH_CLIENT_ID` overrides it);
-  scopes `repo notifications read:user`. The strip under the search field
+  scopes `repo notifications read:user`. One trip (docs/github-single-sign-in.md):
+  Sign In with GitHub… with the relay's address (the default one written
+  the first time) and this Mac not paired also starts the relay's
+  enrollment and opens only its page, with `inbox=1` when server sync's
+  checkbox beside the button is ticked (ticked by default; its consent text
+  under it, no alert) and `user_code` (`RelaySignInChain`), only when the
+  relay's `POST /devices` lists them in `chain`. The tab: GitHub App
+  sign-in, the accounts, the inbox grant, then the code with a link to
+  GitHub's device page. The pairing waits for the device flow's token
+  (`RelayDeviceSession.enroll`), then the id check, then the save; server
+  sync turns on once the relay answers with the copy
+  (`GitHubBook.confirmServerSyncGrant`: every 5 s for 10 min, a 428 all
+  along leaves it off). Already signed in, the URL also carries this Mac's
+  GitHub id (`subject`, from GitHub's `/user`): a browser on another
+  account ends at the relay, no pairing and no grant kept; without that
+  id no inbox grant is asked for. An older relay, a refusal or no pairing
+  opens GitHub's page from skil.li instead (`codeNotShown`, once). Live
+  updates' Authorize this Mac… chains the inbox grant the same way. The strip under the search field
   (Settings → GitHub → Show under the search field, on by default, once
   signed in): the counts in Git Island's colors and the unread
   notifications; a click opens the GitHub mode on that group. Nothing asks
@@ -2525,9 +2542,10 @@ re-investigating.
   is never sent to the relay.
   Server sync (Settings → GitHub → Server sync, `githubServerSync`, off by
   default, pane only: the user's consent): the relay reads pull requests
-  and notifications on GitHub with its own OAuth grant (`read:user repo`,
-  given in the browser on the relay's `/inbox/authorize`, which must prove
-  this Mac's numeric GitHub id) and keeps one encrypted copy per product
+  and notifications on GitHub with its own OAuth grant (`repo notifications
+  read:user`, given in the browser on the relay's `/inbox/authorize` or
+  chained after the enrollment, which must prove this Mac's numeric GitHub
+  id) and keeps one encrypted copy per product
   and user for all their Macs. Every read then goes to the relay's
   authority (`RelayInboxClient`: `GET`/`POST /inbox`, `GET`/`POST
   /inbox/notifications`, `DELETE /inbox`, `POST /inbox/authorization`;
