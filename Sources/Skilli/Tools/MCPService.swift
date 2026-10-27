@@ -281,8 +281,16 @@ final class MCPService {
         }
 
         // A recording's words: the card names one recording, the call reads
-        // that one, whatever is newest by the time the user answers.
-        let arguments = SkilliTools.recordingWords.contains(name) ? tools.pinningRecording(arguments) : arguments
+        // that one, whatever is newest by the time the user answers; none
+        // found, nothing is asked.
+        var arguments = arguments
+        if SkilliTools.recordingWords.contains(name) {
+            do {
+                arguments = try tools.pinningRecording(arguments)
+            } catch {
+                return text(error.localizedDescription, isError: true)
+            }
+        }
         let risk = SkilliTools.risk(of: definition, arguments: arguments)
         let custom = settings.customTool(named: name)
         let call = ApprovalRules.Call(tool: name, title: definition.title, description: custom?.instructions ?? definition.description,

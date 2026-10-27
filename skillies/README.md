@@ -252,7 +252,8 @@ recording's window says when it ran):
 # @skilli.forRecordings true
 [ -n "$SKILLI_RECORDING" ] || { echo "Run me from a recording's ⌘K."; exit 1; }
 # One file per recording, named after its folder ("2026-10-22 14.00 Weekly sync.md").
-cp "$SKILLI_RECORDING/transcript.md" ~/Documents/Meetings/"$(basename "$SKILLI_RECORDING").md" && echo "Copied."
+mkdir -p ~/Documents/Meetings &&
+  cp "$SKILLI_RECORDING/transcript.md" ~/Documents/Meetings/"$(basename "$SKILLI_RECORDING").md" && echo "Copied."
 ```
 
 The recordings made, and the recorder's settings (Settings → Recorder,

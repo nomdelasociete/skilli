@@ -737,9 +737,10 @@ final class SkilliTools {
 
     /// The call's `recording` as the folder's name it resolves to now (an
     /// id, a title, empty for the newest), so the card and the call read
-    /// the same one; left as given when none is (the call says why).
-    func pinningRecording(_ arguments: [String: Any]) -> [String: Any] {
-        guard let center = recorder?(), let (folder, _) = try? center.recordingForTool(arguments["recording"] as? String) else { return arguments }
+    /// the same one; why not when none is, before anything is asked.
+    func pinningRecording(_ arguments: [String: Any]) throws -> [String: Any] {
+        guard let center = recorder?() else { throw Failure(message: "The recorder is not available.") }
+        let (folder, _) = try center.recordingForTool(arguments["recording"] as? String)
         var pinned = arguments
         pinned["recording"] = folder.lastPathComponent
         return pinned

@@ -220,6 +220,16 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
         }
     }
 
+    /// This record with the skillies' runs of `latest` (the record as it is
+    /// on disk now): a skillie may finish while a transcript is made from a
+    /// record read before, and its run is kept.
+    public func keepingRuns(of latest: MeetingRecord?) -> MeetingRecord {
+        guard let runs = latest?.skillies else { return self }
+        var record = self
+        record.skillies = runs
+        return record
+    }
+
     /// The calendar's event a recording is of: which occurrence, and when
     /// it ends (the call's end is watched from then).
     public struct EventLink: Codable, Equatable, Sendable {

@@ -90,6 +90,23 @@ final class MeetingRecordTests: XCTestCase {
         XCTAssertTrue(json.contains("\"title\" : \"Weekly sync\""), json)
     }
 
+    func testATranscriptKeepsTheRunsThatFinishedWhileItWasMade() {
+        var made = MeetingRecord(title: "Weekly sync", started: Date(timeIntervalSince1970: 0), language: "en-US", recorder: nil)
+        made.state = .done
+        let ran = MeetingRecord.SkillieRun(title: "Keep the Folder", path: "/skillies/keep.sh", at: Date(timeIntervalSince1970: 60),
+                                           automatic: false, status: 0, line: "Kept.")
+        var onDisk = made
+        onDisk.state = .transcribing
+        onDisk.skillies = [ran]
+        let kept = made.keepingRuns(of: onDisk)
+        XCTAssertEqual(kept.skillies, [ran])
+        XCTAssertEqual(kept.state, .done, "the rest is the transcript's")
+        XCTAssertEqual(made.keepingRuns(of: nil), made, "nothing on disk: as made")
+        made.skillies = [ran]
+        onDisk.skillies = nil
+        XCTAssertEqual(made.keepingRuns(of: onDisk).skillies, [ran], "none on disk: its own kept")
+    }
+
     func testOneNeverStoppedIsUnfinishedOnceItsRecorderIsGone() {
         let owner = MeetingRecord.Owner(pid: 4242, launched: Date(timeIntervalSince1970: 100))
         var record = MeetingRecord(title: "Weekly sync", started: .now, language: "en-US", recorder: owner)
