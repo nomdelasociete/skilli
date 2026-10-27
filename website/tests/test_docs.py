@@ -23,7 +23,7 @@ class DocsPages(unittest.TestCase):
         cls.addClassCleanup(scratch.cleanup)
         cls.target = Path(scratch.name)
         build.render_docs(build.ROOT / 'website/skillies/docs.template.html', cls.target)
-        cls.pages = {path.name: path.read_text() for path in cls.target.glob('*.html')}
+        cls.pages = {path.name: path.read_text(encoding='utf-8') for path in cls.target.glob('*.html')}
 
     def test_every_markdown_file_has_its_page(self):
         sources = sorted(path.name for path in (build.ROOT / 'skillies/docs').glob('*.md'))
@@ -59,6 +59,55 @@ class DocsPages(unittest.TestCase):
     def test_no_em_dashes(self):
         for name, html in self.pages.items():
             self.assertNotIn('—', html, name)
+
+
+class GuidesPages(unittest.TestCase):
+    """The guides to skil.li's features: website/guides/*.md, the same way."""
+
+    @classmethod
+    def setUpClass(cls):
+        scratch = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(scratch.cleanup)
+        cls.target = Path(scratch.name)
+        build.render_docs(build.ROOT / 'website/guides.template.html', cls.target, book='guides')
+        cls.pages = {path.name: path.read_text(encoding='utf-8') for path in cls.target.glob('*.html')}
+
+    def test_every_markdown_file_has_its_page(self):
+        sources = sorted(path.name for path in (build.ROOT / 'website/guides').glob('*.md'))
+        self.assertEqual(sorted(source for source, _, _ in build.GUIDES), sources, 'add each file to GUIDES in website/build.py')
+        self.assertEqual(sorted(self.pages), sorted(page for _, page, _ in build.GUIDES))
+
+    def test_links_land_on_a_page_and_a_heading(self):
+        ids = {name: set(re.findall(r'id="([^"]+)"', html)) for name, html in self.pages.items()}
+        docs = {page for _, page, _ in build.DOCS}
+        for name, html in self.pages.items():
+            article = html[html.index('<article'):html.index('</article>')]
+            for href in re.findall(r'href="([^"]+)"', article):
+                if href.startswith(('http', 'mailto:')):
+                    continue
+                page, _, anchor = href.partition('#')
+                # A page of the skillies docs, from /guides/.
+                if page.startswith('../skillies/docs/'):
+                    self.assertIn(page.removeprefix('../skillies/docs/') or 'index.html', docs, f'{name}: {href}')
+                    continue
+                page = 'index.html' if page == './' else page or name
+                self.assertIn(page, self.pages, f'{name}: {href}')
+                if anchor:
+                    self.assertIn(anchor, ids[page], f'{name}: {href}')
+
+    def test_each_page_names_itself_and_marks_where_it_is(self):
+        for _, page, label in build.GUIDES:
+            html = self.pages[page]
+            self.assertRegex(html, r'<title>[^<|]+ \| Guides \| skil.li</title>')
+            self.assertIn(f' aria-current="page">{label}</a>', html)
+            self.assertIn('<a href="./" aria-current="true">Guides</a>', html)
+            self.assertNotIn('{{', html)
+            self.assertNotIn('—', html, page)
+
+    def test_the_windows_guide_says_how_to_undo(self):
+        windows = self.pages['windows.html']
+        for words in ('Run it again within 10 seconds', '✦W R', 'off by default', 'Nothing leaves your Mac'):
+            self.assertIn(words, windows)
 
 
 class Markdown(unittest.TestCase):

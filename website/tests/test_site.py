@@ -32,10 +32,25 @@ class LandingContracts(unittest.TestCase):
         self.assertIn('id="own-commands"', INDEX)
         # Every page's footer, by its own path.
         for page, href in (('index.html', 'skillies/docs/'), ('manifesto.html', 'skillies/docs/'), ('legal.html', 'skillies/docs/'),
-                           ('skillies/index.template.html', 'docs/'), ('skillies/docs.template.html', './')):
+                           ('skillies/index.template.html', 'docs/'), ('skillies/docs.template.html', './'),
+                           ('guides.template.html', '../skillies/docs/')):
             html = (ROOT / page).read_text()
             footer = html[html.index('<nav aria-label="Footer">'):]
             self.assertIn(f'<a href="{href}">Docs</a>', footer[:footer.index('</nav>')], page)
+
+    def test_the_guides_are_one_click_away(self):
+        nav = INDEX[INDEX.index('<nav id="site-nav"'):INDEX.index('</nav>', INDEX.index('<nav id="site-nav"'))]
+        self.assertIn('href="guides/">Guides<', nav)
+        # The Windows card leads to its guide.
+        card = INDEX[INDEX.index('<h3>Windows</h3>'):]
+        self.assertIn('href="guides/windows.html"', card[:card.index('</article>')])
+        # Every page's footer, by its own path.
+        for page, href in (('index.html', 'guides/'), ('manifesto.html', 'guides/'), ('legal.html', 'guides/'),
+                           ('skillies/index.template.html', '../guides/'), ('skillies/docs.template.html', '../../guides/'),
+                           ('guides.template.html', './')):
+            html = (ROOT / page).read_text()
+            footer = html[html.index('<nav aria-label="Footer">'):]
+            self.assertIn(f'<a href="{href}">Guides</a>', footer[:footer.index('</nav>')], page)
 
     def test_get_it_lands_on_the_download_section(self):
         section = INDEX[INDEX.index('id="download"'):]
