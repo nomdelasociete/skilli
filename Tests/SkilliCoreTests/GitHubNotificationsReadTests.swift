@@ -65,6 +65,15 @@ final class GitHubNotificationsReadTests: XCTestCase {
         XCTAssertEqual(asked.count, 1)
     }
 
+    func testAShortPageWithANextLinkIsNotTheLast() async throws {
+        let read = try await GitHubNotifications.read(since: nil) { number, _ in
+            let ids = number == 1 ? (1...30).map(String.init) : (31...45).map(String.init)
+            return GitHubNotificationsPage(status: 200, data: StandInNotifications.threads(ids), lastModified: nil, pollInterval: 60,
+                                           hasNext: number == 1)
+        }
+        XCTAssertEqual(Set(ids(read) ?? []).count, 45)
+    }
+
     func testEveryPageIsReadAndACutIsSaid() async throws {
         let all = StandInNotifications(total: 120)
         let read = try await GitHubNotifications.read(since: nil) { await all.page($0, $1) }

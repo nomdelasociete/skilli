@@ -77,11 +77,9 @@ public enum GitHubNotifications {
                     return try await read(since: nil, maxPages: maxPages, page: page)
                 }
             }
-            let list = try parse(answer.data)
-            for notification in list { threads[notification.id] = notification }
-            // GitHub's count, before the threads it cannot place are left out.
-            let received = (try? JSONSerialization.jsonObject(with: answer.data) as? [Any])?.count ?? list.count
-            if received < 50 || !answer.hasNext {
+            for notification in try parse(answer.data) { threads[notification.id] = notification }
+            // GitHub's Link header decides, not the page's length.
+            if !answer.hasNext {
                 return .changed(sortedNewestFirst(threads), complete: true, lastModified: lastModified, pollInterval: pollInterval)
             }
         }
