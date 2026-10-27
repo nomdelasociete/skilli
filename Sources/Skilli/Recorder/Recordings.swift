@@ -78,6 +78,15 @@ final class Recordings: Sendable {
             .sorted { $0.record.started > $1.record.started }
     }
 
+    /// Those left at the quit to be transcribed again (`madeAgain`), oldest
+    /// first.
+    func madeAgainLeft() -> [(folder: URL, record: MeetingRecord)] {
+        let folders = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        return folders.compactMap { folder in read(folder).map { (folder, $0) } }
+            .filter { $0.record.madeAgain != nil && $0.record.state == .done }
+            .sorted { $0.record.started < $1.record.started }
+    }
+
     /// A title given later renames its folder by the same rules (its date
     /// kept); the folder it is in now.
     func rename(_ folder: URL, to title: String, started: Date) throws -> URL {

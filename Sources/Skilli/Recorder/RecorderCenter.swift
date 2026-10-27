@@ -1029,7 +1029,9 @@ final class RecorderCenter {
     struct Left {
         var unfinished: [(URL, MeetingRecord)] = []
         var toTranscribe: [(URL, MeetingRecord)] = []
-        var isEmpty: Bool { unfinished.isEmpty && toTranscribe.isEmpty }
+        /// Transcribe Again asked and not made as skil.li quit.
+        var toMakeAgain: [(URL, MeetingRecord)] = []
+        var isEmpty: Bool { unfinished.isEmpty && toTranscribe.isEmpty && toMakeAgain.isEmpty }
     }
 
     /// At launch, a few seconds in: what `root` holds that was left,
@@ -1039,7 +1041,8 @@ final class RecorderCenter {
         await Task.detached(priority: .utility) {
             let recordings = Recordings(root: root)
             return Left(unfinished: recordings.unfinished().map { ($0.folder, MeetingRecorder.measured($0.folder, record: $0.record)) },
-                        toTranscribe: recordings.stopped().map { ($0.folder, $0.record) })
+                        toTranscribe: recordings.stopped().map { ($0.folder, $0.record) },
+                        toMakeAgain: recordings.madeAgainLeft().map { ($0.folder, $0.record) })
         }.value
     }
 
@@ -1051,6 +1054,16 @@ final class RecorderCenter {
         for (folder, record) in left.toTranscribe.reversed() {
             madeQuietly.insert(Self.key(folder))
             recorder.transcribe(folder, record: record)
+        }
+        // Then those asked again before the quit, as asked (their transcript
+        // stays until the new one is written).
+        for (folder, record) in left.toMakeAgain {
+            guard let asked = record.madeAgain else { continue }
+            var record = record
+            record.language = asked.language
+            madeQuietly.insert(Self.key(folder))
+            madeAgain.insert(Self.key(folder))
+            recorder.transcribe(folder, record: record, again: true, engine: TranscriptEngine(stored: asked.engine) ?? .macOS)
         }
         guard !left.unfinished.isEmpty else { return }
         unfinished = left.unfinished

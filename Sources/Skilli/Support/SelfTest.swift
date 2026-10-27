@@ -24582,6 +24582,7 @@ final class SelfTest {
         let call = aborted ? nil : await voicesToldApartInTheCalls()
         if !aborted, let call { await speakersRenamedAndMerged(call) }
         if !aborted, let call { await transcribeAgainAsPicked(call) }
+        if !aborted, let call { await transcribeAgainLeftAtQuit(call) }
     }
 
     /// The played-back calls (`script/recorder-measure`), their names
@@ -25170,6 +25171,37 @@ final class SelfTest {
         self.record(name, passed,
                     "\(languages.count) languages, engines \(engines), note “\(note)”; Better transcription \(whisperReady ? "downloaded" : "not downloaded"): “\(whisperNote)”, Transcribe \(whisperCan ? "on" : "dimmed") \(whisperSaid); an action meanwhile: “\(busyNote)”, Transcribe \(busyCan ? "on" : "dimmed"), the transcript being made \(makingSaid), back after it \(busySaid); progress shown \(showsProgress), made again in \(record?.language ?? "?") with \(record?.engine ?? "?") \(madeAgain), edited \(record?.edited.map(String.init) ?? "nil"), names given kept \(kept) (\(record?.speakers ?? [:])); then English again \(english)",
                     nil)
+    }
+
+    /// A Transcribe Again left at the quit (`madeAgain`, as `closeForQuit`
+    /// writes it): the next launch finds it and makes it as asked, quietly
+    /// (no window), the transcript before kept until then; made, it is not
+    /// found again.
+    private func transcribeAgainLeftAtQuit(_ folder: URL) async {
+        let name = "Recorder: a Transcribe Again left as skil.li quit is made at the next launch as asked, without a window, and not again after"
+        guard let center = context.recorder(), var left = center.recordings.read(folder) else {
+            record(name, false, "no recording", nil)
+            return
+        }
+        center.openWindows.forEach { $0.close() }
+        let linesBefore = center.recordings.transcript(folder)?.lines.count ?? 0
+        left.madeAgain = MeetingRecord.MadeAgain(language: "en-US", engine: TranscriptEngine.macOS.rawValue)
+        try? center.recordings.write(left, to: folder)
+        let found = await RecorderCenter.left(in: center.recordings.root)
+        let key = { (url: URL) in url.resolvingSymlinksInPath().standardizedFileURL.path }
+        let toMake = found.toMakeAgain.filter { key($0.0) == key(folder) }
+        center.pickUp(RecorderCenter.Left(toMakeAgain: toMake))
+        let started = await waitUntil(timeout: 5) { center.recorder.transcribing.map { key($0.folder) == key(folder) && $0.again } ?? false } != nil
+        let made = await waitUntil(timeout: 120) { center.recorder.transcribing == nil && center.recordings.read(folder)?.madeAgain == nil } != nil
+        await pause(800)
+        let after = center.recordings.read(folder)
+        let lines = center.recordings.transcript(folder)?.lines.count ?? 0
+        let noWindow = center.openWindows.isEmpty
+        let again = await RecorderCenter.left(in: center.recordings.root).toMakeAgain.contains { key($0.0) == key(folder) }
+        let passed = toMake.count == 1 && started && made && after?.state == .done && after?.language == "en-US" && lines > 0 && noWindow && !again
+        record(name, passed,
+               "found \(toMake.count), made again at once \(started), done \(made) (“\(after?.state.rawValue ?? "?")”, \(after?.language ?? "?"), \(linesBefore) → \(lines) lines), window \(noWindow ? "none" : "opened"), found again after \(again)",
+               nil)
     }
 
     // MARK: - Phase 4: Better transcription (docs/meeting-recorder-views.md)

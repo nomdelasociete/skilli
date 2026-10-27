@@ -90,6 +90,19 @@ final class MeetingRecordTests: XCTestCase {
         XCTAssertTrue(json.contains("\"title\" : \"Weekly sync\""), json)
     }
 
+    func testATranscribeAgainLeftAtTheQuitIsReadBack() throws {
+        var record = MeetingRecord(title: "Weekly sync", started: Date(timeIntervalSince1970: 0), language: "en-US", recorder: nil)
+        record.state = .done
+        XCTAssertNil(try MeetingRecord.decode(try record.encoded()).madeAgain, "none asked")
+        record.madeAgain = .init(language: "fr-FR", engine: "whisper")
+        let back = try MeetingRecord.decode(try record.encoded())
+        XCTAssertEqual(back.madeAgain, .init(language: "fr-FR", engine: "whisper"))
+        XCTAssertEqual(back.language, "en-US", "the transcript there is still the one before")
+        let older = String(decoding: try record.encoded(), as: UTF8.self)
+            .replacingOccurrences(of: #""madeAgain" : \{[^}]*\},?"#, with: "", options: .regularExpression)
+        XCTAssertNil(try MeetingRecord.decode(Data(older.utf8)).madeAgain, "a meeting.json from before reads")
+    }
+
     func testATranscriptKeepsTheRunsThatFinishedWhileItWasMade() {
         var made = MeetingRecord(title: "Weekly sync", started: Date(timeIntervalSince1970: 0), language: "en-US", recorder: nil)
         made.state = .done
