@@ -740,8 +740,13 @@ final class GitHubBook {
     // MARK: Signing in and out
 
     /// Gets a code from GitHub, copies it, opens github.com/login/device;
-    /// signed in once the user has typed it there.
-    func signIn() {
+    /// signed in once the user has typed it there. With a relay origin and
+    /// this Mac not paired yet, one browser tab does it all
+    /// (docs/github-single-sign-in.md): the relay's enrollment, server
+    /// sync's grant when `serverSync`, then the code on GitHub's page. The
+    /// pairing is saved once the token arrives and both name the same
+    /// GitHub id; `serverSyncReady` then runs if the grant was chained.
+    func signIn(relayOrigin: String? = nil, serverSync: Bool = false, serverSyncReady: @escaping () -> Void = {}) {
         signingIn?.cancel()
         signInProblem = nil
         let clientID = clientID()
@@ -752,13 +757,26 @@ final class GitHubBook {
         let requestID = UUID()
         signInRequestID = requestID
         signingIn = Task { [client] in
+            var chained = false
             do {
                 let code = try await client.startSignIn(clientID: clientID)
                 guard signInRequestID == requestID, !Task.isCancelled else { return }
                 signInCode = code
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(code.userCode, forType: .string)
-                openURL(code.verificationURL)
+                // GitHub's page, unless the relay's tab ends on it.
+                let codeElsewhere = { [weak self] in
+                    guard let self, self.signInRequestID == requestID, self.signInCode == code else { return }
+                    self.openURL(code.verificationURL)
+                }
+                if let relayOrigin, !relayDevice.canRevoke,
+                   relayDevice.enroll(origin: relayOrigin, chain: RelaySignInChain(inbox: serverSync, userCode: code.userCode),
+                                      codeNotShown: codeElsewhere, paired: { if $0 { serverSyncReady() } }) {
+                    Log.actions.notice("GitHub: signing in with live updates\(serverSync ? " and server sync" : "")")
+                    chained = true
+                } else {
+                    openURL(code.verificationURL)
+                }
                 let token = try await client.waitForToken(code, clientID: clientID)
                 guard signInRequestID == requestID, !Task.isCancelled else { return }
                 try Keychain.save(token, account: keychainAccount)
@@ -773,6 +791,8 @@ final class GitHubBook {
                 signInCode = nil
             } catch {
                 guard signInRequestID == requestID else { return }
+                // The enrollment waits for this token: it will not come.
+                if chained { relayDevice.cancelEnrollment() }
                 signInCode = nil
                 signInProblem = error.localizedDescription
             }
@@ -781,6 +801,7 @@ final class GitHubBook {
     }
 
     func cancelSignIn() {
+        if signInCode != nil { relayDevice.cancelEnrollment() }
         signInRequestID = nil
         signingIn?.cancel()
         signingIn = nil

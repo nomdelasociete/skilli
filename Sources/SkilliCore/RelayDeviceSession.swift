@@ -41,6 +41,9 @@ struct RelayDeviceGrant: Decodable {
     let device_code: String
     let verification_uri: URL
     let expires_in: TimeInterval
+    /// What `/enroll` chains after Associate (`inbox`, `user_code`); absent
+    /// on a relay without the single sign-in.
+    var chain: [String]? = nil
 
     var isValid: Bool {
         !device_code.isEmpty && expires_in > 0 && expires_in <= 600 &&
@@ -72,6 +75,19 @@ struct RelayDeviceCredentials: Codable {
     var authorityOrigin: String? = nil
     var pendingRefreshID: String? = nil
     var pendingRevocation: Bool? = nil
+}
+
+/// The single sign-in (docs/github-single-sign-in.md): what the relay's
+/// enrollment tab goes on to after Associate. `inbox`: the server sync
+/// grant. `userCode`: GitHub's device code for this Mac's own sign-in, the
+/// tab's last page.
+public struct RelaySignInChain: Sendable, Equatable {
+    public let inbox: Bool
+    public let userCode: String?
+    public init(inbox: Bool, userCode: String? = nil) {
+        self.inbox = inbox
+        self.userCode = userCode
+    }
 }
 
 @MainActor
@@ -224,11 +240,23 @@ public final class RelayDeviceSession: ObservableObject {
         hasSavedEnrollment = true
     }
 
-    public func enroll(origin: String) {
-        guard let enrollmentToken = githubToken(), !enrollmentToken.isEmpty,
+    /// Opens the relay's enrollment in the browser and saves the pairing
+    /// once GitHub (native token) and the authority agree on the account.
+    /// With a `chain` the same tab also grants server sync and ends on
+    /// GitHub's device page; the native token then arrives after the
+    /// pairing, which waits for it. `codeNotShown` runs (once) when the
+    /// relay's tab will not show `userCode`: an older relay, or no pairing.
+    /// `paired` runs after the save, true when the inbox grant was chained.
+    /// False: nothing started.
+    @discardableResult
+    public func enroll(origin: String, chain: RelaySignInChain? = nil,
+                       codeNotShown: (() -> Void)? = nil, paired: ((Bool) -> Void)? = nil) -> Bool {
+        let enrollmentToken = githubToken().flatMap { $0.isEmpty ? nil : $0 }
+        let userCode = chain?.userCode.flatMap { Self.userCode($0) ? $0 : nil }
+        guard enrollmentToken != nil || userCode != nil,
               !isBusy, !readUnavailable, credentials?.pendingRevocation != true, let url = Self.origin(origin),
               let authority = Self.origin(authorityOrigin()), let browser = Self.origin(browserOrigin()),
-              authority != url, browser != url else { return }
+              authority != url, browser != url else { return false }
         isBusy = true
         isEnrolling = true
         identityTask?.cancel()
@@ -236,8 +264,15 @@ public final class RelayDeviceSession: ObservableObject {
         identityGeneration += 1
         let enrollmentGeneration = identityGeneration
         message = "Checking whether live update setup is available…"
+        var codeHandled = userCode == nil
+        let codeElsewhere = {
+            guard !codeHandled else { return }
+            codeHandled = true
+            codeNotShown?()
+        }
         operation = Task { [self] in
             defer {
+                codeElsewhere()
                 isBusy = false
                 isEnrolling = false
                 operation = nil
@@ -262,8 +297,18 @@ public final class RelayDeviceSession: ObservableObject {
                 guard grant.isValid, grant.verification_uri.scheme == browser.scheme,
                       grant.verification_uri.host == browser.host, grant.verification_uri.port == browser.port,
                       grant.verification_uri.path == "/enroll", grant.verification_uri.fragment == nil else { throw URLError(.badServerResponse) }
+                // Only what this relay says `/enroll` chains: an older one
+                // would drop the rest and the tab would end without the code.
+                let chained = grant.chain ?? []
+                let inbox = chain?.inbox == true && chained.contains("inbox")
+                let codeInTab = userCode != nil && chained.contains("user_code")
+                var page = URLComponents(url: grant.verification_uri, resolvingAgainstBaseURL: false)
+                var items = page?.queryItems ?? []
+                if inbox { items.append(URLQueryItem(name: "inbox", value: "1")) }
+                if codeInTab, let userCode { items.append(URLQueryItem(name: "user_code", value: userCode)) }
+                page?.queryItems = items
                 let deadline = startedAt.addingTimeInterval(grant.expires_in)
-                guard deadline > Date(), openBrowser(grant.verification_uri) else { throw URLError(.cannotLoadFromNetwork) }
+                guard deadline > Date(), let opened = page?.url, openBrowser(opened) else { throw URLError(.cannotLoadFromNetwork) }
                 message = "Finish authorizing this Mac in your browser."
                 while Date() < deadline {
                     try await sleep(5)
@@ -278,7 +323,22 @@ public final class RelayDeviceSession: ObservableObject {
                     guard pair.isValid, let installations = pair.installations, !installations.isEmpty,
                           installations.allSatisfy(Self.numericID) else { throw URLError(.badServerResponse) }
                     try Task.checkCancellation()
-                    guard githubToken() == enrollmentToken,
+                    if codeInTab { codeHandled = true } else { codeElsewhere() }
+                    // Signing in at the same time: GitHub's code comes last
+                    // in the tab, so this Mac's token arrives after the
+                    // pairing. Nothing is saved before the ids are compared.
+                    var arrived = enrollmentToken
+                    let nativeDeadline = Date().addingTimeInterval(pair.expires_in - 30)
+                    while arrived == nil {
+                        message = "Last step: enter the code on GitHub. skil.li finishes by itself."
+                        guard Date() < nativeDeadline else {
+                            message = "GitHub sign-in did not finish in time. Start again."
+                            return
+                        }
+                        try await sleep(1)
+                        arrived = githubToken().flatMap { $0.isEmpty ? nil : $0 }
+                    }
+                    guard githubToken() == arrived,
                           let verified = await verifyIdentity(pair: pair, authority: authority) else { return }
                     let native = verified.native
                     try Task.checkCancellation()
@@ -293,6 +353,7 @@ public final class RelayDeviceSession: ObservableObject {
                     retryNotBefore = nil
                     message = "This Mac is authorized for \(installations.count) GitHub account(s). Live access renews automatically."
                     onChange?()
+                    paired?(inbox)
                     return
                 }
                 message = "Authorization expired. Start setup again."
@@ -302,6 +363,7 @@ public final class RelayDeviceSession: ObservableObject {
                     : "Setup could not finish. Your existing connection is unchanged; you can start again."
             }
         }
+        return true
     }
 
     private func verifyRestoredIdentity() {
@@ -514,6 +576,14 @@ public final class RelayDeviceSession: ObservableObject {
                 message = "Server revocation is pending. Retrying automatically."
                 onChange?()
             }
+        }
+    }
+
+    /// GitHub's device code as GitHub prints it (`ABCD-1234`); the relay
+    /// refuses anything else.
+    static func userCode(_ value: String) -> Bool {
+        value.utf8.count == 9 && value.utf8.enumerated().allSatisfy { index, byte in
+            index == 4 ? byte == 45 : (48...57).contains(byte) || (65...90).contains(byte)
         }
     }
 
