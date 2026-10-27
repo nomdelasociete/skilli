@@ -2,8 +2,9 @@ import SkilliCore
 import SwiftUI
 
 /// Settings → GitHub, in the order of the Settings plan's rules: how it is
-/// reached ("pr" in the launcher, its alias), the account (GitHub's device
-/// flow: a code to type on github.com) and what skil.li read last; the
+/// reached ("pr" in the launcher, its alias), the account (one browser tab:
+/// the relay's live updates and server sync, then GitHub's device code,
+/// docs/github-single-sign-in.md) and what skil.li read last; the
 /// strip under the search field with its preview, drawn by the strip's own
 /// view; what leaves the Mac and to whom; live updates (this Mac's relay
 /// access), then server sync (the relay reads GitHub for the user's Macs);
@@ -16,6 +17,9 @@ struct GitHubPane: View {
     @State private var relayURL = ""
     @State private var relayToken = ""
     @State private var relayNote: String?
+    /// Server sync's checkbox beside the sign-in, the consent given before
+    /// the browser trip.
+    @State private var serverSyncWanted = true
 
     private var github: GitHubBook? { context.github }
 
@@ -57,13 +61,9 @@ struct GitHubPane: View {
             }
 
             if let github, github.isSignedIn {
-                RelayEnrollmentControls(session: github.relayDevice, origin: {
-                    if preferences.relayPublicURL.isEmpty {
-                        preferences.relayPublicURL = "https://relay.nomdelasociete.com"
-                        relayURL = preferences.relayPublicURL
-                    }
-                    return preferences.relayPublicURL
-                })
+                RelayEnrollmentControls(session: github.relayDevice, origin: relayOrigin,
+                                        serverSync: preferences.githubServerSync ? nil : $serverSyncWanted,
+                                        serverSyncReady: { github.confirmServerSyncGrant { turnOnServerSync() } })
                 if github.relayDevice.canRevoke || preferences.githubServerSync {
                     ServerSyncControls(preferences: preferences, github: github)
                 }
@@ -147,6 +147,25 @@ struct GitHubPane: View {
         }
     }
 
+    /// The relay's address GitHubBook connects to: this session's
+    /// RELAY_PUBLIC_URL when set, else the setting, the default one written
+    /// the first time. The pairing is bound to it.
+    private func relayOrigin() -> String {
+        let environment = (ProcessInfo.processInfo.environment["RELAY_PUBLIC_URL"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !environment.isEmpty { return environment }
+        if preferences.relayPublicURL.isEmpty {
+            preferences.relayPublicURL = "https://relay.nomdelasociete.com"
+            relayURL = preferences.relayPublicURL
+        }
+        return preferences.relayPublicURL
+    }
+
+    /// The relay holds the grant now: on, unless the box was unticked
+    /// while the browser trip went on.
+    private func turnOnServerSync() {
+        if serverSyncWanted { preferences.githubServerSync = true }
+    }
+
     @ViewBuilder
     private func account(_ github: GitHubBook) -> some View {
         if github.isSignedIn {
@@ -162,22 +181,30 @@ struct GitHubPane: View {
                     Text(code.userCode)
                         .font(.system(.title3, design: .monospaced).weight(.semibold))
                         .textSelection(.enabled)
+                    // GitHub's page at once, without waiting for the relay's tab.
+                    Button("Open GitHub") { github.open(code.verificationURL) }
                     Button("Cancel") { github.cancelSignIn() }
                 }
             } label: {
-                LabelDetail("Type this code on GitHub", "It is copied, and the page opened in your browser. skil.li signs in by itself once you have typed it there.")
+                LabelDetail("Finish in your browser", "The code is copied; GitHub asks for it last. skil.li signs in by itself once you have typed it there.")
             }
         } else {
             LabeledContent {
-                Button("Sign In with GitHub…") { github.signIn() }
-                    .disabled(!github.canSignIn)
+                Button("Sign In with GitHub…") {
+                    github.signIn(relayOrigin: relayOrigin(), serverSync: serverSyncWanted,
+                                  serverSyncReady: { turnOnServerSync() })
+                }
+                .disabled(!github.canSignIn)
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("GitHub")
-                    Text(github.signInProblem ?? (github.canSignIn ? "A code to type on github.com: no password here."
+                    Text(github.signInProblem ?? (github.canSignIn ? "One trip in your browser: live updates, then a code to type on github.com. No password here."
                                                   : "This build of skil.li has no GitHub app to sign in with yet."))
                         .font(.caption).foregroundStyle(github.signInProblem == nil ? Color.secondary : Color.red)
                 }
+            }
+            if github.canSignIn {
+                ServerSyncChoice(wanted: $serverSyncWanted)
             }
         }
     }
@@ -204,7 +231,18 @@ struct GitHubPane: View {
 private struct RelayEnrollmentControls: View {
     @ObservedObject var session: RelayDeviceSession
     let origin: () -> String
+    /// Server sync in the same trip, while it is off on this Mac.
+    let serverSync: Binding<Bool>?
+    /// The grant was asked for in the tab: confirms it, then turns server sync on.
+    let serverSyncReady: () -> Void
     @State private var confirmRevoke = false
+
+    private func enroll() {
+        // The checkbox shows only before this Mac is paired: managing
+        // accounts asks for nothing more.
+        session.enroll(origin: origin(), chain: RelaySignInChain(inbox: !session.canRevoke && serverSync?.wrappedValue == true),
+                       paired: { if $0 { serverSyncReady() } })
+    }
 
     var body: some View {
         Section {
@@ -212,11 +250,11 @@ private struct RelayEnrollmentControls: View {
             HStack {
                 if !session.canRevoke {
                     Button(session.needsEnrollment ? "Authorize this Mac again…" : "Authorize this Mac…") {
-                        session.enroll(origin: origin())
+                        enroll()
                     }.disabled(session.isBusy)
                 } else {
                     Label("\(session.installationCount) GitHub account(s) authorized", systemImage: "checkmark.circle")
-                    Button("Manage connected accounts…") { session.enroll(origin: origin()) }
+                    Button("Manage connected accounts…") { enroll() }
                         .disabled(session.isBusy)
                 }
                 if session.isEnrolling {
@@ -232,11 +270,27 @@ private struct RelayEnrollmentControls: View {
                         }
                 }
             }
+            if !session.canRevoke, let serverSync {
+                ServerSyncChoice(wanted: serverSync)
+            }
         } header: {
             Text("Live updates")
         } footer: {
             Text("Select all the GitHub accounts and organizations you want in your browser. Managing accounts replaces the selection only after authorization succeeds. This Mac renews its live access automatically. Your GitHub sign-in token stays on this Mac; GitHub is checked on a timer whenever live updates are unavailable.")
         }
+    }
+}
+
+/// Server sync chosen before the browser trip (sign-in, live updates): the
+/// consent in full under the checkbox, so the trip needs no alert.
+private struct ServerSyncChoice: View {
+    @Binding var wanted: Bool
+
+    var body: some View {
+        Toggle(isOn: $wanted) {
+            LabelDetail("Keep my pull requests on the relay for all my Macs (server sync)", ServerSyncControls.consent)
+        }
+        .toggleStyle(.checkbox)
     }
 }
 
@@ -253,7 +307,7 @@ private struct ServerSyncControls: View {
     @State private var note: String?
 
     static let consent = "The relay reads your pull requests (yours and those waiting for your review) and your unread notifications "
-        + "on GitHub, with an authorization you give on GitHub in your browser (scopes repo and read:user; repo also allows changes, "
+        + "on GitHub, with an authorization you give on GitHub in your browser (scopes repo, notifications and read:user; repo also allows changes, "
         + "the relay only reads). It keeps one encrypted copy for your Macs authorized for live updates: titles, links, repositories, "
         + "review states, checks, your permissions, notification titles and reasons; never code, descriptions or comments. The copy "
         + "goes after 24 hours unused, the authorization after 90 days. Merging, updating a branch and marking read stay on this Mac, "
