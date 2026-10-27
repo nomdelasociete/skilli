@@ -657,8 +657,12 @@ final class GitHubBook {
         self.timer = timer
     }
 
+    /// Live updates: a pairing that listens to at least one installation.
+    /// One without (no GitHub App) has no webhook to wake it: no stream, and
+    /// reads stay on their timers.
     private var relayIsConfigured: Bool {
-        resolvedRelayOrigin.flatMap { relayDevice.configuration(origin: $0.absoluteString) } != nil
+        relayDevice.installationCount > 0
+            && resolvedRelayOrigin.flatMap { relayDevice.configuration(origin: $0.absoluteString) } != nil
     }
 
     private var resolvedRelayOrigin: URL? {

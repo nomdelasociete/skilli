@@ -182,6 +182,34 @@ final class RelayDeviceSessionTests: XCTestCase {
         await assertVerified(restored, token: "v2.rotated", origin: origin)
     }
 
+    func testAPairingWithoutTheGitHubAppIsSavedAndRenews() async throws {
+        let vault = RelayVault()
+        let none = tokens.replacingOccurrences(of: "[\"123\"]", with: "[]")
+        let server = RelayReplies([response(201, grant), response(200, none), response(200, rotated)])
+        let client = session(vault, server)
+        client.enroll(origin: origin)
+        try await finish(client)
+        XCTAssertEqual(client.installationCount, 0)
+        XCTAssertEqual(client.configuration(origin: origin)?.token, "v2.new")
+        XCTAssertEqual(client.message, "This Mac is paired without live updates. Install the GitHub App, then Add Accounts…, for instant updates.")
+        client.renew()
+        try await finish(client)
+        XCTAssertEqual(client.credentials?.pair.installations, [])
+        let restored = session(vault, RelayReplies([]))
+        XCTAssertEqual(restored.installationCount, 0)
+        await assertVerified(restored, token: "v2.rotated", origin: origin)
+    }
+
+    func testANonNumericInstallationIsStillRefused() async throws {
+        let vault = RelayVault()
+        let invalid = tokens.replacingOccurrences(of: "[\"123\"]", with: "[\"abc\"]")
+        let client = session(vault, RelayReplies([response(201, grant), response(200, invalid)]))
+        client.enroll(origin: origin)
+        try await finish(client)
+        XCTAssertNil(vault.value)
+        XCTAssertNil(client.configuration(origin: origin))
+    }
+
     func testUnavailableEnrollmentPreservesLegacyAndNeverOpensBrowser() async throws {
         for status in [404, 503, 429] {
             let vault = RelayVault()
