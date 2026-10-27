@@ -181,6 +181,7 @@ enum MeetingTranscriber {
         let lines = MeetingTranscript.lines(voiced)
         var done = record
         done.state = .done
+        done.failed = nil
         done.engine = engine.rawValue
         done.echoDropped = dropped
         done.recorder = nil

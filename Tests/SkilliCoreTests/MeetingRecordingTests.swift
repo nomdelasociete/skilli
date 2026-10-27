@@ -103,6 +103,13 @@ final class MeetingRecordTests: XCTestCase {
         XCTAssertNil(try MeetingRecord.decode(Data(older.utf8)).madeAgain, "a meeting.json from before reads")
     }
 
+    func testWhyATranscriptFailedIsKept() throws {
+        var record = MeetingRecord(title: "Weekly sync", started: Date(timeIntervalSince1970: 0), language: "it-IT", recorder: nil)
+        record.state = .pending
+        record.failed = "Italian can't be transcribed on this Mac yet."
+        XCTAssertEqual(try MeetingRecord.decode(try record.encoded()).failed, "Italian can't be transcribed on this Mac yet.")
+    }
+
     func testATranscriptKeepsTheRunsThatFinishedWhileItWasMade() {
         var made = MeetingRecord(title: "Weekly sync", started: Date(timeIntervalSince1970: 0), language: "en-US", recorder: nil)
         made.state = .done

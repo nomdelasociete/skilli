@@ -675,7 +675,10 @@ final class MeetingRecorder {
                 pending.state = .pending
                 pending.engine = nil
                 pending.recorder = nil
+                pending.failed = error.localizedDescription
                 try? recordings.write(pending.keepingRuns(of: recordings.read(folder)), to: folder)
+                // Said once, in the card; its window says it too, with Transcribe.
+                onTranscriptFailed?("No transcript for “\(record.title)”: \(error.localizedDescription) Its window offers Transcribe ↩.")
                 Log.actions.error("Recorder: no transcript for “\(record.title, privacy: .private)” (\(error.localizedDescription, privacy: .public))")
             }
             transcribing = nil

@@ -893,10 +893,10 @@ final class RecorderCenter {
             self?.windows[Self.key(folder)]?.close()
             self?.delete(folder, title: record.title)
         }
-        window.onTranscribe = { [weak self] folder, record in
+        window.onTranscribe = { [weak self] folder, record, engine in
             guard let self else { return }
             try? self.recordings.write(record, to: folder)
-            self.recorder.transcribe(folder, record: record)
+            self.recorder.transcribe(folder, record: record, engine: engine)
         }
         window.onTranscribeAgain = { [weak self] folder, record, engine in
             self?.transcribeAgain(folder, record: record, engine: engine)
@@ -932,6 +932,8 @@ final class RecorderCenter {
             self.preferences.recorderBetterHintShown = true
             return true
         }
+        // Pending: shown again now that its engines are known, for their menu.
+        if transcript == nil, record.state == .pending { window.show(record, transcript: nil) }
         windows[Self.key(folder)] = window
         return window
     }

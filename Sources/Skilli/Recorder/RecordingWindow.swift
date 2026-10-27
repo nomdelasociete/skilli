@@ -50,7 +50,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var onDelete: ((URL, MeetingRecord) -> Void)?
     var onShowFolder: ((URL) -> Void)?
     /// A transcript waiting for a language: made in the one picked.
-    var onTranscribe: ((URL, MeetingRecord) -> Void)?
+    /// Transcribe ↩ in a pending one: the language and the engine picked.
+    var onTranscribe: ((URL, MeetingRecord, TranscriptEngine) -> Void)?
     /// Transcribe Again (phase 4): the record with the language picked,
     /// and the engine picked.
     var onTranscribeAgain: ((URL, MeetingRecord, TranscriptEngine) -> Void)?
@@ -121,7 +122,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         window.center()
         view.onPlay = { [weak self] in self?.togglePlay() }
         view.onSeek = { [weak self] seconds, plays in self?.seek(to: seconds, play: plays) }
-        view.onTranscribe = { [weak self] language in self?.transcribe(in: language) }
+        view.onTranscribe = { [weak self] language, engine in self?.transcribe(in: language, engine: engine) }
         view.onKey = { [weak self] event in self?.key(event) ?? false }
         view.onEdited = { [weak self] line, text in self?.edit(line, text: text) }
         view.onRenameClicked = { [weak self] line, point in self?.showRenameMenu(line: line, at: point) }
@@ -156,6 +157,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var currentTime: Double { player?.currentTime().seconds ?? 0 }
     var litLine: Int? { view.litLine }
     var shownState: String { view.stateText }
+    var shownPendingEngines: [(title: String, enabled: Bool)] { Array(zip(view.pendingEngines, view.pendingEnginesEnabled)) }
     var spaceHint: String? { view.spaceHint }
     var shownHints: [String] { view.hintLabels }
     var shownLanes: [String] { view.shownLanes }
@@ -227,7 +229,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             // Its turn not come yet (another being made, or the launch's).
             view.showWaiting()
         } else {
-            view.showPending(language: record.language)
+            view.showPending(language: record.language, why: record.failed, engines: engines(), languages: languages)
         }
         linesShown = transcribing == nil && !waiting && transcript != nil
         making = transcribing != nil || waiting
@@ -740,11 +742,11 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    private func transcribe(in language: String) {
+    private func transcribe(in language: String, engine: TranscriptEngine) {
         var record = record
         record.language = language
         self.record = record
-        onTranscribe?(folder, record)
+        onTranscribe?(folder, record, engine)
     }
 
     private func updateHints() {
@@ -1019,7 +1021,7 @@ private final class RecordingWindow: NSWindow {
 private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
     var onPlay: (() -> Void)?
     var onSeek: ((Double, Bool) -> Void)?
-    var onTranscribe: ((String) -> Void)?
+    var onTranscribe: ((String, TranscriptEngine) -> Void)?
     /// A key the lines' table got first.
     var onKey: ((NSEvent) -> Bool)?
     /// A line's words kept as typed.
@@ -1045,6 +1047,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     private let table = LinesTable()
     private let state = NSTextField(wrappingLabelWithString: "")
     private let languageMenu = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let engineMenu = NSPopUpButton(frame: .zero, pullsDown: false)
     private let transcribeButton = NSButton(title: "Transcribe", target: nil, action: nil)
     private let hints = HintBar()
     private let dropRing = DropRing()
@@ -1098,6 +1101,13 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     var aboutText: String { about.stringValue }
     var hintLabels: [String] { hints.shown.map(\.label) }
     private var languageIDs: [String] = []
+    /// A pending one's engines, as its menu lists them, and their languages.
+    private var engineIDs: [TranscriptEngine] = []
+    private var pendingLanguage = ""
+    private var languagesOf: ((TranscriptEngine) async -> [(id: String, name: String)])?
+    /// Self-test hooks.
+    var pendingEngines: [String] { engineMenu.isHidden ? [] : engineMenu.itemTitles }
+    var pendingEnginesEnabled: [Bool] { engineMenu.itemArray.map(\.isEnabled) }
     private(set) var litLine: Int?
     /// The line selected (phase 4), by its place in `lines`.
     private(set) var selectedLine: Int?
@@ -1185,6 +1195,9 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         state.alignment = .center
         languageMenu.target = self
         languageMenu.action = #selector(languagePicked)
+        engineMenu.autoenablesItems = false
+        engineMenu.target = self
+        engineMenu.action = #selector(enginePicked)
         transcribeButton.bezelStyle = .push
         transcribeButton.keyEquivalent = "\r"
         transcribeButton.target = self
@@ -1207,7 +1220,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         ranLine.lineBreakMode = .byTruncatingTail
         ranLine.isHidden = true
         for subview in [title, about, transcribeAgainButton, playButton, time, waveform, topLine, scroll, picturesColumn, state, languageMenu,
-                        transcribeButton, hintLine, workSpinner, workLine, ranLine, bottomLine, hints, dropRing] as [NSView] {
+                        engineMenu, transcribeButton, hintLine, workSpinner, workLine, ranLine, bottomLine, hints, dropRing] as [NSView] {
             addSubview(subview)
         }
         registerForDraggedTypes([.fileURL])
@@ -1249,6 +1262,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         state.isHidden = !rows.isEmpty
         state.stringValue = rows.isEmpty ? "Nothing was said, or nothing the engine could hear." : ""
         languageMenu.isHidden = true
+        engineMenu.isHidden = true
         transcribeButton.isHidden = true
         needsLayout = true
     }
@@ -1285,6 +1299,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         state.isHidden = false
         state.stringValue = text
         languageMenu.isHidden = true
+        engineMenu.isHidden = true
         transcribeButton.isHidden = true
         needsLayout = true
     }
@@ -1296,20 +1311,48 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
 
     /// No transcript: the language this Mac could not transcribe, and the
     /// ones it can.
-    func showPending(language: String) {
-        showState("Not transcribed yet: \(MeetingTranscriber.shortName(of: language)) can't be transcribed on this Mac.")
+    /// No transcript: why (`why`, as said when it failed; else the
+    /// language this Mac could not transcribe), the engines and the
+    /// languages of the one picked (docs/meeting-recorder.md, "A language
+    /// this Mac cannot transcribe"). One that cannot be used is dimmed.
+    func showPending(language: String, why: String?, engines: [(engine: TranscriptEngine, unusable: String?)],
+                     languages: @escaping (TranscriptEngine) async -> [(id: String, name: String)]) {
+        showState("Not transcribed yet: " + (why ?? "\(MeetingTranscriber.shortName(of: language)) can't be transcribed on this Mac."))
+        pendingLanguage = language
+        languagesOf = languages
+        engineIDs = engines.map(\.engine)
+        engineMenu.removeAllItems()
+        for each in engines {
+            engineMenu.addItem(withTitle: each.engine.title)
+            engineMenu.lastItem?.isEnabled = each.unusable == nil
+            engineMenu.lastItem?.toolTip = each.unusable
+        }
+        engineMenu.selectItem(at: engines.firstIndex { $0.unusable == nil } ?? 0)
         languageMenu.isHidden = false
+        engineMenu.isHidden = engines.count < 2
         transcribeButton.isHidden = false
+        loadPendingLanguages()
+        needsLayout = true
+    }
+
+    /// The picked engine's languages: the recording's own when it has it,
+    /// else the Mac's.
+    private func loadPendingLanguages() {
+        let index = engineMenu.indexOfSelectedItem
+        guard let languagesOf, engineIDs.indices.contains(index) else { return }
+        let engine = engineIDs[index]
         Task {
-            let languages = await MeetingTranscriber.languages()
+            let languages = await languagesOf(engine)
+            guard engineIDs.indices.contains(engineMenu.indexOfSelectedItem), engineIDs[engineMenu.indexOfSelectedItem] == engine else { return }
             languageIDs = languages.map(\.id)
             languageMenu.removeAllItems()
             languageMenu.addItems(withTitles: languages.map(\.name))
-            let first = languageIDs.firstIndex { $0.hasPrefix(Locale.current.language.languageCode?.identifier ?? "en") } ?? 0
+            let first = languageIDs.firstIndex(of: pendingLanguage)
+                ?? languageIDs.firstIndex { $0.hasPrefix(Locale.current.language.languageCode?.identifier ?? "en") } ?? 0
             if !languageIDs.isEmpty { languageMenu.selectItem(at: first) }
+            transcribeButton.isEnabled = !languageIDs.isEmpty
             needsLayout = true
         }
-        needsLayout = true
     }
 
     /// The hints by what the keys do now: a line selected, or none (⌘K
@@ -1507,10 +1550,14 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
 
     @objc private func languagePicked() {}
 
+    @objc private func enginePicked() {
+        loadPendingLanguages()
+    }
+
     @objc private func transcribePressed() {
-        let index = languageMenu.indexOfSelectedItem
-        guard languageIDs.indices.contains(index) else { return }
-        onTranscribe?(languageIDs[index])
+        let (index, engine) = (languageMenu.indexOfSelectedItem, engineMenu.indexOfSelectedItem)
+        guard languageIDs.indices.contains(index), engineIDs.indices.contains(engine) else { return }
+        onTranscribe?(languageIDs[index], engineIDs[engine])
     }
 
     // MARK: - Selecting, editing (phase 4)
@@ -1846,9 +1893,12 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         let block = stateHeight + (languageMenu.isHidden ? 0 : 44)
         state.frame = NSRect(x: (width - min(inner, 460)) / 2, y: middle - block / 2, width: min(inner, 460), height: stateHeight)
         languageMenu.sizeToFit()
+        engineMenu.sizeToFit()
         transcribeButton.sizeToFit()
-        let rowWidth = languageMenu.frame.width + 12 + transcribeButton.frame.width
-        languageMenu.frame.origin = NSPoint(x: (width - rowWidth) / 2, y: state.frame.maxY + 14)
+        let engineWidth = engineMenu.isHidden ? 0 : engineMenu.frame.width + 12
+        let rowWidth = engineWidth + languageMenu.frame.width + 12 + transcribeButton.frame.width
+        engineMenu.frame.origin = NSPoint(x: (width - rowWidth) / 2, y: state.frame.maxY + 14)
+        languageMenu.frame.origin = NSPoint(x: (width - rowWidth) / 2 + engineWidth, y: state.frame.maxY + 14)
         transcribeButton.frame.origin = NSPoint(x: languageMenu.frame.maxX + 12, y: state.frame.maxY + 12)
         dropRing.frame = bounds.insetBy(dx: 8, dy: 8)
     }

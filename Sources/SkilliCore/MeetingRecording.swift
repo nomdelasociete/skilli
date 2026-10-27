@@ -198,6 +198,9 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
     /// The skillies run on it (phase 5): from ⌘K, or on their own after its
     /// transcript; the last 20.
     public var skillies: [SkillieRun]?
+    /// Why its first transcript was not made, as said (`pending`): the
+    /// window says it; nil once one is.
+    public var failed: String?
     /// A Transcribe Again not made as skil.li quit (waiting its turn, or
     /// being made): made at the next launch in that language, with that
     /// engine; nil once it is made, or failed.

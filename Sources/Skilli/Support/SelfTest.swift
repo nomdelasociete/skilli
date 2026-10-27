@@ -24045,6 +24045,7 @@ final class SelfTest {
         if !aborted { await skilliesForRecordingsRunOnThem(center, controller) }
         if !aborted { await transcriptToolsAskEveryTime(center, folder) }
         if !aborted { await reminderLinkOpensTheMeeting(center, folder) }
+        if !aborted { await pendingSaysWhyAndOffersTheEngines(center) }
     }
 
     /// The stand-in meeting (invented people): Camille is the user, Margot
@@ -24538,6 +24539,40 @@ final class SelfTest {
             && declined.status != 0 && refusedFirst && linkAsked
         record(name, passed,
                "list_recordings (\(listedStatus)) \(listed.split(separator: "\n").count) lines, no words \(noWords); get_transcript asked \(asked) \(hints), named \(named), given (\(transcript.status)) \(transcript.output.count) characters; recording_followup asked \(askedAgain) \(followHints), says where \(whereSaid), Esc (\(declined.status)); one not there refused with no card \(refusedFirst) (\(unknown.output.prefix(80))); the link asked and declined \(linkAsked)",
+               nil)
+    }
+
+    /// A recording whose first transcript failed (docs/meeting-recorder-views.md,
+    /// "Said, and not said"): its window says why, as it failed, and offers
+    /// the engines (Better transcription dimmed until downloaded) and the
+    /// languages of the one picked, then Transcribe.
+    private func pendingSaysWhyAndOffersTheEngines(_ center: RecorderCenter) async {
+        let name = "Recorder: a recording whose transcript failed says why in its window, with the engines (one not downloaded dimmed) and the picked one's languages"
+        guard let folder = seedMeeting(center, title: "Supplier call", script: Array(Self.launchReview.prefix(3))),
+              var meeting = center.recordings.read(folder) else {
+            record(name, false, "no meeting", nil)
+            return
+        }
+        let why = "The speech model could not be read."
+        meeting.state = .pending
+        meeting.engine = nil
+        meeting.failed = why
+        try? center.recordings.write(meeting, to: folder)
+        for file in ["transcript.json", "transcript.md"] { try? FileManager.default.removeItem(at: folder.appendingPathComponent(file)) }
+        center.open(folder)
+        guard let controller = await waitUntil(timeout: 5, { center.window(for: folder) != nil }).flatMap({ _ in center.window(for: folder) }) else {
+            record(name, false, "no window", nil)
+            return
+        }
+        defer { controller.close() }
+        let said = await waitUntil(timeout: 2) { controller.shownState == "Not transcribed yet: \(why)" } != nil
+        let engines = controller.shownPendingEngines
+        let whisperReady = BetterTranscription.isReady()
+        let offered = engines.map(\.title) == ["macOS", "Better transcription"] && engines.first?.enabled == true
+            && engines.last?.enabled == whisperReady
+        await captureRecordingWindow(controller, as: "recorder-pending")
+        record(name, said && offered,
+               "“\(controller.shownState)” \(said); engines \(engines.map { "\($0.title) \($0.enabled ? "on" : "dimmed")" }.joined(separator: ", ")), Better transcription \(whisperReady ? "downloaded" : "not downloaded") \(offered)",
                nil)
     }
 
