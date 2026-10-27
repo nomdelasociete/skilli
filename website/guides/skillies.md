@@ -22,6 +22,10 @@ an agent.
   Skillies.
 - **In the menu bar**: a skillie can keep its last line there, refreshed
   on its own (a price, a build status, a counter).
+- **For recordings**: one whose header says `@skilli.forRecordings true`
+  is in a recording's ⌘K and gets that recording's folder. Settings →
+  Recorder → *After each transcript* can run one on every new recording
+  (off until you pick one).
 
 ![Settings → Skillies: the folder, and each skillie with its shortcut](images/settings-skillies.png)
 
@@ -52,6 +56,9 @@ shortcuts and skillies… through skil.li.
   Always Ask, Always Allow or Block.
 - **Your Rules** (Settings → Ask) apply to agents too: "never send an
   email without asking me".
+- **Your recordings**: an agent can list them (titles, dates, lengths,
+  never the words). Reading a transcript asks you every time,
+  naming the recording; there is no Always Allow for it.
 - **Connected Servers**: the MCP servers your commands and Ask may use,
   imported from Claude Code, Claude for Mac, Codex and Cursor.
 

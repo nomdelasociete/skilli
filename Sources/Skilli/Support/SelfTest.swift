@@ -28470,6 +28470,14 @@ final class SelfTest {
         }
         await pause(400)
         await captureGuide("recorder-window", [controller.nsWindow])
+        // ⌘K over it: the SI's actions first, named by the provider.
+        controller.showActions()
+        guard await waitUntil(timeout: 2, { controller.isShowingActions }) != nil else {
+            return guideMissing("recorder-actions", "⌘K listed nothing")
+        }
+        await pause(300)
+        await captureGuide("recorder-actions", [controller.nsWindow])
+        controller.closeActions()
     }
 
     /// Three window layouts of invented windows on this Mac's display
