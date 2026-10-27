@@ -16779,12 +16779,13 @@ final class SelfTest {
         record(name, passed, details.joined(separator: "; "), nil)
     }
 
-    /// "800 TRY in eur" typed key by key from a seeded table: from "800
-    /// TRY" on, the first row is the conversion before any ↩ (the user's
+    /// "800 try in eur" typed key by key from a seeded table (the keys
+    /// typed here carry no Shift: a code in any case reads), from "800
+    /// try" on, the first row is the conversion before any ↩ (the user's
     /// currency while "in e…" is typed, then EUR); ⌘K adds Copy with
     /// Currency and Copy Rate; ↩ pastes it and EUR becomes TRY's default.
     private func launcherConvertsCurrencies() async {
-        let name = "Currencies: “800 TRY in eur” answers as it is typed, before ↩; ⌘K Copy with Currency and Copy Rate; ↩ pastes it; EUR learned for TRY"
+        let name = "Currencies: “800 try in eur” answers as it is typed, before ↩; ⌘K Copy with Currency and Copy Rate; ↩ pastes it; EUR learned for TRY"
         guard let store = context.currencyRates else {
             record(name, false, "no exchange rates in this run", nil)
             return
@@ -16801,7 +16802,7 @@ final class SelfTest {
         textView.string = ""
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
         _ = await waitUntil(timeout: 0.5) { self.context.launcher.isVisible }
-        let typed = "800 TRY in eur"
+        let typed = "800 try in eur"
         var typedSoFar = ""
         var steady = true
         var seen: [String] = []
@@ -16811,7 +16812,7 @@ final class SelfTest {
             // What the calculator answers for the text so far, as the launcher asks it.
             let text = typedSoFar
             let expected = Calculator.evaluate(text, currency: store.context)
-            guard text.count >= "800 TRY".count else { continue }
+            guard text.count >= "800 try".count else { continue }
             let shown = await waitUntil(timeout: 1) {
                 self.context.launcher.query == text && self.context.launcher.resultTitles.first == expected?.display
             } != nil
