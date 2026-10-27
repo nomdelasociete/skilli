@@ -228,7 +228,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             view.showPending(language: record.language)
         }
         linesShown = transcribing == nil && !waiting && transcript != nil
-        view.canTranscribeAgain = linesShown
+        view.canTranscribeAgain = linesShown && working == nil
         updateHints()
         if player == nil, !loadingPlayer { loadPlayer() }
     }
@@ -696,6 +696,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     func showWork(_ text: String?) {
         working = text
         view.setWork(text)
+        // Not made again under an action reading it.
+        view.canTranscribeAgain = linesShown && text == nil
     }
 
     /// The summary as it is written (`header` says who and when), or read
@@ -946,7 +948,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// The panel under its button: the language and the engine, used as
     /// picked.
     func showTranscribeAgain() {
-        guard draft != nil || record.state == .done else { return }
+        guard draft != nil || record.state == .done, working == nil else { return }
         againPanel?.close()
         let panel = TranscribeAgainPanel(language: made?.language ?? record.language,
                                          engine: TranscriptEngine(stored: made?.engine ?? record.engine) ?? .macOS,
