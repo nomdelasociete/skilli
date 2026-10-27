@@ -30,6 +30,8 @@ final class Recordings: Sendable {
     }
 
     static let record = "meeting.json"
+    /// The summary, when the user asked for one (phase 5).
+    static let summary = "summary.md"
 
     /// A new recording's folder, made now: its name the date and the title,
     /// " 2" after it when one of that name is there.

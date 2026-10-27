@@ -12,8 +12,9 @@ import UniformTypeIdentifiers
 /// play small beside it, in step (phase 3). A line selected is edited in
 /// place, given to another speaker or deleted, a speaker renamed, every
 /// change written at once and undone with ⌘Z; Transcribe Again; a file
-/// dropped on it is imported (phase 4). Built when opened, released when
-/// closed.
+/// dropped on it is imported (phase 4). ⌘K lists what can be done with
+/// the recording; its chapters head the lines and mark the waveform, its
+/// summary tops them (phase 5). Built when opened, released when closed.
 @MainActor
 final class RecordingWindowController: NSObject, NSWindowDelegate {
     let folder: URL
@@ -29,6 +30,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private var correcting: [ObjectIdentifier: CMTime] = [:]
     /// Loading it: once, however often the window is shown meanwhile.
     private var loadingPlayer = false
+    /// Where to play from once the player is loaded (a link's `at`).
+    private var playOnLoad: Double?
     private var observer: Any?
     /// The transcript as edited here, and its changes (⌘Z, ⇧⌘Z) while
     /// the window is open; nil until there is one.
@@ -63,6 +66,21 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var languages: (TranscriptEngine) async -> [(id: String, name: String)] = { _ in await MeetingTranscriber.languages() }
     /// Settings → Recorder (Better transcription's line, a click).
     var onOpenSettings: (() -> Void)?
+    /// ⌘K's summary, chapters, action items, recap mail (phase 5): done by
+    /// the center, the window told what to show.
+    var onFollowUp: ((URL, MeetingFollowUp.Action) -> Void)?
+    /// Remove Chapters: gone at once, the undo card offers them back.
+    var onRemoveChapters: ((URL, MeetingRecord) -> Void)?
+    /// Who writes for the AI's actions, as their titles name it ("Claude").
+    var provider: () -> String = { "Claude" }
+    /// The summary shown above the lines, from `summary.md`: its words and
+    /// its header ("SUMMARY BY CLAUDE · 14:52").
+    private(set) var summary: (text: String, header: String)?
+    /// What the AI is doing for this recording now, as the window says it
+    /// ("Writing the summary with Claude · Haiku…"); nil: nothing.
+    private(set) var working: String?
+    /// ⌘K's list over the window.
+    private let actionPanel = ActionPanelView()
     /// Whether this window says once what Better transcription does (the
     /// record's transcript made by macOS's engine, never said before);
     /// asked once per window, when it shows a transcript.
@@ -101,6 +119,12 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         view.onTranscribeAgain = { [weak self] in self?.showTranscribeAgain() }
         view.onDrop = { [weak self] urls in self?.onImport?(urls) }
         view.onHint = { [weak self] in self?.onOpenSettings?() }
+        actionPanel.isHidden = true
+        actionPanel.bottom = 48
+        actionPanel.autoresizingMask = [.width, .height]
+        actionPanel.onRun = { [weak self] action in self?.runAction(action) }
+        actionPanel.onDismiss = { [weak self] in self?.closeActions() }
+        view.addSubview(actionPanel)
         if let ownName {
             Task { [weak self] in
                 let name = await ownName()
@@ -129,6 +153,15 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var shownPictures: Int { view.pictureCount }
     var isEditingLine: Bool { view.editingLine != nil }
     var shownHint: String? { view.hintText }
+    var shownWork: String? { view.workText }
+    var shownChapters: [MeetingRecord.Chapter] { view.chapters }
+    var shownChapterMarks: Int { view.chapterMarks }
+    var shownSummary: String? { view.summaryShown }
+    var isShowingActions: Bool { !actionPanel.isHidden }
+    var shownActions: [(title: String, key: String?)] { actionPanel.shown.map { ($0.title, $0.key?.label) } }
+    var shownActionsNote: String? { actionPanel.note }
+    /// Where a chapter's heading is on screen, to click it.
+    func screenFrame(ofChapter index: Int) -> NSRect? { view.screenFrame(ofChapter: index) }
     /// Where the screen's and the webcam's players are, and the sound's.
     var pictureTimes: [Double] { pictures.map { $0.currentTime().seconds } }
     /// Where a line is on screen (AppKit's coordinates), to click it.
@@ -165,7 +198,9 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
                 history = TranscriptHistory()
             }
             made = (transcript.language, transcript.engine)
-            view.showLines(fresh.lines, names: fresh.names, slides: Self.slides(in: folder))
+            summary = Self.summary(in: folder, record: record)
+            view.showLines(fresh.lines, names: fresh.names, slides: Self.slides(in: folder), chapters: record.chapters, summary: summary)
+            view.setChapterMarks(record.chapters)
             considerBetterHint()
         } else if record.state == .transcribing || record.state == .stopped {
             // Its turn not come yet (another being made, or the launch's).
@@ -216,6 +251,24 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     func present() {
         Foreground.bring(window)
+    }
+
+    /// The summary in `summary.md`, and its header: who wrote it and when
+    /// ("SUMMARY BY CLAUDE · 14:52"); nil when there is none.
+    static func summary(in folder: URL, record: MeetingRecord) -> (text: String, header: String)? {
+        guard let file = try? String(contentsOf: folder.appendingPathComponent(Recordings.summary), encoding: .utf8) else { return nil }
+        let text = MeetingFollowUp.summary(inFile: file)
+        guard !text.isEmpty else { return nil }
+        return (text, summaryHeader(record.summarized))
+    }
+
+    /// "SUMMARY BY CLAUDE · 14:52"; another day's, its date too.
+    static func summaryHeader(_ summarized: MeetingRecord.Summarized?) -> String {
+        guard let summarized else { return "SUMMARY" }
+        let who = summarized.by.components(separatedBy: " · ").first ?? summarized.by
+        let when = Calendar.current.isDateInToday(summarized.at) ? summarized.at.formatted(date: .omitted, time: .shortened)
+            : summarized.at.formatted(.dateTime.day().month(.abbreviated).hour().minute())
+        return "SUMMARY BY \(who.uppercased()) · \(when)"
     }
 
     /// The slides read on screen, from `slides.json` (none: empty).
@@ -273,11 +326,24 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
                 }
             }
             self.view.played(to: 0, playing: false)
+            if let start = self.playOnLoad {
+                self.playOnLoad = nil
+                self.seek(to: start, play: true)
+            }
         }
         Task.detached(priority: .utility) {
             let peaks = urls.map { RecordingWindowController.peaks(of: $0) }
             await MainActor.run { [weak self] in self?.view.setPeaks(me: peaks[0], them: peaks[1]) }
         }
+    }
+
+    /// A link's `at` (a reminder's way back): the line said then selected,
+    /// played from its start.
+    func play(from seconds: Double) {
+        let line = MeetingTranscript.line(at: seconds + 0.05, in: view.lines)
+        if let line { view.select(line, scrollToIt: true) }
+        let start = line.map { view.lines[$0].start } ?? seconds
+        if player == nil { playOnLoad = start } else { seek(to: start, play: true) }
     }
 
     func togglePlay() {
@@ -374,12 +440,17 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// transcript and ⌘⌫ deletes the recording; ⌘↩ shows the folder; ⌘Z
     /// ⇧⌘Z undo and redo the lines' changes.
     fileprivate func key(_ event: NSEvent) -> Bool {
+        if !actionPanel.isHidden {
+            actionPanelKey(event)
+            return true
+        }
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
         // Letters by what they type (on AZERTY, Z is W's key): C and Z are
         // the only ones the window takes.
         let letter = event.charactersIgnoringModifiers?.lowercased()
         let code: Int = switch letter {
         case "c": kVK_ANSI_C
+        case "k": kVK_ANSI_K
         case "z": kVK_ANSI_Z
         case let typed? where typed.count == 1 && typed.first?.isLetter == true: -1
         default: Int(event.keyCode)
@@ -414,10 +485,132 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             undo()
         case ([.command, .shift], kVK_ANSI_Z):
             redo()
+        case (.command, kVK_ANSI_K):
+            showActions()
         default:
             return false
         }
         return true
+    }
+
+    // MARK: - ⌘K (phase 5)
+
+    /// The recording's actions over the window (docs/meeting-recorder-views.md,
+    /// "The recording's window: ⌘K"), the launcher's list and keys.
+    func showActions() {
+        guard actionPanel.isHidden else { return }
+        actionPanel.frame = view.bounds
+        actionPanel.show(actions(), for: record.title)
+        view.setHints([("Run", "↩"), ("Back", "esc")])
+        // Its keys come to the window, whatever had the keyboard.
+        if window.firstResponder !== view.linesTable { window.makeFirstResponder(view.linesTable) }
+    }
+
+    func closeActions() {
+        guard !actionPanel.isHidden else { return }
+        actionPanel.isHidden = true
+        updateHints()
+    }
+
+    private func runAction(_ action: LauncherAction) {
+        if !action.keepsOpen { closeActions() }
+        action.run()
+    }
+
+    /// What ⌘K lists now: the AI's actions (once there is a transcript), the
+    /// window's own, the copies, what removes. Each AI action names who it
+    /// goes to; one asked while another is being done says so in the list.
+    func actions() -> [LauncherAction] {
+        let by = provider()
+        var list: [LauncherAction] = []
+        func ai(_ title: String, _ symbol: String, _ action: MeetingFollowUp.Action) -> LauncherAction {
+            LauncherAction(title: title, symbol: symbol, keepsOpen: working != nil) { [weak self] in
+                guard let self else { return }
+                if let working = self.working {
+                    self.actionPanel.say("\(working.replacingOccurrences(of: "…", with: "")): one at a time.")
+                    return
+                }
+                self.onFollowUp?(self.folder, action)
+            }
+        }
+        if linesShown {
+            list.append(ai(summary == nil ? "Summary by \(by)" : "Summary Again by \(by)", "text.append", .summary))
+            if record.seconds >= MeetingFollowUp.shortestForChapters {
+                list.append(ai(record.chapters.isEmpty ? "Chapters by \(by)" : "Chapters Again by \(by)", "list.bullet.indent", .chapters))
+            }
+            list.append(ai("Action Items to Reminders by \(by)", "checklist", .actionItems))
+            list.append(ai(summary == nil ? "Recap Mail to the Attendees by \(by)" : "Recap Mail to the Attendees", "envelope", .recapMail))
+            list.append(LauncherAction(title: "Transcribe Again…", symbol: "arrow.triangle.2.circlepath") { [weak self] in self?.showTranscribeAgain() })
+        }
+        list.append(LauncherAction(title: "Show in Finder", symbol: "folder", key: .openSecond) { [weak self] in
+            guard let self else { return }
+            self.onShowFolder?(self.folder)
+        })
+        if linesShown {
+            list.append(LauncherAction(title: "Copy Transcript", symbol: "doc.on.doc", key: .copy, group: .copy) { [weak self] in self?.copyTranscript() })
+        }
+        if let summary {
+            list.append(LauncherAction(title: "Copy Summary", symbol: "doc.on.doc", group: .copy) {
+                AIActionController.writeAnswerToClipboard(summary.text)
+            })
+        }
+        if linesShown, !record.chapters.isEmpty {
+            list.append(LauncherAction(title: "Remove Chapters", symbol: "trash", group: .remove) { [weak self] in
+                guard let self else { return }
+                self.onRemoveChapters?(self.folder, self.record)
+            })
+        }
+        list.append(LauncherAction(title: "Delete Recording", symbol: "trash", key: .delete, group: .remove) { [weak self] in
+            guard let self else { return }
+            self.player?.pause()
+            self.pictures.forEach { $0.pause() }
+            self.onDelete?(self.folder, self.record)
+        })
+        return list
+    }
+
+    /// A key while ⌘K's list is open, as the launcher's: arrows move, ↩
+    /// runs the selected action, an action's own key runs it, letters
+    /// filter, esc or ⌘K close it. A key that does nothing here says so.
+    private func actionPanelKey(_ event: NSEvent) {
+        let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        let code = Int(event.keyCode)
+        if code == kVK_Escape || (flags == .command && event.charactersIgnoringModifiers?.lowercased() == "k") {
+            closeActions()
+        } else if code == kVK_UpArrow {
+            actionPanel.move(by: -1, wraps: !event.isARepeat)
+        } else if code == kVK_DownArrow {
+            actionPanel.move(by: 1, wraps: !event.isARepeat)
+        } else if let step = LauncherController.controlStep(event) {
+            actionPanel.move(by: step, wraps: !event.isARepeat)
+        } else if let key = LauncherAction.Key(event) {
+            if let found = key == .open ? actionPanel.selectedAction : LauncherAction.find(key, in: actionPanel.actions) {
+                runAction(found)
+            } else if key == .open {
+                actionPanel.say("No action matches “\(actionPanel.filter)”: ⌫ shows them again.")
+            } else {
+                actionPanel.say("Nothing on \(key.label) here: pick an action in the list.")
+            }
+        } else if code == kVK_Delete, flags.isEmpty || flags == .option {
+            actionPanel.deleteBackward()
+        } else if flags.isDisjoint(with: [.command, .control]), let text = event.characters, !text.isEmpty,
+                  text.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) && $0.properties.generalCategory != .privateUse }) {
+            actionPanel.type(text)
+        }
+    }
+
+    /// What the AI is doing for this recording, at the bottom of the lines
+    /// (nil: done, the line goes).
+    func showWork(_ text: String?) {
+        working = text
+        view.setWork(text)
+    }
+
+    /// The summary as it is written (`header` says who and when), or read
+    /// again once written.
+    func showSummary(_ text: String, header: String) {
+        summary = text.isEmpty ? nil : (text, header)
+        view.setSummary(summary)
     }
 
     /// ⌘C: the transcript, as `transcript.md` has it.
@@ -446,6 +639,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     }
 
     private func updateHints() {
+        // Under ⌘K's list: its own, until it closes.
+        guard actionPanel.isHidden else { return }
         view.updateHints(canUndo: linesShown && history.canUndo)
     }
 
@@ -742,15 +937,29 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     /// transcription); a click acts on it.
     private let hintLine = NSButton(title: "", target: nil, action: nil)
     var hintText: String? { hintLine.isHidden ? nil : hintLine.title }
+    /// What the AI is doing for the recording (phase 5), a spinner before it.
+    private let workLine = NSTextField(labelWithString: "")
+    private let workSpinner = NSProgressIndicator()
+    var workText: String? { workLine.isHidden ? nil : workLine.stringValue }
     private(set) var lines: [TranscriptLine] = []
     private(set) var names: [String: String] = [:]
-    /// What the table shows: the lines said and the slides read, by time.
+    /// The chapters heading the lines, and the summary above them (phase 5).
+    private(set) var chapters: [MeetingRecord.Chapter] = []
+    private var summary: (text: String, header: String)?
+    var summaryShown: String? { summary?.text }
+    var chapterMarks: Int { waveform.chapters.count }
+    /// What the table shows: the summary, then the lines said, the slides
+    /// read and the chapters' headings, by time.
     private enum Row {
+        case summary
+        case chapter(MeetingRecord.Chapter, first: Bool)
         case said(TranscriptLine)
         case shown(SlideLog.Slide)
 
         var start: Double {
             switch self {
+            case .summary: -1
+            case .chapter(let chapter, _): chapter.start
             case .said(let line): line.start
             case .shown(let slide): slide.start
             }
@@ -782,6 +991,8 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     /// Lines that came while a line was edited or renamed: shown once it
     /// ends (a reload would take the editor's cell away).
     private var linesLater: (lines: [TranscriptLine], names: [String: String], slides: [SlideLog.Slide])?
+    /// The summary written meanwhile: shown once the line's editor closes.
+    private var summaryLater = false
     private var heights: [Int: CGFloat] = [:]
     /// The lines' width as last laid out: their heights are measured at it.
     private var linesWidth: CGFloat = 0
@@ -865,8 +1076,15 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         hintLine.alignment = .left
         hintLine.target = self
         hintLine.action = #selector(hintPressed)
+        workLine.font = .systemFont(ofSize: 12)
+        workLine.textColor = .secondaryLabelColor
+        workLine.lineBreakMode = .byTruncatingTail
+        workLine.isHidden = true
+        workSpinner.style = .spinning
+        workSpinner.controlSize = .small
+        workSpinner.isDisplayedWhenStopped = false
         for subview in [title, about, transcribeAgainButton, playButton, time, waveform, topLine, scroll, picturesColumn, state, languageMenu,
-                        transcribeButton, hintLine, bottomLine, hints, dropRing] as [NSView] {
+                        transcribeButton, hintLine, workSpinner, workLine, bottomLine, hints, dropRing] as [NSView] {
             addSubview(subview)
         }
         registerForDraggedTypes([.fileURL])
@@ -881,17 +1099,25 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         about.stringValue = line
     }
 
-    func showLines(_ lines: [TranscriptLine], names: [String: String], slides: [SlideLog.Slide] = []) {
+    func showLines(_ lines: [TranscriptLine], names: [String: String], slides: [SlideLog.Slide] = [],
+                   chapters: [MeetingRecord.Chapter], summary: (text: String, header: String)?) {
+        self.chapters = chapters
+        self.summary = summary
         guard editingLine == nil, renamingLine == nil else {
             linesLater = (lines, names, slides)
             return
         }
         linesLater = nil
+        summaryLater = false
         self.lines = lines
         self.names = names
         self.slides = slides
         measureSpeakers()
-        setRows(lines.map(Row.said) + slides.map(Row.shown))
+        // A chapter heads the line it starts on (the rows keep this order
+        // when they start together).
+        let starts = MeetingTranscript.chapterLines(chapters, in: lines).sorted { $0.key < $1.key }
+        let headings = starts.enumerated().map { index, start in Row.chapter(start.value, first: index == 0) }
+        setRows((summary == nil ? [] : [Row.summary]) + headings + lines.map(Row.said) + slides.map(Row.shown))
         if let selected = selectedLine, selected >= lines.count { selectedLine = nil }
         heights = [:]
         table.reloadData()
@@ -908,7 +1134,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     /// scroll kept, `select` selected.
     func update(lines: [TranscriptLine], names: [String: String], select line: Int?) {
         let origin = scroll.contentView.bounds.origin
-        showLines(lines, names: names, slides: slides)
+        showLines(lines, names: names, slides: slides, chapters: chapters, summary: summary)
         scroll.contentView.scroll(to: origin)
         scroll.reflectScrolledClipView(scroll.contentView)
         select(line.flatMap { lines.indices.contains($0) ? $0 : nil }, scrollToIt: true)
@@ -925,6 +1151,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     func showState(_ text: String) {
         // The lines go: a line being edited or renamed is put back first.
         linesLater = nil
+        summaryLater = false
         endEditing(keep: false)
         endRenaming(keep: false)
         lines = []
@@ -962,16 +1189,65 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         needsLayout = true
     }
 
-    /// The hints by what the keys do now: a line selected, or none.
+    /// The hints by what the keys do now: a line selected, or none (⌘K
+    /// lists the rest, Show in Finder ⌘↩ and Delete ⌘⌫ among them).
     func updateHints(canUndo: Bool) {
         let space = playing ? "Pause" : "Play"
         if selectedLine != nil {
             hints.setHints([("Edit", "↩"), ("Next Speaker", "⇥"), ("Rename", "⌥↩"), ("Copy Line", "⌘C"), ("Delete Line", "⌘⌫")])
         } else if lines.isEmpty {
-            hints.setHints([(space, "space"), ("Show in Finder", "⌘↩"), ("Delete", "⌘⌫")])
+            hints.setHints([(space, "space"), ("Actions", "⌘K")])
         } else {
-            hints.setHints([(space, "space"), ("Copy Transcript", "⌘C"), ("Show in Finder", "⌘↩"), ("Delete", "⌘⌫")])
+            hints.setHints([(space, "space"), ("Copy Transcript", "⌘C"), ("Actions", "⌘K")])
         }
+    }
+
+    /// ⌘K's own hints while its list is open.
+    func setHints(_ shown: [(label: String, key: String)]) {
+        hints.setHints(shown)
+    }
+
+    /// The lines' table: the window's keys reach the controller through it.
+    var linesTable: NSTableView { table }
+
+    /// What the AI is doing now, at the bottom of the lines; nil: nothing.
+    func setWork(_ text: String?) {
+        workLine.isHidden = text == nil
+        workLine.stringValue = text ?? ""
+        if text == nil { workSpinner.stopAnimation(nil) } else { workSpinner.startAnimation(nil) }
+        needsLayout = true
+    }
+
+    /// The summary above the lines, as it is written; nil: none. Its row
+    /// alone is drawn again while the lines stay where they are; a line
+    /// being edited keeps its editor (shown once it closes).
+    func setSummary(_ shown: (text: String, header: String)?) {
+        let had = summary != nil
+        summary = shown
+        guard editingLine == nil, renamingLine == nil else {
+            summaryLater = true
+            return
+        }
+        guard !lines.isEmpty || !rows.isEmpty else { return }
+        if had, shown != nil, case .summary? = rows.first {
+            heights[0] = nil
+            table.reloadData(forRowIndexes: [0], columnIndexes: [0])
+            table.noteHeightOfRows(withIndexesChanged: [0])
+        } else {
+            update(lines: lines, names: names, select: selectedLine)
+        }
+    }
+
+    /// The chapters' marks on the waveform.
+    func setChapterMarks(_ chapters: [MeetingRecord.Chapter]) {
+        waveform.chapters = chapters
+    }
+
+    func screenFrame(ofChapter index: Int) -> NSRect? {
+        let headings = rows.indices.filter { if case .chapter = rows[$0] { true } else { false } }
+        guard headings.indices.contains(index), let window else { return nil }
+        table.scrollRowToVisible(headings[index])
+        return window.convertToScreen(table.convert(table.rect(ofRow: headings[index]), to: nil))
     }
 
     /// The rows by time (a slide before the line said as it showed),
@@ -1195,10 +1471,14 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     }
 
     /// The lines that came meanwhile, unless the change just kept showed
-    /// newer ones.
+    /// newer ones; the summary written meanwhile.
     private func showLinesLater() {
-        guard let later = linesLater else { return }
-        showLines(later.lines, names: later.names, slides: later.slides)
+        if let later = linesLater {
+            showLines(later.lines, names: later.names, slides: later.slides, chapters: chapters, summary: summary)
+        } else if summaryLater {
+            summaryLater = false
+            update(lines: lines, names: names, select: selectedLine)
+        }
     }
 
     #if SKILLI_SELFTEST
@@ -1254,6 +1534,18 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        switch rows[row] {
+        case .summary:
+            let cell = tableView.makeView(withIdentifier: SummaryCell.identifier, owner: nil) as? SummaryCell ?? SummaryCell()
+            if let summary { cell.show(summary.text, header: summary.header) }
+            return cell
+        case .chapter(let chapter, let first):
+            let cell = tableView.makeView(withIdentifier: ChapterCell.identifier, owner: nil) as? ChapterCell ?? ChapterCell()
+            cell.show(chapter, first: first)
+            return cell
+        case .said, .shown:
+            break
+        }
         let cell = tableView.makeView(withIdentifier: LineCell.identifier, owner: nil) as? LineCell ?? LineCell()
         // The line being edited or renamed, asked for again as it grows:
         // left as it is (shown again, its editor would close under the
@@ -1265,6 +1557,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         switch rows[row] {
         case .said(let line): cell.show(line, name: MeetingVoices.name(of: line.speaker, in: names))
         case .shown(let slide): cell.show(slide)
+        case .summary, .chapter: break
         }
         cell.onName = { [weak self, weak cell] in
             guard let self, let cell, let line = self.rowOfLine.firstIndex(of: self.table.row(for: cell)) else { return }
@@ -1283,11 +1576,20 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         if let height = heights[row] { return height }
         // Before the first layout: the window's starting width.
-        let text: String = switch rows[row] {
-        case .said(let line): line.text
-        case .shown(let slide): LineCell.text(of: slide)
+        let width = linesWidth > 0 ? linesWidth : 712
+        let text: String
+        switch rows[row] {
+        case .summary:
+            let height = summary.map { SummaryCell.height(of: $0.text, width: width) } ?? 1
+            heights[row] = height
+            return height
+        case .chapter(_, let first):
+            heights[row] = ChapterCell.height(first: first)
+            return ChapterCell.height(first: first)
+        case .said(let line): text = line.text
+        case .shown(let slide): text = LineCell.text(of: slide)
         }
-        var height = LineCell.height(of: text, width: linesWidth > 0 ? linesWidth : 712, speakerWidth: speakerWidth)
+        var height = LineCell.height(of: text, width: width, speakerWidth: speakerWidth)
         // Being edited: the words as typed.
         if let line = editingLine, line < rowOfLine.count, rowOfLine[line] == row, let typed = editedText {
             height = max(height, LineCell.height(of: typed, width: linesWidth > 0 ? linesWidth : 712, speakerWidth: speakerWidth))
@@ -1301,6 +1603,8 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     @objc private func lineClicked() {
         let row = table.clickedRow
         guard row >= 0, row < rows.count else { return }
+        // The summary is read, not played.
+        if case .summary = rows[row] { return }
         scrolledAt = nil
         if let line = rowOfLine.firstIndex(of: row) {
             if editingLine != nil, editingLine != line { endEditing(keep: true) }
@@ -1383,9 +1687,14 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         picturesColumn.isHidden = columnWidth == 0
         picturesColumn.frame = NSRect(x: width - inset - columnWidth, y: y + 16, width: columnWidth, height: max(0, bottom - y - 32))
         let linesInner = columnWidth > 0 ? inner - columnWidth - 20 : inner
+        // Under the lines: the hint taught once, what the AI is doing.
         let hintHeight: CGFloat = hintLine.isHidden ? 0 : 30
+        let workHeight: CGFloat = workLine.isHidden ? 0 : 28
         hintLine.frame = NSRect(x: inset, y: bottom - hintHeight + 6, width: linesInner, height: 18)
-        scroll.frame = NSRect(x: inset - 12, y: y + 1, width: linesInner + 24, height: max(0, bottom - y - 1 - hintHeight))
+        let workY = bottom - hintHeight - workHeight + 6
+        workSpinner.frame = NSRect(x: inset, y: workY + 1, width: 16, height: 16)
+        workLine.frame = NSRect(x: inset + 22, y: workY, width: max(0, linesInner - 22), height: 18)
+        scroll.frame = NSRect(x: inset - 12, y: y + 1, width: linesInner + 24, height: max(0, bottom - y - 1 - hintHeight - workHeight))
         let tableWidth = scroll.contentSize.width
         if tableWidth != linesWidth {
             linesWidth = tableWidth
@@ -1643,6 +1952,106 @@ private final class LineCell: NSTableCellView {
     }
 }
 
+/// The summary above the lines (phase 5): who wrote it and when,
+/// letterspaced, then its Markdown as the card draws it.
+private final class SummaryCell: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("transcript-summary")
+    private static let font = NSFont.systemFont(ofSize: 13)
+    private static let headerHeight: CGFloat = 16
+    private let header = NSTextField(labelWithString: "")
+    private let words = NSTextField(wrappingLabelWithString: "")
+    private let line = HairlineView()
+
+    init() {
+        super.init(frame: .zero)
+        identifier = Self.identifier
+        header.font = Theme.Font.sectionHeader
+        header.textColor = .secondaryLabelColor
+        words.isSelectable = false
+        for subview in [header, words, line] { addSubview(subview) }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    override var isFlipped: Bool { true }
+
+    func show(_ text: String, header title: String) {
+        header.attributedStringValue = NSAttributedString(string: title, attributes: [
+            .font: Theme.Font.sectionHeader, .foregroundColor: NSColor.secondaryLabelColor, .kern: 0.6,
+        ])
+        words.attributedStringValue = Self.styled(text)
+        needsLayout = true
+    }
+
+    static func styled(_ text: String) -> NSAttributedString {
+        CardMarkdown.render(text, font: font, color: .labelColor)
+    }
+
+    /// Its height at `width`: the header, the summary wrapped, a margin
+    /// and the hairline under it.
+    static func height(of text: String, width: CGFloat) -> CGFloat {
+        let measured = styled(text).boundingRect(with: NSSize(width: max(80, width - LineCell.padding * 2), height: .greatestFiniteMagnitude),
+                                                 options: [.usesLineFragmentOrigin, .usesFontLeading]).height
+        return LineCell.vertical + headerHeight + 6 + ceil(measured) + 18
+    }
+
+    override func layout() {
+        super.layout()
+        let x = LineCell.padding
+        let width = max(0, bounds.width - x * 2)
+        header.frame = NSRect(x: x, y: LineCell.vertical, width: width, height: Self.headerHeight)
+        words.frame = NSRect(x: x, y: header.frame.maxY + 6, width: width, height: max(0, bounds.height - header.frame.maxY - 6 - 18))
+        line.frame = NSRect(x: x, y: bounds.height - 6, width: width, height: 1)
+    }
+}
+
+/// A chapter's heading among the lines (phase 5): its title, its time on
+/// the right; a hairline above it but the first.
+private final class ChapterCell: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("transcript-chapter")
+    private let title = NSTextField(labelWithString: "")
+    private let time = NSTextField(labelWithString: "")
+    private let line = HairlineView()
+    private var first = false
+
+    init() {
+        super.init(frame: .zero)
+        identifier = Self.identifier
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+        title.lineBreakMode = .byTruncatingTail
+        time.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        time.textColor = .tertiaryLabelColor
+        time.alignment = .right
+        for subview in [line, title, time] { addSubview(subview) }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    override var isFlipped: Bool { true }
+
+    func show(_ chapter: MeetingRecord.Chapter, first: Bool) {
+        self.first = first
+        title.stringValue = chapter.title
+        time.stringValue = MeetingTranscript.clock(chapter.start)
+        line.isHidden = first
+        setAccessibilityLabel("Chapter: \(chapter.title)")
+        needsLayout = true
+    }
+
+    static func height(first: Bool) -> CGFloat { first ? 34 : 46 }
+
+    override func layout() {
+        super.layout()
+        let x = LineCell.padding
+        let top: CGFloat = first ? 8 : 20
+        line.frame = NSRect(x: x, y: 8, width: max(0, bounds.width - x * 2), height: 1)
+        time.frame = NSRect(x: bounds.width - x - 60, y: top + 3, width: 60, height: 16)
+        title.frame = NSRect(x: x, y: top, width: max(0, bounds.width - x * 2 - 68), height: 20)
+    }
+}
+
 /// A speaker's name: a click opens its menu of names (the pointing hand
 /// says so).
 private final class SpeakerLabel: NSTextField {
@@ -1742,8 +2151,21 @@ private final class WaveformView: NSView {
     var them: [Float] = [] { didSet { needsDisplay = true } }
     var names: [String: String] = [:] { didSet { needsDisplay = true } }
     var lanesShown: [Speaker] = Speaker.allCases { didSet { needsDisplay = true } }
-    var duration: Double = 0 { didSet { needsDisplay = true } }
+    var duration: Double = 0 {
+        didSet {
+            needsDisplay = true
+            updateTips()
+        }
+    }
     var position: Double = 0 { didSet { if position != oldValue { needsDisplay = true } } }
+    /// The chapters' starts, marked across the lanes (phase 5); the pointer
+    /// over one says its title.
+    var chapters: [MeetingRecord.Chapter] = [] {
+        didSet {
+            needsDisplay = true
+            updateTips()
+        }
+    }
     var onSeek: ((Double, Bool) -> Void)?
     private static let labelWidth: CGFloat = 48
 
@@ -1782,10 +2204,40 @@ private final class WaveformView: NSView {
             }
         }
         if duration > 0 {
+            // The chapters: a line across the lanes, a notch on top.
+            NSColor.tertiaryLabelColor.setFill()
+            for chapter in chapters {
+                let x = chapterX(chapter)
+                NSRect(x: x - 0.5, y: 0, width: 1, height: bounds.height).fill()
+                let notch = NSBezierPath()
+                notch.move(to: NSPoint(x: x - 4, y: 0))
+                notch.line(to: NSPoint(x: x + 4, y: 0))
+                notch.line(to: NSPoint(x: x, y: 5))
+                notch.close()
+                notch.fill()
+            }
             let x = lanes.minX + CGFloat(min(1, position / duration)) * lanes.width
             NSColor.labelColor.setFill()
             NSRect(x: x.rounded() - 0.5, y: 0, width: 1, height: bounds.height).fill()
         }
+    }
+
+    private func chapterX(_ chapter: MeetingRecord.Chapter) -> CGFloat {
+        (lanes.minX + CGFloat(min(1, max(0, chapter.start / max(duration, 0.001)))) * lanes.width).rounded()
+    }
+
+    /// Each chapter's title, said by the pointer over its mark.
+    private func updateTips() {
+        removeAllToolTips()
+        guard duration > 0 else { return }
+        for chapter in chapters {
+            addToolTip(NSRect(x: chapterX(chapter) - 5, y: 0, width: 10, height: bounds.height), owner: chapter.title as NSString, userData: nil)
+        }
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        updateTips()
     }
 
     override func mouseDown(with event: NSEvent) {

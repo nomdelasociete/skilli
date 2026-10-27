@@ -319,6 +319,11 @@ final class SelfTest {
         /// back; speakers renamed and merged; Transcribe Again (keys,
         /// ~10 min).
         case voices
+        /// Only the recorder's phase 5 in a recording's window: ⌘K's list,
+        /// the recap mail, the summary, chapters, action items to a scratch
+        /// Reminders list, each undo, a reminder's link back; the AI's parts
+        /// on the provider set up here (keys, ~5 min).
+        case followups
         /// Only Better transcription (phase 4): its download from a stand-in
         /// server (the model on this Mac's ~/recorder-measure: cancelled,
         /// resumed, a wrong file refused), its row in Settings → Recorder,
@@ -736,6 +741,10 @@ final class SelfTest {
         if scope == .whisper {
             window.center()
             return await finish(after: [whisperChecks])
+        }
+        if scope == .followups {
+            window.center()
+            return await finish(after: [followUpsChecks])
         }
         if scope == .whisperdownload {
             return await finish(after: [betterTranscriptionRealDownload])
@@ -23948,6 +23957,325 @@ final class SelfTest {
             for app in apps { app.terminate() }
             _ = await waitUntil(timeout: 3) { apps.allSatisfy(\.isTerminated) }
         }
+    }
+
+    // MARK: - Phase 5: the recording's window, ⌘K and its follow-ups (docs/meeting-recorder-views.md)
+
+    /// Phase 5's checks in the window: ⌘K's list and its keys; the recap
+    /// mail (its summary written first by the user's AI), the summary made
+    /// again and its undo, chapters (headings, the waveform's marks,
+    /// transcript.md, Remove Chapters and its undo), action items to
+    /// Reminders (a scratch list) and their undo, a reminder's link back,
+    /// a short meeting without chapters. The AI's parts on the provider set
+    /// up on this Mac, skipped without one.
+    private func followUpsChecks() async {
+        guard let center = context.recorder() else {
+            record("Recorder phase 5", false, "no recorder", nil)
+            return
+        }
+        guard let folder = seedMeeting(center, title: "Onboarding launch review", script: Self.launchReview) else {
+            record("Recorder phase 5", false, "the stand-in meeting could not be written", nil)
+            return
+        }
+        center.open(folder)
+        guard let controller = await waitForWindow(center, folder) else {
+            record("Recorder phase 5", false, "no window for the stand-in meeting", nil)
+            return
+        }
+        await followUpsListedInActions(controller)
+        if aborted { return }
+        if context.ai.writer(for: nil) == nil { await context.ai.refresh() }
+        guard context.ai.writer(for: nil) != nil else {
+            checks.append(Check(name: "Recorder phase 5: the AI's actions", passed: true, skipped: true,
+                                detail: "no writing provider set up on this Mac", latencyMs: nil))
+            return
+        }
+        await recapMailWritesTheSummaryFirst(center, controller)
+        if !aborted { await summaryWrittenAgainAndUndone(center, controller) }
+        if !aborted { await chaptersHeadTheLines(center, controller) }
+        if !aborted { await actionItemsBecomeReminders(center, controller) }
+        if !aborted { await reminderLinkOpensTheMeeting(center, folder) }
+        controller.close()
+    }
+
+    /// The stand-in meeting (invented people): Camille is the user, Margot
+    /// Martin and Paul Arnaud the other side. Three subjects: the launch
+    /// date (decided), the pricing page (open), the next steps (Paul's
+    /// screens by Friday, Margot's release note by Monday, Camille's room).
+    private static let launchReview: [(at: Double, voice: Voice, words: String)] = [
+        (2, .me, "Hello both, thanks for joining. Today we settle the onboarding launch, the pricing page and who does what next."),
+        (14, .them, "Hi Camille. On the launch, engineering says the new onboarding is ready for the third of November."),
+        (31, .them(2), "Design agrees. The last screens are almost done."),
+        (45, .me, "Then let's ship it on the third of November, behind a flag for the first week."),
+        (62, .them, "Agreed, behind a flag for a week, then on for everyone if the numbers hold."),
+        (80, .them(2), "Fine with me. We watch sign-ups and the support tickets that week."),
+        (100, .me, "Good, that's decided: the third of November, behind a flag for one week."),
+        (135, .me, "Next, the pricing page. Does it change with the launch?"),
+        (150, .them, "I'm not sure yet. Sales wants the new plans on it, but legal has not read the terms."),
+        (175, .them(2), "If the plans change, I need two more days for the page design."),
+        (200, .me, "So we leave it open until legal answers."),
+        (220, .them, "Yes, it stays open. I'll ask legal again this week."),
+        (245, .them(2), "And we keep the old page until then."),
+        (275, .me, "Last, the next steps. Paul, can you send the final screens by Friday?"),
+        (290, .them(2), "Yes, I'll send the final screens by Friday."),
+        (305, .them, "I'll write the release note by Monday."),
+        (325, .me, "And I'll book the room for the demo on the fourth."),
+        (345, .them, "Great. Should we invite the support team to the demo?"),
+        (360, .me, "Yes, I'll invite them too."),
+        (380, .them(2), "Then we're done. Thanks, everyone."),
+        (395, .me, "Thanks, see you on the fourth.")
+    ]
+
+    /// A recording written as the recorder writes one once transcribed (no
+    /// sound: the lines alone), in the self-test's Recordings folder.
+    private func seedMeeting(_ center: RecorderCenter, title: String, script: [(at: Double, voice: Voice, words: String)],
+                             seconds: Double? = nil) -> URL? {
+        let started = Date.now.addingTimeInterval(-2 * 3600)
+        guard let folder = try? center.recordings.makeFolder(title: title, started: started) else { return nil }
+        let lines = script.map { line in
+            TranscriptLine(speaker: line.voice, words: line.words.split(separator: " ").enumerated().map { index, word in
+                TranscriptWord(String(word), start: line.at + Double(index) * 0.35, end: line.at + Double(index) * 0.35 + 0.3)
+            })
+        }
+        var record = MeetingRecord(title: title, started: started, language: "en-US", recorder: nil)
+        record.state = .done
+        record.engine = TranscriptEngine.macOS.rawValue
+        record.seconds = seconds ?? ((lines.last?.end ?? 0) + 5)
+        record.stopped = started.addingTimeInterval(record.seconds)
+        record.speakers = ["me": "Camille", "them": "Margot Martin", "them2": "Paul Arnaud"]
+        record.attendees = ["Margot Martin", "Paul Arnaud"]
+        record.addresses = ["margot.martin@example.com", "paul.arnaud@example.com"]
+        let file = MeetingTranscript.File(language: "en-US", engine: TranscriptEngine.macOS.rawValue, lines: lines)
+        // Both tracks, silent, its length: the player seeks as in a recording.
+        for speaker in Speaker.allCases {
+            guard Self.writeSilence(to: folder.appendingPathComponent(speaker.file), seconds: record.seconds) else { return nil }
+        }
+        do {
+            try file.encoded().write(to: folder.appendingPathComponent("transcript.json"))
+            try MeetingTranscriber.markdown(record, lines: lines).write(to: folder.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)
+            try center.recordings.write(record, to: folder)
+        } catch {
+            return nil
+        }
+        return folder
+    }
+
+    /// `seconds` of silence as the recorder writes a track (AAC, 48 kHz, mono).
+    nonisolated private static func writeSilence(to url: URL, seconds: Double) -> Bool {
+        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48000, channels: 1, interleaved: false),
+              let file = try? AVAudioFile(forWriting: url, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 48000,
+                                                                     AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64000],
+                                          commonFormat: .pcmFormatFloat32, interleaved: false),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 48000) else { return false }
+        buffer.frameLength = 48000
+        for _ in 0..<Int(seconds.rounded(.up)) {
+            guard (try? file.write(from: buffer)) != nil else { return false }
+        }
+        return true
+    }
+
+    private func waitForWindow(_ center: RecorderCenter, _ folder: URL) async -> RecordingWindowController? {
+        _ = await waitUntil(timeout: 5) { center.window(for: folder).map { !$0.shownLines.isEmpty } ?? false }
+        return center.window(for: folder)
+    }
+
+    /// ⌘K in the window: the list over its bottom right, the AI's actions
+    /// first, named by the provider; typing filters, ⌫ shows them again,
+    /// esc closes; ⌘C in it copies the transcript; the hint bar says
+    /// "Actions ⌘K". A meeting under 3 minutes has no Chapters.
+    private func followUpsListedInActions(_ controller: RecordingWindowController) async {
+        let name = "Recorder phase 5: ⌘K in a recording's window lists its actions (the AI's first, named by the provider), filters as typed, ⌘C copies the transcript, esc closes; a meeting under 3 minutes has no Chapters"
+        guard await recordingWindowHasKeys(controller, name) else { return }
+        let hints = controller.shownHints
+        await pressKey("k", flags: .maskCommand)
+        let opened = await waitUntil(timeout: 2) { controller.isShowingActions } != nil
+        let provider = context.ai.defaultModel.provider.title
+        let titles = controller.shownActions.map(\.title)
+        let expected = ["Summary by \(provider)", "Chapters by \(provider)", "Action Items to Reminders by \(provider)",
+                        "Recap Mail to the Attendees by \(provider)", "Transcribe Again…", "Show in Finder", "Copy Transcript", "Delete Recording"]
+        await captureRecordingWindow(controller, as: "recorder-actions")
+        for character in "sum" { _ = await typeCharacter(character) }
+        let filtered = await waitUntil(timeout: 1) { controller.shownActions.map(\.title) == ["Summary by \(provider)"] } != nil
+        for _ in 0..<3 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+        let back = await waitUntil(timeout: 1) { controller.shownActions.count == expected.count } != nil
+        NSPasteboard.general.clearContents()
+        await pressKey("c", flags: .maskCommand)
+        let copied = await waitUntil(timeout: 2) { !controller.isShowingActions && NSPasteboard.general.string(forType: .string)?.hasPrefix("# Onboarding launch review") == true } != nil
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 2) { controller.isShowingActions }
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let closed = await waitUntil(timeout: 1) { !controller.isShowingActions && controller.shownHints.last == "Actions" } != nil
+        // A short one: no Chapters.
+        let shortTitles = context.recorder().flatMap { center in
+            seedMeeting(center, title: "Quick check", script: Array(Self.launchReview.prefix(3)), seconds: 150)
+        }.flatMap { folder -> [String]? in
+            guard let center = context.recorder() else { return nil }
+            center.open(folder)
+            defer { center.window(for: folder)?.close() }
+            return center.window(for: folder)?.actions().map(\.title)
+        } ?? []
+        _ = await recordingWindowHasKeys(controller, name)
+        let passed = opened && titles == expected && hints == ["Play", "Copy Transcript", "Actions"] && filtered && back && copied && closed
+            && !shortTitles.isEmpty && !shortTitles.contains { $0.hasPrefix("Chapters") }
+        record(name, passed,
+               "hints \(hints.joined(separator: " · ")); ⌘K \(opened): \(titles.joined(separator: " · ")); “sum” \(filtered), ⌫ \(back); ⌘C \(copied); esc \(closed); under 3 min: \(shortTitles.joined(separator: " · "))",
+               nil)
+    }
+
+    /// ⌘K → "recap" ↩: no summary yet, so the AI writes it first (the
+    /// window says so, the summary shows above the lines as it comes, then
+    /// is written to summary.md), then the mail app gets a new message to
+    /// the attendees, the summary in it; nothing sent.
+    private func recapMailWritesTheSummaryFirst(_ center: RecorderCenter, _ controller: RecordingWindowController) async {
+        let name = "Recorder phase 5: Recap Mail with no summary yet: the user's AI writes the summary first (said in the window, shown above the lines, written to summary.md), then a new mail to the attendees holds it; nothing sent"
+        guard await recordingWindowHasKeys(controller, name) else { return }
+        var opened: [URL] = []
+        let openURL = center.followUps.openURL
+        center.followUps.openURL = { opened.append($0) }
+        defer { center.followUps.openURL = openURL }
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 2) { controller.isShowingActions }
+        for character in "recap" { _ = await typeCharacter(character) }
+        let one = controller.shownActions.count == 1
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let started = ContinuousClock.now
+        let working = await waitUntil(timeout: 5) { controller.shownWork?.hasPrefix("Writing the summary for the recap with") == true } != nil
+        let workSaid = controller.shownWork ?? ""
+        let streamed = await waitUntil(timeout: 120) { (controller.shownSummary?.count ?? 0) > 80 } != nil
+        if working { await captureRecordingWindow(controller, as: "recorder-working") }
+        let mailed = await waitUntil(timeout: 180) { !opened.isEmpty } != nil
+        let seconds = Double((ContinuousClock.now - started).components.seconds)
+        let file = (try? String(contentsOf: controller.folder.appendingPathComponent(Recordings.summary), encoding: .utf8)) ?? ""
+        let mail = opened.last.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+        let to = mail?.path ?? ""
+        let subject = mail?.queryItems?.first { $0.name == "subject" }?.value ?? ""
+        let body = mail?.queryItems?.first { $0.name == "body" }?.value ?? ""
+        let summary = MeetingFollowUp.summary(inFile: file).lowercased()
+        let says = summary.contains("flag") && summary.contains("november")
+        let record = center.recordings.read(controller.folder)
+        _ = await waitUntil(timeout: 2) { controller.shownWork == nil }
+        await captureRecordingWindow(controller, as: "recorder-summary")
+        let passed = one && working && streamed && mailed && file.hasPrefix("# Summary of Onboarding launch review") && says
+            && record?.summarized != nil && to == "margot.martin@example.com,paul.arnaud@example.com" && subject == "Recap: Onboarding launch review"
+            && body.hasPrefix("Here is the recap of Onboarding launch review") && !body.contains("###") && controller.shownWork == nil
+            && controller.shownSummary != nil
+        self.record(name, passed,
+                    "one action \(one); “\(workSaid)” \(working), shown as written \(streamed), mail \(mailed) after \(Int(seconds)) s: to \(to), “\(subject)”, \(body.count) characters; summary.md \(file.count) characters, says the flag and November \(says); by \(record?.summarized?.by ?? "nobody")",
+                    nil)
+    }
+
+    /// Summary Again: the one before to the Trash, the undo card says so,
+    /// its ⌘Z puts it back.
+    private func summaryWrittenAgainAndUndone(_ center: RecorderCenter, _ controller: RecordingWindowController) async {
+        let name = "Recorder phase 5: Summary Again by the user's AI replaces the summary; the one before goes to the Trash and the undo card's ⌘Z puts it back"
+        guard await recordingWindowHasKeys(controller, name) else { return }
+        let before = controller.shownSummary ?? ""
+        let provider = context.ai.defaultModel.provider.title
+        let titled = controller.actions().first?.title == "Summary Again by \(provider)"
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 2) { controller.isShowingActions }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let popover = context.aiActions.popover
+        let replaced = await waitUntil(timeout: 180) { popover.isVisible && popover.shownTitle == "Summary Replaced" } != nil
+        let after = controller.shownSummary ?? ""
+        await pressKey("z", flags: .maskCommand)
+        let undone = await waitUntil(timeout: 3) { controller.shownSummary == before } != nil
+        let onDisk = MeetingFollowUp.summary(inFile: (try? String(contentsOf: controller.folder.appendingPathComponent(Recordings.summary), encoding: .utf8)) ?? "")
+        record(name, titled && replaced && !after.isEmpty && undone && onDisk == before,
+               "titled “Summary Again” \(titled); replaced, card \(replaced) (\(after.count) characters); ⌘Z \(undone), on disk the one before \(onDisk == before)", nil)
+    }
+
+    /// Chapters by the user's AI: headings in the lines on the lines they
+    /// start, marks on the waveform, `meeting.json` and `transcript.md`;
+    /// a click on one plays from there; Remove Chapters and its ⌘Z.
+    private func chaptersHeadTheLines(_ center: RecorderCenter, _ controller: RecordingWindowController) async {
+        let name = "Recorder phase 5: Chapters by the user's AI: headings on the lines they start (the first on the first line), marks on the waveform, written to meeting.json and transcript.md; a click plays from one; Remove Chapters and its ⌘Z"
+        guard await recordingWindowHasKeys(controller, name) else { return }
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 2) { controller.isShowingActions }
+        for character in "chap" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let working = await waitUntil(timeout: 5) { controller.shownWork?.hasPrefix("Finding chapters with") == true } != nil
+        let made = await waitUntil(timeout: 180) { !controller.shownChapters.isEmpty && controller.shownWork == nil } != nil
+        let chapters = center.recordings.read(controller.folder)?.chapters ?? []
+        let starts = Set(controller.shownLines.map(\.start))
+        let onLines = !chapters.isEmpty && chapters.allSatisfy { starts.contains($0.start) } && chapters.first?.start == controller.shownLines.first?.start
+        let markdown = (try? String(contentsOf: controller.folder.appendingPathComponent("transcript.md"), encoding: .utf8)) ?? ""
+        let headings = markdown.components(separatedBy: "\n").filter { $0.hasPrefix("## ") }.count
+        await captureRecordingWindow(controller, as: "recorder-chapters")
+        var clicked = false
+        if chapters.count > 1, let frame = controller.screenFrame(ofChapter: 1) {
+            await click(frame)
+            clicked = await waitUntil(timeout: 2) { abs(controller.currentTime - chapters[1].start) < 1.5 } != nil
+            if controller.playing { await pressKey(nil, code: CGKeyCode(kVK_Space)) }
+        }
+        _ = await recordingWindowHasKeys(controller, name)
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 2) { controller.isShowingActions }
+        for character in "remove" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let popover = context.aiActions.popover
+        let removed = await waitUntil(timeout: 3) { controller.shownChapters.isEmpty && popover.shownTitle == "Chapters Removed" } != nil
+        await pressKey("z", flags: .maskCommand)
+        let back = await waitUntil(timeout: 3) { controller.shownChapters == chapters } != nil
+        let passed = working && made && chapters.count >= 2 && onLines && controller.shownChapterMarks == chapters.count && headings == chapters.count
+            && clicked && removed && back
+        record(name, passed,
+               "said \(working), made \(made): \(chapters.map { "\(MeetingTranscript.clock($0.start)) \($0.title)" }.joined(separator: " · ")); on lines \(onLines), \(controller.shownChapterMarks) marks, \(headings) headings in transcript.md; click \(clicked); removed \(removed), ⌘Z \(back)",
+               nil)
+    }
+
+    /// Action Items to Reminders (a scratch list): each at once, the user's
+    /// own as written, someone else's with their name first, a day said
+    /// put on the calendar, the meeting's link in each; the undo card's ⌘Z
+    /// takes them all back.
+    private func actionItemsBecomeReminders(_ center: RecorderCenter, _ controller: RecordingWindowController) async {
+        let name = "Recorder phase 5: Action Items to Reminders: the user's AI reads them, each a reminder at once (someone else's with their name first, “by Friday” a Friday, the meeting's link and time in it); the undo card's ⌘Z takes them back"
+        guard let book = center.followUps.reminders else {
+            record(name, false, "no reminders", nil)
+            return
+        }
+        guard await recordingWindowHasKeys(controller, name) else { return }
+        book.testItems = []
+        defer { book.testItems = nil }
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 2) { controller.isShowingActions }
+        for character in "action" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let popover = context.aiActions.popover
+        let added = await waitUntil(timeout: 180) { popover.isVisible && popover.shownTitle.hasSuffix("Added") } != nil
+        let requests = book.addedForTest
+        let titles = requests.map(\.title)
+        let screens = requests.first { $0.title.hasPrefix("Paul") && $0.title.lowercased().contains("screen") }
+        let friday = screens?.due.map { Calendar.current.component(.weekday, from: $0) == 6 && $0 >= Calendar.current.startOfDay(for: controller.record.started) } ?? false
+        let room = requests.first { $0.title.lowercased().contains("room") }
+        let mine = room.map { !$0.title.contains(":") } ?? false
+        let linked = requests.allSatisfy { ($0.url ?? "").hasPrefix("skilli://record/open?recording=") && $0.notes.hasPrefix("From “Onboarding launch review”") }
+        let card = popover.shownTitle
+        await pressKey("z", flags: .maskCommand)
+        let takenBack = await waitUntil(timeout: 3) { book.testItems?.isEmpty == true } != nil
+        let passed = added && requests.count >= 3 && screens != nil && friday && mine && linked && takenBack
+        record(name, passed,
+               "card “\(card)” \(added): \(titles.joined(separator: " · ")); Paul's screens on a Friday \(friday); the room the user's \(mine); links and notes \(linked); ⌘Z \(takenBack)",
+               nil)
+    }
+
+    /// A reminder's link back (`skilli://record/open?recording=…&at=…`):
+    /// the window, the line said then selected.
+    private func reminderLinkOpensTheMeeting(_ center: RecorderCenter, _ folder: URL) async {
+        let name = "Recorder phase 5: skilli://record/open?recording=…&at=290 opens the recording's window on the line said then"
+        guard let links = context.links else {
+            record(name, false, "no link runner", nil)
+            return
+        }
+        center.window(for: folder)?.close()
+        await links.openNow(SkilliLink.openRecording(folder.lastPathComponent, at: 291).url)
+        let opened = await waitUntil(timeout: 3) { center.window(for: folder)?.selectedLine != nil } != nil
+        let line = center.window(for: folder).flatMap { controller in controller.selectedLine.map { controller.shownLines[$0].start } }
+        center.window(for: folder).map { if $0.playing { $0.togglePlay() } }
+        await links.openNow(SkilliLink.openRecording("No such meeting", at: nil).url)
+        let missing = links.log.last == "missing recording No such meeting"
+        record(name, opened && line == 290 && missing, "opened \(opened), the line at \(line.map(MeetingTranscript.clock) ?? "none"); a missing one said \(missing) (\(links.log.last ?? ""))", nil)
     }
 
     // MARK: - Meeting recorder (docs/meeting-recorder.md, phase 1)

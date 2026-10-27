@@ -83,7 +83,7 @@ final class PrivacyMapTests: XCTestCase {
             var setup = PrivacyMap.Setup()
             setup.askWriter = provider
             let destination = PrivacyMap.Destination(writer: provider)
-            XCTAssertEqual(ids(destination, setup), ["ask", "followUps", "mail", "fieldWords", "plannedSteps"], provider.title)
+            XCTAssertEqual(ids(destination, setup), ["ask", "followUps", "mail", "fieldWords", "plannedSteps", "meetings"], provider.title)
             for other in PrivacyMap.Destination.allCases where other != destination {
                 XCTAssertFalse(ids(other, setup).contains("ask"), "\(provider.title): not to \(other.title)")
             }
@@ -392,7 +392,7 @@ final class PrivacyMapTests: XCTestCase {
     func testPaneLinesNameNoAIAndPointToPanesThatExist() {
         let setups = [PrivacyMap.Setup(), everything]
         for pane in ["ask", "aiAccounts", "commands", "tools", "windows", "clipboard", "snippets", "github", "backup", "yourDetails", "launcher",
-                     "skillies"] {
+                     "skillies", "recorder"] {
             for setup in setups {
                 let line = PrivacyMap.line(for: pane, setup)
                 XCTAssertNotNil(line, pane)
@@ -459,6 +459,17 @@ final class PrivacyMapTests: XCTestCase {
         XCTAssertEqual(section.status, "Better transcription's download, only when you click it")
         XCTAssertEqual(section.rows.first?.flow.pane, "recorder")
         XCTAssertTrue(PrivacyMap.betterTranscription.sends.contains("nothing of yours"))
+    }
+
+    /// A recording's transcript goes to Ask's writer only from its window's
+    /// ⌘K; the pane says so, and where.
+    func testRecordedMeetingsGoToAsksWriterOnlyFromTheirWindow() {
+        XCTAssertTrue(ids(.claude, everything).contains("meetings"))
+        XCTAssertFalse(ids(.chatGPT, everything).contains("meetings"))
+        XCTAssertEqual(PrivacyMap.line(for: "recorder", everything)?.text.hasPrefix(
+            "When you pick a summary, chapters, action items or a recap in a recording's ⌘K, its transcript goes to Claude."), true)
+        XCTAssertEqual(PrivacyMap.line(for: "recorder", PrivacyMap.Setup())?.text.hasPrefix("Nothing else leaves this Mac."), true)
+        XCTAssertTrue(PrivacyMap.meetings.sends.contains("never its sound or pictures"))
     }
 
     func testLinkPreviewsGoToTheirSites() {

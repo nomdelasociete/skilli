@@ -83,6 +83,7 @@
 		33C9C65D8243133BB06ACF20 /* LearningStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91F615E8629D0BEBB0099BA6 /* LearningStore.swift */; };
 		3458F91518FCC1DE155474DD /* PromptEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBCB8DCB6EE8E95CC3A8413B /* PromptEditor.swift */; };
 		35B949867D126D8D0B3EF014 /* WhisperCpp in Frameworks */ = {isa = PBXBuildFile; productRef = 5C451B003AB005A5728F154B /* WhisperCpp */; };
+		3640771F1A09D7BB4C02A19F /* RecordingFollowUps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90B7BF5796FEB3580C0E2EFE /* RecordingFollowUps.swift */; };
 		3648BD533630540E2C4FEC3C /* FileSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 841CD04238111CBF6D55A4C8 /* FileSearch.swift */; };
 		36A51C83A013C4B69C998477 /* AskRouteCorpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76392668F260E84E713200D6 /* AskRouteCorpus.swift */; };
 		372116AFF85F0EE47B69A1E5 /* RecorderChild.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E9D2B2DD5473B8CC8517E27 /* RecorderChild.swift */; };
@@ -297,6 +298,7 @@
 		CC7C2D4B082AD7F5C12DE109 /* MenuBarSkillies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DF855C181119E9A4FFA2AC /* MenuBarSkillies.swift */; };
 		CD5EE21A12FA15B98B37EC53 /* AddShortcutSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D07CDB42AF7CA9B447FB64 /* AddShortcutSheet.swift */; };
 		CE2C31E6575DD75556295640 /* SkillieEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1652A2C8726A9428E6EDCBA2 /* SkillieEnvironment.swift */; };
+		CF69A0117B0FFEAC560382A1 /* MeetingFollowUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FC2DCFD5F3A0C7F5B65178B /* MeetingFollowUp.swift */; };
 		CF69A58D5DE3C7E6193DE53E /* ClipboardRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25CAA8284FAB4B0E13B42626 /* ClipboardRules.swift */; };
 		CF9D2511DC34F623FB2281F0 /* PasteCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2BE8AC7ABCBB95696CCC88 /* PasteCheck.swift */; };
 		CFB77934FE109E56BF935AE2 /* BrowserTabReuse.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C1A2A8F02B651FD0E3DF92 /* BrowserTabReuse.swift */; };
@@ -637,7 +639,9 @@
 		8E6D581AD87DE821705933C4 /* ScheduledAsk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledAsk.swift; sourceTree = "<group>"; };
 		8F8ECF7BCD7E0CE2A77DF0EE /* AskSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskSchedule.swift; sourceTree = "<group>"; };
 		8FB368F0A0595301FA6F64AD /* SnippetLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetLibrary.swift; sourceTree = "<group>"; };
+		8FC2DCFD5F3A0C7F5B65178B /* MeetingFollowUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingFollowUp.swift; sourceTree = "<group>"; };
 		909C3A5CA605D8B57F2E96C8 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
+		90B7BF5796FEB3580C0E2EFE /* RecordingFollowUps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingFollowUps.swift; sourceTree = "<group>"; };
 		91117DB0BC9995D196DB1F61 /* LinkCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkCardView.swift; sourceTree = "<group>"; };
 		916CDD21647F22C4D1C18D23 /* SystemCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemCommand.swift; sourceTree = "<group>"; };
 		91AE12E3FE514EF3A2F63647 /* ModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPicker.swift; sourceTree = "<group>"; };
@@ -891,6 +895,7 @@
 				F27A226061344551B2C0E8BB /* MCPToolList.swift */,
 				F6BF0BBE7DD28A30361C6987 /* MeetingAlert.swift */,
 				D91CD308B15A5E0DC4E6BC74 /* MeetingBar.swift */,
+				8FC2DCFD5F3A0C7F5B65178B /* MeetingFollowUp.swift */,
 				115A6B490420DDF7ECF9B5E5 /* MeetingMoment.swift */,
 				A81041CFFEA3339FA692A753 /* MeetingPictures.swift */,
 				5FB001360B30A9859D5118CF /* MeetingRecording.swift */,
@@ -1221,6 +1226,7 @@
 				3DA0BC6066120EAD8ED27716 /* RecorderCenter.swift */,
 				9F7B26FC74873B1F6C43EBC2 /* RecorderIndicator.swift */,
 				BEC0859C6CF39E1EC9EEB7C9 /* RecorderPictures.swift */,
+				90B7BF5796FEB3580C0E2EFE /* RecordingFollowUps.swift */,
 				C2DECA78D37C9A69AC179F0F /* RecordingImport.swift */,
 				043F8667EB239200DFB6157E /* RecordingLibrary.swift */,
 				82B07F23ED5000035F9DD151 /* Recordings.swift */,
@@ -1657,6 +1663,7 @@
 				664D720DE4E16FB9C3456BAA /* MarkdownBlocks.swift in Sources */,
 				F3F28EC722CF8EF122FB6E18 /* MeetingAlert.swift in Sources */,
 				C93CD3DF22722B8F18A5AF75 /* MeetingBar.swift in Sources */,
+				CF69A0117B0FFEAC560382A1 /* MeetingFollowUp.swift in Sources */,
 				BF3E48D2E22DE3E01FA4572D /* MeetingMoment.swift in Sources */,
 				F195ED0CB6AC73F51611FBA2 /* MeetingPictures.swift in Sources */,
 				2761257AF0CC9E9615FED396 /* MeetingRecording.swift in Sources */,
@@ -1871,6 +1878,7 @@
 				079F72F739507947C167C6BA /* RecorderPictures.swift in Sources */,
 				EA8179FDEC8704498842F60F /* RecorderProbe.swift in Sources */,
 				55981B440DA19C9455D20FB3 /* RecorderSyncProbe.swift in Sources */,
+				3640771F1A09D7BB4C02A19F /* RecordingFollowUps.swift in Sources */,
 				EA72D9D5A28B7750D9AA00D4 /* RecordingImport.swift in Sources */,
 				1E089D3D08421938BC11254D /* RecordingLibrary.swift in Sources */,
 				F16DD55F0D0C3835A2426639 /* RecordingWindow.swift in Sources */,

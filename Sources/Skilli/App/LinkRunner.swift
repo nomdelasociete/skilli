@@ -57,6 +57,9 @@ final class LinkRunner {
     /// The recording on now, by its name (nil: none).
     var recordingTitle: () -> String? = { nil }
     var controlRecording: (SkilliLink.RecordingControl) -> Void = { _ in }
+    /// A recording's window, by its folder's name or its title, from a time
+    /// in it; false when there is no such recording.
+    var openRecording: (String, Double?) -> Bool = { _, _ in false }
     /// macOS may bring skil.li forward to open a link: the app the user was
     /// in comes back first, so a window place or a snippet lands there. The
     /// self-test opens links itself, its own window in front: off.
@@ -139,6 +142,12 @@ final class LinkRunner {
             // The panel only: the user's ↩ there imports.
             log.append("import \(file ?? "")")
             if !dryRun { openImport(file.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }) }
+        case .openRecording(let recording, let at):
+            // Its window only: nothing leaves the Mac, nothing changes.
+            log.append("open recording \(recording)")
+            if !dryRun, !openRecording(recording, at) {
+                say("missing recording \(recording)", "No recording “\(recording)” in skil.li: it was deleted, or renamed.")
+            }
         }
     }
 

@@ -298,6 +298,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         center.contactNames = { [weak self] in await self?.aiActions.dictationVocabulary?().phrases ?? [] }
         center.openSettings = { [weak self] pane in self?.settings.show(pane: pane) }
+        // Phase 5: the user's AI, their reminders and mail app.
+        let followUps = center.followUps
+        followUps.ai = ai
+        followUps.reminders = reminderBook
+        followUps.ownName = center.ownName
+        followUps.onPermissionNeeded = { [weak self] permission in self?.permissions.grant(permission) }
+        followUps.ownAddresses = { [contactBook] in
+            guard contactBook.isAllowed, let me = await contactBook.me() else { return [] }
+            return me.emails.map(\.value)
+        }
+        followUps.eventAddresses = { [weak self] link in
+            guard let self, self.calendarBook.isAllowed else { return [] }
+            let event = self.calendarBook.events(from: link.start.addingTimeInterval(-1), to: link.end.addingTimeInterval(1)).first { $0.id == link.id }
+            return event?.attendees.compactMap(\.email) ?? []
+        }
         madeRecorderCenter = center
         return center
     }
@@ -565,6 +580,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         runner.onAlwaysDo = { [toolSettings] goal, app in toolSettings.trustDoLink(goal: goal, app: app, title: "Do It Here") }
         runner.openRecordCard = { [weak self] title in self?.recorderCenter.showCard(title: title, fromOutside: true) }
         runner.openImport = { [weak self] file in self?.recorderCenter.importRecording(selecting: file) }
+        runner.openRecording = { [weak self] name, at in self?.recorderCenter.open(named: name, at: at) ?? false }
         runner.recordingTitle = { [weak self] in
             guard let recorder = self?.madeRecorderCenter?.recorder, recorder.isRecording else { return nil }
             return recorder.title
