@@ -24,7 +24,8 @@ learn them by heart.
 ![The panel after ✦K, listing each next key and its command](images/leader-k.png "After ✦K: each next key and what it does.")
 
 These are the keys skil.li starts with; each one is yours to change or
-remove:
+remove in Settings → Keys, except the launcher's own (opening it, and ⌘,
+inside it), which are in Settings → Launcher:
 
 | Keys | Does |
 | --- | --- |

@@ -54,7 +54,7 @@ Every key is yours to change. These are the ones skil.li starts with:
 
 | Opens | Its key at first |
 | --- | --- |
-| The launcher: apps, files, commands, everything | The keys you chose in the welcome (⌘Space or ✦Space) |
+| The launcher: apps, files, commands, everything | The keys you chose in the welcome (⌘Space, ✦Space or your own) |
 | Ask: say what you want, in your words | ✦A |
 | Your clipboard history | ✦C |
 
