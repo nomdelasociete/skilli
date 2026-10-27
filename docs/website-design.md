@@ -15,6 +15,10 @@ supersede this record; update the relevant section when a choice changes.
 - [Skillies guide](../skillies/README.md): contributions and local installation.
 - [Skillies docs](../skillies/docs/README.md): the reference, published as
   `/skillies/docs/` (generated from the Markdown; the website README says how).
+- [Guides](guides/README.md): how skil.li's features work, in plain words
+  with the exact rules, published as `/guides/` the same way (2026-10-27:
+  a guide only on GitHub is not found by people on the site). The Windows
+  guide first.
 - Native code and relevant tests: what the product actually supports. Check current
   implementations before adding claims; the demos are illustrations, not evidence.
 
@@ -182,7 +186,9 @@ rest of your day. One key away.) shows what the sections above do not:
 clipboard, snippets, emoji, windows, meetings, reminders, do it here,
 dictate, search, GitHub, timers, what leaves the Mac. One sentence each,
 from [Features](FEATURES.md); keys only where they are the app's defaults
-(✦C, ⌃⌘Space, ✦W, ✦D). Add a card when a feature area ships.
+(✦C, ⌃⌘Space, ✦W, ✦D). Add a card when a feature area ships. A card whose
+area has a guide ends with a quiet "How it works" link to it (the Windows
+card → `guides/windows.html`).
 
 The key is called the **Hyper Key** (✦), the name Mac users know from Raycast,
 Karabiner and Hyperkey (2026-10-17: "everyone calls it hyper key"). Not
@@ -200,7 +206,7 @@ on scroll rather than becoming a duplicate logo. Show the GitHub logo/link as
 an OSS navigation element, with a public star count when GitHub's unauthenticated
 API answers. Desktop links jump to real landing sections (launcher, speed, key
 sequences, skillies, BYOK, FAQ), plus the Skillies docs (`skillies/docs/`, next
-to Skillies) and the Manifesto. The docs are also linked where people need
+to Skillies), the Guides (`guides/`, right after Docs) and the Manifesto. The docs are also linked where people need
 them (2026-10-26: reachable only through the collection was not findable):
 the agent-created skillies section ("Write your own: the docs"), the FAQ
 ("Can I write my own commands?"), the collection's nav and every footer. The primary CTA is **Get it**, which opens the
@@ -209,8 +215,8 @@ latest notarised DMG on GitHub) and the Homebrew command. On small screens
 the same links open in a hamburger sheet (focus trap, Escape, `aria-expanded`).
 Preserve responsive layout and keyboard focus states.
 
-The shared footer on the landing page, catalog, docs, manifesto and legal page
-includes FAQ, Docs, Manifesto, Legal & privacy, GitHub, the free/open-source/BYOK line and
+The shared footer on the landing page, catalog, docs, guides, manifesto and legal page
+includes FAQ, Docs, Guides, Manifesto, Legal & privacy, GitHub, the free/open-source/BYOK line and
 “Made by Nom de la société”. A discreet independence/trademark disclaimer follows.
 
 `website/legal.html` follows dsmn.app's publisher/hosting structure, with English
