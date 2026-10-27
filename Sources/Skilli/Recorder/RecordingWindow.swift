@@ -88,6 +88,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private(set) var working: String?
     /// ⌘K's list over the window.
     private let actionPanel = ActionPanelView()
+    /// Keys the list took: their repeats are not new presses.
+    private var heldKeys = HeldKeys()
     /// Whether this window says once what Better transcription does (the
     /// record's transcript made by macOS's engine, never said before);
     /// asked once per window, when it shows a transcript.
@@ -464,10 +466,40 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// transcript and ⌘⌫ deletes the recording; ⌘↩ shows the folder; ⌘Z
     /// ⇧⌘Z undo and redo the lines' changes.
     fileprivate func key(_ event: NSEvent) -> Bool {
-        if !actionPanel.isHidden {
+        // A key the list took, held: its repeats move or type in the list,
+        // else nothing (held ⌘K opens it once, held ↩ runs one action).
+        switch heldKeys.press(event.keyCode, isRepeat: event.isARepeat, listShown: !actionPanel.isHidden,
+                              repeatsInList: Self.repeatsInList(event)) {
+        case .swallowed:
+            return true
+        case .toList:
             actionPanelKey(event)
             return true
+        case .new:
+            break
         }
+        let listed = !actionPanel.isHidden
+        let handled = listed ? { actionPanelKey(event); return true }() : windowKey(event)
+        if handled, listed || !actionPanel.isHidden { heldKeys.took(event.keyCode) }
+        return handled
+    }
+
+    /// A key released: a held one is over.
+    fileprivate func keyReleased(_ event: NSEvent) {
+        heldKeys.released(event.keyCode)
+    }
+
+    /// Keys whose repeats mean something in the list: arrows, ⌃N ⌃P, ⌫, a
+    /// letter typed.
+    private static func repeatsInList(_ event: NSEvent) -> Bool {
+        let code = Int(event.keyCode)
+        if [kVK_UpArrow, kVK_DownArrow, kVK_Delete].contains(code) || LauncherController.controlStep(event) != nil { return true }
+        let flags = event.modifierFlags.intersection([.command, .control])
+        return flags.isEmpty && ![kVK_Return, kVK_ANSI_KeypadEnter, kVK_Escape, kVK_Tab].contains(code)
+    }
+
+    /// The window's own keys, the list closed.
+    private func windowKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
         // Letters by what they type (on AZERTY, Z is W's key): C and Z are
         // the only ones the window takes.
@@ -950,6 +982,12 @@ private final class RecordingWindow: NSWindow {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.type == .keyDown, !(firstResponder is NSText), controller?.key(event) == true { return true }
         return super.performKeyEquivalent(with: event)
+    }
+
+    /// Every key's release, whoever has the keyboard: a held key is over.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyUp { controller?.keyReleased(event) }
+        super.sendEvent(event)
     }
 }
 

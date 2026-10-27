@@ -23986,6 +23986,7 @@ final class SelfTest {
             return
         }
         await followUpsListedInActions(controller)
+        if !aborted { await heldKeysInTheWindow(controller) }
         if aborted { return }
         if context.ai.writer(for: nil) == nil { await context.ai.refresh() }
         guard context.ai.writer(for: nil) != nil else {
@@ -24128,6 +24129,46 @@ final class SelfTest {
             && !shortTitles.isEmpty && !shortTitles.contains { $0.hasPrefix("Chapters") }
         record(name, passed,
                "hints \(hints.joined(separator: " · ")); ⌘K \(opened): \(titles.joined(separator: " · ")); “sum” \(filtered), ⌫ \(back); ⌘C \(copied); esc \(closed); under 3 min: \(shortTitles.joined(separator: " · "))",
+               nil)
+    }
+
+    /// Keys held in the window (a key's auto-repeats): held ⌘K opens the
+    /// list once and leaves it open; held ↩ runs one action and never edits
+    /// the line selected after it; ↓ held moves in the list. Synthetic
+    /// key events, straight to the window's keys.
+    private func heldKeysInTheWindow(_ controller: RecordingWindowController) async {
+        let name = "Recorder phase 5: keys held in a recording's window: ⌘K held opens ⌘K's list once and leaves it open, ↩ held runs one action and edits no line after it, ↓ held moves in the list"
+        let window = controller.nsWindow
+        func key(_ code: Int, _ characters: String, _ flags: NSEvent.ModifierFlags = [], repeat isRepeat: Bool = false, up: Bool = false) -> NSEvent? {
+            NSEvent.keyEvent(with: up ? .keyUp : .keyDown, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
+                             windowNumber: window.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                             isARepeat: isRepeat, keyCode: UInt16(code))
+        }
+        func press(_ code: Int, _ characters: String, _ flags: NSEvent.ModifierFlags = [], repeats: Int = 0) {
+            if let down = key(code, characters, flags) { _ = controller.press(down) }
+            for _ in 0..<repeats { if let again = key(code, characters, flags, repeat: true) { _ = controller.press(again) } }
+            if let up = key(code, characters, flags, up: true) { window.sendEvent(up) }
+        }
+        let arrowDown = String(UnicodeScalar(UInt16(NSDownArrowFunctionKey))!)
+        press(kVK_ANSI_K, "k", .command, repeats: 4)
+        let openOnce = controller.isShowingActions
+        press(kVK_DownArrow, arrowDown, repeats: 3)
+        let moved = controller.isShowingActions
+        press(kVK_Escape, "\u{1B}", repeats: 2)
+        let closed = !controller.isShowingActions
+        // A line selected, then Copy Transcript run with a held ↩.
+        press(kVK_DownArrow, arrowDown)
+        let selected = controller.selectedLine != nil
+        press(kVK_ANSI_K, "k", .command)
+        for character in "copy t" { press(character == " " ? kVK_Space : kVK_ANSI_A, String(character)) }
+        let one = controller.shownActions.map(\.title) == ["Copy Transcript"]
+        NSPasteboard.general.clearContents()
+        press(kVK_Return, "\r", repeats: 3)
+        let ran = !controller.isShowingActions && NSPasteboard.general.string(forType: .string)?.hasPrefix("# Onboarding launch review") == true
+        let noEdit = !controller.isEditingLine
+        press(kVK_Escape, "\u{1B}")
+        record(name, openOnce && moved && closed && selected && one && ran && noEdit,
+               "⌘K held: open once \(openOnce); ↓ held in the list \(moved); esc held: closed \(closed); a line selected \(selected), “copy t” one action \(one), ↩ held: ran \(ran), no line edited \(noEdit)",
                nil)
     }
 

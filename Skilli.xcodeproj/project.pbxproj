@@ -257,6 +257,7 @@
 		B2F4ED9AFC496993B9D5C5BC /* RelayInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5883A013981BCCB2A5C8C645 /* RelayInbox.swift */; };
 		B30C601DAAE60EEBE5CF7A7E /* Reminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D0A34413F83EEBBE4B6BDFE /* Reminders.swift */; };
 		B356254A656403CF73E81E6B /* BrowserHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF91D64C6E06D80F6EA699B5 /* BrowserHistory.swift */; };
+		B3731BEB0FCAF73CA24C3D08 /* HeldKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A93305ED67627FE38C474B1 /* HeldKeys.swift */; };
 		B4125951A88CEB67DDAE15DF /* SettingsTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFAC4F714AD1BD0682334E74 /* SettingsTable.swift */; };
 		B4F86F04FED36A2EF9F2053B /* MailSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B05FCDFA45B461AFF7A75C7 /* MailSelection.swift */; };
 		B55A4D274DD2579DE95933AE /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EFADC8783D3115E97300F38 /* SettingsWindowController.swift */; };
@@ -657,6 +658,7 @@
 		97D0EF415E975D2E3F48CBB8 /* WebcamTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebcamTrack.swift; sourceTree = "<group>"; };
 		98B0E1DF0661F6663D05E646 /* EditorProject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorProject.swift; sourceTree = "<group>"; };
 		99C10D1E8C9047F940AC9F7C /* ShortcutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConfig.swift; sourceTree = "<group>"; };
+		9A93305ED67627FE38C474B1 /* HeldKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeldKeys.swift; sourceTree = "<group>"; };
 		9B37503A4C2B93906FA63A91 /* CardContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardContent.swift; sourceTree = "<group>"; };
 		9B7A72321CA575E8EA5B1F68 /* ClipboardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardStore.swift; sourceTree = "<group>"; };
 		9B9FA3A404A7E50DC9F1F25B /* TrackWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackWriter.swift; sourceTree = "<group>"; };
@@ -872,6 +874,7 @@
 				4E2E708A3831FF5D35F7E422 /* GitHubServerInbox.swift */,
 				85222576F80105D3893F2D45 /* Handoff.swift */,
 				F066C8F59CD75C6A215E724C /* Health.swift */,
+				9A93305ED67627FE38C474B1 /* HeldKeys.swift */,
 				525E82EB8EF05ED0519C7498 /* HistoryVisit.swift */,
 				738E57A49A152A4B343380FA /* HyperKey.swift */,
 				08B4C6157780BFC4A9800FE7 /* ImageTags.swift */,
@@ -1640,6 +1643,7 @@
 				098DA881E3AB36E897810310 /* GitHubServerInbox.swift in Sources */,
 				C546920AB16EDB49D0CBB270 /* Handoff.swift in Sources */,
 				E7858DD3BA597D8B32E9B822 /* Health.swift in Sources */,
+				B3731BEB0FCAF73CA24C3D08 /* HeldKeys.swift in Sources */,
 				6491E278431C90438EF5EE62 /* HistoryVisit.swift in Sources */,
 				248524430DC784D101D065D4 /* HyperKey.swift in Sources */,
 				C234C6B7E32F368735B62F47 /* ImageTags.swift in Sources */,
