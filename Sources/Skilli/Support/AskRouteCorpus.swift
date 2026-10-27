@@ -181,6 +181,12 @@ enum AskRouteCorpus {
         .init("trouve mes issues linear assignées", .act),
         .init("partage cette page avec Julie sur Slack", .act),
         .init("télécharge la facture et envoie-la à la compta", .act),
+        // What was said in a meeting they recorded (phase 5): the agent,
+        // with the recorder's tools (list_recordings, get_transcript).
+        .init("what did Paul say about the budget in Monday's meeting?", .act),
+        .init("qu'est-ce qu'Anna a dit sur le planning pendant la réunion d'hier ?", .act),
+        .init("in the weekly sync recording, who agreed to send the deck?", .act),
+        .init("résume la réunion d'équipe que j'ai enregistrée ce matin", .act),
         // An app named, something else asked of it: not opened.
         .init("mets Chrome comme navigateur par défaut", .act),
         .init("make Safari my default browser", .act),
@@ -365,6 +371,10 @@ enum AskRouteCorpus {
         .init("make the Dock smaller", .act),
         .init("change the accent color to green", .act),
         .init("enlève Zoom des éléments d'ouverture", .act),
+        .init("what was decided in yesterday's design review?", .act),
+        .init("dans l'enregistrement du comité, qui doit envoyer le compte rendu ?", .act),
+        .init("what did we say about pricing in the last meeting I recorded?", .act),
+        .init("retrouve ce que Margot a dit sur la date de lancement dans la réunion de mardi", .act),
 
         .init("où se trouve l'option pour afficher la barre d'état ?", .find),
         .init("in which menu is Print?", .find),
