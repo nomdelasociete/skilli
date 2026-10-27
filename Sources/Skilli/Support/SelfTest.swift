@@ -28017,12 +28017,12 @@ final class SelfTest {
         let book = launcher.contacts
         book?.testRecords = Self.guidePeople
         defer { book?.testRecords = nil }
-        guard await openLauncher() else { return guideMissing("launcher-results", "the launcher did not open") }
         // System Settings' panes left out: they are named in the test
-        // Mac's language.
+        // Mac's language. Set before the launcher opens, which reads it once.
         let savedOff = context.preferences.catalogOff
         context.preferences.catalogOff = savedOff.union(["catalog.settingsPanes"])
         defer { context.preferences.catalogOff = savedOff }
+        guard await openLauncher() else { return guideMissing("launcher-results", "the launcher did not open") }
         for character in "screen" { await pressKey(character) }
         _ = await waitUntil(timeout: 2) { launcher.query == "screen" && launcher.resultTitles.count > 2 }
         await pause(400)

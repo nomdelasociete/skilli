@@ -167,8 +167,9 @@ class Page:
                 # A line no block takes (a lone |): kept as text.
                 paragraph.append(lines[i].strip())
                 i += 1
-            if len(paragraph) == 1 and (figure := self.figure(paragraph[0])):
-                out.append(figure)
+            # Images alone on their lines, one after the other: a figure each.
+            if all(IMAGE.fullmatch(line) for line in paragraph):
+                out.extend(self.figure(line) for line in paragraph)
                 continue
             out.append(f'<p>{self.inline(" ".join(paragraph))}</p>')
         return '\n'.join(out)

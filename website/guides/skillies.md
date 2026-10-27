@@ -38,7 +38,8 @@ Shut Down, Log Out, Quit All Apps, Quit Other Apps, settings, and
 pastes of your copies.
 
 `skilli://do?app=TextEdit&goal=…` does what the goal says in that app,
-the way Ask's Do It Here would, and always asks first.
+the way Ask's Do It Here would. It asks first, unless you chose
+**Always** for that goal in that app.
 
 ## Agents: skil.li for Claude Code, Codex and others
 

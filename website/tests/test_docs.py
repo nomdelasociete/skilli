@@ -161,6 +161,21 @@ class Markdown(unittest.TestCase):
                                '<p>See <img src="i.png" alt="x" loading="lazy"> here.</p>\n'
                                '<figure><video src="v.mp4" autoplay loop muted playsinline aria-label="A clip"></video></figure>')
 
+    def test_images_on_lines_in_a_row_are_a_figure_each(self):
+        html = render('![A](a.png "One")\n![B](b.png "Two")')
+        self.assertEqual(html, '<figure><img src="a.png" alt="A" loading="lazy"><figcaption>One</figcaption></figure>\n'
+                               '<figure><img src="b.png" alt="B" loading="lazy"><figcaption>Two</figcaption></figure>')
+
+    def test_symlinks_in_images_are_not_published(self):
+        images = build.ROOT / 'website/guides/images'
+        link = images / 'outside.png'
+        link.symlink_to(build.ROOT / 'website/assets/launcher.png')
+        self.addCleanup(link.unlink)
+        with tempfile.TemporaryDirectory() as scratch:
+            build.render_docs(build.ROOT / 'website/guides.template.html', Path(scratch), book='guides')
+            self.assertTrue((Path(scratch) / 'images/welcome.png').is_file())
+            self.assertFalse((Path(scratch) / 'images/outside.png').exists())
+
     def test_a_dark_twin_shows_in_dark_mode(self):
         page = Page(lambda href: href, lambda src: {'src': src, 'dark': 'a-dark.png', 'size': (400, 300)})
         self.assertEqual(page.render('![A](a.png)'),

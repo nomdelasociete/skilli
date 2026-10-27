@@ -8,9 +8,12 @@ dark appearance; the site shows the `-dark` twin in dark mode.
 To make them all again, after a change people will see:
 
 ```sh
-./script/build_and_run.sh remote guides   # on the test Mac: dist/remote/guides/*.png
-script/guide-images.sh                    # copies them here
+./script/build_and_run.sh remote guides && script/guide-images.sh
 ```
+
+The first runs on the test Mac and brings the pictures back to
+`dist/remote/guides`; the second copies them here, only when that run
+was green and every picture has its dark twin.
 
 Then look at each one before committing: no real names, paths, menu-bar
 contents or apps of the test Mac. A guide shows one with

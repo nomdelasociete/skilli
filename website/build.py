@@ -284,10 +284,15 @@ def render_docs(template, target, book='docs'):
             result = result.replace(key, value)
         (target / name).write_text(result, encoding='utf-8')
     # The pictures the pages show; in --preview the pages are written beside them already.
+    # Never a symbolic link: it could publish a file from outside the book.
     images = folder / 'images'
-    if images.is_dir() and images.resolve() != (target / 'images').resolve():
-        shutil.copytree(images, target / 'images', dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns('*.md', '.*'))
+
+    def left_out(directory, names):
+        return set(shutil.ignore_patterns('*.md', '.*')(directory, names)) | {
+            name for name in names if (Path(directory) / name).is_symlink()}
+
+    if images.is_dir() and not images.is_symlink() and images.resolve() != (target / 'images').resolve():
+        shutil.copytree(images, target / 'images', dirs_exist_ok=True, ignore=left_out)
 
 
 def build(preview=False):

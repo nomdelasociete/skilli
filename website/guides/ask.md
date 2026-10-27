@@ -17,7 +17,7 @@ Press **✦A** (or type in the launcher, then **⇥**) and say it:
 - "write to Jean-François that I'll be late" → a new mail to that
   contact.
 
-![An answer in Ask's card](images/ask-answer.png "An answer, written as it comes; ⇥ asks a follow-up.")
+![Ask's card answering what is due: the final screens by Friday, and a yes or no on inviting the support team to the demo on the 4th; Copy ↩, Follow up ⇥, In Codex ⌘↩, Close esc](images/ask-answer.png "An answer, written as it comes; ⇥ asks a follow-up.")
 
 It reads what you mean, not a fixed phrase. If something is missing (how
 long, which app, when), the card asks just that; answer it and the rest
@@ -47,7 +47,7 @@ What can be taken back happens at once, with ⌘Z right after. What cannot
 (quitting an app with unsaved work, sending, deleting, a menu item that
 closes something) waits for your ↩ in the card.
 
-![Ask's card asking before it acts](images/ask-approval.png "What cannot be taken back waits for ↩.")
+![Ask's card asking "Send this email to Margot Martin?", the email's subject and first words below, with Send ↩ and Cancel esc](images/ask-approval.png "What cannot be taken back waits for ↩.")
 
 - **Do It Here**: "fill this form with my details", "pick the earliest
   delivery slot", on the window in front. skil.li clicks and types for
