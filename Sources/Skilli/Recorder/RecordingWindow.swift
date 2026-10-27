@@ -1007,6 +1007,10 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        // Its tool tips' areas go with it: one left past the window, freed,
+        // had AppKit route the pointer's exit to it (a crash once another
+        // window opened under the pointer).
+        view.removeToolTips()
         againPanel?.close()
         player?.pause()
         pictures.forEach { $0.pause() }
@@ -1429,6 +1433,14 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     }
 
     /// How the skillie marked last ran after the transcript; nil: none.
+    /// The window closing: no tool tip left behind (the chapter marks',
+    /// the ran line's).
+    func removeToolTips() {
+        waveform.removeTips()
+        ranLine.toolTip = nil
+        removeAllToolTips()
+    }
+
     func setRan(_ text: String?) {
         guard text != ranText else { return }
         ranLine.isHidden = text == nil
@@ -2438,6 +2450,12 @@ private final class WaveformView: NSView {
 
     /// The tool tips' owners: AppKit keeps them weakly.
     private var tipOwners: [NSString] = []
+
+    /// Its window closing: none left.
+    func removeTips() {
+        removeAllToolTips()
+        tipOwners = []
+    }
 
     /// Each chapter's title, said by the pointer over its mark.
     private func updateTips() {
