@@ -199,14 +199,18 @@ the persistent Trueno wordmark with the menu padding; it settles into the menu
 on scroll rather than becoming a duplicate logo. Show the GitHub logo/link as
 an OSS navigation element, with a public star count when GitHub's unauthenticated
 API answers. Desktop links jump to real landing sections (launcher, speed, key
-sequences, skillies, BYOK, FAQ). The primary CTA is **Get it**, which opens the
+sequences, skillies, BYOK, FAQ), plus the Skillies docs (`skillies/docs/`, next
+to Skillies) and the Manifesto. The docs are also linked where people need
+them (2026-10-26: reachable only through the collection was not findable):
+the agent-created skillies section ("Write your own: the docs"), the FAQ
+("Can I write my own commands?"), the collection's nav and every footer. The primary CTA is **Get it**, which opens the
 FAQ “How do I get it?”: Download skil.li (`/download`, the Worker's redirect to the
 latest notarised DMG on GitHub) and the Homebrew command. On small screens
 the same links open in a hamburger sheet (focus trap, Escape, `aria-expanded`).
 Preserve responsive layout and keyboard focus states.
 
-The shared footer on the landing page, catalog and legal page includes FAQ,
-Legal & privacy, GitHub, the free/open-source/BYOK line and
+The shared footer on the landing page, catalog, docs, manifesto and legal page
+includes FAQ, Docs, Manifesto, Legal & privacy, GitHub, the free/open-source/BYOK line and
 “Made by Nom de la société”. A discreet independence/trademark disclaimer follows.
 
 `website/legal.html` follows dsmn.app's publisher/hosting structure, with English

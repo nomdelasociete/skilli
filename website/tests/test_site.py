@@ -12,7 +12,7 @@ SCENE_JS = (ROOT / 'brand-glass' / 'scene.js').read_text()
 
 class LandingContracts(unittest.TestCase):
     def test_nav_targets_exist_on_the_page(self):
-        for href in ('#launcher', '#speed', '#experience', 'skillies/', '#byok', '#questions', '#download'):
+        for href in ('#launcher', '#speed', '#experience', 'skillies/', 'skillies/docs/', '#byok', '#questions', '#download'):
             self.assertIn(f'href="{href}"', INDEX)
         self.assertIn('id="launcher"', INDEX)
         self.assertIn('id="speed"', INDEX)
@@ -24,6 +24,18 @@ class LandingContracts(unittest.TestCase):
         self.assertIn('href="/download"', INDEX)
         self.assertIn('brew install --cask nomdelasociete/tap/skilli', INDEX)
         self.assertNotRegex(INDEX, r'download\.(dmg|zip|pkg)')
+
+    def test_the_docs_are_one_click_away(self):
+        nav = INDEX[INDEX.index('<nav id="site-nav"'):INDEX.index('</nav>', INDEX.index('<nav id="site-nav"'))]
+        self.assertEqual(nav.count('>Docs<'), 1)
+        self.assertIn('href="skillies/docs/">Docs<', nav)
+        self.assertIn('id="own-commands"', INDEX)
+        # Every page's footer, by its own path.
+        for page, href in (('index.html', 'skillies/docs/'), ('manifesto.html', 'skillies/docs/'), ('legal.html', 'skillies/docs/'),
+                           ('skillies/index.template.html', 'docs/'), ('skillies/docs.template.html', './')):
+            html = (ROOT / page).read_text()
+            footer = html[html.index('<nav aria-label="Footer">'):]
+            self.assertIn(f'<a href="{href}">Docs</a>', footer[:footer.index('</nav>')], page)
 
     def test_get_it_lands_on_the_download_section(self):
         section = INDEX[INDEX.index('id="download"'):]
