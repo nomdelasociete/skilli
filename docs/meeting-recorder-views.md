@@ -4,8 +4,9 @@ Phase 1: spec, 2026-10-23, written before building, then brought in line
 with three rounds of captures on the test Mac (light and dark). Phase 2
 (the moment, below): spec, 2026-10-24, written before building from the
 Moment section of `docs/meeting-recorder.md`. Quit and sleep: 2026-10-25,
-from that file's "Quit and sleep". Phase 3 (the webcam and the screen,
-last): spec, 2026-10-25, written before building. That file says what
+from that file's "Quit and sleep". Phase 3 (the webcam and the screen):
+spec, 2026-10-25, written before building. Phases 4 and 5 (last): each
+written before building, dated in its own section. That file says what
 is recorded, kept and measured; this says what each phase shows. Each
 view is drawn by the code that runs it (`remote recorder` saves
 `recorder-*.png`).
@@ -1173,3 +1174,298 @@ Names put on voices by the user's AI, chapters, the summary, ⌘K's
 actions in the window (Transcribe Again gets its key there), the q5_0
 model (worse on a bad line, Measured), a voice's lines joined when two
 speakers merge (each line keeps its place).
+
+# Phase 5: chapters, the summary, follow-ups, skillies, agents
+
+Spec, 2026-10-27, written before building from `docs/meeting-recorder.md`
+(Target's Better 3 and 4, Done, Privacy and consent, Decided 2 and 7).
+The last phase: what the user does with a meeting once it is written
+out. Built in two pull requests, one after the other: (a) in the
+recording's window: ⌘K, chapters, the summary, action items, the recap
+mail; (b) from elsewhere: Ask about a meeting, skillies for recordings,
+the agents' tools and the links.
+
+## The moment, again
+
+1. **When**, each case apart:
+   - **The summary**: right after the meeting, the window open (it opens
+     by itself once the transcript is made: the user is already there),
+     to read what was decided or pass it on; or days later, before the
+     next meeting of the series.
+   - **Chapters**: a long meeting read or played again later, to find a
+     part of it. Meetings of 3 minutes or more: a shorter one has
+     nothing to split.
+   - **Action items**: right after the meeting, before the next one
+     starts, while the to-dos are fresh.
+   - **The recap mail**: right after, to the attendees, while they
+     remember the meeting.
+   - **Ask about a meeting**: any time later, from where the user looks
+     for things already: the launcher ("what did Paul say about the
+     budget?"), or the recording's window.
+   - **A skillie for recordings**: the user's own next step (a CRM, a
+     notes app, a shared folder), from ⌘K on one recording; marked, after
+     every transcript.
+   - **Agents** (Claude Code, Codex) working for the user: which
+     meetings there were, and a transcript when the user lets it go.
+2. **The path**: one key from where the user is.
+   - ⌘K in the recording's window: every action of this phase, and the
+     window's own (Copy Transcript, Show in Finder, Transcribe Again,
+     Delete). The window's hint bar says "Actions ⌘K", as the launcher's
+     footer does.
+   - The launcher: ⌘K on a recording's row (Search Recordings, `recs`, or
+     found by its words) gives Ask About This Meeting…; Ask itself
+     answers a question about a meeting with the recorder's tools.
+   - A link and a tool for each, for skillies and agents. No default
+     shortcut for any of them (the user can give one).
+3. **Hint or push**: nothing is pushed; no AI runs by itself. The keys
+   are where the user looks: ⌘K's list in the window, its row in the
+   launcher. Taught by the hint bar's "Actions ⌘K", nothing else: no
+   badge, no line offering a summary. The one thing that runs on its own
+   is the skillie the user marked to run after every transcript, off
+   until marked (Privacy and consent's one exception).
+4. **Deterministic or AI**: code does what macOS and the files answer:
+   copying, the folder, the mail's addresses (the event's attendees),
+   the reminders' fields from what was read, the skillies, the lists the
+   tools give. The user's AI (Settings → SI Accounts: Claude, ChatGPT or
+   the OpenAI API) does what only a reading of the words tells: the
+   summary, the chapters, the action items, an answer. Each button names
+   it ("Summary by Claude"). What it is sent: the transcript's text with
+   its speakers' names and times, the text read on screen with its times
+   (`slides.json`), the title and the date. Never the sound, the
+   pictures, the attendees' addresses or the contacts.
+5. **Wrong**: chapters or a summary that miss: made again from ⌘K, the
+   ones before replaced (a summary replaced goes to the Trash, Undo ⌘Z
+   for 10 s); Remove Chapters (Undo ⌘Z). Action items that should not be
+   reminders: Undo ⌘Z in the card takes them all back, else each in
+   Reminders. The recap mail: nothing leaves before the user's Send in
+   the mail app, where the addresses and the words are changed. An
+   answer: in the card, nothing kept. A skillie marked by mistake: Undo
+   ⌘Z for 10 s, or None in Settings → Recorder; what it did with a
+   recording is its own script's. An agent's `get_transcript` not
+   wanted: Deny in the card.
+
+## The recording's window: ⌘K
+
+```
+┌ Weekly design review ─────────────────────────────────────────────────┐
+│ …                                                                     │
+│ Me       0:00  Hello everyone, can you all hear me?                   │
+│ Paul     0:04  Yes, loud and clear.        ┌──────────────────────────┐│
+│ …                                          │ WEEKLY DESIGN REVIEW     ││
+│                                            │ ✦ Summary by Claude      ││
+│                                            │ ☰ Chapters by Claude     ││
+│                                            │ ✓ Action Items to Remi…  ││
+│                                            │ ✉ Recap Mail to the At…  ││
+│                                            │ ? Ask Claude About Thi…  ││
+│                                            │ ▶ Send to Notes          ││
+│                                            │ ──────────────────────── ││
+│                                            │ ⧉ Copy Transcript    ⌘C  ││
+│                                            │ ⧉ Copy Summary           ││
+│                                            │ ──────────────────────── ││
+│                                            │ 🗑 Delete Recording  ⌘⌫  ││
+│                                            │ Search actions…          ││
+│ ───────────────────────────────────────────└──────────────────────────┘│
+│                           Play space   Copy Transcript ⌘C   Actions ⌘K│
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+- ⌘K opens the launcher's list (`ActionPanelView`) over the window's
+  bottom right, the recording's title on top; with a line selected too
+  (they are the recording's actions, not the line's). Its keys are the
+  launcher's: typing filters, ↑ ↓ (⌃N ⌃P), ↩ runs, an action's key runs
+  it, esc or ⌘K closes it, a click beside it closes it.
+- **The list**, doing first: Summary by Claude (or "Summary Again by
+  Claude" once there is one), Chapters by Claude (3 minutes or more;
+  "Chapters Again by Claude"), Action Items to Reminders, Recap Mail to
+  the Attendees, Ask Claude About This Meeting…, the user's skillies for
+  recordings, Transcribe Again…, Show in Finder ⌘↩; then Copy Transcript
+  ⌘C, Copy Summary (once there is one); then Remove Chapters (once
+  there are some), Delete Recording ⌘⌫. "Claude" is the user's writing
+  provider's name (ChatGPT, OpenAI API). Not transcribed yet: the copies
+  and the AI's actions are not listed.
+- **The hint bar** without a line selected: "Play space · Copy
+  Transcript ⌘C · Actions ⌘K" (Show in Finder and Delete keep their keys,
+  listed in ⌘K). A line selected: as phase 4 (⌘K still opens the list).
+
+### Working, said in the window
+
+While the AI writes, one line at the bottom of the lines, in the
+secondary color, a spinner before it: "Writing the summary with Claude ·
+Haiku…", "Finding chapters with Claude · Haiku…", "Reading the action
+items with Claude · Haiku…". One at a time: another AI action meanwhile
+says so in the list ("Claude is still writing the summary."). The window
+closed meanwhile: the work goes on and lands in the files. A failure is
+said in the card (as a transcript that failed): "The summary was not
+written: Claude is not set up yet. Settings → SI Accounts." Nothing is
+said when it is done: the window shows it.
+
+## Chapters
+
+- **Chapters by Claude** (meetings of 3 minutes or more): the AI reads
+  the transcript and the text on screen and splits the meeting into
+  parts, about one every five to ten minutes, two at least: each a title
+  of a few words in the meeting's language, and where it starts. The
+  start is put on the line that starts there (the first line at or after
+  it); the first chapter starts at the first line.
+- **In the lines**, a heading before each chapter's first line: its
+  title, 15 pt semibold, its time on the right in the tertiary color; a
+  hairline above it but the first. A click plays from its start.
+- **On the waveform**, a mark at each chapter's start: a 1 pt line
+  across the lanes in the tertiary color and a small notch on top; the
+  pointer over it says the chapter's title.
+- **Written**: `meeting.json`'s `chapters` (title, start in seconds),
+  and `transcript.md`, a `## Title` heading before the chapter's first
+  line. Transcribe Again keeps them (the times are the sound's). Made
+  again: replaced. Remove Chapters: gone at once, the undo card "Chapters
+  Removed", Undo ⌘Z for 10 s.
+
+## The summary
+
+```
+│ ───────────────────────────────────────────────────────────────────── │
+│ SUMMARY BY CLAUDE · 14:52                                             │
+│ The team agreed to ship the new onboarding on 3 November.             │
+│                                                                       │
+│ Decided                                                               │
+│ • Onboarding ships on 3 November, behind a flag for a week.           │
+│ Open                                                                  │
+│ • Whether the pricing page changes with it.                           │
+│ Next steps                                                            │
+│ • Paul: send the final screens by Friday.                             │
+│ ───────────────────────────────────────────────────────────────────── │
+│ Me       0:00  Hello everyone, can you all hear me?                   │
+```
+
+- **Summary by Claude** writes, in the meeting's language: two
+  sentences on what it came to, then Decided, Open questions and Next
+  steps (who does what, by when), short bullets, in Markdown. Nothing
+  more than the transcript says.
+- **In the window**, above the lines (the first row, scrolling with
+  them): "SUMMARY BY CLAUDE · 14:52" (the provider, when it was
+  written), letterspaced in the secondary color, then the summary drawn
+  as the card draws Markdown. It shows as it is written. Opened again
+  later, the window reads it from `summary.md`.
+- **Written**: `summary.md` in the recording's folder (a `# Summary of
+  Weekly design review` heading, then the summary). Made again: the one
+  before goes to the Trash, the undo card "Summary Replaced" (Undo ⌘Z
+  for 10 s puts it back). Copy Summary copies it as the card copies an
+  answer (rich text, and plain text without its marks).
+
+## Action items to Reminders
+
+- **Action Items to Reminders**: the AI reads the to-dos said in the
+  meeting: what, who, by when when said. Each becomes a reminder at once,
+  in the list Settings → Reminders adds to: "Send the final screens" when
+  it is the user's, "Paul: send the final screens" when it is someone
+  else's (to follow up); due when a date was said ("by Friday": that
+  Friday, from the meeting's date); its notes "From “Weekly design
+  review”, 22 Oct, at 12:04"; its link the recording
+  (`skilli://record/open?recording=…`: its window at that line).
+- **Said**: the undo card, "4 Reminders Added" and their titles, Undo
+  ⌘Z for 10 s takes them all back. None found: the card says "No action
+  items in “Weekly design review”." Reminders not allowed: macOS's
+  question, as Ask's reminders ask it.
+
+## The recap mail
+
+- **Recap Mail to the Attendees**: a new message in the user's mail app
+  (a `mailto:` link, as Email on a contact), nothing sent: to the
+  event's attendees' addresses (the user's own left out, by My Card),
+  the subject "Recap: Weekly design review", the summary as plain text
+  under one line ("Here is the recap of Weekly design review, Wed 22
+  Oct."). No summary yet: it is written first (the window's line says
+  so), then the mail opens. No addresses (no event, attendees without
+  one): the message opens with no one in To. The user reads it, changes
+  it, sends it.
+
+## Ask about a meeting
+
+- **In the window**: Ask Claude About This Meeting… in ⌘K turns the
+  list into a field ("Ask about “Weekly design review”"); ↩ sends the
+  question with the transcript to the user's AI, and the answer shows
+  in the card, as Ask's answers do: its status says who answered ("Claude
+  · Haiku · 2.1 s"), ⇥ follows up, ⌘C copies. Nothing is kept.
+- **In the launcher**: the same on a recording's row (⌘K → Ask About
+  This Meeting…). And Ask: a question about a meeting ("what did Paul
+  say about the budget on Monday?") is Ask's agent's to answer with the
+  recorder's tools: it finds the recording (`list_recordings`) and reads
+  its transcript (`get_transcript`), which the card asks every time,
+  naming the recording. The route is measured on the volume corpus
+  (`remote routes`, AskRouteCorpus's held-out half), never tuned on
+  one sentence.
+
+## Skillies for recordings
+
+- A skillie says it is for recordings in its header:
+  `@skilli.forRecordings true`. Run on a recording, it gets the
+  recording's folder in `SKILLI_RECORDING` (its arguments empty); run
+  elsewhere, `SKILLI_RECORDING` is not set.
+- **In ⌘K**: each, by its title, after the AI's actions; ↩ runs it on
+  this recording, as the launcher runs a skillie (its own "ask first"
+  kept, the card while it runs, its last line). A skillie that needs an
+  argument is not listed (nothing would give it one).
+- **After every transcript**: Settings → Recorder, "After each
+  transcript": None (the default) or one of them. Picked, the line under
+  it says "“Send to Notes” gets every recording from now on: its
+  folder, with the sound, the pictures and the words. What it does with
+  them is its own script's.", and the undo card says the same, Undo ⌘Z
+  for 10 s (back to None). Its row in ⌘K says it: "Send to Notes · after
+  every transcript". Not an agent's setting (`set_setting` does not
+  reach it): marking it is the user's.
+- **It runs** once per recording, when its transcript is first made
+  (after Stop, an import, a launch's transcript), not on Transcribe
+  Again, with no card while it runs (out of sight, the window already
+  showing). A failure is said in the card ("“Send to Notes” failed after
+  the transcript of “Weekly sync”: …"). The window says it ran, at the
+  bottom of the lines: "“Send to Notes” ran after the transcript at
+  14:52: Sent." (its last line), or "… failed at 14:52: …". Kept in
+  `meeting.json`'s `skillies` (title, when, whether it ran on its own,
+  exit status, last line).
+
+## The agents' tools
+
+- `list_recordings`: the recordings, newest first: each its id (the
+  folder's name), title, date, length, state, whether it has a summary
+  and chapters. No words. A read: the tool rights of a read.
+- `get_transcript` (`recording`: an id or a title, the newest of that
+  title; empty: the newest): its transcript as `transcript.md` has it.
+  Asked in the card every time, naming the recording ("Give “Weekly
+  sync” (22 Oct, 32 min) to Claude Code?"): `ToolPolicy`'s `everyTime`,
+  no Always Allow, no right or mode makes it silent; only Block refuses
+  it without asking.
+- `recording_followup` (`recording`, `action`: `summary`, `chapters`,
+  `action_items`, `recap_mail`, `ask` with `question`): what ⌘K does, its
+  answer the summary, the chapters, the reminders added, "The mail is
+  open in Mail", the answer. Asked every time too, naming the recording
+  and the provider (it sends the transcript to the user's AI, and its
+  answer to the agent).
+- Links (`skilli://record/…?recording=…`): `open` (its window; `at=` a
+  time in seconds plays from there), `summary`, `chapters`,
+  `actions`, `recap`, `ask?question=…`: each but `open` asked in the
+  card every time, as the recording's pause and stop are. A skillie
+  calls the tools with `"$SKILLI_CLI" call …` (`skillies/README.md`).
+
+## Said, and not said (phase 5)
+
+- Not said: chapters made, a summary written, the mail opened, a
+  skillie run from ⌘K beyond its own last line (each seen).
+- Said: the reminders added (the undo card), a summary replaced and
+  chapters removed (the undo card), a skillie marked (the undo card), an
+  AI action that failed (the card), a marked skillie that failed (the
+  card), no action items found (the card).
+
+## The files (phase 5)
+
+- `meeting.json`: `chapters` (`title`, `start` in seconds), `summarized`
+  (when `summary.md` was written, and by whom: "Claude · Haiku"),
+  `skillies` (the skillies run on it), `addresses` (the attendees' mail
+  addresses, from the event, for the recap; never sent elsewhere).
+- `summary.md`, when asked.
+- `transcript.md`: a `## Title` heading at each chapter.
+
+## Not in phase 5
+
+Names put on voices by the user's AI (the user names them, phase 4),
+a chapter renamed by hand, a summary edited in the window (edit
+`summary.md`, the window reads it again when opened), several skillies
+after every transcript (one).

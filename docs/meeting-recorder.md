@@ -10,7 +10,10 @@ the Moment checked again for them and their views and states in
 `docs/meeting-recorder-views.md` ("Phase 3"). 2026-10-26: phase 4
 being built: its moment, views and states in the same file ("Phase
 4"), first the voices, import, editing and renaming, then Better
-transcription.
+transcription. 2026-10-27: phase 5, the last, being built: its moment,
+views and states in the same file ("Phase 5"); ⌘K's order in Done
+changed by it (the AI's actions first, the copies after, as every ⌘K
+list).
 
 Asked for: a meeting recorder like omarchy-meeting-recorder (an
 open-source recorder for Omarchy Linux): your microphone and the
@@ -319,12 +322,14 @@ The recording's window (a window, not a card: it is read and edited):
   two given the same name become one; the user's own name kept).
 - A line: edit it in place, give it to the next speaker, delete it (Undo
   ⌘Z for 10 s).
-- Chapters by the user's agent (meetings of three minutes or more, on the
+- Chapters by the user's AI (meetings of three minutes or more, on the
   button): in the list, as headings, as marks on the waveform.
-- ⌘K: Copy Transcript (↩), Summary by Claude, Action Items to Reminders,
-  Recap Mail to the attendees, Open Folder, Transcribe Again, and the
-  user's skillies marked for recordings (omarchy's Actions; one may run on
-  its own when a transcript is done, said in its row).
+- ⌘K: Summary by Claude (↩), Chapters by Claude, Action Items to
+  Reminders, Recap Mail to the attendees, Ask Claude About This Meeting…,
+  the user's skillies for recordings (omarchy's Actions; one may run on
+  its own when a transcript is done, said in its row), Transcribe Again,
+  Show in Finder, then Copy Transcript and Copy Summary, then Delete
+  (docs/meeting-recorder-views.md, "Phase 5").
 - Import: drop an audio or video file on the window, or Import… in the
   launcher.
 
@@ -332,9 +337,10 @@ The recording's window (a window, not a card: it is read and edited):
 
 `~/Library/Application Support/skil.li/Recordings/2026-10-22 14.00 Weekly sync/`:
 `me.m4a`, `them.m4a`, `webcam.mp4`, `screen.mp4` (when on), `meeting.json`
-(title, attendees, speakers, language, engine, chapters), `transcript.md`
-(times, speakers, chapters), `transcript.json` (words with times),
-`slides.json` (text read on screen, with times), `summary.md` when asked.
+(title, attendees and their addresses, speakers, language, engine,
+chapters, the skillies run on it), `transcript.md` (times, speakers,
+chapters), `transcript.json` (words with times), `slides.json` (text read
+on screen, with times), `summary.md` when asked.
 
 - The folder's name is the date and the title. In the title, `/` and `:`
   become `-`, control characters and a leading dot go, and it is cut at 80
@@ -352,8 +358,8 @@ The recording's window (a window, not a card: it is read and edited):
   retention: pruned at launch and then hourly, never at the moment the
   setting changes, a line under it says what the next pass removes; an
   expired recording goes to the Trash, not deleted for good.
-- Agents: `list_recordings` (titles, dates, lengths) and `get_transcript`
-  (and the `$SKILLI_CLI call` equivalents).
+- Agents: `list_recordings` (titles, dates, lengths), `get_transcript`
+  and `recording_followup` (and the `$SKILLI_CLI call` equivalents).
 - The words said, for the launcher's search, are also in
   `recordings-index.sqlite` beside the Recordings folder (with SQLite's
   `-wal`, `-shm` and `-journal` files). Like the recordings, never in a
@@ -378,9 +384,10 @@ The recording's window (a window, not a card: it is read and edited):
   | Flow | Goes to | What is sent | Consent |
   |---|---|---|---|
   | Record, transcribe, play, search, read slides | nowhere | nothing | — |
-  | "Summary by Claude", chapters, Ask about a meeting, names put on voices | the user's own AI (its provider) | the transcript's text with its speaker labels and times, the event's title, and for names on voices the attendees' names | the button or the request, which names where it goes |
+  | "Summary by Claude", chapters, action items, Ask about a meeting, names put on voices | the user's own AI (its provider) | the transcript's text with its speaker labels and times, the text read on screen with its times, the event's title and date, and for names on voices the attendees' names | the button or the request, which names where it goes |
   | Recap Mail | the attendees, by the user's mail app | the recap the user reads first | Send, in the mail app |
   | `get_transcript` | the agent that calls it (Claude Code, Codex…), then its provider | that recording's transcript | asked every time in the card, naming the recording (`ToolPolicy` `everyTime`: no Always Allow) |
+  | `recording_followup` | the user's own AI, then the agent that calls it | the transcript as for "Summary by Claude"; the agent gets the summary, chapters, reminders or answer | asked every time in the card, naming the recording and the provider (`everyTime`) |
   | `list_recordings` | the agent | titles, dates, lengths, no words | the tool rights of a read |
   | A skillie marked to run when a transcript is done | wherever that skillie sends it (the user's own script) | the recording folder's path, so everything in it | marked once, by the user, in the skillie's row: the one exception to "each time" below |
 
@@ -413,8 +420,9 @@ The recording's window (a window, not a card: it is read and edited):
 4. Speakers told apart (SpeakerKit), import, edit lines, rename
    speakers, transcribe again; the "Better transcription" download
    (whisper).
-5. Chapters, summary, action items, recap mail, skillies on done, agent
-   tools.
+5. Chapters, summary, action items, recap mail, Ask about a meeting,
+   skillies on done, agent tools (docs/meeting-recorder-views.md,
+   "Phase 5").
 
 Each phase checked on the mini with a played-back call (audio and video
 files standing in for the microphone, the other side and the camera),

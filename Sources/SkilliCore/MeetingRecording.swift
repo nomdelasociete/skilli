@@ -126,9 +126,27 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
         }
     }
 
+    /// A part of the meeting, by the user's AI (phase 5): its title, and
+    /// the start of the line it starts on (seconds).
     public struct Chapter: Codable, Equatable, Sendable {
         public var title: String
         public var start: Double
+
+        public init(title: String, start: Double) {
+            self.title = title
+            self.start = start
+        }
+    }
+
+    /// When `summary.md` was written, and who wrote it ("Claude · Haiku").
+    public struct Summarized: Codable, Equatable, Sendable {
+        public var at: Date
+        public var by: String
+
+        public init(at: Date, by: String) {
+            self.at = at
+            self.by = by
+        }
     }
 
     public var version = 1
@@ -172,6 +190,11 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
     /// An import's file name ("Board call.m4a"): made from a file, not
     /// recorded here.
     public var imported: String?
+    /// The summary written (phase 5), when there is one.
+    public var summarized: Summarized?
+    /// The attendees' mail addresses, from the event: the recap mail's (phase
+    /// 5). Never sent anywhere else.
+    public var addresses: [String]?
 
     /// The calendar's event a recording is of: which occurrence, and when
     /// it ends (the call's end is watched from then).

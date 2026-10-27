@@ -228,6 +228,17 @@ public enum MeetingTranscript {
         return lines
     }
 
+    /// Each chapter by the line it starts on: the first line started at
+    /// its start or after (a chapter past the last line is left out).
+    public static func chapterLines(_ chapters: [MeetingRecord.Chapter], in lines: [TranscriptLine]) -> [Int: MeetingRecord.Chapter] {
+        var starts: [Int: MeetingRecord.Chapter] = [:]
+        for chapter in chapters {
+            guard let line = lines.firstIndex(where: { $0.start >= chapter.start - 0.001 }), starts[line] == nil else { continue }
+            starts[line] = chapter
+        }
+        return starts
+    }
+
     /// The line playing at `time`: the last one started by then.
     public static func line(at time: Double, in lines: [TranscriptLine]) -> Int? {
         var lo = 0, hi = lines.count
@@ -242,10 +253,13 @@ public enum MeetingTranscript {
 
     /// `transcript.md`: the title, a line saying when, how long and in
     /// which language (`about`), then each line under its speaker's name
-    /// and its time.
-    public static func markdown(title: String, about: String, lines: [TranscriptLine], names: [String: String] = [:]) -> String {
+    /// and its time, a chapter's heading before the line it starts on.
+    public static func markdown(title: String, about: String, lines: [TranscriptLine], names: [String: String] = [:],
+                                chapters: [MeetingRecord.Chapter] = []) -> String {
         var text = "# \(title)\n\n\(about)\n"
-        for line in lines {
+        let starts = chapterLines(chapters, in: lines)
+        for (index, line) in lines.enumerated() {
+            if let chapter = starts[index] { text += "\n## \(chapter.title)\n" }
             let name = names[line.speaker.rawValue] ?? line.speaker.title
             text += "\n**\(name)** · \(clock(line.start))\n\(line.text)\n"
         }
