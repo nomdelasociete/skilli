@@ -25104,6 +25104,7 @@ final class SelfTest {
             record(name, false, "no window", nil)
             return
         }
+        defer { controller.close() }
         guard await recordingWindowHasKeys(controller, name) else { return }
         let names = center.recordings.read(folder)?.speakers ?? [:]
         controller.showTranscribeAgain()
@@ -25148,7 +25149,11 @@ final class SelfTest {
         let showsProgress = await waitUntil(timeout: 10) { controller.shownState.hasPrefix("Transcribing") } != nil
         let madeAgain = await waitUntil(timeout: 120) { center.recordings.transcript(folder)?.language == "fr-FR" && !controller.shownLines.isEmpty } != nil
         let record = center.recordings.read(folder)
-        let kept = names.filter { !MeetingVoices.isStandard($0.value) }.allSatisfy { id, given in record?.speakers[id] == nil || record?.speakers[id] == given }
+        // Each named voice found again keeps its name (one not found again
+        // has none to keep); at least one is.
+        let voicesNow = Set(center.recordings.transcript(folder)?.lines.map(\.speaker.rawValue) ?? [])
+        let given = names.filter { !MeetingVoices.isStandard($0.value) && voicesNow.contains($0.key) }
+        let kept = !given.isEmpty && given.allSatisfy { id, name in record?.speakers[id] == name }
         // English again, for the window's last captures.
         controller.showTranscribeAgain()
         var english = false
@@ -25158,7 +25163,6 @@ final class SelfTest {
             english = await waitUntil(timeout: 120) { center.recordings.transcript(folder)?.language == "en-US" && !controller.shownLines.isEmpty } != nil
         }
         await captureRecordingWindow(controller, as: "recorder-window-again")
-        controller.close()
         let passed = languages.contains { $0.hasPrefix("English") } && languages.contains { $0.hasPrefix("French") }
             && engines == ["macOS", "Better transcription"] && whisperSaid && busySaid
             && note == "Your changes to the lines are replaced." && showsProgress && madeAgain && record?.language == "fr-FR"

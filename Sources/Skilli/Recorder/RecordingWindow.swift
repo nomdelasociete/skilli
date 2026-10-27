@@ -618,7 +618,10 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
                     self.onRunSkillie?(self.folder, skillie)
                 })
             }
-            list.append(LauncherAction(title: "Transcribe Again…", symbol: "arrow.triangle.2.circlepath") { [weak self] in self?.showTranscribeAgain() })
+            // Not while one of its actions runs (it reads this transcript).
+            if working == nil {
+                list.append(LauncherAction(title: "Transcribe Again…", symbol: "arrow.triangle.2.circlepath") { [weak self] in self?.showTranscribeAgain() })
+            }
         }
         list.append(LauncherAction(title: "Show in Finder", symbol: "folder", key: .openSecond) { [weak self] in
             guard let self else { return }
