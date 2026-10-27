@@ -24263,6 +24263,9 @@ final class SelfTest {
         center.window(for: first)?.close()
         center.open(first, at: 290)
         let played = await waitUntil(timeout: 5) { center.window(for: first)?.playing == true } != nil
+        // From 4:50, as asked (a moment of it played).
+        let at = center.window(for: first)?.playedTime ?? 0
+        let fromThere = at >= 289 && at < 296
         center.window(for: first).map { if $0.playing { $0.togglePlay() } }
         for step in 0..<6 { await move(to: frame.minX + frame.width * (0.3 + 0.08 * CGFloat(step)), frame.maxY - 260) }
         await pause(200)
@@ -24276,7 +24279,8 @@ final class SelfTest {
         await pause(1500)
         center.openWindows.forEach { $0.close() }
         await pause(300)
-        self.record(name, played && opened, "opened at 4:50, played \(played); the next window opened \(opened), still running after the pointer moved over it", nil)
+        self.record(name, played && fromThere && opened,
+                    "opened at 4:50, played \(played) from \(MeetingTranscript.clock(at)) \(fromThere); the next window opened \(opened), still running after the pointer moved over it", nil)
     }
 
     private func waitForWindow(_ center: RecorderCenter, _ folder: URL) async -> RecordingWindowController? {

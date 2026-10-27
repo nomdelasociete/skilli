@@ -30,7 +30,10 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private var correcting: [ObjectIdentifier: CMTime] = [:]
     /// Loading it: once, however often the window is shown meanwhile.
     private var loadingPlayer = false
-    /// The players' readiness watched for a play asked before it (`playAll`).
+    /// A play asked before every player could take it: from when (the
+    /// latest asked), played once each is ready; nil when none waits.
+    private var pendingPlay: CMTime?
+    /// The players' readiness watched for it.
     private var readyWatch: [NSKeyValueObservation] = []
     /// Where to play from once the player is loaded (a link's `at`).
     private var playOnLoad: Double?
@@ -155,6 +158,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var shownNames: [String: String] { view.names }
     var selectedLine: Int? { view.selectedLine }
     var playing: Bool { (player?.rate ?? 0) > 0 }
+    /// Where the sound is, in seconds (a self-test reads it).
+    var playedTime: Double { player?.currentTime().seconds ?? 0 }
     var currentTime: Double { player?.currentTime().seconds ?? 0 }
     var litLine: Int? { view.litLine }
     var shownState: String { view.stateText }
@@ -386,6 +391,12 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     func togglePlay() {
         guard let player else { return }
+        // A play still waiting for its players: this one stops it.
+        if pendingPlay != nil {
+            cancelPendingPlay()
+            view.played(to: player.currentTime().seconds, playing: false)
+            return
+        }
         if player.rate > 0 {
             player.pause()
             pictures.forEach { $0.pause() }
@@ -405,6 +416,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         if play || player.rate > 0 {
             playAll(from: time)
         } else {
+            // A play waiting is not wanted any more.
+            cancelPendingPlay()
             for each in [player] + pictures { each.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) }
         }
         view.played(to: seconds, playing: play || player.rate > 0)
@@ -418,16 +431,22 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// pointing into a gone frame (skil.li crashed on the next actor check).
     private func playAll(from time: CMTime) {
         guard let player else { return }
+        // A picture that cannot play is left out: the sound plays without it.
+        pictures.removeAll { $0.status == .failed }
+        guard player.status != .failed else { return cancelPendingPlay() }
         let all = [player] + pictures
         guard all.allSatisfy({ $0.status == .readyToPlay }) else {
+            // Each watched from now (`.initial`: one ready meanwhile is not
+            // missed); the time played is the latest asked.
+            pendingPlay = time
             readyWatch = all.filter { $0.status != .readyToPlay }.map { each in
-                each.observe(\.status, options: [.new]) { [weak self] _, _ in
-                    Task { @MainActor in self?.playWhenReady(from: time) }
+                each.observe(\.status, options: [.initial, .new]) { [weak self] _, _ in
+                    Task { @MainActor in self?.playWhenReady() }
                 }
             }
             return
         }
-        readyWatch = []
+        cancelPendingPlay()
         let host = CMTimeAdd(CMClockGetTime(CMClockGetHostTimeClock()), CMTime(value: 1, timescale: 20))
         for each in [player] + pictures {
             each.setRate(1, time: time, atHostTime: host)
@@ -436,17 +455,21 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         correcting = Dictionary(uniqueKeysWithValues: pictures.map { (ObjectIdentifier($0), host) })
     }
 
-    /// A play waiting for its players: done once each is ready, dropped if
-    /// one cannot play.
-    private func playWhenReady(from time: CMTime) {
-        guard let player, !readyWatch.isEmpty else { return }
-        let all = [player] + pictures
-        if all.contains(where: { $0.status == .failed }) {
-            readyWatch = []
-            return
-        }
-        guard all.allSatisfy({ $0.status == .readyToPlay }) else { return }
+    /// The play waiting: once every player is ready, from the time last
+    /// asked; dropped if the sound cannot play (a picture that cannot is
+    /// left out).
+    private func playWhenReady() {
+        guard let time = pendingPlay, let player else { return }
+        pictures.removeAll { $0.status == .failed }
+        guard player.status != .failed else { return cancelPendingPlay() }
+        guard ([player] + pictures).allSatisfy({ $0.status == .readyToPlay }) else { return }
         playAll(from: time)
+    }
+
+    /// No play waits any more: paused, sought without playing, or played.
+    private func cancelPendingPlay() {
+        pendingPlay = nil
+        readyWatch = []
     }
 
     /// While playing, a picture more than a frame off the sound (a file
