@@ -24263,9 +24263,13 @@ final class SelfTest {
         center.window(for: first)?.close()
         center.open(first, at: 290)
         let played = await waitUntil(timeout: 5) { center.window(for: first)?.playing == true } != nil
-        // From 4:50, as asked (a moment of it played).
+        // From 4:50, as asked: the rate goes up at once, the position at the
+        // host time asked a moment later (setRate(_:time:atHostTime:)).
+        let fromThere = await waitUntil(timeout: 2) {
+            let at = center.window(for: first)?.playedTime ?? 0
+            return at >= 289 && at < 296
+        } != nil
         let at = center.window(for: first)?.playedTime ?? 0
-        let fromThere = at >= 289 && at < 296
         center.window(for: first).map { if $0.playing { $0.togglePlay() } }
         for step in 0..<6 { await move(to: frame.minX + frame.width * (0.3 + 0.08 * CGFloat(step)), frame.maxY - 260) }
         await pause(200)
