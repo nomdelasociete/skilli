@@ -24078,7 +24078,7 @@ final class SelfTest {
             record("Recorder phase 5", false, "no recorder", nil)
             return
         }
-        await aClosedWindowLeavesNothingUnderThePointer(center)
+        await aRecordingOpenedAtATimePlaysOnceReady(center)
         guard let folder = seedMeeting(center, title: "Onboarding launch review", script: Self.launchReview) else {
             record("Recorder phase 5", false, "the stand-in meeting could not be written", nil)
             return
@@ -24219,12 +24219,12 @@ final class SelfTest {
         return true
     }
 
-    /// A recording's window with chapter marks closed under the pointer,
-    /// then another opened there, the pointer moving over it: skil.li goes
-    /// on (it crashed in AppKit's tracking-area routing, the closed window
-    /// and its views freed inside its close).
-    private func aClosedWindowLeavesNothingUnderThePointer(_ center: RecorderCenter) async {
-        let name = "Recorder: a recording's window with chapter marks closed under the pointer, another opened there, the pointer moving over it: skil.li goes on"
+    /// A recording's window opened at a time, as a reminder's link opens it,
+    /// plays from there once its player is ready, and skil.li goes on: it
+    /// played at once, AVPlayer raised (not ready yet), and the next actor
+    /// check crashed, here as another window opened under the pointer.
+    private func aRecordingOpenedAtATimePlaysOnceReady(_ center: RecorderCenter) async {
+        let name = "Recorder: a recording's window opened at a time (a reminder's link) plays from there once ready, and skil.li goes on, another window opened under the pointer"
         guard let first = seedMeeting(center, title: "Closed under the pointer", script: Self.launchReview),
               var record = center.recordings.read(first) else {
             record(name, false, "no meeting", nil)
@@ -24262,7 +24262,7 @@ final class SelfTest {
         // Closed, and opened again on the same folder playing from a time.
         center.window(for: first)?.close()
         center.open(first, at: 290)
-        _ = await waitUntil(timeout: 3) { center.window(for: first)?.playing == true }
+        let played = await waitUntil(timeout: 5) { center.window(for: first)?.playing == true } != nil
         center.window(for: first).map { if $0.playing { $0.togglePlay() } }
         for step in 0..<6 { await move(to: frame.minX + frame.width * (0.3 + 0.08 * CGFloat(step)), frame.maxY - 260) }
         await pause(200)
@@ -24276,7 +24276,7 @@ final class SelfTest {
         await pause(1500)
         center.openWindows.forEach { $0.close() }
         await pause(300)
-        self.record(name, opened, "the second window opened \(opened); still running after the pointer moved over it", nil)
+        self.record(name, played && opened, "opened at 4:50, played \(played); the next window opened \(opened), still running after the pointer moved over it", nil)
     }
 
     private func waitForWindow(_ center: RecorderCenter, _ folder: URL) async -> RecordingWindowController? {
