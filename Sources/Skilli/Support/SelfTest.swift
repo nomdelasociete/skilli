@@ -24233,13 +24233,6 @@ final class SelfTest {
         record.chapters = [MeetingRecord.Chapter(title: "Launch", start: 0.5), MeetingRecord.Chapter(title: "Pricing", start: 135)]
         try? center.recordings.write(record, to: first)
         center.open(first)
-        guard let window = await waitForWindow(center, first),
-              await waitUntil(timeout: 20, { window.showsWaveform }) != nil else {
-            self.record(name, false, "no window with its waveform", nil)
-            return
-        }
-        // The pointer over it, across the chapter marks.
-        let frame = window.nsWindow.frame
         let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
         let source = CGEventSource(stateID: .hidSystemState)
         func move(to x: CGFloat, _ y: CGFloat) async {
@@ -24247,8 +24240,31 @@ final class SelfTest {
                     mouseButton: .left)?.post(tap: .cghidEventTap)
             await pause(80)
         }
-        for step in 0..<10 { await move(to: frame.minX + frame.width * (0.2 + 0.06 * CGFloat(step)), frame.maxY - 210) }
-        window.close()
+        let frame: NSRect
+        // Its window held here only in this block: closed, nothing else keeps it.
+        do {
+            guard let window = await waitForWindow(center, first),
+                  await waitUntil(timeout: 20, { window.showsWaveform }) != nil else {
+                self.record(name, false, "no window with its waveform", nil)
+                return
+            }
+            frame = window.nsWindow.frame
+            // The pointer over it, across the chapter marks; played, its ⌘K
+            // opened, as the reminder link check leaves it.
+            for step in 0..<10 { await move(to: frame.minX + frame.width * (0.2 + 0.06 * CGFloat(step)), frame.maxY - 210) }
+            window.togglePlay()
+            await pause(600)
+            window.togglePlay()
+            window.showActions()
+            await pause(300)
+            window.closeActions()
+        }
+        // Closed, and opened again on the same folder playing from a time.
+        center.window(for: first)?.close()
+        center.open(first, at: 290)
+        _ = await waitUntil(timeout: 3) { center.window(for: first)?.playing == true }
+        center.window(for: first).map { if $0.playing { $0.togglePlay() } }
+        for step in 0..<6 { await move(to: frame.minX + frame.width * (0.3 + 0.08 * CGFloat(step)), frame.maxY - 260) }
         await pause(200)
         guard let second = seedMeeting(center, title: "Opened under the pointer", script: Array(Self.launchReview.prefix(3))) else {
             self.record(name, false, "no second meeting", nil)
