@@ -13788,7 +13788,7 @@ final class SelfTest {
 
     /// A sentence spoken by macOS's own voice (`say`) into a file, in the
     /// first installed voice of `language`.
-    private func spokenFile(_ sentence: String, language: String) async -> URL? {
+    private func spokenFile(_ sentence: String, language: String, voiceNeeded: Bool = false) async -> URL? {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-voice-\(getpid()).aiff")
         return await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
@@ -13807,6 +13807,11 @@ final class SelfTest {
                     return parts.count > 1 ? parts[0].trimmingCharacters(in: .whitespaces) : nil
                 }
                 let voice = names.first { $0.hasPrefix("Thomas") } ?? names.first
+                // None in that language: the default voice speaks, unless one is needed.
+                if voiceNeeded, voice == nil {
+                    continuation.resume(returning: nil)
+                    return
+                }
                 let say = Process()
                 say.executableURL = URL(fileURLWithPath: "/usr/bin/say")
                 say.arguments = (voice.map { ["-v", $0] } ?? []) + ["-o", url.path, sentence]
@@ -25298,8 +25303,8 @@ final class SelfTest {
         }
         let offered = await MeetingTranscriber.languages(for: .macOS).contains { $0.id.hasPrefix("nl") }
         let sentence = "Goedemorgen allemaal. Vandaag bespreken we de nieuwe planning voor het project en de begroting voor volgend jaar."
-        guard let spoken = await spokenFile(sentence, language: "nl") else {
-            record(name, false, "no Dutch voice on this Mac", nil)
+        guard let spoken = await spokenFile(sentence, language: "nl", voiceNeeded: true) else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "no Dutch voice on this Mac", latencyMs: nil))
             return
         }
         let file = recorderScratch.appendingPathComponent("Planning overleg.aiff")

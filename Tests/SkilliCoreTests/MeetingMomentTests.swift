@@ -196,6 +196,12 @@ final class MeetingMomentTests: XCTestCase {
         kept.kept(.appLeft(app))
         kept.offerAgain()
         XCTAssertNil(kept.update(now: now.addingTimeInterval(600), app: (app, false), quiet: false, eventEnd: nil), "Keep Recording stands")
+        var keptQuiet = CallEndWatch()
+        _ = keptQuiet.update(now: end.addingTimeInterval(1), app: nil, quiet: true, eventEnd: end)
+        XCTAssertEqual(keptQuiet.update(now: end.addingTimeInterval(61), app: nil, quiet: true, eventEnd: end), .quietAfterEnd(end))
+        keptQuiet.kept(.quietAfterEnd(end))
+        keptQuiet.offerAgain()
+        XCTAssertNil(keptQuiet.update(now: end.addingTimeInterval(700), app: nil, quiet: true, eventEnd: end), "Keep Recording stands for quiet too")
     }
 
     func testTheMeetingEndsWhenItIsOverAndQuietForAMinute() {

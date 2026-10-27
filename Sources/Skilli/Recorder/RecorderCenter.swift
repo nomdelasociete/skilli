@@ -626,6 +626,11 @@ final class RecorderCenter {
     /// The call ended: a card offers Stop (never taking the keys from the
     /// app the user types in).
     private func offerStop(_ reason: CallEndWatch.Reason) {
+        // The wake card up: offered once it is answered, still pending.
+        if case .slept? = card.content {
+            watch.offerAgain()
+            return
+        }
         guard recorder.isRecording, !card.isVisible else { return }
         Log.trace("Recorder: the call ended (\(CallEndWatch.line(reason))): Stop offered")
         card.showCallEnded(title: recorder.title, elapsed: recorder.elapsed, line: CallEndWatch.line(reason), reason: reason)
@@ -852,19 +857,30 @@ final class RecorderCenter {
         let title = String(typed.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120))
         guard var record = recordings.read(folder) else { throw RecordingFollowUps.Failure(message: "The recording is gone.") }
         guard !title.isEmpty, title != record.title else { return folder }
-        if recorder.folder.map(Self.key) == Self.key(folder) || isBeingMade(folder) {
-            let doing = recorder.folder.map(Self.key) == Self.key(folder) ? "recorded" : "transcribed"
-            throw RecordingFollowUps.Failure(message: "“\(record.title)” was not renamed: it is being \(doing). Rename it once it is done.")
+        let before = record.title
+        // Not under what writes to its folder: the recorder, a transcript, an
+        // action of its ⌘K (its answer would find the folder gone).
+        let doing: String? = recorder.folder.map(Self.key) == Self.key(folder) ? "it is being recorded"
+            : isBeingMade(folder) ? "it is being transcribed"
+            : followUps.work(for: folder).map { "\($0.replacingOccurrences(of: "…", with: "")) for it" }
+        if let doing {
+            throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(doing). Rename it once it is done.")
         }
         let open = windows[Self.key(folder)]
         let frame = open?.nsWindow.frame
         let moved: URL
         do {
             moved = try recordings.rename(folder, to: title, started: record.started)
-            record.title = title
+        } catch {
+            throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(error.localizedDescription)")
+        }
+        record.title = title
+        do {
             try recordings.write(record, to: moved)
         } catch {
-            throw RecordingFollowUps.Failure(message: "“\(record.title)” was not renamed: \(error.localizedDescription)")
+            // Its folder back, as it was with its title.
+            try? FileManager.default.moveItem(at: moved, to: folder)
+            throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(error.localizedDescription)")
         }
         if let lines = recordings.transcript(moved)?.lines {
             try? MeetingTranscriber.markdown(record, lines: lines).write(to: moved.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)

@@ -271,6 +271,7 @@ public struct CallEndWatch: Equatable, Sendable {
     private var offeredQuiet = false
     /// Keep Recording answered: that reason is not offered again.
     private var keptAppLeft = false
+    private var keptQuiet = false
 
     /// 5 s and a minute; the self-test waits less.
     public init(appGrace: TimeInterval = 5, quietFor: TimeInterval = 60) {
@@ -322,12 +323,15 @@ public struct CallEndWatch: Equatable, Sendable {
     /// if it is still true. Keep Recording's answer stands.
     public mutating func offerAgain() {
         if !keptAppLeft { offeredAppLeft = false }
-        offeredQuiet = false
+        if !keptQuiet { offeredQuiet = false }
     }
 
     /// Keep Recording answered to `reason`: not offered again.
     public mutating func kept(_ reason: Reason) {
-        if case .appLeft = reason { keptAppLeft = true }
+        switch reason {
+        case .appLeft: keptAppLeft = true
+        case .quietAfterEnd: keptQuiet = true
+        }
     }
 
     /// Whether an offer for `reason` still stands: the app back on the

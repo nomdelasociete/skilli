@@ -1039,7 +1039,9 @@ final class SkilliTools {
 
         case "rename_recording":
             guard let center = recorder?() else { throw Failure(message: "The recorder is not available.") }
-            let recording = try text("recording")
+            // Which one, always: never the newest by default.
+            let recording = try text("recording").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !recording.isEmpty else { throw Failure(message: "recording is needed: its id from list_recordings, or its title.") }
             let (folder, record) = try center.recordingForTool(recording)
             let moved = try center.renamed(folder, to: try text("title"))
             return "“\(record.title)” is now “\(center.recordings.read(moved)?.title ?? "")”, id \(moved.lastPathComponent)."

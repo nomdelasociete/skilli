@@ -300,8 +300,9 @@ enum MeetingTranscriber {
         let analyzer: SpeechAnalyzer
         let collect: Task<[[TranscriptWord]], Error>
         if dictation {
-            let transcriber = DictationTranscriber(locale: locale, contentHints: [], transcriptionOptions: [], reportingOptions: [],
-                                                   attributeOptions: [.audioTimeRange])
+            // The preset its model was installed with: punctuation, and each
+            // word's time.
+            let transcriber = DictationTranscriber(locale: locale, preset: .timeIndexedLongDictation)
             analyzer = SpeechAnalyzer(modules: [transcriber], options: .init(priority: .userInitiated, modelRetention: .whileInUse))
             let results = transcriber.results
             collect = Task {
