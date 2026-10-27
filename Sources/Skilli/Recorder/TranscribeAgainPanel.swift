@@ -21,6 +21,12 @@ final class TranscribeAgainPanel: NSObject, NSPopoverDelegate {
     private var loading: Task<Void, Never>?
     var onTranscribe: ((String, TranscriptEngine) -> Void)?
     var onClose: (() -> Void)?
+    /// One of the window's actions running (a link's or a tool's, begun
+    /// while the panel is open): Transcribe dims and says why, the
+    /// choices kept; nil once it is done.
+    var busy: String? {
+        didSet { if busy != oldValue { updateNote() } }
+    }
 
     init(language: String, engine: TranscriptEngine, engines: [(engine: TranscriptEngine, unusable: String?)], edited: Bool,
          languages: @escaping (TranscriptEngine) async -> [(id: String, name: String)]) {
@@ -122,7 +128,7 @@ final class TranscribeAgainPanel: NSObject, NSPopoverDelegate {
 
     private func updateNote() {
         let unusable = engines.first { $0.engine == engine }?.unusable
-        content.unusable = unusable ?? (loaded && languageIDs.isEmpty ? "\(engine.title) has no language on this Mac." : nil)
+        content.unusable = busy ?? unusable ?? (loaded && languageIDs.isEmpty ? "\(engine.title) has no language on this Mac." : nil)
         content.transcribe.isEnabled = content.unusable == nil && !languageIDs.isEmpty
         popover.contentSize = NSSize(width: TranscribeAgainView.width, height: content.preferredHeight)
     }

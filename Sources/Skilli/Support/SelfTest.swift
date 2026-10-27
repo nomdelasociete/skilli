@@ -25096,7 +25096,7 @@ final class SelfTest {
     /// downloaded says so and Transcribe dims), French picked: made in
     /// French with macOS's engine, the names given kept; then English again.
     private func transcribeAgainAsPicked(_ folder: URL) async {
-        let name = "Recorder phase 4: Transcribe Again in the language and engine picked (its panel lists both engines, says the changes are replaced, and that Better transcription is not downloaded, Transcribe dimmed), the names given kept"
+        let name = "Recorder phase 4: Transcribe Again in the language and engine picked (its panel lists both engines, says the changes are replaced, that Better transcription is not downloaded, and waits while an action runs, Transcribe dimmed), the names given kept"
         guard let center = context.recorder(), let controller = center.window(for: folder) else {
             record(name, false, "no window", nil)
             return
@@ -25119,6 +25119,13 @@ final class SelfTest {
             window.appearance = nil
             controller.nsWindow.appearance = nil
         }
+        // An action begun meanwhile (a link's, a tool's): Transcribe dims
+        // and says why, the panel open; back once it is done.
+        controller.showWork("Writing the summary with Claude · Haiku…")
+        let busyNote = panel.shownNote, busyCan = panel.canTranscribe
+        controller.showWork(nil)
+        let busySaid = !busyCan && busyNote == "Writing the summary with Claude · Haiku: Transcribe Again once it is done."
+            && panel.canTranscribe && panel.shownNote == note
         // Better transcription: listed; not downloaded, it says why and
         // Transcribe dims (downloaded, it can be picked).
         await panel.pick(language: nil, engine: .whisper)
@@ -25143,11 +25150,11 @@ final class SelfTest {
         await captureRecordingWindow(controller, as: "recorder-window-again")
         controller.close()
         let passed = languages.contains { $0.hasPrefix("English") } && languages.contains { $0.hasPrefix("French") }
-            && engines == ["macOS", "Better transcription"] && whisperSaid
+            && engines == ["macOS", "Better transcription"] && whisperSaid && busySaid
             && note == "Your changes to the lines are replaced." && showsProgress && madeAgain && record?.language == "fr-FR"
             && record?.engine == TranscriptEngine.macOS.rawValue && record?.edited == nil && kept && english
         self.record(name, passed,
-                    "\(languages.count) languages, engines \(engines), note “\(note)”; Better transcription \(whisperReady ? "downloaded" : "not downloaded"): “\(whisperNote)”, Transcribe \(whisperCan ? "on" : "dimmed") \(whisperSaid); progress shown \(showsProgress), made again in \(record?.language ?? "?") with \(record?.engine ?? "?") \(madeAgain), edited \(record?.edited.map(String.init) ?? "nil"), names given kept \(kept) (\(record?.speakers ?? [:])); then English again \(english)",
+                    "\(languages.count) languages, engines \(engines), note “\(note)”; Better transcription \(whisperReady ? "downloaded" : "not downloaded"): “\(whisperNote)”, Transcribe \(whisperCan ? "on" : "dimmed") \(whisperSaid); an action meanwhile: “\(busyNote)”, Transcribe \(busyCan ? "on" : "dimmed"), back after it \(busySaid); progress shown \(showsProgress), made again in \(record?.language ?? "?") with \(record?.engine ?? "?") \(madeAgain), edited \(record?.edited.map(String.init) ?? "nil"), names given kept \(kept) (\(record?.speakers ?? [:])); then English again \(english)",
                     nil)
     }
 

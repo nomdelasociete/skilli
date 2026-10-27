@@ -696,8 +696,9 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     func showWork(_ text: String?) {
         working = text
         view.setWork(text)
-        // Not made again under an action reading it.
+        // Not made again under an action reading it, its panel open too.
         view.canTranscribeAgain = linesShown && text == nil
+        againPanel?.busy = text.map { "\($0.replacingOccurrences(of: "…", with: "")): Transcribe Again once it is done." }
     }
 
     /// The summary as it is written (`header` says who and when), or read
@@ -954,7 +955,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
                                          engine: TranscriptEngine(stored: made?.engine ?? record.engine) ?? .macOS,
                                          engines: engines(), edited: record.edited == true, languages: languages)
         panel.onTranscribe = { [weak self] language, engine in
-            guard let self else { return }
+            guard let self, self.working == nil else { return }
             var record = self.record
             record.language = language
             self.againPanel = nil
