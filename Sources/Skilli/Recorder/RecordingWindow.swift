@@ -96,6 +96,11 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private let actionPanel = ActionPanelView()
     /// Keys the list took: their repeats are not new presses.
     private var heldKeys = HeldKeys()
+    /// Every key's release in this window, whoever has the keyboard: a held
+    /// key is over. A local monitor, not an override of the window's
+    /// `sendEvent`: its Swift thunk crashed in AppKit's tracking-area
+    /// routing once a window had closed and another opened under the pointer.
+    private var keyUpMonitor: Any?
     /// Whether this window says once what Better transcription does (the
     /// record's transcript made by macOS's engine, never said before);
     /// asked once per window, when it shows a transcript.
@@ -122,6 +127,10 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         window.contentView = view
         window.delegate = self
         window.controller = self
+        keyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { [weak self] event in
+            if let self, event.window === self.window { self.keyReleased(event) }
+            return event
+        }
         window.center()
         view.onPlay = { [weak self] in self?.togglePlay() }
         view.onSeek = { [weak self] seconds, plays in self?.seek(to: seconds, play: plays) }
@@ -333,6 +342,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         // An import still copying its sound: loaded once its file is in.
         if record.imported != nil, !FileManager.default.fileExists(atPath: urls[0].path) { return }
         loadingPlayer = true
+        let loadedFrom = folder
         let composition = AVMutableComposition()
         Task { [weak self] in
             // Both tracks from 0, in one composition: they play in step.
@@ -344,6 +354,12 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
                 try? added.insertTimeRange(range, of: track, at: .zero)
             }
             guard let self else { return }
+            // Renamed meanwhile (its folder moved): loaded again from there.
+            guard self.folder == loadedFrom else {
+                self.loadingPlayer = false
+                self.loadPlayer()
+                return
+            }
             let player = AVPlayer(playerItem: AVPlayerItem(asset: composition))
             player.automaticallyWaitsToMinimizeStalling = false
             self.player = player
@@ -1011,6 +1027,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         // had AppKit route the pointer's exit to it (a crash once another
         // window opened under the pointer).
         view.removeToolTips()
+        if let keyUpMonitor { NSEvent.removeMonitor(keyUpMonitor) }
+        keyUpMonitor = nil
         againPanel?.close()
         player?.pause()
         pictures.forEach { $0.pause() }
@@ -1035,12 +1053,6 @@ private final class RecordingWindow: NSWindow {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.type == .keyDown, !(firstResponder is NSText), controller?.key(event) == true { return true }
         return super.performKeyEquivalent(with: event)
-    }
-
-    /// Every key's release, whoever has the keyboard: a held key is over.
-    override func sendEvent(_ event: NSEvent) {
-        if event.type == .keyUp { controller?.keyReleased(event) }
-        super.sendEvent(event)
     }
 }
 
