@@ -76,6 +76,8 @@ final class AIStore {
     @ObservationIgnored let codex = CodexEngine()
     /// Self-test hook: replaces every writer for AI actions (no tokens).
     @ObservationIgnored var testEngine: TextEngine?
+    /// Self-test hook: what the card says writes, while `testEngine` does.
+    @ObservationIgnored var testEngineLabel = "Test"
     @ObservationIgnored private(set) var api: ClaudeAPIEngine!
     @ObservationIgnored private(set) var openAI: OpenAIEngine!
     @ObservationIgnored private let preferences: Preferences
@@ -175,7 +177,7 @@ final class AIStore {
     /// nothing can write.
     func writer(for choice: ModelChoice?) -> Writer? {
         let wanted = choice ?? defaultModel
-        if let testEngine { return Writer(engine: testEngine, choice: wanted, label: "Test") }
+        if let testEngine { return Writer(engine: testEngine, choice: wanted, label: testEngineLabel) }
         if let writer = ready(wanted) { return writer }
         guard choice != nil, var writer = ready(defaultModel) else { return nil }
         if case .unavailable(let why, _) = availability(wanted.provider) {
