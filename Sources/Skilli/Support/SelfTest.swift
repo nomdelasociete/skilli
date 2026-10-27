@@ -25014,7 +25014,7 @@ final class SelfTest {
         let attendees = Array(items.dropFirst().prefix(3))
         // Picked: the first attendee for the first voice, then the same name for the second.
         let picked = await pickName(controller, line: first, item: attendees.first ?? "")
-        let renamed = controller.shownNames[them[0].rawValue] == attendees.first
+        let renamed = await waitUntil(timeout: 2) { controller.shownNames[them[0].rawValue] == attendees.first } != nil
         let secondCount = controller.shownLines.filter { $0.speaker == them[1] }.count
         let firstCount = controller.shownLines.filter { $0.speaker == them[0] }.count
         let merged = await pickName(controller, line: second, item: "\(attendees.first ?? "") — joins \(attendees.first ?? "")’s lines")
@@ -25052,7 +25052,7 @@ final class SelfTest {
             && items.contains("Me — joins your lines") && items.last == "Other Name…" && picked && renamed && merged && mergedRight && other
             && fieldShown && typed && joinedMe && meKept && unjoined && unmerged && saved
         record(name, passed,
-               "menu \(items.joined(separator: " | ")); renamed \(renamed), merged \(mergedRight) (\(firstCount)+\(secondCount) lines); Other Name… field \(fieldShown), typed \(typed); own name joins Me \(joinedMe), Me kept \(meKept); ⌘Z unjoins \(unjoined), unmerges \(unmerged); written \(saved)",
+               "menu \(items.joined(separator: " | ")); picked \(picked), renamed \(renamed), merged \(mergedRight) (\(firstCount)+\(secondCount) lines); Other Name… field \(fieldShown), typed \(typed); own name joins Me \(joinedMe), Me kept \(meKept); ⌘Z unjoins \(unjoined), unmerges \(unmerged); written \(saved)",
                nil)
     }
 
@@ -25073,7 +25073,10 @@ final class SelfTest {
     /// it (as a click on it does). False when the menu or the item was not
     /// there.
     private func pickName(_ controller: RecordingWindowController, line: Int, item: String) async -> Bool {
-        guard let frame = controller.screenFrame(ofLine: line) else { return false }
+        // A menu still closing (a capture's, the last pick's) would take
+        // the click.
+        guard await waitUntil(timeout: 2, { controller.renameMenu == nil }) != nil,
+              let frame = controller.screenFrame(ofLine: line) else { return false }
         await click(frame)
         if controller.playing { await pressKey(nil, code: CGKeyCode(kVK_Space)) }
         let guardTimer = escapeLater(10)
