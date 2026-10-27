@@ -103,7 +103,7 @@ class GuidesPages(unittest.TestCase):
         for _, page, label in build.GUIDES:
             html = self.pages[page]
             self.assertRegex(html, r'<title>[^<|]+ \| Guides \| skil.li</title>')
-            self.assertIn(f' aria-current="page">{label}</a>', html)
+            self.assertIn(f' aria-current="page">{build.si_labels(label)}</a>', html)
             self.assertIn('<a href="./" aria-current="true">Guides</a>', html)
             self.assertNotIn('{{', html)
             self.assertNotIn('—', html, page)
@@ -115,6 +115,9 @@ class GuidesPages(unittest.TestCase):
         self.assertLess(menu.index('Start here'), menu.index('>Getting started<'))
         # The skillies docs are the last part of the same menu, on their own pages too.
         self.assertIn('<a href="../skillies/docs/">Write a skillie</a>', menu)
+        # An SI in a page's name reveals AI there too, as in Previous and Next.
+        self.assertIn('>Your <span class="si-label">SI</span> and privacy</a>', menu)
+        self.assertIn('<span>Previous</span>Your <span class="si-label">SI</span> and privacy</a>', self.pages['troubleshooting.html'])
 
     def test_pictures_are_in_the_book_and_copied(self):
         for name, html in self.pages.items():

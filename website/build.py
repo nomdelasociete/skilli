@@ -13,7 +13,7 @@ import sys
 
 # The renderer beside this file, also when the build is loaded by the tests.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from markdown_pages import Page  # noqa: E402
+from markdown_pages import Page, si_labels  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUG = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*')
@@ -284,17 +284,17 @@ def render_docs(template, target, book='docs'):
         menu = ''.join((f'<li class="docs-menu-part">{esc(MENU_PARTS[other_book][other])}</li>'
                         if other in MENU_PARTS.get(other_book, {}) else '')
                        + f'<li><a href="{library_address(other_book, other, book)}"'
-                       f'{current if (other_book, other) == (book, name) else ""}>{esc(label)}</a></li>'
+                       f'{current if (other_book, other) == (book, name) else ""}>{si_labels(esc(label))}</a></li>'
                        for other_book, other, label in library)
         sections = ''.join(f'<li class="level-{level}"><a href="#{anchor}">{label}</a></li>' for level, anchor, label in page.headings if level in (2, 3))
         steps = []
         place = library.index((book, name, short))
         if place > 0:
             before_book, before, label = library[place - 1]
-            steps.append(f'<a class="docs-prev" href="{library_address(before_book, before, book)}"><span>Previous</span>{esc(label)}</a>')
+            steps.append(f'<a class="docs-prev" href="{library_address(before_book, before, book)}"><span>Previous</span>{si_labels(esc(label))}</a>')
         if place + 1 < len(library):
             after_book, after, label = library[place + 1]
-            steps.append(f'<a class="docs-next" href="{library_address(after_book, after, book)}"><span>Next</span>{esc(label)}</a>')
+            steps.append(f'<a class="docs-next" href="{library_address(after_book, after, book)}"><span>Next</span>{si_labels(esc(label))}</a>')
         canonical = f'https://skil.li/{site}/' + ('' if name == 'index.html' else name)
         values = {'{{TITLE}}': esc(title), '{{DESCRIPTION}}': esc(description), '{{CANONICAL}}': canonical,
                   '{{MENU}}': menu, '{{SECTIONS}}': sections, '{{CONTENT}}': content, '{{STEPS}}': ''.join(steps),
