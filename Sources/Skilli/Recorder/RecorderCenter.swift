@@ -872,9 +872,13 @@ final class RecorderCenter {
         Log.trace("Recorder: renamed “\(title)” (\(moved.lastPathComponent))")
         NotificationCenter.default.post(name: Recordings.changed, object: nil)
         if let open {
-            open.close()
-            self.open(moved)
-            if let frame { windows[Self.key(moved)]?.nsWindow.setFrame(frame, display: true) }
+            // Asked from that window (a key in its ⌘K): closed once the key
+            // is handled, never freed under its own event.
+            DispatchQueue.main.async { [weak self] in
+                open.close()
+                self?.open(moved)
+                if let frame { self?.windows[Self.key(moved)]?.nsWindow.setFrame(frame, display: true) }
+            }
         }
         return moved
     }
@@ -936,7 +940,9 @@ final class RecorderCenter {
         window.onClose = { [weak self] controller in self?.windows[Self.key(controller.folder)] = nil }
         window.onShowFolder = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
         window.onDelete = { [weak self] folder, record in
-            self?.windows[Self.key(folder)]?.close()
+            // From its own ⌘K (a key there): closed once the key is handled.
+            let open = self?.windows[Self.key(folder)]
+            DispatchQueue.main.async { open?.close() }
             self?.delete(folder, title: record.title)
         }
         window.onTranscribe = { [weak self] folder, record, engine in
