@@ -595,8 +595,14 @@ final class MeetingRecorder {
                 break
             }
             // Each write keeps the skillies' runs as they are on disk: one
-            // may finish while the transcript is made.
+            // may finish while the transcript is made. Made again: from the
+            // record as it is now (chapters, a summary written while it
+            // waited its turn), in the language picked.
             var working = record.keepingRuns(of: recordings.read(folder))
+            if again, var now = recordings.read(folder) {
+                now.language = record.language
+                working = now
+            }
             working.state = .transcribing
             working.recorder = Recordings.ownProcess
             try? recordings.write(working, to: folder)
