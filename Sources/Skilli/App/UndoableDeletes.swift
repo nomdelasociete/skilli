@@ -107,6 +107,15 @@ final class UndoableDeletes {
         }
     }
 
+    /// Settings → Recorder → After each transcript (phase 5): a skillie
+    /// marked gets every recording from now on, said at once; ⌘Z puts back
+    /// what was there.
+    func skillieMarked(_ title: String, previous: String, in preferences: Preferences) {
+        offer("After Every Transcript", UndoDelete.details(title, " gets every recording from now on: its folder, with the sound, the pictures and the words.")) {
+            preferences.recorderAfterTranscript = previous
+        }
+    }
+
     /// Action Items to Reminders (phase 5): added at once, out of sight, so
     /// the undo card says what was added; ⌘Z takes them all back.
     func remindersAdded(_ items: [ReminderItem], in book: ReminderBook) {

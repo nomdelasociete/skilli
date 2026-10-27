@@ -280,6 +280,17 @@ final class MCPService {
             break
         }
 
+        // A recording's words: the card names one recording, the call reads
+        // that one, whatever is newest by the time the user answers; none
+        // found, nothing is asked.
+        var arguments = arguments
+        if SkilliTools.recordingWords.contains(name) {
+            do {
+                arguments = try tools.pinningRecording(arguments)
+            } catch {
+                return text(error.localizedDescription, isError: true)
+            }
+        }
         let risk = SkilliTools.risk(of: definition, arguments: arguments)
         let custom = settings.customTool(named: name)
         let call = ApprovalRules.Call(tool: name, title: definition.title, description: custom?.instructions ?? definition.description,
@@ -459,7 +470,8 @@ final class MCPService {
             Log.trace("Tool \(name) allowed with this run's first step on screen")
             return .go
         case .ask:
-            let once = ruled.reason != nil
+            // A rule asked, or the tool asks every time: no Always.
+            let once = ruled.reason != nil || ToolSettings.asksEveryTime(name)
             switch await presenter?.approve(title, detail: detail(), caller: caller, run: run, once: once, reason: ruled.reason?.line) ?? .deny {
             case .deny:
                 Log.actions.notice("Tool \(name, privacy: .public) declined")

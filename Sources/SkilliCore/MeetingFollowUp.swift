@@ -16,6 +16,33 @@ public enum MeetingFollowUp {
         case actionItems = "action_items"
         case recapMail = "recap_mail"
         case ask
+
+        /// Its link's path (`skilli://record/<name>?recording=…`).
+        public var linkName: String {
+            switch self {
+            case .summary: "summary"
+            case .chapters: "chapters"
+            case .actionItems: "actions"
+            case .recapMail: "recap"
+            case .ask: "ask"
+            }
+        }
+
+        public init?(linkName: String) {
+            guard let action = Self.allCases.first(where: { $0.linkName == linkName.lowercased() }) else { return nil }
+            self = action
+        }
+
+        /// As the card names it before it runs: "Write the summary of".
+        public var asked: String {
+            switch self {
+            case .summary: "Write the summary of"
+            case .chapters: "Find the chapters of"
+            case .actionItems: "Add the action items to Reminders from"
+            case .recapMail: "Open a recap mail of"
+            case .ask: "Answer a question about"
+            }
+        }
     }
 
     /// The meeting as the AI reads it: what it is, then a line each, by

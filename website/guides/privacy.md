@@ -37,8 +37,9 @@ Stays on your Mac:
 
 - your clipboard history and snippets;
 - speech for Ask by Voice and Dictate;
-- meeting recordings and their transcripts (a summary or action items
-  send the words to your SI only when you pick them);
+- meeting recordings and their transcripts (a summary, action items or
+  a question send the words to your SI only when you pick them; an
+  agent reading a transcript asks you every time);
 - where your windows go;
 - your backups.
 

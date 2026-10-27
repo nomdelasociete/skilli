@@ -75,7 +75,15 @@ Them 1, Them 2…, until you name them).
 - **⌘K** for more, sent to your SI only when you pick it, and only the
   words: **Summary**, **Chapters**, **Action Items to Reminders** (each
   linked back to when it was said), **Recap Mail to the Attendees** (a
-  draft in your mail app; you send it).
+  draft in your mail app; you send it), **Ask About This Meeting**
+  ("what did we decide about the launch date?"), answered from the
+  transcript with who said it and when. A recording's row in `recs` has
+  Ask in its ⌘K too.
+- **Your skillies for recordings** are in the same ⌘K: one runs on this
+  recording's folder (its sound, pictures and transcript), and the
+  window says when it ran.
+
+![A recording's ⌘K: Summary, Chapters, Action Items to Reminders, Recap Mail to the Attendees and Ask About This Meeting by Claude, then Transcribe Again, Show in Finder, Copy Transcript and Delete Recording](images/recorder-actions.png "Your SI's actions first, sent only when you pick one.")
 
 **Better transcription**: Settings → Recorder offers a 1.6 GB download
 (whisper large-v3-turbo) that runs on your Mac: about 40% fewer errors
@@ -92,3 +100,6 @@ recording into one.
   where events and Google Meet open, calendars to leave out.
 - **Settings → Recorder**: microphone, the Mac's sound, webcam, screen,
   language, engine, where recordings are kept and when they are deleted.
+  *After each transcript* is off until you pick a skillie there: it then
+  gets every recording from now on, once its transcript is written (⌘Z
+  takes it back).

@@ -46,6 +46,10 @@ public struct ScriptCommand: Hashable, Sendable {
     public let refreshSeconds: Int?
     /// Where it runs; nil for the script's own folder.
     public let directory: String?
+    /// For recordings (`@skilli.forRecordings true`, phase 5): listed in a
+    /// recording's ⌘K, run with its folder in `SKILLI_RECORDING`; one may
+    /// be marked to run after every transcript.
+    public var forRecordings = false
 
     /// Stable id: its path.
     public var id: String { path }
@@ -109,7 +113,8 @@ public struct ScriptCommand: Hashable, Sendable {
             needsConfirmation: values["needsConfirmation"] == "true",
             showsRunning: values["showsRunning"] != "false",
             refreshSeconds: values["refreshTime"].flatMap(seconds),
-            directory: values["currentDirectoryPath"]
+            directory: values["currentDirectoryPath"],
+            forRecordings: values["forRecordings"] == "true"
         )
     }
 

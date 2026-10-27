@@ -129,6 +129,7 @@ final class Preferences {
         static let recorderBetterHintShown = "Preferences.recorderBetterHintShown"
         static let recorderFolderPath = "Preferences.recorderFolderPath"
         static let recorderRetention = "Preferences.recorderRetention"
+        static let recorderAfterTranscript = "Preferences.recorderAfterTranscript"
         static let clipboardHistory = "Preferences.clipboardHistory"
         static let clipboardRetention = "Preferences.clipboardRetention"
         static let clipboardOCR = "Preferences.clipboardOCR"
@@ -333,6 +334,11 @@ final class Preferences {
     }
     /// Delete after changed: the hourly pass is set (nothing removed now).
     @ObservationIgnored var onRecorderRetentionChange: (() -> Void)?
+    /// The skillie for recordings marked to run after every transcript (its
+    /// path); empty: none, the default (Settings → Recorder, the user's only).
+    var recorderAfterTranscript: String {
+        didSet { save(recorderAfterTranscript, Key.recorderAfterTranscript) }
+    }
 
     /// Keep what is copied (Settings → Clipboard).
     var clipboardHistory: Bool {
@@ -725,6 +731,7 @@ final class Preferences {
         recorderBetterHintShown = defaults.bool(forKey: Key.recorderBetterHintShown)
         recorderFolderPath = defaults.string(forKey: Key.recorderFolderPath) ?? ""
         recorderRetention = RecordingRetention(rawValue: defaults.string(forKey: Key.recorderRetention) ?? "never")
+        recorderAfterTranscript = defaults.string(forKey: Key.recorderAfterTranscript) ?? ""
         clipboardHistory = defaults.object(forKey: Key.clipboardHistory) as? Bool ?? true
         clipboardRetention = defaults.string(forKey: Key.clipboardRetention).map(ClipboardRetention.init(rawValue:)) ?? .month
         clipboardOCR = defaults.object(forKey: Key.clipboardOCR) as? Bool ?? true

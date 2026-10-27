@@ -328,7 +328,8 @@ struct ToolsPane: View {
             let right = settings.override(for: tool)
             return ToolSettings.asksEveryTime(tool) && right != .never ? nil : right
         })
-        let everyTime = tools.contains(where: ToolSettings.asksEveryTime) ? " · changes ask every time" : ""
+        let everyTime = tools.contains(where: SkilliTools.recordingWords.contains) ? " · a transcript asks every time"
+            : tools.contains(where: ToolSettings.asksEveryTime) ? " · changes ask every time" : ""
         return "\(tools.count) tool\(tools.count == 1 ? "" : "s")" + (counts.isEmpty ? " · default" : counts) + everyTime
     }
 
@@ -526,7 +527,8 @@ private struct ToolRightPicker: View {
     let settings: ToolSettings
     let tool: String
     let defaultLabel: String
-    /// A change to skil.li's settings: it asks every time, or is blocked.
+    /// A change to skil.li's settings, a recording's words: it asks every
+    /// time, or is blocked.
     var everyTime = false
 
     var body: some View {

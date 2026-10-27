@@ -1213,7 +1213,7 @@ the agents' tools and the links.
      Delete). The window's hint bar says "Actions ⌘K", as the launcher's
      footer does.
    - The launcher: ⌘K on a recording's row (Search Recordings, `recs`, or
-     found by its words) gives Ask About This Meeting…; Ask itself
+     found by its words) gives Ask Claude About This Meeting…; Ask itself
      answers a question about a meeting with the recorder's tools.
    - A link and a tool for each, for skillies and agents. No default
      shortcut for any of them (the user can give one).
@@ -1385,8 +1385,8 @@ said when it is done: the window shows it.
   question with the transcript to the user's AI, and the answer shows
   in the card, as Ask's answers do: its status says who answered ("Claude
   · Haiku · 2.1 s"), ⇥ follows up, ⌘C copies. Nothing is kept.
-- **In the launcher**: the same on a recording's row (⌘K → Ask About
-  This Meeting…). And Ask: a question about a meeting ("what did Paul
+- **In the launcher**: the same on a recording's row (⌘K → Ask Claude
+  About This Meeting…). And Ask: a question about a meeting ("what did Paul
   say about the budget on Monday?") is Ask's agent's to answer with the
   recorder's tools: it finds the recording (`list_recordings`) and reads
   its transcript (`get_transcript`), which the card asks every time,
@@ -1429,10 +1429,11 @@ said when it is done: the window shows it.
   and chapters. No words. A read: the tool rights of a read.
 - `get_transcript` (`recording`: an id or a title, the newest of that
   title; empty: the newest): its transcript as `transcript.md` has it.
-  Asked in the card every time, naming the recording ("Give “Weekly
-  sync” (22 Oct, 32 min) to Claude Code?"): `ToolPolicy`'s `everyTime`,
-  no Always Allow, no right or mode makes it silent; only Block refuses
-  it without asking.
+  Asked in the card every time, naming the recording ("Give a
+  recording's transcript", under it "“Weekly sync” · Wed 22 Oct, 14:00 ·
+  32 min. Its whole transcript goes to the agent asking, then to its
+  provider."): `ToolPolicy`'s `everyTime`, Allow and Deny only, no right
+  or mode makes it silent; only Block refuses it without asking.
 - `recording_followup` (`recording`, `action`: `summary`, `chapters`,
   `action_items`, `recap_mail`, `ask` with `question`): what ⌘K does, its
   answer the summary, the chapters, the reminders added, "The mail is

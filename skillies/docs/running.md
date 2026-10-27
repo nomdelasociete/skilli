@@ -67,6 +67,13 @@ key, Ask, an agent, a link, the menu bar).
   if [ -z "$SKILLI_CLI" ]; then echo "Run me from skil.li."; exit 1; fi
   ```
 
+- Added for a skillie for recordings (`@skilli.forRecordings true`) run on
+  a recording, from its window's ⌘K or after its transcript:
+
+  | Variable | Value |
+  | --- | --- |
+  | `SKILLI_RECORDING` | The recording's folder: `meeting.json`, `transcript.md`, `transcript.json`, `me.m4a`, `them.m4a`, `webcam.mp4` and `screen.mp4` when recorded, `slides.json`, `summary.md` once written. Not set when it runs any other way. |
+
 ### The time limit
 
 At the limit, skil.li sends SIGTERM to the skillie **and every process

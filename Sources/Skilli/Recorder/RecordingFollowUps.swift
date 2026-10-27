@@ -23,6 +23,9 @@ final class RecordingFollowUps {
     var reminders: ReminderBook?
     /// A recording's window when one is open: told what to show.
     var window: (URL) -> RecordingWindowController? = { _ in nil }
+    /// The window shown again as its recording is now (its transcript, or
+    /// where one being made again is: `RecorderCenter`).
+    var reshow: (URL) -> Void = { _ in }
     /// One line in the card: a failure, said once.
     var notify: (String) -> Void = { _ in }
     /// The mail app with a new message (the recap); the self-test watches.
@@ -34,6 +37,20 @@ final class RecordingFollowUps {
     /// The event's attendees' addresses, for a recording made before they
     /// were kept with it.
     var eventAddresses: (MeetingRecord.EventLink) -> [String] = { _ in [] }
+    /// Ask about a meeting: the card answers `message` under `title`.
+    var askInCard: (_ title: String, _ message: String) -> Void = { _, _ in }
+    /// The user's skillies (all of them: those for recordings are picked).
+    var skillies: () -> [ScriptCommand] = { [] }
+    /// The skillie marked to run after every transcript (its path; empty:
+    /// none, Settings → Recorder).
+    var marked: () -> String = { "" }
+    /// A skillie run as the launcher runs one (its "ask first", the card),
+    /// on a recording; `ran` gets how it went.
+    var runInCard: (_ skillie: ScriptCommand, _ folder: URL, _ ran: @escaping @MainActor @Sendable (ScriptLibrary.Run) -> Void) -> Void = { _, _, _ in }
+    /// A skillie run out of sight (no card), on a recording.
+    var runQuietly: (_ skillie: ScriptCommand, _ folder: URL) async throws -> ScriptLibrary.Run = { _, _ in
+        throw Failure(message: "Skillies cannot run now.")
+    }
     /// Reminders not allowed: macOS's question, or its list in Settings.
     var onPermissionNeeded: (Permission) -> Void = { _ in }
     /// What is being done for each recording now (its folder's path), as
@@ -116,8 +133,27 @@ final class RecordingFollowUps {
         case .recapMail:
             return try await recap(folder, record: record, transcript: transcript)
         case .ask:
-            throw Failure(message: "ask it from the recording's ⌘K.")
+            let question = question?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !question.isEmpty else { throw Failure(message: "there is no question.") }
+            let writer = try writer()
+            return try await write(MeetingFollowUp.askRequest(question, transcript: text(of: record, transcript, in: folder)), with: writer,
+                                   in: folder, doing: "Answering a question")
         }
+    }
+
+    /// Ask about a meeting (the window's ⌘K, the launcher's row): the
+    /// question and the transcript to Ask's writer, the answer in the card.
+    func ask(_ question: String, about folder: URL) {
+        guard let record = recordings.read(folder), let transcript = recordings.transcript(folder), !transcript.lines.isEmpty else {
+            notify("The question was not answered: the recording has no transcript yet.")
+            return
+        }
+        // One at a time per recording, Ask too.
+        if let busy = working[Self.key(folder)] {
+            notify("The question was not answered: one at a time, and this one is \(busy.prefix(1).lowercased() + busy.dropFirst())")
+            return
+        }
+        askInCard(record.title, MeetingFollowUp.askRequest(question, transcript: text(of: record, transcript, in: folder)))
     }
 
     // MARK: - The AI
@@ -315,12 +351,75 @@ final class RecordingFollowUps {
         return addresses.isEmpty ? "The mail is open, with no one in To." : "The mail is open, to \(addresses.joined(separator: ", "))."
     }
 
+    // MARK: - Skillies for recordings
+
+    /// The user's skillies for recordings (`@skilli.forRecordings`) that
+    /// need no argument (nothing would give one), by title.
+    func recordingSkillies() -> [ScriptCommand] {
+        skillies().filter { $0.forRecordings && !$0.needsArguments }
+    }
+
+    /// Those that may run after each transcript, out of sight: never one
+    /// that asks before it runs (`needsConfirmation`), whose card would be
+    /// skipped.
+    nonisolated static func runsOnItsOwn(_ skillie: ScriptCommand) -> Bool {
+        skillie.forRecordings && !skillie.needsArguments && !skillie.needsConfirmation
+    }
+
+    /// Whether `skillie` is the one marked (`marked`, a path): by the file
+    /// it is (`/var` and `/private/var` are one folder).
+    nonisolated static func isMarked(_ skillie: ScriptCommand, _ marked: String) -> Bool {
+        !marked.isEmpty && URL(fileURLWithPath: skillie.path).resolvingSymlinksInPath().path
+            == URL(fileURLWithPath: marked).resolvingSymlinksInPath().path
+    }
+
+    /// ⌘K on a recording: the skillie run on it, in the card.
+    func run(_ skillie: ScriptCommand, on folder: URL) {
+        runInCard(skillie, folder) { [weak self] run in self?.note(skillie, run, on: folder, automatic: false) }
+    }
+
+    /// A recording's transcript first made (after Stop, an import, a
+    /// launch's transcript; not Transcribe Again): the skillie marked runs on
+    /// it once, out of sight; the window says it ran, the card only a
+    /// failure (docs/meeting-recorder-views.md, "Skillies for recordings").
+    func transcriptDone(_ folder: URL) {
+        let path = marked()
+        guard !path.isEmpty, let skillie = recordingSkillies().first(where: { Self.isMarked($0, path) }), Self.runsOnItsOwn(skillie),
+              let record = recordings.read(folder), record.state == .done,
+              !(record.skillies ?? []).contains(where: { $0.automatic && $0.path == skillie.path }) else { return }
+        Log.trace("Recorder: “\(skillie.title)” runs after the transcript of “\(record.title)”")
+        Task { [weak self] in
+            guard let self else { return }
+            let run: ScriptLibrary.Run
+            do {
+                run = try await self.runQuietly(skillie, folder)
+            } catch {
+                run = ScriptLibrary.Run(output: error.localizedDescription, status: -1)
+            }
+            self.note(skillie, run, on: folder, automatic: true)
+            guard !run.succeeded else { return }
+            let line = ScriptCommand.lastLine(run.output)
+            self.notify("“\(skillie.title)” failed after the transcript of “\(record.title)”: "
+                        + (line.isEmpty ? "exit \(run.status)." : line))
+        }
+    }
+
+    /// A run kept in `meeting.json` (the last 20), the window told.
+    private func note(_ skillie: ScriptCommand, _ run: ScriptLibrary.Run, on folder: URL, automatic: Bool) {
+        guard var record = recordings.read(folder) else { return }
+        let ran = MeetingRecord.SkillieRun(title: skillie.title, path: skillie.path, at: .now, automatic: automatic, status: run.status,
+                                           line: String(ScriptCommand.lastLine(run.output).prefix(200)))
+        record.skillies = Array(((record.skillies ?? []) + [ran]).suffix(20))
+        try? recordings.write(record, to: folder)
+        refresh(folder)
+    }
+
     // MARK: - The window
 
-    /// The window shows the recording as its files are now.
+    /// The window shows the recording as its files are now; while its
+    /// transcript is made again, where that is (`RecorderCenter`).
     private func refresh(_ folder: URL) {
         NotificationCenter.default.post(name: Recordings.changed, object: nil)
-        guard let window = window(folder), let record = recordings.read(folder) else { return }
-        window.show(record, transcript: recordings.transcript(folder))
+        reshow(folder)
     }
 }

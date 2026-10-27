@@ -226,6 +226,36 @@ in the skillie's card unless the user's tool rights allow them. While a
 meeting is on, the card is that meeting's (its title unless one is
 given, its attendees, in person the microphone only).
 
+Once a transcript is made, what its window's ⌘K does, with your own SI
+(Settings → SI Accounts) reading the transcript, asked in the card every
+time, the recording named:
+
+```bash
+"$SKILLI_CLI" call list_recordings                                   # ids, titles, dates, lengths: no words
+"$SKILLI_CLI" call get_transcript recording="Weekly sync"            # its transcript.md (empty: the newest)
+"$SKILLI_CLI" call recording_followup action=summary recording="Weekly sync"       # written to summary.md, and printed
+"$SKILLI_CLI" call recording_followup action=chapters                              # the newest recording's
+"$SKILLI_CLI" call recording_followup action=action_items recording="Weekly sync"  # each added to Reminders
+"$SKILLI_CLI" call recording_followup action=recap_mail recording="Weekly sync"    # a mail to the attendees opens: you send it
+"$SKILLI_CLI" call recording_followup action=ask question="Who sends the deck?"
+open "skilli://record/summary?recording=Weekly%20sync"   # …/chapters, …/actions, …/recap, …/ask?question=…
+open "skilli://record/open?recording=Weekly%20sync&at=724"   # its window, playing from 12:04
+```
+
+A skillie made for recordings says so in its header; a recording's ⌘K
+lists it and runs it with the recording's folder in `SKILLI_RECORDING`.
+Settings → Recorder → After each transcript marks one to run on every
+recording once its transcript is made (off until you pick it; the
+recording's window says when it ran):
+
+```bash
+# @skilli.forRecordings true
+[ -n "$SKILLI_RECORDING" ] || { echo "Run me from a recording's ⌘K."; exit 1; }
+# One file per recording, named after its folder ("2026-10-22 14.00 Weekly sync.md").
+mkdir -p ~/Documents/Meetings &&
+  cp "$SKILLI_RECORDING/transcript.md" ~/Documents/Meetings/"$(basename "$SKILLI_RECORDING").md" && echo "Copied."
+```
+
 The recordings made, and the recorder's settings (Settings → Recorder,
 each asked in the card):
 

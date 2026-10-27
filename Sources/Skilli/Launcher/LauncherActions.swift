@@ -266,7 +266,11 @@ extension LauncherController {
             return [first]
         // A recording made: its folder, its words, gone to the Trash.
         case .recorded(let found):
-            return [first, key("Show in Finder", "folder", .openSecond),
+            return [first,
+                    LauncherAction(title: "Ask \(recordingProvider()) About This Meeting…", symbol: "questionmark.bubble", keepsOpen: true) { [weak self] in
+                        self?.askAboutRecording(found.summary)
+                    },
+                    key("Show in Finder", "folder", .openSecond),
                     LauncherAction(title: "Copy Transcript", symbol: "doc.on.doc", key: .copy, group: .copy) { [weak self] in
                         self?.hide()
                         self?.onCopyRecordingTranscript?(found.summary.folder)

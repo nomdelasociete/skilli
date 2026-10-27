@@ -469,6 +469,12 @@ Your meetings recorded on this Mac, both sides, then written out.
   the Attendees** (a new message in your mail app: you send it). Each
   goes to the SI you write with (Settings → SI Accounts), only when you
   pick it: the transcript's words, never the sound or the pictures.
+  **Ask Claude About This Meeting…** there and on a recording's row in
+  the launcher: the answer in the card. Your **skillies for recordings**
+  (`@skilli.forRecordings true`) run on it from ⌘K, getting its folder;
+  one can run after each transcript (Settings → Recorder, off until you
+  pick it). Agents: `list_recordings`, and `get_transcript`, asked each
+  time.
 - **Import Recording** (`import`): a sound or video file (a voice memo,
   a call app's own recording) made a recording, transcribed on this Mac,
   voices told apart; or drop the file on a recording's window. The file
@@ -477,8 +483,9 @@ Your meetings recorded on this Mac, both sides, then written out.
   said and the text read on screen; the best two show in any search too.
 
 Settings: Record ⌘R on the meeting card · Microphone · The Mac's sound
-· Webcam · Screen · Language · Better transcription · Engine · Keep
-recordings in · Delete after · the recordings, by month.
+· Webcam · Screen · Language · Better transcription · Engine · After each
+transcript · Keep recordings in · Delete after · the recordings, by
+month.
 
 <!-- pane: reminders -->
 ## Reminders

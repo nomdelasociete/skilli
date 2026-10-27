@@ -83,6 +83,8 @@ struct RecorderPane: View {
                                            remove: { removeBetterTranscription(better) })
             }
 
+            afterTranscript
+
             if let line = PrivacyMap.line(for: SettingsPane.recorder.rawValue, .current(preferences, context)) {
                 Section {
                     LeavesMacRow(line: line, open: open)
@@ -181,6 +183,47 @@ struct RecorderPane: View {
     }
 
     /// Remove: to the Trash, the undo card offers it back for 10 s.
+    /// After each transcript (phase 5): None, the default, or one skillie
+    /// for recordings that gets every recording from now on, said under it
+    /// and in the undo card (⌘Z puts back what was there).
+    private var afterTranscript: some View {
+        // Never one that asks first: after a transcript nobody is there to answer.
+        let skillies = context.skillies().filter(RecordingFollowUps.runsOnItsOwn)
+        let marked = preferences.recorderAfterTranscript
+        let title = skillies.first { RecordingFollowUps.isMarked($0, marked) }?.title
+        return Section {
+            Picker("After each transcript", selection: Binding(get: { marked }, set: { mark($0, among: skillies) })) {
+                Text("None").tag("")
+                if !marked.isEmpty, title == nil {
+                    Text("A skillie no longer there").tag(marked)
+                }
+                // The one marked under the path it was saved with.
+                ForEach(skillies, id: \.path) { skillie in
+                    Text(skillie.title).tag(RecordingFollowUps.isMarked(skillie, marked) ? marked : skillie.path)
+                }
+            }
+            .disabled(skillies.isEmpty && marked.isEmpty)
+            .settingAnchor("recorderAfterTranscript")
+        } footer: {
+            if let title {
+                Text("“\(title)” gets every recording from now on: its folder, with the sound, the pictures and the words. What it does with them is its own script's.")
+            } else if skillies.isEmpty {
+                Text("No skillie for recordings that runs without asking: one says @skilli.forRecordings true in its header, and not needsConfirmation. ⌘K in a recording's window runs one on it.")
+            } else {
+                Text("A skillie for recordings can run on each recording once its transcript is made. ⌘K in a recording's window runs one on it.")
+            }
+        }
+    }
+
+    private func mark(_ path: String, among skillies: [ScriptCommand]) {
+        let previous = preferences.recorderAfterTranscript
+        guard path != previous else { return }
+        preferences.recorderAfterTranscript = path
+        if let skillie = skillies.first(where: { $0.path == path }) {
+            context.deletes.skillieMarked(skillie.title, previous: previous, in: preferences)
+        }
+    }
+
     private func removeBetterTranscription(_ better: BetterTranscription) {
         do {
             removeFailed = nil

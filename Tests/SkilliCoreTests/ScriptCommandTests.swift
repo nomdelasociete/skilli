@@ -119,6 +119,15 @@ final class ScriptCommandTests: XCTestCase {
         XCTAssertEqual(FeatureCatalog.entry(image).run, .skillie("/Users/me/skillies/clock.sh"))
     }
 
+    func testASkillieForRecordingsSaysSo() throws {
+        let marked = try XCTUnwrap(ScriptCommand.parse("#!/bin/sh\n# @skilli.title Send to Notes\n# @skilli.mode compact\n# @skilli.forRecordings true\n",
+                                                       path: "/scripts/notes.sh"))
+        XCTAssertTrue(marked.forRecordings)
+        let plain = try XCTUnwrap(ScriptCommand.parse("#!/bin/sh\n# @skilli.title Hello\n# @skilli.mode compact\n", path: "/scripts/hello.sh"))
+        XCTAssertFalse(plain.forRecordings)
+        XCTAssertEqual(SkillieEnvironment.recording, "SKILLI_RECORDING")
+    }
+
     func testOutputLines() {
         XCTAssertEqual(ScriptCommand.lastLine("one\ntwo\n\n  \n"), "two")
         XCTAssertEqual(ScriptCommand.lastLine(""), "")

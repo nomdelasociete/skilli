@@ -154,6 +154,7 @@ public enum SettingsTable {
         public static let signIn = "Signing in is the user's, in the app's own sign-in: skil.li never handles it."
         public static let relay = "It says where skil.li sends the relay's stream token: the user sets it in the pane."
         public static let consent = "It sends the user's pull requests and notifications through a server: only the user turns it on, after reading what it keeps."
+        public static let recordings = "It hands every recording, its sound, pictures and words, to the user's own script: only the user marks it, in the pane."
     }
 
     private static let set = SettingEntry.Access.tools([Tool.setSetting])
@@ -342,6 +343,8 @@ public enum SettingsTable {
                 .choiceOrNumber([SettingOption("never", "Never"), SettingOption("week", "1 week"), SettingOption("month", "1 month"),
                                  SettingOption("quarter", "3 months"), SettingOption("year", "1 year")], 1...3650, unit: "days"),
                 note: "Or a number of days (Custom). Changing it removes nothing at once: expired recordings go to the Trash on the next hourly pass, and the pane says how many first."),
+        setting("recorder", "recorderAfterTranscript", "After each transcript", .choiceOnThisMac, access: .paneOnly(Why.recordings),
+                note: "A skillie for recordings (@skilli.forRecordings) that gets each recording's folder once its transcript is made, by its path; empty: none (the default)."),
 
         // Reminders
         setting("reminders", "remindersDefaultList", "Said reminders go to", .choiceOnThisMac),

@@ -528,7 +528,7 @@ final class MeetingRecorder {
         queue = []
         if let transcribing {
             if let before = transcribingBefore {
-                try? recordings.write(before, to: transcribing.folder)
+                try? recordings.write(before.keepingRuns(of: recordings.read(transcribing.folder)), to: transcribing.folder)
             } else {
                 left.insert(transcribing.folder, at: 0)
             }
@@ -572,6 +572,12 @@ final class MeetingRecorder {
         }
     }
 
+    /// Whether `folder`'s transcript waits its turn (another being made).
+    func waits(_ folder: URL) -> Bool {
+        let key = folder.resolvingSymlinksInPath().standardizedFileURL.path
+        return queue.contains { $0.0.resolvingSymlinksInPath().standardizedFileURL.path == key }
+    }
+
     private func transcribeNext() async {
         while !queue.isEmpty, !quitting {
             let (folder, record, again, engine) = queue.removeFirst()
@@ -588,7 +594,9 @@ final class MeetingRecorder {
                 transcribingBefore = nil
                 break
             }
-            var working = record
+            // Each write keeps the skillies' runs as they are on disk: one
+            // may finish while the transcript is made.
+            var working = record.keepingRuns(of: recordings.read(folder))
             working.state = .transcribing
             working.recorder = Recordings.ownProcess
             try? recordings.write(working, to: folder)
@@ -601,10 +609,10 @@ final class MeetingRecorder {
                         }
                     }
                 }
-                try recordings.write(done, to: folder)
+                try recordings.write(done.keepingRuns(of: recordings.read(folder)), to: folder)
             } catch where before?.state == .done && recordings.transcript(folder) != nil {
                 // Transcribe Again that failed: the transcript before stays.
-                if let before { try? recordings.write(before, to: folder) }
+                if let before { try? recordings.write(before.keepingRuns(of: recordings.read(folder)), to: folder) }
                 onTranscriptFailed?("The transcript was not made again: \(error.localizedDescription) The one before is kept.")
                 Log.actions.error("Recorder: “\(record.title, privacy: .private)” not transcribed again (\(error.localizedDescription, privacy: .public))")
             } catch {
@@ -612,7 +620,7 @@ final class MeetingRecorder {
                 pending.state = .pending
                 pending.engine = nil
                 pending.recorder = nil
-                try? recordings.write(pending, to: folder)
+                try? recordings.write(pending.keepingRuns(of: recordings.read(folder)), to: folder)
                 Log.actions.error("Recorder: no transcript for “\(record.title, privacy: .private)” (\(error.localizedDescription, privacy: .public))")
             }
             transcribing = nil

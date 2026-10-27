@@ -128,11 +128,13 @@ final class ActionPanelView: NSView {
     required init?(coder: NSCoder) { nil }
 
     /// Typing a value instead of choosing ("Alias for Emoji"): ↩ submits.
-    private var prompt: (title: String, submit: (String) -> Void)?
+    /// `placeholder` shows in the empty field, `line` in place of the rows.
+    private var prompt: (title: String, placeholder: String, line: String, submit: (String) -> Void)?
     var isPrompting: Bool { prompt != nil }
 
-    func ask(_ title: String, initial: String, submit: @escaping (String) -> Void) {
-        prompt = (title, submit)
+    func ask(_ title: String, initial: String, placeholder: String = "e, cl, todo…", line: String = "Type it, ↩ saves, esc goes back",
+             submit: @escaping (String) -> Void) {
+        prompt = (title, placeholder, line, submit)
         header.stringValue = title
         filter = initial
         note = nil
@@ -227,7 +229,7 @@ final class ActionPanelView: NSView {
         header.frame = NSRect(x: 14, y: height - Self.headerHeight + 7, width: listWidth - 28, height: 16)
         var y = height - Self.headerHeight
         if visible.isEmpty {
-            let none = NSTextField(labelWithString: isPrompting ? "Type it, ↩ saves, esc goes back" : "No action matches")
+            let none = NSTextField(labelWithString: prompt?.line ?? "No action matches")
             none.font = .systemFont(ofSize: 13)
             none.textColor = .tertiaryLabelColor
             none.frame = NSRect(x: 14, y: y - Self.rowHeight + 7, width: listWidth - 28, height: 17)
@@ -262,7 +264,7 @@ final class ActionPanelView: NSView {
         }
         field.lineBreakMode = .byTruncatingHead
         field.toolTip = nil
-        field.stringValue = filter.isEmpty ? (isPrompting ? "e, cl, todo…" : "Search actions…") : filter
+        field.stringValue = filter.isEmpty ? (prompt?.placeholder ?? "Search actions…") : filter
         field.textColor = filter.isEmpty ? .tertiaryLabelColor : .labelColor
     }
 

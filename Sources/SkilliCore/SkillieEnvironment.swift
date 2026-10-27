@@ -11,6 +11,8 @@ public enum SkillieEnvironment {
     public static let socket = "SKILLI_SOCKET"
     /// This run's id: the card names the skillie and lends it its card.
     public static let skillie = "SKILLI_SKILLIE"
+    /// A skillie for recordings run on one: its folder (phase 5).
+    public static let recording = "SKILLI_RECORDING"
 
     /// The three, or none when skil.li's tools do not listen: a call would
     /// reach another skil.li.
