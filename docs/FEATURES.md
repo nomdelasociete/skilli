@@ -221,7 +221,7 @@ Everything you copy, and your screenshots, ready to paste again.
 
 - **Clipboard History** (✦C, `cb`): text, images and files; search
   without accents, even words inside images; ⇥ by meaning ("my train
-  ticket from yesterday"). ↩ pastes, ⇧↩ plain text, ⌘↩ copies, ⌘⌫ forgets
+  ticket from yesterday") or by what a copy is ("email", "a link"). ↩ pastes, ⇧↩ plain text, ⌘↩ copies, ⌘⌫ forgets
   (⌘Z brings it back for 10 s). With CleanShot X, ⌘K on an image
   annotates it, pins it or adds it to Quick Access.
 - **Previews** by kind: a link's card (picture, title, site), a color's

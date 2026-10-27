@@ -110,6 +110,7 @@
 		47F3794B14AFAFD8F1E76706 /* MeetingTabSelect.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBCDAF84D8DEA0023BC560E8 /* MeetingTabSelect.swift */; };
 		497C3C6769A7730369153915 /* MCPService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C17658C5B466D342BA5EC31C /* MCPService.swift */; };
 		4A1F8B8DC1190BF82FC1C146 /* ShortcutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5503C6237C9DD3E2805FAEC /* ShortcutStore.swift */; };
+		4A56A10E2821D135D920EF60 /* ClipboardMeaningCorpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B3DF246D2CEF3D4751EF4F /* ClipboardMeaningCorpus.swift */; };
 		4AEBDC38089DF858D723EBC8 /* ClipboardPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61892FB77FB4F33A30C7052E /* ClipboardPreviewView.swift */; };
 		4C1629C8A7E2B48A7B47916F /* MCPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB56A6DA8BEE2043310D1BF /* MCPClient.swift */; };
 		4C67C7322B27F5F175A71878 /* Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B4DD2FE4CDE021E7536FF52 /* Snapshot.swift */; };
@@ -544,6 +545,7 @@
 		50F39B4ABEF6648C0FD216C2 /* Transcriber */ = {isa = PBXFileReference; includeInIndex = 0; path = Transcriber; sourceTree = BUILT_PRODUCTS_DIR; };
 		512A4230C03E002AF05528B1 /* SkilliCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SkilliCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		516D2305BCD384C1B18505BF /* BindingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BindingEngine.swift; sourceTree = "<group>"; };
+		51B3DF246D2CEF3D4751EF4F /* ClipboardMeaningCorpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardMeaningCorpus.swift; sourceTree = "<group>"; };
 		51D120965BBCEDD15A346F01 /* RestoreDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoreDefaults.swift; sourceTree = "<group>"; };
 		51EAE0135FC45452398571B3 /* ClaudeSubscriptionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSubscriptionEngine.swift; sourceTree = "<group>"; };
 		51ED913D9DAA4C0DE0E9FE0F /* ToolRightsTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolRightsTools.swift; sourceTree = "<group>"; };
@@ -1276,6 +1278,7 @@
 				76392668F260E84E713200D6 /* AskRouteCorpus.swift */,
 				DD3FFF919066544B9CB6E429 /* Benchmark.swift */,
 				589BBB57B8D9D8261748F540 /* BrandCheck.swift */,
+				51B3DF246D2CEF3D4751EF4F /* ClipboardMeaningCorpus.swift */,
 				0D03B019FD562A3A2561B27E /* Foreground.swift */,
 				6DFAFFF8E51ADA4D23735148 /* GlassCheck.swift */,
 				4339AF712A9178E3FF6B0D63 /* Log.swift */,
@@ -1794,6 +1797,7 @@
 				22C792FF2363284A10525894 /* ClaudeSubscriptionEngine.swift in Sources */,
 				6094AFE312E3430D7BC5D923 /* ClipboardHistory.swift in Sources */,
 				660B1110428831E6B3C0067E /* ClipboardLinks.swift in Sources */,
+				4A56A10E2821D135D920EF60 /* ClipboardMeaningCorpus.swift in Sources */,
 				E8F305312777A8E91E522299 /* ClipboardPane.swift in Sources */,
 				4AEBDC38089DF858D723EBC8 /* ClipboardPreviewView.swift in Sources */,
 				F47F684AFFD89552F44B4C0B /* ClipboardStore.swift in Sources */,

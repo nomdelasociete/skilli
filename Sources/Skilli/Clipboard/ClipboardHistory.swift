@@ -220,11 +220,21 @@ final class ClipboardHistory {
         guard let store else { return nil }
         let candidates = store.search("", limit: ClipboardMeaning.candidateLimit)
         guard !candidates.isEmpty else { return MeaningResult(items: [], label: "") }
-        let options = candidates.map { item in
-            DecisionQuestion.Option(value: "c\(item.id)", description: ClipboardMeaning.describe(
-                kind: ClipboardMeaning.Kind(rawValue: item.kind.rawValue) ?? .text, text: item.text, ocr: item.ocr,
-                appName: item.appName, copiedAt: item.copiedAt, tags: item.tags, now: now))
+        // Off the main thread: each text is read for what it is (Apple's data
+        // detectors). A newer search or a closed history cancels it, and
+        // then nothing is sent.
+        let work = Task.detached(priority: .userInitiated) { () -> [DecisionQuestion.Option]? in
+            var options: [DecisionQuestion.Option] = []
+            for item in candidates {
+                if Task.isCancelled { return nil }
+                options.append(DecisionQuestion.Option(value: "c\(item.id)", description: ClipboardMeaning.describe(
+                    kind: ClipboardMeaning.Kind(rawValue: item.kind.rawValue) ?? .text, text: item.text, ocr: item.ocr,
+                    appName: item.appName, copiedAt: item.copiedAt, tags: item.tags, now: now)))
+            }
+            return options
         }
+        guard let options = await withTaskCancellationHandler(operation: { await work.value }, onCancel: { work.cancel() }),
+              !Task.isCancelled else { return nil }
         let question = DecisionQuestion(name: "copy", instructions: ClipboardMeaning.instructions,
                                         options: options + [.init(value: "none", description: "No copy fits what the user describes")])
         let input = ClipboardMeaning.input(request, now: now)
