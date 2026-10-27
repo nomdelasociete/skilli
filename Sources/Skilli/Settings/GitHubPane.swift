@@ -63,7 +63,7 @@ struct GitHubPane: View {
             if let github, github.isSignedIn {
                 RelayEnrollmentControls(session: github.relayDevice, origin: relayOrigin,
                                         serverSync: preferences.githubServerSync ? nil : $serverSyncWanted,
-                                        serverSyncReady: { github.confirmServerSyncGrant { preferences.githubServerSync = true } })
+                                        serverSyncReady: { github.confirmServerSyncGrant { turnOnServerSync() } })
                 if github.relayDevice.canRevoke || preferences.githubServerSync {
                     ServerSyncControls(preferences: preferences, github: github)
                 }
@@ -147,13 +147,23 @@ struct GitHubPane: View {
         }
     }
 
-    /// The relay's address, the default one written the first time.
+    /// The relay's address GitHubBook connects to: this session's
+    /// RELAY_PUBLIC_URL when set, else the setting, the default one written
+    /// the first time. The pairing is bound to it.
     private func relayOrigin() -> String {
+        let environment = (ProcessInfo.processInfo.environment["RELAY_PUBLIC_URL"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !environment.isEmpty { return environment }
         if preferences.relayPublicURL.isEmpty {
             preferences.relayPublicURL = "https://relay.nomdelasociete.com"
             relayURL = preferences.relayPublicURL
         }
         return preferences.relayPublicURL
+    }
+
+    /// The relay holds the grant now: on, unless the box was unticked
+    /// while the browser trip went on.
+    private func turnOnServerSync() {
+        if serverSyncWanted { preferences.githubServerSync = true }
     }
 
     @ViewBuilder
@@ -171,6 +181,8 @@ struct GitHubPane: View {
                     Text(code.userCode)
                         .font(.system(.title3, design: .monospaced).weight(.semibold))
                         .textSelection(.enabled)
+                    // GitHub's page at once, without waiting for the relay's tab.
+                    Button("Open GitHub") { github.open(code.verificationURL) }
                     Button("Cancel") { github.cancelSignIn() }
                 }
             } label: {
@@ -180,7 +192,7 @@ struct GitHubPane: View {
             LabeledContent {
                 Button("Sign In with GitHub…") {
                     github.signIn(relayOrigin: relayOrigin(), serverSync: serverSyncWanted,
-                                  serverSyncReady: { preferences.githubServerSync = true })
+                                  serverSyncReady: { turnOnServerSync() })
                 }
                 .disabled(!github.canSignIn)
             } label: {

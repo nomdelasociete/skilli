@@ -50,11 +50,14 @@ Sign In with GitHub…
   nothing: the code is only useful to someone signed in to GitHub, and a code
   approved by another account gives a token that fails the id check below.
 - **Already signed in on this Mac** (existing users): no `user_code`, the
-  final page says "Done". Live updates and server sync take one trip. The
-  URL carries this Mac's GitHub id (`subject`, from GitHub's `/user`): a
-  browser on another account ends at the relay's callback, before any
-  pairing or inbox grant is kept (review, 2026-10-27: otherwise a grant
-  would stay on the relay for an account this Mac refuses).
+  final page says "Done". Live updates and server sync take one trip. When the relay lists
+  `subject` in `chain`, the URL carries this Mac's GitHub id (from GitHub's
+  `/user`): a browser on another account ends at the relay's callback,
+  before any pairing or inbox grant is kept (review, 2026-10-27: otherwise
+  a grant would stay on the relay for an account this Mac refuses). A relay
+  without `subject`, or a `/user` that does not answer: no inbox grant is
+  asked for in the tab, and the Mac's own id check after the pairing
+  decides, as today.
 - **Server sync turns on only once the relay holds the grant**: skil.li asks
   the relay's copy every 5 s while the tab can still finish (10 min).
 - **The inbox grant asks for the same scopes as the native token**
@@ -162,9 +165,11 @@ the chain skips step 3.
 
 **relay** (`cloudflare/src/auth.ts`, `inbox.ts`):
 
-1. `POST /devices` answers `chain: ["inbox", "user_code"]`; `/enroll`
-   accepts optional `inbox=1` and `user_code` (strict format, at most once
-   each); `BrowserFlow` keeps them sealed with the flow.
+1. `POST /devices` answers `chain: ["inbox", "user_code", "subject"]`;
+   `/enroll` accepts optional `inbox=1`, `user_code` and `subject` (strict
+   format, at most once each); `BrowserFlow` keeps them sealed with the
+   flow, and ends a browser on another account than `subject` at the
+   callback.
 2. After a successful Associate with `inbox=1`: 303 to a new inbox flow
    bound to (product, subject) without a device bearer
    (`InboxAuthorization.beginFromEnrollment`), then GitHub, then the final
