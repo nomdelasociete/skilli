@@ -32,7 +32,66 @@ public struct GitHubNotification: Identifiable, Hashable, Sendable {
     public var reasonTitle: String { GitHubNotifications.reasonTitle(reason) }
 }
 
+/// One page of GitHub's `/notifications`, as the client fetched it.
+public struct GitHubNotificationsPage: Sendable {
+    public let status: Int
+    public let data: Data
+    public let lastModified: String?
+    public let pollInterval: TimeInterval?
+    /// GitHub's `Link` header names a next page.
+    public let hasNext: Bool
+
+    public init(status: Int, data: Data, lastModified: String?, pollInterval: TimeInterval?, hasNext: Bool) {
+        self.status = status
+        self.data = data
+        self.lastModified = lastModified
+        self.pollInterval = pollInterval
+        self.hasNext = hasNext
+    }
+}
+
+/// What a read of the notifications found.
+public enum GitHubNotificationsRead: Sendable, Equatable {
+    case unchanged(pollInterval: TimeInterval)
+    /// `complete`: false when GitHub had more unread than `maxPages` pages.
+    case changed([GitHubNotification], complete: Bool, lastModified: String?, pollInterval: TimeInterval)
+}
+
 public enum GitHubNotifications {
+    /// GitHub's unread notifications, every page. Only the first request is
+    /// conditional: unchanged, GitHub answers 304 and it costs nothing. A
+    /// 200 to it lists only the threads changed since then, never the whole
+    /// inbox (2026-10-27: 2 shown of 330), so a full read follows.
+    public static func read(since: String?, maxPages: Int = 10,
+                            page: @Sendable (_ number: Int, _ since: String?) async throws -> GitHubNotificationsPage) async throws -> GitHubNotificationsRead {
+        var threads: [String: GitHubNotification] = [:]
+        var lastModified: String?
+        var pollInterval: TimeInterval = 60
+        for number in 1...max(1, maxPages) {
+            let answer = try await page(number, number == 1 ? since : nil)
+            if number == 1 {
+                pollInterval = answer.pollInterval ?? 60
+                lastModified = answer.lastModified
+                if since != nil {
+                    if answer.status == 304 { return .unchanged(pollInterval: pollInterval) }
+                    return try await read(since: nil, maxPages: maxPages, page: page)
+                }
+            }
+            let list = try parse(answer.data)
+            for notification in list { threads[notification.id] = notification }
+            // GitHub's count, before the threads it cannot place are left out.
+            let received = (try? JSONSerialization.jsonObject(with: answer.data) as? [Any])?.count ?? list.count
+            if received < 50 || !answer.hasNext {
+                return .changed(sortedNewestFirst(threads), complete: true, lastModified: lastModified, pollInterval: pollInterval)
+            }
+        }
+        return .changed(sortedNewestFirst(threads), complete: false, lastModified: lastModified, pollInterval: pollInterval)
+    }
+
+    private static func sortedNewestFirst(_ threads: [String: GitHubNotification]) -> [GitHubNotification] {
+        threads.values.sorted { $0.updatedAt == $1.updatedAt ? $0.id > $1.id : $0.updatedAt > $1.updatedAt }
+    }
+
     /// GitHub's notifications, newest first; those it cannot place are left
     /// out.
     public static func parse(_ data: Data) throws -> [GitHubNotification] {

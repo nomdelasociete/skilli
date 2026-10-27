@@ -2525,7 +2525,9 @@ re-investigating.
   statuses such as Woodpecker's and Vercel's included, the repository's
   default merge method; Merge offered only with write access,
   `viewerPermission`); notifications from `/notifications` with
-  `If-Modified-Since` (304 costs nothing), at GitHub's `X-Poll-Interval`.
+  `If-Modified-Since` (304 costs nothing), at GitHub's `X-Poll-Interval`;
+  a 200 to it lists only the threads changed since, so every page is read
+  again (`GitHubNotifications.read`, 10 pages of 50 at most, a cut said).
   Signing in: GitHub's device flow (a code, copied, typed on
   github.com/login/device; the token in the Keychain as `github-token`,
   `selftest-` for the self-test) with the OAuth app "skil.li" (owned by nomdelasociete, device flow on,
