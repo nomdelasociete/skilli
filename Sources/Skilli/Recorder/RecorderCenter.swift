@@ -46,6 +46,10 @@ final class RecorderCenter {
     private(set) lazy var followUps: RecordingFollowUps = {
         let followUps = RecordingFollowUps(recordings: recordings, deletes: deletes)
         followUps.window = { [weak self] folder in self?.window(for: folder) }
+        followUps.transcribing = { [weak self] folder in
+            guard let transcribing = self?.recorder.transcribing, Self.key(transcribing.folder) == Self.key(folder) else { return nil }
+            return transcribing.step
+        }
         followUps.notify = { [weak self] line in self?.notify(line) }
         return followUps
     }()

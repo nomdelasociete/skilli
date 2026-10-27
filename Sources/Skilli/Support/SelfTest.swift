@@ -24489,9 +24489,10 @@ final class SelfTest {
     /// The agents' tools: list_recordings (no words); get_transcript asked
     /// every time with no Always, even with Always Allow and an allow
     /// right, naming the recording; recording_followup asked the same way,
-    /// naming where the words go; a follow-up link asked too.
+    /// naming where the words go; one not there refused before any card;
+    /// a follow-up link asked too.
     private func transcriptToolsAskEveryTime(_ center: RecorderCenter, _ folder: URL) async {
-        let name = "Recorder phase 5: list_recordings gives no words; get_transcript and recording_followup ask every time (Always Allow and an allow right change nothing, no Always offered), naming the recording; a follow-up link asks too"
+        let name = "Recorder phase 5: list_recordings gives no words; get_transcript and recording_followup ask every time (Always Allow and an allow right change nothing, no Always offered), naming the recording; one not there is refused before any card; a follow-up link asks too"
         let (listedStatus, listed) = await skilliCall("list_recordings")
         let noWords = listedStatus == 0 && listed.contains(folder.lastPathComponent) && !listed.contains("final screens")
         let tools = context.tools.settings
@@ -24519,6 +24520,10 @@ final class SelfTest {
         let whereSaid = popover.shownText.contains("its transcript goes to \(context.ai.defaultModel.provider.title)")
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         let declined = await refused
+        // A recording that is not there: refused before any card.
+        _ = await waitUntil(timeout: 2) { !popover.isVisible }
+        let unknown = await skilliCall("get_transcript", "{\"recording\":\"No such meeting\"}")
+        let refusedFirst = unknown.status != 0 && unknown.output.contains("No recording") && !popover.isVisible
         var linkAsked = false
         if let links = context.links {
             guard await focusTestWindow() else { return }
@@ -24530,9 +24535,9 @@ final class SelfTest {
         }
         let passed = noWords && asked && hints == ["Allow", "Deny"] && named && transcript.status == 0
             && transcript.output.hasPrefix("# Onboarding launch review") && askedAgain && followHints == ["Allow", "Deny"] && whereSaid
-            && declined.status != 0 && linkAsked
+            && declined.status != 0 && refusedFirst && linkAsked
         record(name, passed,
-               "list_recordings (\(listedStatus)) \(listed.split(separator: "\n").count) lines, no words \(noWords); get_transcript asked \(asked) \(hints), named \(named), given (\(transcript.status)) \(transcript.output.count) characters; recording_followup asked \(askedAgain) \(followHints), says where \(whereSaid), Esc (\(declined.status)); the link asked and declined \(linkAsked)",
+               "list_recordings (\(listedStatus)) \(listed.split(separator: "\n").count) lines, no words \(noWords); get_transcript asked \(asked) \(hints), named \(named), given (\(transcript.status)) \(transcript.output.count) characters; recording_followup asked \(askedAgain) \(followHints), says where \(whereSaid), Esc (\(declined.status)); one not there refused with no card \(refusedFirst) (\(unknown.output.prefix(80))); the link asked and declined \(linkAsked)",
                nil)
     }
 
