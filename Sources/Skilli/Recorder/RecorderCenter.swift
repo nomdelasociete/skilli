@@ -790,8 +790,12 @@ final class RecorderCenter {
     /// `name` (case and accents aside).
     func recording(named name: String) -> URL? {
         let root = recordings.root
-        let exact = root.appendingPathComponent(name, isDirectory: true)
-        if recordings.read(exact) != nil { return exact }
+        // A folder's name never holds a slash nor starts with a dot: a link
+        // never reaches outside the recordings.
+        if !name.contains("/"), !name.hasPrefix(".") {
+            let exact = root.appendingPathComponent(name, isDirectory: true)
+            if recordings.read(exact) != nil { return exact }
+        }
         let folders = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
         return folders.compactMap { folder in recordings.read(folder).map { (folder, $0) } }
             .filter { MeetingVoices.sameName($0.1.title, name) }
