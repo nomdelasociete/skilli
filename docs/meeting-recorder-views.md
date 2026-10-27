@@ -1276,8 +1276,10 @@ the agents' tools and the links.
   it, esc or ⌘K closes it, a click beside it closes it.
 - **The list**, doing first: Summary by Claude (or "Summary Again by
   Claude" once there is one), Chapters by Claude (3 minutes or more;
-  "Chapters Again by Claude"), Action Items to Reminders, Recap Mail to
-  the Attendees, Ask Claude About This Meeting…, the user's skillies for
+  "Chapters Again by Claude"), Action Items to Reminders by Claude, Recap
+  Mail to the Attendees by Claude ("Recap Mail to the Attendees" once
+  there is a summary, which goes in the mail as written), Ask Claude About This
+  Meeting…, the user's skillies for
   recordings, Transcribe Again…, Show in Finder ⌘↩; then Copy Transcript
   ⌘C, Copy Summary (once there is one); then Remove Chapters (once
   there are some), Delete Recording ⌘⌫. "Claude" is the user's writing
@@ -1293,7 +1295,8 @@ While the AI writes, one line at the bottom of the lines, in the
 secondary color, a spinner before it: "Writing the summary with Claude ·
 Haiku…", "Finding chapters with Claude · Haiku…", "Reading the action
 items with Claude · Haiku…". One at a time: another AI action meanwhile
-says so in the list ("Claude is still writing the summary."). The window
+says so in the list ("Writing the summary with Claude · Haiku: one at a
+time."); a link's or Ask's says so in the card, a tool's in its answer. The window
 closed meanwhile: the work goes on and lands in the files. A failure is
 said in the card (as a transcript that failed): "The summary was not
 written: Claude is not set up yet. Settings → SI Accounts." Nothing is
@@ -1405,7 +1408,9 @@ said when it is done: the window shows it.
   kept, the card while it runs, its last line). A skillie that needs an
   argument is not listed (nothing would give it one).
 - **After every transcript**: Settings → Recorder, "After each
-  transcript": None (the default) or one of them. Picked, the line under
+  transcript": None (the default) or one of them that runs without
+  asking (not one with `needsConfirmation`: after a transcript nobody is
+  there to answer it). Picked, the line under
   it says "“Send to Notes” gets every recording from now on: its
   folder, with the sound, the pictures and the words. What it does with
   them is its own script's.", and the undo card says the same, Undo ⌘Z

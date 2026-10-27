@@ -19,7 +19,7 @@
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>skil.li records the Mac's sound, the others in a call, when you record a meeting; it is transcribed on this Mac and sent nowhere.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>skil.li shows you your camera when you press Check Camera &amp; Mic in a meeting's card, before you join. Nothing is recorded.</string>
+	<string>skil.li shows you your camera when you press Check Camera &amp; Mic in a meeting's card, before you join, and records it only when you turn the webcam on in a meeting you record; the recording stays on this Mac.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>skil.li connects and disconnects the Bluetooth devices paired with this Mac (AirPods, a keyboard, a speaker) when you ask it to.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
