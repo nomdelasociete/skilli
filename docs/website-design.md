@@ -18,7 +18,9 @@ supersede this record; update the relevant section when a choice changes.
 - [Guides](../website/guides/README.md): how skil.li's features work, in plain words
   with the exact rules, published as `/guides/` the same way (2026-10-27:
   a guide only on GitHub is not found by people on the site). The Windows
-  guide first.
+  guide first; 2026-10-27, one guide per area, grouped Start here, Every
+  day, Make it yours, with screenshots from the `guides` self-test
+  (`website/guides/images/`). The map of every document: [docs/README.md](README.md).
 - Native code and relevant tests: what the product actually supports. Check current
   implementations before adding claims; the demos are illustrations, not evidence.
 

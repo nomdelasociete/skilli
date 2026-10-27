@@ -7,6 +7,12 @@ Website design, copy, demos, navigation, social previews or legal pages: read
 build/publishing, use [`website/README.md`](website/README.md); website-only work
 does not require Swift tests, native benchmarks or app self-tests.
 
+Documentation: [`docs/README.md`](docs/README.md) maps every document and who
+it is for. A change people will see updates its area's guide in
+`website/guides/` (published at skil.li/guides) along with `docs/FEATURES.md`;
+a new or changed surface gets its screenshot from `remote guides`
+(`website/guides/images/README.md`).
+
 ## This repository is public
 
 Everything here, its history, pull request texts, comments and the apps built

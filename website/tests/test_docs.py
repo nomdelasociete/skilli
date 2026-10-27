@@ -104,6 +104,17 @@ class GuidesPages(unittest.TestCase):
             self.assertNotIn('{{', html)
             self.assertNotIn('—', html, page)
 
+    def test_the_menu_is_in_parts(self):
+        menu = self.pages['index.html'].split('class="docs-menu">', 1)[1].split('</ul>', 1)[0]
+        parts = re.findall(r'docs-menu-part">([^<]+)<', menu)
+        self.assertEqual(parts, list(build.MENU_PARTS['guides'].values()))
+        self.assertLess(menu.index('Start here'), menu.index('>Getting started<'))
+
+    def test_pictures_are_in_the_book_and_copied(self):
+        for name, html in self.pages.items():
+            for src in re.findall(r'<(?:img|video|source)[^>]+(?:src|srcset)="([^"]+)"', html):
+                self.assertTrue((self.target / src).is_file(), f'{name}: {src}')
+
     def test_the_windows_guide_says_how_to_undo(self):
         windows = self.pages['windows.html']
         for words in ('Run it again within 10 seconds', '✦W R', 'off by default', 'Nothing leaves your Mac'):
@@ -143,6 +154,26 @@ class Markdown(unittest.TestCase):
 
     def test_notes_for_maintainers_stay_out(self):
         self.assertEqual(render('Before.\n\n<!-- Maintainers: change\nthis too. -->\n\nAfter.'), '<p>Before.</p>\n<p>After.</p>')
+
+    def test_an_image_alone_is_a_figure_and_mp4_a_video(self):
+        html = render('![The launcher](images/a.png "Type, then ↩.")\n\nSee ![x](i.png) here.\n\n![A clip](v.mp4)')
+        self.assertEqual(html, '<figure><img src="images/a.png" alt="The launcher" loading="lazy"><figcaption>Type, then ↩.</figcaption></figure>\n'
+                               '<p>See <img src="i.png" alt="x" loading="lazy"> here.</p>\n'
+                               '<figure><video src="v.mp4" autoplay loop muted playsinline aria-label="A clip"></video></figure>')
+
+    def test_a_dark_twin_shows_in_dark_mode(self):
+        page = Page(lambda href: href, lambda src: {'src': src, 'dark': 'a-dark.png', 'size': (400, 300)})
+        self.assertEqual(page.render('![A](a.png)'),
+                         '<figure><picture><source srcset="a-dark.png" media="(prefers-color-scheme: dark)">'
+                         '<img src="a.png" alt="A" width="400" height="300" loading="lazy"></picture></figure>')
+
+    def test_a_missing_picture_stops_the_build(self):
+        with self.assertRaises(ValueError):
+            build.docs_asset('images/none.png', 'guides')
+
+    def test_italics_leave_lone_stars_alone(self):
+        self.assertEqual(render('Turn on *Usual places*: 2 * 3, `a*b*`.'),
+                         '<p>Turn on <em>Usual places</em>: 2 * 3, <code>a*b*</code>.</p>')
 
     def test_text_is_escaped_and_links_rewritten(self):
         html = Page(lambda href: href.replace('.md', '.html')).render('See [the <header>](header.md#keys) & `<tool>`.')

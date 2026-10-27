@@ -13,6 +13,7 @@
 <p align="center">
   <a href="https://skil.li/download"><b>Download</b></a> ·
   <a href="https://skil.li">Website</a> ·
+  <a href="https://skil.li/guides/">Guides</a> ·
   <a href="docs/MANIFESTO.md">Manifesto</a> ·
   <a href="docs/FEATURES.md">Features</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
@@ -51,7 +52,10 @@ Accessibility and connect your SI.
 - **Built to be built on.** A script becomes a command, MCP servers plug in,
   and your agents can use skil.li too.
 
+New to skil.li? The [guides](https://skil.li/guides/) show how to use
+each area, starting with [Getting started](website/guides/getting-started.md).
 Everything, area by area, with its default keys: [FEATURES.md](docs/FEATURES.md).
+Every document in the repository, and who it is for: [docs/README.md](docs/README.md).
 
 ## Your SI, your data
 
