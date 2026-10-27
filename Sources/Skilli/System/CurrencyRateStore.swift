@@ -25,6 +25,8 @@ final class CurrencyRateStore {
     /// After a failed read with no table: not before then, one timer.
     private var retryAfter = Date.distantPast
     private var retryPending = false
+    /// The network came back during a read: one more read after it.
+    private var readAgain = false
     private var observers: [NSObjectProtocol] = []
     private let network = NWPathMonitor()
     private var online = true
@@ -71,7 +73,7 @@ final class CurrencyRateStore {
                 // Back online: a read now, even inside a failed read's wait.
                 if up {
                     self.retryAfter = .distantPast
-                    self.refreshIfDue()
+                    if self.reading { self.readAgain = true } else { self.refreshIfDue() }
                 }
             }
         }
@@ -113,6 +115,11 @@ final class CurrencyRateStore {
                 }
             }
             onChange?()
+            if readAgain {
+                readAgain = false
+                retryAfter = .distantPast
+                refreshIfDue()
+            }
         }
     }
 

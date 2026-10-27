@@ -1010,7 +1010,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         currencyRates.onChange = { [weak self] in self?.launcher.reloadSources() }
         currencyRates.start()
         launcher.currency = { [currencyRates] in currencyRates.context }
-        toolServer.tools.currency = { [currencyRates] in currencyRates.context }
+        // A tool call reads a table past its time again, as a launcher show does.
+        toolServer.tools.currency = { [currencyRates] in
+            currencyRates.refreshIfDue()
+            return currencyRates.context
+        }
         launcher.onCalculation = { [weak self] result, paste in
             guard let self else { return }
             if let conversion = result.conversion { currencyRates.picked(conversion) }
@@ -1267,6 +1271,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installStatusItem()
         preferences.onChange = { [weak self] preferences in
             self?.apply(preferences)
+            // Convert Currencies turned on: the day's table now, not at the next show.
+            self?.currencyRates.refreshIfDue()
         }
         apply(preferences)
         startEventTap()
