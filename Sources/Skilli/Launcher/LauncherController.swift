@@ -447,6 +447,8 @@ final class LauncherController: NSObject {
     /// Ask about a meeting (phase 5): its folder's name and the question,
     /// answered in the card by `recordingProvider` ("Claude").
     var onAskAboutRecording: ((String, String) -> Void)?
+    /// A recording's row → Rename Recording…: its folder's name, the title typed.
+    var onRenameRecording: ((String, String) -> Void)?
     var recordingProvider: () -> String = { WritingProvider.claude.title }
     /// Search Recordings' words said, for the text typed.
     private var recordingWords: (query: String, found: [(folder: String, snippet: String)])?
@@ -3297,6 +3299,20 @@ final class LauncherController: NSObject {
             guard !question.isEmpty else { return }
             self.hide()
             self.onAskAboutRecording?(summary.folder, question)
+        }
+    }
+
+    /// ⌘K → Rename Recording…: the list becomes a field, its title in it;
+    /// ↩ renames it (its folder too), empty or unchanged: nothing.
+    func renameRecording(_ summary: RecordingSummary) {
+        actionPanel.ask("Rename “\(summary.title)”", initial: summary.title, placeholder: "Title",
+                        line: "Type its name, ↩ renames it and its folder, esc goes back") { [weak self] typed in
+            guard let self else { return }
+            let title = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.closeActions()
+            guard !title.isEmpty, title != summary.title else { return }
+            self.onRenameRecording?(summary.folder, title)
+            self.refreshResults()
         }
     }
 

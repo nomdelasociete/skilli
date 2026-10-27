@@ -918,6 +918,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.recorderCenter.ask(question, about: self.recordingLibrary.folder(name))
         }
+        launcher.onRenameRecording = { [weak self] name, title in
+            guard let self else { return }
+            self.recorderCenter.rename(self.recordingLibrary.folder(name), to: title)
+        }
         launcher.recordingProvider = { [weak self] in self?.ai.defaultModel.provider.title ?? WritingProvider.claude.title }
         toolServer.tools.recorder = { [weak self] in self?.recorderCenter }
         aiActions.startTimer = { [weak self] request in self?.startTimer(request) ?? UUID() }

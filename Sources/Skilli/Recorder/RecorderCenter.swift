@@ -833,6 +833,38 @@ final class RecorderCenter {
         Task { await followUps.run(action, on: folder) }
     }
 
+    /// Rename… (the window's ⌘K, a recording's row in the launcher): its
+    /// title, and its folder by the same rules (docs/meeting-recorder.md,
+    /// "Where it lives"), `transcript.md`'s heading too; its window opened
+    /// again on the folder it is in now. Not while it records or its
+    /// transcript is made: said why.
+    func rename(_ folder: URL, to typed: String) {
+        let title = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, var record = recordings.read(folder), title != record.title else { return }
+        if recorder.folder.map(Self.key) == Self.key(folder) || isBeingMade(folder) {
+            notify("“\(record.title)” was not renamed: it is being \(recorder.folder.map(Self.key) == Self.key(folder) ? "recorded" : "transcribed"). Rename it once it is done.")
+            return
+        }
+        let open = windows[Self.key(folder)]
+        let frame = open?.nsWindow.frame
+        do {
+            let moved = try recordings.rename(folder, to: title, started: record.started)
+            record.title = title
+            try recordings.write(record, to: moved)
+            if let lines = recordings.transcript(moved)?.lines {
+                try? MeetingTranscriber.markdown(record, lines: lines).write(to: moved.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)
+            }
+            Log.trace("Recorder: renamed “\(title)” (\(moved.lastPathComponent))")
+            NotificationCenter.default.post(name: Recordings.changed, object: nil)
+            guard let open else { return }
+            open.close()
+            self.open(moved)
+            if let frame { windows[Self.key(moved)]?.nsWindow.setFrame(frame, display: true) }
+        } catch {
+            notify("“\(record.title)” was not renamed: \(error.localizedDescription)")
+        }
+    }
+
     /// Ask about a meeting from the launcher's row: answered in the card.
     func ask(_ question: String, about folder: URL) {
         followUps.ask(question, about: folder)
@@ -918,6 +950,7 @@ final class RecorderCenter {
         }
         window.onRemoveChapters = { [weak self] folder, _ in self?.followUps.removeChapters(in: folder) }
         window.onAsk = { [weak self] folder, question in self?.followUps.ask(question, about: folder) }
+        window.onRename = { [weak self] folder, title in self?.rename(folder, to: title) }
         window.skillies = { [weak self] in self?.followUps.recordingSkillies() ?? [] }
         window.markedSkillie = { [weak self] in self?.followUps.marked() ?? "" }
         window.onRunSkillie = { [weak self] folder, skillie in self?.followUps.run(skillie, on: folder) }

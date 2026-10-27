@@ -24046,6 +24046,7 @@ final class SelfTest {
         if !aborted { await transcriptToolsAskEveryTime(center, folder) }
         if !aborted { await reminderLinkOpensTheMeeting(center, folder) }
         if !aborted { await pendingSaysWhyAndOffersTheEngines(center) }
+        if !aborted { await recordingRenamedFromItsWindow(center) }
     }
 
     /// The stand-in meeting (invented people): Camille is the user, Margot
@@ -24174,7 +24175,7 @@ final class SelfTest {
         let provider = context.ai.defaultModel.provider.title
         let titles = controller.shownActions.map(\.title)
         let expected = ["Summary by \(provider)", "Chapters by \(provider)", "Action Items to Reminders by \(provider)",
-                        "Recap Mail to the Attendees by \(provider)", "Ask \(provider) About This Meeting…", "Transcribe Again…", "Show in Finder",
+                        "Recap Mail to the Attendees by \(provider)", "Ask \(provider) About This Meeting…", "Transcribe Again…", "Rename…", "Show in Finder",
                         "Copy Transcript", "Delete Recording"]
         await captureRecordingWindow(controller, as: "recorder-actions")
         // The captures switch its appearance: the keys made sure again.
@@ -24573,6 +24574,46 @@ final class SelfTest {
         await captureRecordingWindow(controller, as: "recorder-pending")
         record(name, said && offered,
                "“\(controller.shownState)” \(said); engines \(engines.map { "\($0.title) \($0.enabled ? "on" : "dimmed")" }.joined(separator: ", ")), Better transcription \(whisperReady ? "downloaded" : "not downloaded") \(offered)",
+               nil)
+    }
+
+    /// Rename… in a recording's ⌘K (docs/meeting-recorder.md, "Where it
+    /// lives"): the list becomes a field with its title; typed and ↩, the
+    /// recording and its folder are renamed, `transcript.md`'s heading too,
+    /// and its window opens again on the folder it is in now.
+    private func recordingRenamedFromItsWindow(_ center: RecorderCenter) async {
+        let name = "Recorder: Rename… in a recording's ⌘K renames it and its folder by the same rules, transcript.md's heading too, its window on the folder it is in now"
+        guard let folder = seedMeeting(center, title: "Kickoff", script: Array(Self.launchReview.prefix(3))) else {
+            record(name, false, "no meeting", nil)
+            return
+        }
+        center.open(folder)
+        guard let controller = await waitForWindow(center, folder) else {
+            record(name, false, "no window", nil)
+            return
+        }
+        guard await recordingWindowHasKeys(controller, name) else {
+            controller.close()
+            return
+        }
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 2) { controller.isShowingActions }
+        for character in "rename" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let prompting = await waitUntil(timeout: 2) { controller.isAskingInActions } != nil
+        await pressKey("a", flags: .maskCommand)
+        for character in "Kickoff with legal" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let renamed = await waitUntil(timeout: 3) { center.openWindows.contains { $0.record.title == "Kickoff with legal" } } != nil
+        let moved = center.openWindows.first { $0.record.title == "Kickoff with legal" }
+        let folderNamed = moved.map { $0.folder.lastPathComponent.hasSuffix(" Kickoff with legal") } ?? false
+        let oldGone = !FileManager.default.fileExists(atPath: folder.path)
+        let written = moved.flatMap { center.recordings.read($0.folder)?.title } == "Kickoff with legal"
+        let heading = moved.flatMap { try? String(contentsOf: $0.folder.appendingPathComponent("transcript.md"), encoding: .utf8) }?
+            .hasPrefix("# Kickoff with legal\n") ?? false
+        center.openWindows.forEach { $0.close() }
+        record(name, prompting && renamed && folderNamed && oldGone && written && heading,
+               "the field \(prompting); renamed \(renamed), folder “\(moved?.folder.lastPathComponent ?? "?")” \(folderNamed), the one before gone \(oldGone), meeting.json \(written), transcript.md's heading \(heading)",
                nil)
     }
 

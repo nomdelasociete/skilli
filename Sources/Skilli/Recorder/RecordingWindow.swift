@@ -76,6 +76,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var onRemoveChapters: ((URL, MeetingRecord) -> Void)?
     /// Ask About This Meeting…: the question typed in ⌘K's list.
     var onAsk: ((URL, String) -> Void)?
+    /// Rename…: the title typed (the folder follows, by the center).
+    var onRename: ((URL, String) -> Void)?
     /// The skillies for recordings ⌘K lists, the one marked to run after
     /// every transcript (its path), and one run on this recording.
     var skillies: () -> [ScriptCommand] = { [] }
@@ -625,6 +627,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
                 list.append(LauncherAction(title: "Transcribe Again…", symbol: "arrow.triangle.2.circlepath") { [weak self] in self?.showTranscribeAgain() })
             }
         }
+        list.append(LauncherAction(title: "Rename…", symbol: "pencil", keepsOpen: true) { [weak self] in self?.renameRecording() })
         list.append(LauncherAction(title: "Show in Finder", symbol: "folder", key: .openSecond) { [weak self] in
             guard let self else { return }
             self.onShowFolder?(self.folder)
@@ -650,6 +653,19 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             self.onDelete?(self.folder, self.record)
         })
         return list
+    }
+
+    /// Rename…: the list becomes a field, the title in it; ↩ renames it
+    /// (its folder too), empty or unchanged: nothing.
+    private func renameRecording() {
+        actionPanel.ask("Rename “\(record.title)”", initial: record.title, placeholder: "Title",
+                         line: "Type its name, ↩ renames it and its folder, esc goes back") { [weak self] typed in
+            guard let self else { return }
+            let title = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.closeActions()
+            guard !title.isEmpty, title != self.record.title else { return }
+            self.onRename?(self.folder, title)
+        }
     }
 
     /// Ask About This Meeting…: the list becomes a field; ↩ sends the
