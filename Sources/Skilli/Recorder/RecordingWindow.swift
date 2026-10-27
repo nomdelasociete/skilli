@@ -358,7 +358,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
                 self.pictures.append(picture)
                 layers.append((AVPlayerLayer(player: picture), size))
             }
-            self.view.setPictures(layers)
+            // One that failed while the others loaded is not shown.
+            self.view.setPictures(layers.filter { layer, _ in self.pictures.contains { $0 === layer.player } })
             self.view.duration = max(self.record.seconds, composition.duration.seconds.isFinite ? composition.duration.seconds : 0)
             self.observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 20), queue: .main) { [weak self] time in
                 MainActor.assumeIsolated {
