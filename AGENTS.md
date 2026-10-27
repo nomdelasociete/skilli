@@ -2557,7 +2557,13 @@ re-investigating.
   account ends at the relay, no pairing and no grant kept; without that
   id no inbox grant is asked for. An older relay, a refusal or no pairing
   opens GitHub's page from skil.li instead (`codeNotShown`, once). Live
-  updates' Authorize this Mac… chains the inbox grant the same way. The strip under the search field
+  updates' Authorize this Mac… chains the inbox grant the same way.
+  Without the GitHub App installed, the relay's choice page offers Continue
+  without live updates: a pairing with no installation (identity, renewal,
+  server sync; no webhook). skil.li accepts it, opens no stream for it
+  (`relayIsConfigured` needs an installation) and says "No GitHub account
+  for live updates" with Add Accounts… (pairs again).
+  Spec: `docs/github-sign-in-without-app.md`. The strip under the search field
   (Settings → GitHub → Show under the search field, on by default, once
   signed in): the counts in Git Island's colors and the unread
   notifications; a click opens the GitHub mode on that group. Nothing asks

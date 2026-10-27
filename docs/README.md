@@ -38,6 +38,7 @@ choices, the measures. Each one starts with its status and date.
 | [meeting-recorder.md](meeting-recorder.md) | The meeting recorder |
 | [meeting-recorder-views.md](meeting-recorder-views.md) | The recorder's windows, cards and menus |
 | [github-single-sign-in.md](github-single-sign-in.md) | One GitHub sign-in instead of three |
+| [github-sign-in-without-app.md](github-sign-in-without-app.md) | GitHub sign-in and server sync without the GitHub App |
 
 ## Plans, reviews and lab notes
 

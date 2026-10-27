@@ -254,9 +254,15 @@ private struct RelayEnrollmentControls: View {
                         enroll()
                     }.disabled(session.isBusy)
                 } else {
-                    Label("\(session.installationCount) GitHub account(s) authorized", systemImage: "checkmark.circle")
-                    Button("Manage connected accounts…") { enroll() }
-                        .disabled(session.isBusy)
+                    if session.installationCount == 0 {
+                        Label("No GitHub account for live updates", systemImage: "circle.dashed")
+                        Button("Add Accounts…") { enroll() }
+                            .disabled(session.isBusy)
+                    } else {
+                        Label("\(session.installationCount) GitHub account(s) authorized", systemImage: "checkmark.circle")
+                        Button("Manage connected accounts…") { enroll() }
+                            .disabled(session.isBusy)
+                    }
                 }
                 if session.isEnrolling {
                     Button("Cancel") { session.cancelEnrollment() }
