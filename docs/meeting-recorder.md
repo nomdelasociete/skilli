@@ -106,8 +106,9 @@ the keyboard. Never automatic.
 the event (link, location), Core Audio (which app runs the microphone)
 and the window list. A model would add a delay, send window titles off
 the Mac and sometimes be wrong, for nothing gained. AI comes after the
-meeting and only on the user's action: the summary, action items, names
-put on voices from what is said, by the user's AI (Claude). What it is
+meeting and only on the user's action: the summary, action items (and,
+later, names put on voices from what is said: not in phase 5), by the
+user's AI (Claude). What it is
 sent: the transcript's text with its speaker labels and times, the
 event's title, and for names on voices the attendees' names. Never the
 audio, the video or the screen, window titles or the contacts (as in
@@ -328,7 +329,8 @@ The recording's window (a window, not a card: it is read and edited):
 - Chapters by the user's AI (meetings of three minutes or more, on the
   button): in the list, as headings, as marks on the waveform.
 - ⌘K: Summary by Claude (↩), Chapters by Claude, Action Items to
-  Reminders, Recap Mail to the attendees, Ask Claude About This Meeting…,
+  Reminders by Claude, Recap Mail to the Attendees (by Claude while there
+  is no summary yet), Ask Claude About This Meeting…,
   the user's skillies for recordings (omarchy's Actions; one may run on
   its own when a transcript is done, said in its row), Transcribe Again,
   Show in Finder, then Copy Transcript and Copy Summary, then Delete
@@ -352,7 +354,8 @@ on screen, with times), `summary.md` when asked.
   recording's folder. A title renamed later renames the folder by the same
   rules.
 - The launcher finds recordings by title, date, attendees and words said
-  (plain text search; by meaning only behind ⇥, as the clipboard).
+  (plain text search; by meaning behind ⇥, as the clipboard: later, not
+  built yet).
 - Settings → Recorder (its own pane): where to keep them, delete after N
   days, language, engine, the sources on by default, the meeting card's
   Record button on or off; the recordings list last.
@@ -364,7 +367,8 @@ on screen, with times), `summary.md` when asked.
 - Agents: `list_recordings` (titles, dates, lengths), `get_transcript`
   and `recording_followup` (and the `$SKILLI_CLI call` equivalents).
 - The words said, for the launcher's search, are also in
-  `recordings-index.sqlite` beside the Recordings folder (with SQLite's
+  `recordings-index.sqlite`, in Application Support's `skil.li` folder,
+  where it stays when the Recordings folder is moved (with SQLite's
   `-wal`, `-shm` and `-journal` files). Like the recordings, never in a
   backup (Settings → Backup: "never what you copied or recorded"), and a
   restore leaves it as it is, each of those four names by its exact name
@@ -387,7 +391,7 @@ on screen, with times), `summary.md` when asked.
   | Flow | Goes to | What is sent | Consent |
   |---|---|---|---|
   | Record, transcribe, play, search, read slides | nowhere | nothing | — |
-  | "Summary by Claude", chapters, action items, Ask about a meeting, names put on voices | the user's own AI (its provider) | the transcript's text with its speaker labels and times, the text read on screen with its times, the event's title and date, and for names on voices the attendees' names | the button or the request, which names where it goes |
+  | "Summary by Claude", chapters, action items, Ask about a meeting, names put on voices (later) | the user's own AI (its provider) | the transcript's text with its speaker labels and times, the text read on screen with its times, the event's title and date, and for names on voices the attendees' names | the button or the request, which names where it goes |
   | Recap Mail | the attendees, by the user's mail app | the recap the user reads first | Send, in the mail app |
   | `get_transcript` | the agent that calls it (Claude Code, Codex…), then its provider | that recording's transcript | asked every time in the card, naming the recording (`ToolPolicy` `everyTime`: no Always Allow) |
   | `recording_followup` | the user's own AI, then the agent that calls it | the transcript as for "Summary by Claude"; the agent gets the summary, chapters, reminders or answer | asked every time in the card, naming the recording and the provider (`everyTime`) |

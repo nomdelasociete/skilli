@@ -6,7 +6,7 @@
 	     Reminders silently, with no prompt and no entry in Privacy settings. -->
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
-	<!-- The meeting card's Check Camera & Mic: the camera, shown, never recorded. -->
+	<!-- The meeting card's Check Camera & Mic (the camera shown), and the recorder's webcam when the user turns it on. -->
 	<key>com.apple.security.device.camera</key>
 	<true/>
 	<key>com.apple.security.personal-information.calendars</key>

@@ -80,8 +80,9 @@ Them 1, Them 2…, until you name them).
   transcript with who said it and when. A recording's row in `recs` has
   Ask in its ⌘K too.
 - **Your skillies for recordings** are in the same ⌘K: one runs on this
-  recording's folder (its sound, pictures and transcript), and the
-  window says when it ran.
+  recording's folder (its sound, pictures and transcript), its card
+  showing how it went. The one picked to run after each transcript is
+  said in the window: when it ran, and its last line.
 
 ![A recording's ⌘K: Summary, Chapters, Action Items to Reminders, Recap Mail to the Attendees and Ask About This Meeting by Claude, then Transcribe Again, Show in Finder, Copy Transcript and Delete Recording](images/recorder-actions.png "Your SI's actions first, sent only when you pick one.")
 
