@@ -189,7 +189,9 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     /// What the folder holds now: the transcript once made, or why there is
     /// none.
-    func show(_ record: MeetingRecord, transcript: MeetingTranscript.File?, transcribing: MeetingTranscriber.Step? = nil) {
+    /// `waiting`: made again once another is made, nothing of it yet; the
+    /// transcript before is not shown to be edited meanwhile.
+    func show(_ record: MeetingRecord, transcript: MeetingTranscript.File?, transcribing: MeetingTranscriber.Step? = nil, waiting: Bool = false) {
         self.record = record
         // Made again (by whisper, or being made): the line no longer
         // applies.
@@ -203,6 +205,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         view.setLanes(Self.laneNames(record, lines: transcript?.lines), lanes: Speaker.allCases.filter { !(record.unused ?? []).contains($0) })
         if let transcribing {
             view.showTranscribing(transcribing)
+        } else if waiting {
+            view.showWaiting()
         } else if let transcript {
             // Read again from disk (opened again, made again): a draft that
             // differs is replaced, and with it what ⌘Z would undo.
@@ -223,7 +227,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         } else {
             view.showPending(language: record.language)
         }
-        linesShown = transcribing == nil && transcript != nil
+        linesShown = transcribing == nil && !waiting && transcript != nil
         view.canTranscribeAgain = linesShown
         updateHints()
         if player == nil, !loadingPlayer { loadPlayer() }

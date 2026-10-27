@@ -23,9 +23,9 @@ final class RecordingFollowUps {
     var reminders: ReminderBook?
     /// A recording's window when one is open: told what to show.
     var window: (URL) -> RecordingWindowController? = { _ in nil }
-    /// Where its transcript is when one is being made (Transcribe Again):
-    /// the window goes on showing that, not the transcript before.
-    var transcribing: (URL) -> MeetingTranscriber.Step? = { _ in nil }
+    /// The window shown again as its recording is now (its transcript, or
+    /// where one being made again is: `RecorderCenter`).
+    var reshow: (URL) -> Void = { _ in }
     /// One line in the card: a failure, said once.
     var notify: (String) -> Void = { _ in }
     /// The mail app with a new message (the recap); the self-test watches.
@@ -417,14 +417,9 @@ final class RecordingFollowUps {
     // MARK: - The window
 
     /// The window shows the recording as its files are now; while its
-    /// transcript is made again, where that is (as `RecorderCenter` does).
+    /// transcript is made again, where that is (`RecorderCenter`).
     private func refresh(_ folder: URL) {
         NotificationCenter.default.post(name: Recordings.changed, object: nil)
-        guard let window = window(folder), let record = recordings.read(folder) else { return }
-        if let step = transcribing(folder) {
-            window.show(record, transcript: nil, transcribing: step)
-        } else {
-            window.show(record, transcript: recordings.transcript(folder))
-        }
+        reshow(folder)
     }
 }

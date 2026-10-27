@@ -46,7 +46,7 @@ final class RecorderCenter {
     private(set) lazy var followUps: RecordingFollowUps = {
         let followUps = RecordingFollowUps(recordings: recordings, deletes: deletes)
         followUps.window = { [weak self] folder in self?.window(for: folder) }
-        followUps.transcribing = { [weak self] folder in self?.transcribingStep(folder) }
+        followUps.reshow = { [weak self] folder in self?.reshow(folder) }
         followUps.notify = { [weak self] line in self?.notify(line) }
         return followUps
     }()
@@ -772,25 +772,41 @@ final class RecorderCenter {
     /// `at` seconds in, playing from the line said then.
     func open(_ folder: URL, at: Double? = nil) {
         guard let record = recordings.read(folder) else { return }
-        // Made again now: the window follows that, not the transcript before.
-        let step = transcribingStep(folder)
-        let transcript = step == nil ? recordings.transcript(folder) : nil
         let window: RecordingWindowController
         if let open = windows[Self.key(folder)] {
             window = open
-            window.show(record, transcript: transcript, transcribing: step)
+            show(window, record, folder)
         } else {
-            window = makeWindow(folder, record: record, transcript: transcript)
-            if let step { window.show(record, transcript: nil, transcribing: step) }
+            window = makeWindow(folder, record: record, transcript: recordings.transcript(folder))
+            if isBeingMade(folder) { show(window, record, folder) }
         }
         window.present()
         if let at { window.play(from: at) }
     }
 
-    /// Where `folder`'s transcript is when it is being made now.
-    private func transcribingStep(_ folder: URL) -> MeetingTranscriber.Step? {
-        guard let transcribing = recorder.transcribing, Self.key(transcribing.folder) == Self.key(folder) else { return nil }
-        return transcribing.step
+    /// An open window shows its recording as it is now (`reshow`: after a
+    /// follow-up, Transcribe Again asked).
+    private func reshow(_ folder: URL) {
+        guard let window = windows[Self.key(folder)], let record = recordings.read(folder) else { return }
+        show(window, record, folder)
+    }
+
+    /// The transcript on disk; while one is made again, or waits its turn,
+    /// where that is: never the transcript before, to be edited and then
+    /// replaced.
+    private func show(_ window: RecordingWindowController, _ record: MeetingRecord, _ folder: URL) {
+        if let transcribing = recorder.transcribing, Self.key(transcribing.folder) == Self.key(folder) {
+            window.show(record, transcript: nil, transcribing: transcribing.step)
+        } else if recorder.waits(folder) {
+            window.show(record, transcript: nil, waiting: true)
+        } else {
+            window.show(record, transcript: recordings.transcript(folder))
+        }
+    }
+
+    /// Its transcript being made, or waiting its turn.
+    private func isBeingMade(_ folder: URL) -> Bool {
+        recorder.transcribing.map { Self.key($0.folder) == Self.key(folder) } == true || recorder.waits(folder)
     }
 
     /// `skilli://record/open` (a reminder's link back to its meeting): by its
@@ -921,6 +937,8 @@ final class RecorderCenter {
     private func transcribeAgain(_ folder: URL, record: MeetingRecord, engine: TranscriptEngine) {
         madeAgain.insert(Self.key(folder))
         recorder.transcribe(folder, record: record, again: true, engine: engine)
+        // Another being made first: it waits, its lines no longer editable.
+        reshow(folder)
     }
 
     // MARK: - Import (phase 4)

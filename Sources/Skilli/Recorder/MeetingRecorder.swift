@@ -572,6 +572,12 @@ final class MeetingRecorder {
         }
     }
 
+    /// Whether `folder`'s transcript waits its turn (another being made).
+    func waits(_ folder: URL) -> Bool {
+        let key = folder.resolvingSymlinksInPath().standardizedFileURL.path
+        return queue.contains { $0.0.resolvingSymlinksInPath().standardizedFileURL.path == key }
+    }
+
     private func transcribeNext() async {
         while !queue.isEmpty, !quitting {
             let (folder, record, again, engine) = queue.removeFirst()
