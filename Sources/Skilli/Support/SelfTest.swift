@@ -121,6 +121,8 @@ final class SelfTest {
         var windowLearner: WindowLearner?
         /// Better transcription's download, in the self-test's own folder.
         var betterTranscription: @MainActor () -> BetterTranscription? = { nil }
+        /// The calculator's exchange rates: seeded, never read from the network.
+        var currencyRates: CurrencyRateStore?
     }
 
     enum Scope: String, Sendable {
@@ -463,7 +465,7 @@ final class SelfTest {
         }
         if scope == .calc {
             window.center()
-            let calculations: [Step] = [macControlsWork, launcherCalculates]
+            let calculations: [Step] = [macControlsWork, launcherCalculates, launcherConvertsCurrencies]
             return await finish(after: [
                 macCommandsUseRealAPIs,
                 keepAwakeHoldsTheMac,
@@ -16775,6 +16777,65 @@ final class SelfTest {
         }
         textView.string = ""
         record(name, passed, details.joined(separator: "; "), nil)
+    }
+
+    /// "800 TRY in eur" typed key by key from a seeded table: from "800
+    /// TRY" on, the first row is the conversion before any ↩ (the user's
+    /// currency while "in e…" is typed, then EUR); ⌘K adds Copy with
+    /// Currency and Copy Rate; ↩ pastes it and EUR becomes TRY's default.
+    private func launcherConvertsCurrencies() async {
+        let name = "Currencies: “800 TRY in eur” answers as it is typed, before ↩; ⌘K Copy with Currency and Copy Rate; ↩ pastes it; EUR learned for TRY"
+        guard let store = context.currencyRates else {
+            record(name, false, "no exchange rates in this run", nil)
+            return
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let today = calendar.dateComponents([.year, .month, .day], from: .now)
+        let day = String(format: "%04d-%02d-%02d", today.year ?? 2026, today.month ?? 1, today.day ?? 1)
+        store.seed(CurrencyRates(rates: ["EUR": .init(perEuro: 1, day: day), "USD": .init(perEuro: Decimal(string: "1.1186")!, day: day),
+                                         "TRY": .init(perEuro: Decimal(string: "55.666")!, day: day), "GBP": .init(perEuro: Decimal(string: "0.83658")!, day: day)],
+                                 source: .centralBanks, fetched: .now, validUntil: .distantFuture))
+        guard await focusTestWindow() else { return }
+        window.makeFirstResponder(textView)
+        textView.string = ""
+        _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+        _ = await waitUntil(timeout: 0.5) { self.context.launcher.isVisible }
+        let typed = "800 TRY in eur"
+        var typedSoFar = ""
+        var steady = true
+        var seen: [String] = []
+        for character in typed {
+            await pressKey(character)
+            typedSoFar.append(character)
+            // What the calculator answers for the text so far, as the launcher asks it.
+            let text = typedSoFar
+            let expected = Calculator.evaluate(text, currency: store.context)
+            guard text.count >= "800 TRY".count else { continue }
+            let shown = await waitUntil(timeout: 1) {
+                self.context.launcher.query == text && self.context.launcher.resultTitles.first == expected?.display
+            } != nil
+            steady = steady && shown && expected?.conversion != nil
+            seen.append("“\(text)” \(context.launcher.resultTitles.first ?? "nothing")\(shown ? "" : " (expected \(expected?.display ?? "none"))")")
+        }
+        guard let expected = Calculator.evaluate(typed, currency: store.context), expected.conversion?.to == "EUR" else {
+            record(name, false, "“\(typed)” is not a conversion to EUR here", nil)
+            return
+        }
+        await pressKey("k", flags: .maskCommand)
+        let listed = await waitUntil(timeout: 1) {
+            self.context.launcher.shownActions.map(\.title) == ["Paste Result", "Copy Result", "Copy with Currency", "Copy Rate"]
+        } != nil
+        let list = context.launcher.shownActions.map { "\($0.title) \($0.key ?? "")" }
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let pasted = await waitUntil(timeout: 2) { self.textView.string == expected.copy } != nil
+        let learned = store.lastTargets["TRY"] == "EUR"
+        await pause(300)
+        await closeLauncher()
+        textView.string = ""
+        record(name, steady && listed && pasted && learned,
+               "as typed: \(steady) (\(seen.joined(separator: ", "))); ⌘K \(list): \(listed); ↩ pasted “\(expected.copy)”: \(pasted); EUR learned for TRY: \(learned)", nil)
     }
 
     // MARK: - Mac controls

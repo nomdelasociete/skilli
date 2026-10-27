@@ -331,9 +331,15 @@ extension LauncherController {
             case .file(let url):
                 return [first, reveal(url), key("Copy GIF", "doc.on.doc", .openSecond, group: .copy), copy("Copy Path", url.path, .copySecond)]
             }
-        case .calculation:
+        case .calculation(let result):
+            // The day's rates are not here yet: nothing to paste or copy.
+            if result.isWaiting { return [] }
             // ↩ pastes like a clip, a snippet or an emoji (D4); ⌘↩ and ⌘C copy.
-            return [first, key("Copy Result", "doc.on.doc", .openSecond, group: .copy)]
+            var list = [first, key("Copy Result", "doc.on.doc", .openSecond, group: .copy)]
+            if let conversion = result.conversion {
+                list += [copy("Copy with Currency", result.display, .copySecond), copy("Copy Rate", conversion.rate)]
+            }
+            return list
         case .browserTab(let tab):
             return [first, copy("Copy Title", tab.title, .copy)]
         case .file(let file):

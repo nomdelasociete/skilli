@@ -190,6 +190,23 @@ Lengths go up to a week. While it is kept awake, the cup shows in the menu
 bar and at the right of the launcher's empty field, with the time left (the
 cup alone when it has no end).
 
+## Convert a currency
+
+The launcher's conversion, waited for, at the day's rates (central banks,
+else the ECB), computed on the Mac:
+
+```bash
+"$SKILLI_CLI" call convert_currency amount=800 from=TRY to=EUR
+# {"amount":"800","from":"TRY","rate":"1 TRY = 0.01796 EUR","rateDay":"2026-10-27","result":"14.37","source":"central banks","to":"EUR"}
+"$SKILLI_CLI" call convert_currency amount=49.90 from=GBP   # to the user's own currency
+```
+
+`result` has the target currency's decimals (none for JPY). Exit 1 when a
+currency is not in the day's table, when there is no table yet, or when
+Convert Currencies is off in Settings → Catalog. The launcher has no link
+that opens it on a query yet: a link runs the Catalog entry, which opens
+the launcher for typing.
+
 ## Record a meeting
 
 A skillie opens the Record card; the user starts the recording with ↩

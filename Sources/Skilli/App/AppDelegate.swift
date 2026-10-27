@@ -508,6 +508,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if case .normal = mode { return GIFLibrary(recentsURL: GIFLibrary.defaultRecentsURL) }
         return GIFLibrary(recentsURL: nil, keychainAccount: "selftest-" + GIFLibrary.keyAccount)
     }()
+    /// The day's exchange rates for the calculator; the self-test and the
+    /// benchmark seed their own, nothing read from the network.
+    private lazy var currencyRates: CurrencyRateStore = {
+        if case .normal = mode { return CurrencyRateStore(fileURL: CurrencyRateStore.defaultURL) }
+        return CurrencyRateStore(fileURL: nil, fetches: false)
+    }()
     private lazy var snippetExpander = SnippetExpander(library: snippetLibrary, selection: selection, preferences: preferences)
     private lazy var aiActions = AIActionController(selection: selection, ai: ai, library: PromptLibrary.shared, layout: layout)
     /// Every delete of the user's data: at once, Undo ⌘Z in the card for
@@ -860,6 +866,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.quicklinks = { [quicklinkStore] in quicklinkStore.links }
         launcher.onOpenURL = { [weak self] url in self?.openQuicklinkAddress(url) }
         launcher.onOpened = { [weak self] in
+            self?.currencyRates.refreshIfDue()
             self?.englishTyping.launcherOpened()
             self?.shownWelcome?.launcherShown()
         }
@@ -999,8 +1006,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.onGIF = { [weak self] gif, use, query in self?.useGIF(gif, use, query: query) }
         // A paste's temp file from a run before: Klipy's GIFs are not kept.
         GIFLibrary.removePasteFiles()
+        currencyRates.isOn = { [preferences] in !preferences.catalogOff.contains("catalog.currency") }
+        currencyRates.onChange = { [weak self] in self?.launcher.reloadSources() }
+        currencyRates.start()
+        launcher.currency = { [currencyRates] in currencyRates.context }
+        toolServer.tools.currency = { [currencyRates] in currencyRates.context }
         launcher.onCalculation = { [weak self] result, paste in
             guard let self else { return }
+            if let conversion = result.conversion { currencyRates.picked(conversion) }
             if paste {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     Task { await self.selection.replace(with: result.copy) }
@@ -2165,7 +2178,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 recordings: { [weak self] in self?.recordingLibrary },
                 moveRecordings: { [weak self] folder in await self?.moveRecordings(to: folder) },
                 windowLearner: windowLearner,
-                betterTranscription: { [weak self] in self?.betterTranscription }
+                betterTranscription: { [weak self] in self?.betterTranscription },
+                currencyRates: currencyRates
             ))
             SelfTest.emit(await test.run(scope: scope), to: outputPath)
             NSApp.terminate(nil)

@@ -331,7 +331,10 @@ public enum FeatureCatalog {
             command(.homebrew, .find, "Installs, upgrades or removes tools and apps with Homebrew"),
             CatalogEntry(id: "catalog.calculator", title: "Calculator", oneLine: "Answers math, units and time zones: “12 × 4”, “10 km in miles”",
                          group: .find, symbol: "equal", run: .type("", hint: "12 × 4 · 10 km in miles · time in Tokyo"),
-                         keywords: ["calculator", "calculatrice", "math", "units", "convert", "conversion", "time zone", "heure", "fuseau"])
+                         keywords: ["calculator", "calculatrice", "math", "units", "convert", "conversion", "time zone", "heure", "fuseau"]),
+            CatalogEntry(id: "catalog.currency", title: "Convert Currencies", oneLine: "Converts money as you type, at the day's rates: “800 TRY”, “100 usd in €”",
+                         group: .find, symbol: "dollarsign.arrow.circlepath", run: .type("", hint: "800 TRY · 100 usd in € · 49 £ en $"),
+                         keywords: ["currency", "currencies", "devise", "devises", "exchange rate", "taux de change", "money", "argent", "euro", "dollar"])
         ]
     }
 

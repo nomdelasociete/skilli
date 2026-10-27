@@ -87,7 +87,7 @@ Slack message) tried before the general agent.
 | Search menu items | Free, literal | `MenuReader` (agent tool) | **A**, with meaning (Jev) and ↩ to choose |
 | System commands (lock, sleep, empty trash, appearance, hidden files, eject…) | Free | — | **B1** |
 | Applications: quit, force quit, restart, hide | Free | Launch only | **B1** |
-| Calculator, units, currency, time zones, dates | Free | Done: arithmetic, units, time zones (currency and dates later) | **B2** ✓ |
+| Calculator, units, currency, time zones, dates | Free | Done: arithmetic, units, time zones, currencies at the day's rates (dates later) | **B2** ✓ |
 | Quicklinks with arguments | Free | Done: keywords + {query}, web search fallback | **B2** ✓ |
 | File search | Free, own index | Done: Spotlight by name, ⇥ by meaning with Jev, ⌘↩ shows in Finder | **B2** ✓ |
 | Emoji and symbols, `:` picker in any field | Free | Done in the launcher: names in your language, by feeling with Jev | **B2** ✓ (a `:` picker in any field later) |

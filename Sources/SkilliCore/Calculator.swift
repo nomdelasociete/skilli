@@ -2,8 +2,9 @@ import Foundation
 
 /// The launcher's calculator: arithmetic as people type it ("12,5 × 4",
 /// "20 % de 85", "85 + 20%"), unit conversions ("10 km en miles",
-/// "32 °F to °C") and the time elsewhere ("heure à Tokyo"). A hand-written
-/// parser: no `NSExpression`, nothing evaluated but numbers.
+/// "32 °F to °C"), currencies ("800 TRY in €", CalculatorCurrency.swift)
+/// and the time elsewhere ("heure à Tokyo"). A hand-written parser: no
+/// `NSExpression`, nothing evaluated but numbers.
 public enum Calculator {
     public struct Result: Equatable, Sendable {
         /// What the row shows: "1 234,5", "16,09 km".
@@ -13,15 +14,29 @@ public enum Calculator {
         public let copy: String
         /// What it understood: "10 mi → km", "20 % of 85".
         public let detail: String
+        /// A currency read while the day's rates are not here yet: shown,
+        /// nothing to paste.
+        public var isWaiting = false
+        /// A currency conversion's parts.
+        public var conversion: Conversion?
     }
 
     /// Nil when the text is not a calculation (a word, a lone number).
-    public static func evaluate(_ text: String, locale: Locale = .current, now: Date = .now) -> Result? {
+    public static func evaluate(_ text: String, locale: Locale = .current, now: Date = .now, currency: CurrencyContext? = nil) -> Result? {
+        answers(text, locale: locale, now: now, currency: currency).first
+    }
+
+    /// Every answer, first the one shown first: "100 usd in eur, gbp" is two.
+    public static func answers(_ text: String, locale: Locale = .current, now: Date = .now, currency: CurrencyContext? = nil) -> [Result] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed.count <= 200 else { return nil }
-        if let zone = timeIn(trimmed, now: now, locale: locale) { return zone }
-        if let converted = conversion(trimmed, locale: locale) { return converted }
-        return arithmetic(trimmed, locale: locale)
+        guard !trimmed.isEmpty, trimmed.count <= 200 else { return [] }
+        if let zone = timeIn(trimmed, now: now, locale: locale) { return [zone] }
+        if let converted = conversion(trimmed, locale: locale) { return [converted] }
+        if let currency {
+            let money = currencies(trimmed, locale: locale, now: now, context: currency)
+            if !money.isEmpty { return money }
+        }
+        return arithmetic(trimmed, locale: locale).map { [$0] } ?? []
     }
 
     // MARK: - Arithmetic

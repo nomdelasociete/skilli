@@ -29,7 +29,8 @@ skil.li adds nothing.
 Only what a request needs, and only to the provider you chose.
 **Settings → Privacy → What Leaves This Mac** lists every feature that
 sends anything, grouped by where it goes (Claude, ChatGPT, OpenAI,
-TypeSafe Jev, GitHub, your servers, websites, Apple): what, when, and
+TypeSafe Jev, GitHub, the exchange rates' sources, your servers,
+websites, Apple): what, when, and
 whether its switch is on. Each Settings pane also ends with its own line
 of it.
 

@@ -151,6 +151,7 @@ extension PrivacyMap.Setup {
         setup.imagesFolder = preferences.imageTagsFolder
         setup.linkPreviews = preferences.clipboardLinkPreviews
         setup.gifSearch = context.gifs?.canSearchKlipy == true && !preferences.catalogOff.contains("cmd:\(LauncherCommand.ID.searchGIFs.rawValue)")
+        setup.currencyRates = !preferences.catalogOff.contains("catalog.currency")
         setup.autoQuit = preferences.autoQuit
         setup.imageFolder = FileManager.default.displayName(atPath: preferences.imageFolder.path)
         if let github = context.github, github.isSignedIn {
@@ -319,6 +320,7 @@ private struct DestinationRow: View {
         case .github: .github
         case .klipy: .gifs
         case .huggingFace: .recorder
+        case .exchangeRates: .catalog
         case .websites, .yours, .apple: nil
         }
     }
@@ -333,6 +335,7 @@ private struct DestinationRow: View {
         case .github: SettingsPane.github.symbol
         case .klipy: SettingsPane.gifs.symbol
         case .huggingFace: "arrow.down.circle.fill"
+        case .exchangeRates: "dollarsign.arrow.circlepath"
         case .websites: "globe"
         case .yours: SettingsPane.tools.symbol
         case .apple: "apple.logo"
@@ -348,6 +351,7 @@ private struct DestinationRow: View {
         case .github: .gray
         case .klipy: SettingsPane.gifs.tint
         case .huggingFace: SettingsPane.recorder.tint
+        case .exchangeRates: .green
         case .websites: .blue
         case .yours: SettingsPane.tools.tint
         case .apple: .gray

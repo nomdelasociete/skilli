@@ -72,6 +72,11 @@ Some things need no prefix at all:
 
 - **Math and units**: `12% of 840`, `5 km in miles`, `time in Tokyo`. ↩
   pastes the result in your app, ⌘↩ copies it.
+- **Currencies**: `800 TRY` (in your currency), `100 usd in €`,
+  `49 £ en dollars`, answered as you type at the day's central-bank
+  rates; the row says the rate and its day. Select a price (`$1,299`)
+  and open the launcher: its conversion comes first. Converted on your
+  Mac: only the day's table of rates is downloaded.
 - **System Settings panes**: "displays", "bluetooth", "night shift".
 - **Projects**: the recent folders of Cursor, VS Code, Windsurf, Zed,
   Sublime Text and JetBrains; ↩ opens it in its editor.
