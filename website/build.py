@@ -164,12 +164,13 @@ REPOSITORY = 'https://github.com/nomdelasociete/skilli'
 # The skillies docs, in their reading order: source file, page, short name in the menu.
 DOCS = [('README.md', 'index.html', 'Overview'), ('header.md', 'header.html', 'Header'),
         ('running.md', 'running.html', 'How it runs'), ('calling-skilli.md', 'calling-skilli.html', 'Calling skil.li')]
-# The guides to skil.li's features, the same way: docs/guides/*.md → /guides/.
+# The guides to skil.li's features, the same way: website/guides/*.md → /guides/
+# (under website/: a guide changed alone publishes the site, as the docs under skillies/ do).
 GUIDES = [('README.md', 'index.html', 'Overview'), ('windows.md', 'windows.html', 'Windows')]
 # Each book: its Markdown folder, its pages, where it is on the site, its name in titles.
 BOOKS = {
     'docs': (ROOT / 'skillies/docs', DOCS, 'skillies/docs', 'Skillies docs'),
-    'guides': (ROOT / 'docs/guides', GUIDES, 'guides', 'Guides'),
+    'guides': (ROOT / 'website/guides', GUIDES, 'guides', 'Guides'),
 }
 
 
@@ -211,7 +212,7 @@ def render_docs(template, target, book='docs'):
     source_folder = folder.relative_to(ROOT).as_posix()
     target.mkdir(parents=True, exist_ok=True)
     for index, (source, name, short) in enumerate(pages):
-        text = (folder / source).read_text()
+        text = (folder / source).read_text(encoding='utf-8')
         page = Page(lambda href: docs_link(href, book))
         content = page.render(text)
         h1 = next((h for h in page.headings if h[0] == 1), None)
@@ -238,10 +239,10 @@ def render_docs(template, target, book='docs'):
         values = {'{{TITLE}}': esc(title), '{{DESCRIPTION}}': esc(description), '{{CANONICAL}}': canonical,
                   '{{MENU}}': menu, '{{SECTIONS}}': sections, '{{CONTENT}}': content, '{{STEPS}}': ''.join(steps),
                   '{{SOURCE}}': f'{REPOSITORY}/blob/main/{source_folder}/{source}'}
-        result = template.read_text()
+        result = template.read_text(encoding='utf-8')
         for key, value in values.items():
             result = result.replace(key, value)
-        (target / name).write_text(result)
+        (target / name).write_text(result, encoding='utf-8')
 
 
 def build(preview=False):

@@ -28,7 +28,9 @@ Markdown, never the generated pages. A new file there needs its line in `DOCS`
 (`website/tests/test_docs.py` says so). Links to another doc become links to
 its page; links to the rest of the repository go to GitHub.
 
-The guides at `/guides/` are built by the same code from `docs/guides/*.md`
+The guides at `/guides/` are built by the same code from `website/guides/*.md`
+(under `website/`, so a guide changed alone publishes, as the docs under
+`skillies/` do)
 (`GUIDES` in `build.py`, `BOOKS` names both): layout in
 `website/guides.template.html`, the same `docs.css`. A link from a guide to a
 skillies doc (or back) lands on that page on the site. A

@@ -15,7 +15,7 @@ supersede this record; update the relevant section when a choice changes.
 - [Skillies guide](../skillies/README.md): contributions and local installation.
 - [Skillies docs](../skillies/docs/README.md): the reference, published as
   `/skillies/docs/` (generated from the Markdown; the website README says how).
-- [Guides](guides/README.md): how skil.li's features work, in plain words
+- [Guides](../website/guides/README.md): how skil.li's features work, in plain words
   with the exact rules, published as `/guides/` the same way (2026-10-27:
   a guide only on GitHub is not found by people on the site). The Windows
   guide first.

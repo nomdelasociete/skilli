@@ -18,6 +18,6 @@ website/skillies/index.html
 website/skillies/catalog.json
 website/skillies/files/
 website/skillies/docs/
-website/guides/
+website/guides/*.html
 __pycache__/
 *.blend1

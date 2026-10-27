@@ -315,7 +315,7 @@ using.
   from your own moves and ✦W; a layout saved for the apps open comes
   first. Again within 10 seconds puts them back. **Place new windows
   where you usually put them** (off by default) does the same for a
-  window as it opens. How both work: the [Windows guide](guides/windows.md).
+  window as it opens. How both work: the [Windows guide](../website/guides/windows.md).
 - **Switch Window**: see Launcher.
 - **Auto Quit**: quits the apps you stopped using after a delay you
   choose; never the front app, unsaved work, sound or a call.
@@ -330,7 +330,7 @@ Never quit.
 ### Windows that go where you put them
 
 How Arrange Windows, Arrange as Usual and Usual places learn and act, in
-full: the [Windows guide](guides/windows.md) (also on skil.li, under
+full: the [Windows guide](../website/guides/windows.md) (also on skil.li, under
 Guides).
 
 <!-- pane: none -->

@@ -130,4 +130,4 @@ command=arrangeWindows`, `open "skilli://run/system:arrangeWindows"`
 (asks first, as Show Desktop does), and the settings above by name
 (`windowLearning`, `usualPlaces`, `windowNeverPlace`,
 `neverArrangeDisplays`). The full design, every rule and measurement:
-[smart-layout.md](../smart-layout.md).
+[smart-layout.md](../../docs/smart-layout.md).

@@ -23,7 +23,7 @@ class DocsPages(unittest.TestCase):
         cls.addClassCleanup(scratch.cleanup)
         cls.target = Path(scratch.name)
         build.render_docs(build.ROOT / 'website/skillies/docs.template.html', cls.target)
-        cls.pages = {path.name: path.read_text() for path in cls.target.glob('*.html')}
+        cls.pages = {path.name: path.read_text(encoding='utf-8') for path in cls.target.glob('*.html')}
 
     def test_every_markdown_file_has_its_page(self):
         sources = sorted(path.name for path in (build.ROOT / 'skillies/docs').glob('*.md'))
@@ -62,7 +62,7 @@ class DocsPages(unittest.TestCase):
 
 
 class GuidesPages(unittest.TestCase):
-    """The guides to skil.li's features: docs/guides/*.md, the same way."""
+    """The guides to skil.li's features: website/guides/*.md, the same way."""
 
     @classmethod
     def setUpClass(cls):
@@ -70,10 +70,10 @@ class GuidesPages(unittest.TestCase):
         cls.addClassCleanup(scratch.cleanup)
         cls.target = Path(scratch.name)
         build.render_docs(build.ROOT / 'website/guides.template.html', cls.target, book='guides')
-        cls.pages = {path.name: path.read_text() for path in cls.target.glob('*.html')}
+        cls.pages = {path.name: path.read_text(encoding='utf-8') for path in cls.target.glob('*.html')}
 
     def test_every_markdown_file_has_its_page(self):
-        sources = sorted(path.name for path in (build.ROOT / 'docs/guides').glob('*.md'))
+        sources = sorted(path.name for path in (build.ROOT / 'website/guides').glob('*.md'))
         self.assertEqual(sorted(source for source, _, _ in build.GUIDES), sources, 'add each file to GUIDES in website/build.py')
         self.assertEqual(sorted(self.pages), sorted(page for _, page, _ in build.GUIDES))
 
