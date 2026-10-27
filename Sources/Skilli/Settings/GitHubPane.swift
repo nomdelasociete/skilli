@@ -225,7 +225,9 @@ private struct RelayEnrollmentControls: View {
     @State private var confirmRevoke = false
 
     private func enroll() {
-        session.enroll(origin: origin(), chain: RelaySignInChain(inbox: serverSync?.wrappedValue ?? false),
+        // The checkbox shows only before this Mac is paired: managing
+        // accounts asks for nothing more.
+        session.enroll(origin: origin(), chain: RelaySignInChain(inbox: !session.canRevoke && serverSync?.wrappedValue == true),
                        paired: { if $0 { serverSyncReady() } })
     }
 
