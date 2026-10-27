@@ -3410,7 +3410,7 @@ re-investigating.
   Catalog's Convert Currencies (`catalog.currency`): no row, no read.
   ⌘K: Copy with Currency ⇧⌘C, Copy Rate. Tool `convert_currency`
   (JSON). Privacy: `PrivacyMap.exchangeRates`. `selftest calc`
-  (`launcherConvertsCurrencies`): a seeded table, "800 TRY in eur"
+  (`launcherConvertsCurrencies`): a seeded table, "800 try in eur"
   typed key by key, the first row read before ↩, ⌘K, ↩ pasted, EUR
   learned for TRY.
 - Mac controls (`SystemCommand`, run through `AIActionController.runMac`
