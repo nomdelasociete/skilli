@@ -25127,8 +25127,15 @@ final class SelfTest {
         controller.showWork("Writing the summary with Claude · Haiku…")
         let busyNote = panel.shownNote, busyCan = panel.canTranscribe
         controller.showWork(nil)
+        // Its transcript being made meanwhile (waiting its turn): the same.
+        var makingSaid = false
+        if let now = center.recordings.read(folder) {
+            controller.show(now, transcript: nil, waiting: true)
+            makingSaid = !panel.canTranscribe && panel.shownNote == "Its transcript is being made: Transcribe Again once it is done."
+            controller.show(now, transcript: center.recordings.transcript(folder))
+        }
         let busySaid = !busyCan && busyNote == "Writing the summary with Claude · Haiku: Transcribe Again once it is done."
-            && panel.canTranscribe && panel.shownNote == note
+            && makingSaid && panel.canTranscribe && panel.shownNote == note
         // Better transcription: listed; not downloaded, it says why and
         // Transcribe dims (downloaded, it can be picked).
         await panel.pick(language: nil, engine: .whisper)
@@ -25157,7 +25164,7 @@ final class SelfTest {
             && note == "Your changes to the lines are replaced." && showsProgress && madeAgain && record?.language == "fr-FR"
             && record?.engine == TranscriptEngine.macOS.rawValue && record?.edited == nil && kept && english
         self.record(name, passed,
-                    "\(languages.count) languages, engines \(engines), note “\(note)”; Better transcription \(whisperReady ? "downloaded" : "not downloaded"): “\(whisperNote)”, Transcribe \(whisperCan ? "on" : "dimmed") \(whisperSaid); an action meanwhile: “\(busyNote)”, Transcribe \(busyCan ? "on" : "dimmed"), back after it \(busySaid); progress shown \(showsProgress), made again in \(record?.language ?? "?") with \(record?.engine ?? "?") \(madeAgain), edited \(record?.edited.map(String.init) ?? "nil"), names given kept \(kept) (\(record?.speakers ?? [:])); then English again \(english)",
+                    "\(languages.count) languages, engines \(engines), note “\(note)”; Better transcription \(whisperReady ? "downloaded" : "not downloaded"): “\(whisperNote)”, Transcribe \(whisperCan ? "on" : "dimmed") \(whisperSaid); an action meanwhile: “\(busyNote)”, Transcribe \(busyCan ? "on" : "dimmed"), the transcript being made \(makingSaid), back after it \(busySaid); progress shown \(showsProgress), made again in \(record?.language ?? "?") with \(record?.engine ?? "?") \(madeAgain), edited \(record?.edited.map(String.init) ?? "nil"), names given kept \(kept) (\(record?.speakers ?? [:])); then English again \(english)",
                     nil)
     }
 

@@ -42,6 +42,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// The lines are shown: none while a transcript is made (again) or an
     /// import copies, when ⌘Z and edits would be written over.
     private var linesShown = false
+    /// Its transcript being made (again), or waiting its turn.
+    private var making = false
     /// The user's own name (My Card), offered first for Me; read once.
     private var ownName: String?
     var onClose: ((RecordingWindowController) -> Void)?
@@ -228,7 +230,9 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             view.showPending(language: record.language)
         }
         linesShown = transcribing == nil && !waiting && transcript != nil
+        making = transcribing != nil || waiting
         view.canTranscribeAgain = linesShown && working == nil
+        updateAgainPanel()
         updateHints()
         if player == nil, !loadingPlayer { loadPlayer() }
     }
@@ -698,7 +702,14 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         view.setWork(text)
         // Not made again under an action reading it, its panel open too.
         view.canTranscribeAgain = linesShown && text == nil
-        againPanel?.busy = text.map { "\($0.replacingOccurrences(of: "…", with: "")): Transcribe Again once it is done." }
+        updateAgainPanel()
+    }
+
+    /// An open Transcribe Again panel waits while an action runs or the
+    /// transcript is being made: Transcribe dims, saying why.
+    private func updateAgainPanel() {
+        againPanel?.busy = working.map { "\($0.replacingOccurrences(of: "…", with: "")): Transcribe Again once it is done." }
+            ?? (making ? "Its transcript is being made: Transcribe Again once it is done." : nil)
     }
 
     /// The summary as it is written (`header` says who and when), or read
@@ -949,13 +960,13 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// The panel under its button: the language and the engine, used as
     /// picked.
     func showTranscribeAgain() {
-        guard draft != nil || record.state == .done, working == nil else { return }
+        guard draft != nil || record.state == .done, working == nil, !making else { return }
         againPanel?.close()
         let panel = TranscribeAgainPanel(language: made?.language ?? record.language,
                                          engine: TranscriptEngine(stored: made?.engine ?? record.engine) ?? .macOS,
                                          engines: engines(), edited: record.edited == true, languages: languages)
         panel.onTranscribe = { [weak self] language, engine in
-            guard let self, self.working == nil else { return }
+            guard let self, self.working == nil, !self.making else { return }
             var record = self.record
             record.language = language
             self.againPanel = nil
