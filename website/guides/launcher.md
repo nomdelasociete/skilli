@@ -1,8 +1,8 @@
 # The launcher
 
 One field for everything: apps, files, commands, what you copied, your
-calendar, your Mac. Open it from anywhere with ✦Space (Caps Lock held,
-then Space), or the keys you chose in the welcome.
+calendar, your Mac. Open it from anywhere with the keys you chose in the welcome: ⌘Space,
+✦Space (Caps Lock held, then Space) or your own.
 
 ![The launcher with "screen" typed: CleanShot X's capture commands and Move to Next Display](images/launcher-results.png "A few letters find commands, apps and files; ↩ runs the first.")
 

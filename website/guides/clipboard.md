@@ -5,7 +5,8 @@ and GIFs: typed where you are, in the app you are in.
 
 ## Clipboard History
 
-**✦C** (or `cb` in the launcher) shows what you copied: text, links,
+**✦C** at first (its key is yours to change), or `cb` in the launcher,
+shows what you copied: text, links,
 images, files, and your screenshots too.
 
 ![Clipboard History: a color, an email address, a note, an address, a phone number, a command; the color previewed with its Hex, RGB and HSL](images/clipboard.png "Each copy previewed as what it is.")
@@ -54,7 +55,7 @@ finds one by what you need ("my iban").
 
 ## Emoji and symbols
 
-**⌃⌘Space** (it replaces macOS's Emoji & Symbols), or `:` in the
+**⌃⌘Space** at first (it replaces macOS's Emoji & Symbols), or `:` in the
 launcher.
 
 - Type a name, in your language or in English. **←→↑↓** move, ↩ types

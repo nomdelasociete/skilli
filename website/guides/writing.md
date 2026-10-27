@@ -7,7 +7,8 @@ place with ↩, and ⌘Z takes it back.
 ## Fix a sentence
 
 1. Select the text.
-2. Press **✦K**, then **G** (Fix Spelling & Grammar).
+2. Press **✦K**, then **G** (Fix Spelling & Grammar, with the keys it
+   starts with).
 3. A card shows the new text with the changes highlighted.
 4. **↩** puts it in place of your selection. **⌘C** copies it instead,
    **esc** leaves your text as it was.
@@ -18,7 +19,7 @@ Changed your mind after ↩? **⌘Z** in your app brings your text back.
 
 ## The commands it comes with
 
-| Keys | Command |
+| Keys at first | Command |
 | --- | --- |
 | ✦K G | Fix Spelling & Grammar |
 | ✦K I | Improve Writing |
@@ -27,7 +28,8 @@ Changed your mind after ↩? **⌘Z** in your app brings your text back.
 | ✦K U · L · T | UPPERCASE · lowercase · Title Case (no SI needed) |
 | ✦U | UPPERCASE, in one key |
 
-They are also in the launcher by name, with the selection as their text.
+Each key is yours to change in Settings → Keys. The commands are also in
+the launcher by name, with the selection as their text.
 
 ## Not quite right? Say so
 

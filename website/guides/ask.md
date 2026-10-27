@@ -5,7 +5,8 @@ does it for you.
 
 ## Ask something
 
-Press **✦A** (or type in the launcher, then **⇥**) and say it:
+Press **✦A** (its key at first; yours in Settings → Keys), or type in the
+launcher, then **⇥**, and say it:
 
 - "what's 15% tip on 64 euros" → it answers in a card.
 - "make this more polite" with text selected → it rewrites the

@@ -7,7 +7,8 @@ you. Everything here works on your Mac only.
 
 ## The window in front
 
-Hold the Hyper Key (✦, Caps Lock held), press W, then a key:
+Hold the Hyper Key (✦, Caps Lock held), press W, then a key. These are
+the keys skil.li starts with; change them in Settings → Keys.
 
 | Key | Place |
 | --- | --- |

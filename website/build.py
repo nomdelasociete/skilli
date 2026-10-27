@@ -13,7 +13,7 @@ import sys
 
 # The renderer beside this file, also when the build is loaded by the tests.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from markdown_pages import Page  # noqa: E402
+from markdown_pages import Page, si_labels  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SLUG = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*')
@@ -163,7 +163,7 @@ def render(entries, template, target):
 
 REPOSITORY = 'https://github.com/nomdelasociete/skilli'
 # The skillies docs, in their reading order: source file, page, short name in the menu.
-DOCS = [('README.md', 'index.html', 'Overview'), ('header.md', 'header.html', 'Header'),
+DOCS = [('README.md', 'index.html', 'Write a skillie'), ('header.md', 'header.html', 'Header'),
         ('running.md', 'running.html', 'How it runs'), ('calling-skilli.md', 'calling-skilli.html', 'Calling skil.li')]
 # The guides to skil.li's features, the same way: website/guides/*.md → /guides/
 # (under website/: a guide changed alone publishes the site, as the docs under skillies/ do).
@@ -175,7 +175,10 @@ GUIDES = [('README.md', 'index.html', 'Overview'), ('getting-started.md', 'getti
           ('apps.md', 'apps.html', 'Apps and GitHub'), ('skillies.md', 'skillies.html', 'Skillies, links and agents'),
           ('privacy.md', 'privacy.html', 'Your SI and privacy'), ('troubleshooting.md', 'troubleshooting.html', 'Troubleshooting')]
 # A book's menu in parts: the page each part starts at, and its name.
-MENU_PARTS = {'guides': {'getting-started.html': 'Start here', 'writing.html': 'Every day', 'apps.html': 'Make it yours'}}
+MENU_PARTS = {'guides': {'getting-started.html': 'Start here', 'writing.html': 'Every day', 'apps.html': 'Make it yours'},
+              'docs': {'index.html': 'Build skillies'}}
+# One menu on every guide and doc page: the books in this order, one after the other.
+LIBRARY = ('guides', 'docs')
 # Each book: its Markdown folder, its pages, where it is on the site, its name in titles.
 BOOKS = {
     'docs': (ROOT / 'skillies/docs', DOCS, 'skillies/docs', 'Skillies docs'),
@@ -186,6 +189,14 @@ BOOKS = {
 def page_address(page):
     """A doc page's address from another one: the overview is the folder itself."""
     return './' if page == 'index.html' else page
+
+
+def library_address(book, page, here):
+    """A page of a book, from a page of the book `here`: its folder on the site when another book's."""
+    if book == here:
+        return page_address(page)
+    folder = posixpath.relpath(BOOKS[book][2], BOOKS[here][2]) + '/'
+    return folder + ('' if page == 'index.html' else page)
 
 
 def docs_link(href, book='docs'):
@@ -254,8 +265,9 @@ def render_docs(template, target, book='docs'):
     esc = html.escape
     folder, pages, site, _ = BOOKS[book]
     source_folder = folder.relative_to(ROOT).as_posix()
+    library = [(other_book, other, label) for other_book in LIBRARY for _, other, label in BOOKS[other_book][1]]
     target.mkdir(parents=True, exist_ok=True)
-    for index, (source, name, short) in enumerate(pages):
+    for source, name, short in pages:
         text = (folder / source).read_text(encoding='utf-8')
         page = Page(lambda href: docs_link(href, book), lambda src: docs_asset(src, book))
         content = page.render(text)
@@ -269,18 +281,20 @@ def render_docs(template, target, book='docs'):
         if len(description) > 160:
             description = description[:157].rsplit(' ', 1)[0] + '…'
         current = ' aria-current="page"'
-        parts = MENU_PARTS.get(book, {})
-        menu = ''.join((f'<li class="docs-menu-part">{esc(parts[other])}</li>' if other in parts else '')
-                       + f'<li><a href="{page_address(other)}"{current if other == name else ""}>{esc(label)}</a></li>'
-                       for _, other, label in pages)
+        menu = ''.join((f'<li class="docs-menu-part">{esc(MENU_PARTS[other_book][other])}</li>'
+                        if other in MENU_PARTS.get(other_book, {}) else '')
+                       + f'<li><a href="{library_address(other_book, other, book)}"'
+                       f'{current if (other_book, other) == (book, name) else ""}>{si_labels(esc(label))}</a></li>'
+                       for other_book, other, label in library)
         sections = ''.join(f'<li class="level-{level}"><a href="#{anchor}">{label}</a></li>' for level, anchor, label in page.headings if level in (2, 3))
         steps = []
-        if index > 0:
-            _, before, label = pages[index - 1]
-            steps.append(f'<a class="docs-prev" href="{page_address(before)}"><span>Previous</span>{esc(label)}</a>')
-        if index + 1 < len(pages):
-            _, after, label = pages[index + 1]
-            steps.append(f'<a class="docs-next" href="{page_address(after)}"><span>Next</span>{esc(label)}</a>')
+        place = library.index((book, name, short))
+        if place > 0:
+            before_book, before, label = library[place - 1]
+            steps.append(f'<a class="docs-prev" href="{library_address(before_book, before, book)}"><span>Previous</span>{si_labels(esc(label))}</a>')
+        if place + 1 < len(library):
+            after_book, after, label = library[place + 1]
+            steps.append(f'<a class="docs-next" href="{library_address(after_book, after, book)}"><span>Next</span>{si_labels(esc(label))}</a>')
         canonical = f'https://skil.li/{site}/' + ('' if name == 'index.html' else name)
         values = {'{{TITLE}}': esc(title), '{{DESCRIPTION}}': esc(description), '{{CANONICAL}}': canonical,
                   '{{MENU}}': menu, '{{SECTIONS}}': sections, '{{CONTENT}}': content, '{{STEPS}}': ''.join(steps),
