@@ -408,7 +408,7 @@ public final class RelayDeviceSession: ObservableObject {
                 self.verifiedNativeToken = verified.native
                 self.verifiedAccessToken = current.pair.access_token
                 self.verifiedSubject = verified.subject
-                self.message = current.pair.installations?.isEmpty == true
+                self.message = current.pair.installations?.isEmpty != false
                     ? "GitHub account verified. No account for live updates." : "GitHub account verified for live updates."
                 self.onChange?()
             }
