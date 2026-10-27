@@ -14,6 +14,7 @@ IMAGE = re.compile(r'!\[([^\]]*)\]\(([^)\s]+)(?: +"([^"]*)")?\)')
 LINK = re.compile(r'\[([^\]]+)\]\(([^)\s]+)\)')
 BOLD = re.compile(r'\*\*(.+?)\*\*')
 ITALIC = re.compile(r'(?<![\w*])\*(?![\s*])(.+?)(?<![\s*])\*(?![\w*])')
+SI = re.compile(r'(<[^>]+>)|\bSI\b')
 
 
 def slug(text):
@@ -44,6 +45,8 @@ class Page:
         text = LINK.sub(lambda m: f'<a href="{html.escape(self.link(html.unescape(m.group(2))))}">{m.group(1)}</a>', text)
         text = BOLD.sub(r'<strong>\1</strong>', text)
         text = ITALIC.sub(r'<em>\1</em>', text)
+        # SI, in the text and never in a tag's attributes: the label si-label.js reveals as AI.
+        text = SI.sub(lambda m: m.group(1) or '<span class="si-label">SI</span>', text)
         return re.sub('\x00(\\d+)\x00', lambda m: spans[int(m.group(1))], text)
 
     def media(self, alt, src):

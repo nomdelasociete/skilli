@@ -1,7 +1,7 @@
 # Getting started
 
-Install skil.li, give it one permission, and learn the three keys that
-reach everything else. About a minute.
+Install skil.li, give it one permission, choose your keys, and learn the
+three things that reach everything else. About a minute.
 
 ## 1. Install
 
@@ -31,7 +31,7 @@ not something you read, and you can skip any of them.
    Contacts, the microphone…) is asked by macOS where you first use what
    needs it.
 2. **The Hyper Key.** Hold Caps Lock: it is ✦ now. With a letter it runs
-   skil.li's shortcuts (✦A asks, ✦C opens your clipboard); tapped alone,
+   skil.li's shortcuts (at first, ✦A asks and ✦C opens your clipboard); tapped alone,
    it is Escape. If Caps Lock already has a mapping of yours, it is left
    as it is.
 3. **The launcher's keys.** Choose ⌘Space (instead of Spotlight,
@@ -40,7 +40,7 @@ not something you read, and you can skip any of them.
 4. **Your SI.** skil.li writes with the Claude or ChatGPT you already pay
    for, and chooses with a TypeSafe Jev key. See [Connect your SI](#4-connect-your-si).
 5. **Try it on text.** A sentence full of mistakes is selected. Press ✦K,
-   then G: the fix shows in a card, ↩ puts it in place, ⌘Z takes it back.
+   then G (the keys it starts with): the fix shows in a card, ↩ puts it in place, ⌘Z takes it back.
 6. **Set up.** What the welcome turned on, a line each. A missing line
    says where to set it later.
 
@@ -48,23 +48,26 @@ Closed early, the welcome never comes back by itself. Type `welcome` in
 the launcher to see it again; while Accessibility is off, the menu bar's
 skil.li menu also offers **Set Up skil.li…**.
 
-## 3. The three keys to remember
+## 3. The three things to remember
 
-| Keys | Does |
+Every key is yours to change. These are the ones skil.li starts with:
+
+| Opens | Its key at first |
 | --- | --- |
-| ✦Space (or the keys you chose) | Opens the launcher: apps, files, commands, everything |
-| ✦A | Ask: say what you want, in your words |
-| ✦C | Your clipboard history |
+| The launcher: apps, files, commands, everything | The keys you chose in the welcome (⌘Space or ✦Space) |
+| Ask: say what you want, in your words | ✦A |
+| Your clipboard history | ✦C |
 
-Everything else is one search away: type `?` in the launcher for the
-Catalog, every command skil.li has with its keys. Every row also has
-**⌘K**, the actions it can take, including Set Shortcut….
+Your own keys, as they are now: type `?` in the launcher for the
+Catalog, every command skil.li has with its keys, or open Settings →
+Keys. Every row also has **⌘K**, the actions it can take, including Set
+Shortcut….
 
 ## 4. Connect your SI
 
-SI is skil.li's name for the AI it uses. It is yours, and it is optional:
-everything that is not SI (the launcher, the clipboard, snippets, windows,
-the Hyper Key…) works without it.
+Your SI is yours, and it is optional: everything that is not SI (the
+launcher, the clipboard, snippets, windows, the Hyper Key…) works without
+it.
 
 - **To write** (answers, rewrites, summaries): your Claude subscription
   through Claude Code, a Claude API key, your ChatGPT subscription through

@@ -38,6 +38,10 @@ class DocsPages(unittest.TestCase):
                 if href.startswith(('http', 'mailto:')):
                     continue
                 page, _, anchor = href.partition('#')
+                if page == '../../guides/' + page.rsplit('/', 1)[-1]:
+                    # The guides, next in the one menu: a page of theirs.
+                    self.assertIn(page.rsplit('/', 1)[-1] or 'index.html', [p for _, p, _ in build.GUIDES], f'{name}: {href}')
+                    continue
                 page = 'index.html' if page == './' else page or name
                 self.assertIn(page, self.pages, f'{name}: {href}')
                 if anchor:
@@ -107,8 +111,10 @@ class GuidesPages(unittest.TestCase):
     def test_the_menu_is_in_parts(self):
         menu = self.pages['index.html'].split('class="docs-menu">', 1)[1].split('</ul>', 1)[0]
         parts = re.findall(r'docs-menu-part">([^<]+)<', menu)
-        self.assertEqual(parts, list(build.MENU_PARTS['guides'].values()))
+        self.assertEqual(parts, ['Start here', 'Every day', 'Make it yours', 'Build skillies'])
         self.assertLess(menu.index('Start here'), menu.index('>Getting started<'))
+        # The skillies docs are the last part of the same menu, on their own pages too.
+        self.assertIn('<a href="../skillies/docs/">Write a skillie</a>', menu)
 
     def test_pictures_are_in_the_book_and_copied(self):
         for name, html in self.pages.items():
@@ -202,6 +208,13 @@ class Markdown(unittest.TestCase):
     def test_italics_leave_lone_stars_alone(self):
         self.assertEqual(render('Turn on *Usual places*: 2 * 3, `a*b*`.'),
                          '<p>Turn on <em>Usual places</em>: 2 * 3, <code>a*b*</code>.</p>')
+
+    def test_si_is_the_label_that_reveals_ai(self):
+        # In the text, links and headings; never in code or a picture's alt.
+        self.assertEqual(render('Your **SI** ([SI Accounts](a.md)), `SI`, ![SI card](https://example.com/a.png), SIGN.'),
+                         '<p>Your <strong><span class="si-label">SI</span></strong> (<a href="a.md">'
+                         '<span class="si-label">SI</span> Accounts</a>), <code>SI</code>, '
+                         '<img src="https://example.com/a.png" alt="SI card" loading="lazy">, SIGN.</p>')
 
     def test_text_is_escaped_and_links_rewritten(self):
         html = Page(lambda href: href.replace('.md', '.html')).render('See [the <header>](header.md#keys) & `<tool>`.')

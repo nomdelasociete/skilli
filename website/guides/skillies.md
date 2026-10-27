@@ -1,7 +1,7 @@
 # Skillies, links and agents
 
 Make skil.li do more: a script of yours becomes a command, any command
-runs from a link, and your AI agents can use skil.li too.
+runs from a link, and your SI agents can use skil.li too.
 
 ## Skillies: your scripts as commands
 

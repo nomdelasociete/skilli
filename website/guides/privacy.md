@@ -6,8 +6,7 @@ telemetry.
 
 ## Your SI
 
-SI is skil.li's name for the AI it uses. It has two jobs, and you bring
-your own for each. Set them in **Settings → SI Accounts**; **Verify**
+Your SI has two jobs, and you bring your own for each. Set them in **Settings → SI Accounts**; **Verify**
 tests each one.
 
 | Job | What it does | With |

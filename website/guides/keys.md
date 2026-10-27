@@ -23,7 +23,7 @@ learn them by heart.
 
 ![The panel after ✦K, listing each next key and its command](images/leader-k.png "After ✦K: each next key and what it does.")
 
-The keys skil.li starts with:
+The keys skil.li starts with; each one is yours to change or remove:
 
 | Keys | Does |
 | --- | --- |
