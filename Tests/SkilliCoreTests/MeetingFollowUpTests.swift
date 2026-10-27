@@ -61,6 +61,7 @@ final class MeetingFollowUpTests: XCTestCase {
         XCTAssertNil(MeetingFollowUp.chapters(from: "Sorry, I can't.", lines: lines))
         XCTAssertNil(MeetingFollowUp.chapters(from: "[]", lines: lines))
         XCTAssertNil(MeetingFollowUp.chapters(from: "[{\"start\": \"1:00\", \"title\": \"A\"}]", lines: []))
+        XCTAssertNil(MeetingFollowUp.chapters(from: "[{\"start\": \"0:03\", \"title\": \"Only\"}]", lines: lines), "two at least")
     }
 
     func testTheChaptersAreHeadingsInTheMarkdown() {

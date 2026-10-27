@@ -25566,6 +25566,7 @@ final class SelfTest {
         await recorderCardShowsBothSourcesLive()
         if !aborted { await recorderRecordsAPlayedBackCall() }
         if !aborted { await recorderPausesBothTracksTogether() }
+        if !aborted { await recorderImportWaitsForTheRecording() }
         if !aborted { await recorderOffersOneNeverStopped() }
         if !aborted { await recorderQuitClosesItWhole() }
         if !aborted { await recorderStopStuckOffersIt() }
@@ -26134,6 +26135,69 @@ final class SelfTest {
                            expected, offsets.count, pairs.mine.count, BeepPairs.mean(before) * 1000, BeepPairs.mean(after) * 1000, step * 1000, spread * 1000,
                            restartStep * 1000, jumpLine),
                     nil)
+    }
+
+    /// A file imported while a meeting records (docs/meeting-recorder-views.md,
+    /// "Import"): made at once, its window waiting, nothing transcribed
+    /// meanwhile; at Stop the meeting's transcript is made first, the
+    /// import's still waiting, then the import's.
+    private func recorderImportWaitsForTheRecording() async {
+        let name = "Recorder: a file imported while a meeting records is made at once, its window waiting; its transcript comes after the meeting's"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let train = recorderScratch.appendingPathComponent("import-train.wav")
+        _ = Self.clip(nil, seconds: 20, beeps: stride(from: 0.5, to: 20, by: 1).map { $0 }, to: train)
+        center.recorder.standIn(microphone: train, alsoLeaveOut: [])
+        center.showCard(title: "Import check")
+        guard await waitUntil(timeout: 3, { center.isCardVisible && center.cardView.microphoneLine != "Starting…" }) != nil else {
+            record(name, false, "no Record card", nil)
+            return
+        }
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 2, { center.recorder.phase == .recording }) != nil, let meeting = center.recorder.folder else {
+            record(name, false, "not recording", nil)
+            return
+        }
+        try? center.recorder.microphone.playStandIn(at: mach_absolute_time(), ppm: 0)
+        let file = recorderScratch.appendingPathComponent("While recording.wav")
+        try? FileManager.default.removeItem(at: file)
+        _ = Self.clip(nil, seconds: 6, beeps: [1, 2, 3], to: file)
+        center.importFiles([file])
+        let opened = await waitUntil(timeout: 10) { center.openWindows.contains { $0.record.imported == "While recording.wav" } } != nil
+        await pause(1500)
+        guard opened, let imported = center.openWindows.first(where: { $0.record.imported == "While recording.wav" }) else {
+            center.control(.stop)
+            _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil }
+            center.openWindows.forEach { $0.close() }
+            record(name, false, "no window for the import", nil)
+            return
+        }
+        let state = imported.shownState
+        let waited = center.recorder.waits(imported.folder) && center.recorder.transcribing == nil && state == "Waiting to be transcribed…"
+        // Stopped: the first transcript made is the meeting's, the import's
+        // still waiting then.
+        center.control(.stop)
+        let key = { (url: URL) in url.resolvingSymlinksInPath().standardizedFileURL.path }
+        var firstMade: String?
+        var importWaitedThen = false
+        let deadline = ContinuousClock.now + .seconds(90)
+        while ContinuousClock.now < deadline {
+            if firstMade == nil, let now = center.recorder.transcribing {
+                firstMade = now.title
+                importWaitedThen = key(now.folder) == key(meeting) && center.recorder.waits(imported.folder)
+            }
+            if center.recorder.phase == .idle, center.recorder.transcribing == nil, !center.recorder.waits(imported.folder) { break }
+            await pause(50)
+        }
+        let importDone = center.recordings.read(imported.folder).map { $0.state == .done || $0.state == .pending } ?? false
+        center.openWindows.forEach { $0.close() }
+        let passed = waited && firstMade == "Import check" && importWaitedThen && importDone
+        record(name, passed,
+               "the import's window at once \(opened), “\(state)”, queued \(waited); after Stop the first made “\(firstMade ?? "none")”, the import waiting then \(importWaitedThen); the import's transcript after \(importDone)",
+               nil)
     }
 
     /// A recording skil.li never stopped: another skil.li records, killed

@@ -147,7 +147,8 @@ public enum MeetingFollowUp {
 
     /// The chapters in the AI's answer, each on the line that starts there
     /// (the first line at or after its time; the first chapter on the
-    /// first line), by time, one per line; nil when the answer holds none.
+    /// first line), by time, one per line; nil when the answer holds fewer
+    /// than two (one chapter is the meeting itself).
     public static func chapters(from answer: String, lines: [TranscriptLine]) -> [MeetingRecord.Chapter]? {
         guard !lines.isEmpty, let items = jsonArray(in: answer) else { return nil }
         var found: [(line: Int, title: String)] = []
@@ -165,7 +166,7 @@ public enum MeetingFollowUp {
         for chapter in found where taken.insert(chapter.line).inserted {
             chapters.append(MeetingRecord.Chapter(title: chapter.title, start: lines[chapter.line].start))
         }
-        return chapters
+        return chapters.count >= 2 ? chapters : nil
     }
 
     /// One to-do said in a meeting.

@@ -259,7 +259,7 @@ final class RecordingFollowUps {
         // The lines as they are now: edited meanwhile, the window wrote them.
         let lines = recordings.transcript(folder)?.lines ?? transcript.lines
         guard let chapters = MeetingFollowUp.chapters(from: answer, lines: lines) else {
-            throw Failure(message: "\(writer.choice.provider.title) gave no chapters.")
+            throw Failure(message: "\(writer.choice.provider.title) gave fewer than two chapters: the meeting may hold one subject only.")
         }
         try setChapters(chapters, in: folder)
         return chapters.map { "\(MeetingTranscript.clock($0.start)) \($0.title)" }.joined(separator: "\n")

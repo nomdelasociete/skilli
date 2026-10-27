@@ -50,7 +50,12 @@ final class MeetingRecorder {
 
     let recordings: Recordings
     private(set) var phase: Phase = .idle {
-        didSet { if phase != oldValue { onChange?() } }
+        didSet {
+            guard phase != oldValue else { return }
+            onChange?()
+            // The meeting's files closed: the transcripts that waited for it.
+            if phase == .idle { startTranscribing() }
+        }
     }
     private(set) var transcribing: Transcribing? {
         didSet { if transcribing != oldValue { onChange?() } }
@@ -460,9 +465,10 @@ final class MeetingRecorder {
         self.record = nil
         self.folder = nil
         pausedAt = nil
-        phase = .idle
         Log.trace("Recorder: “\(record.title)” stopped, \(Int(record.seconds)) s (me \(lengths.first ?? 0), them \(lengths.last ?? 0))")
-        transcribe(folder, record: record)
+        // Its transcript first: an import made while it recorded waits.
+        transcribe(folder, record: record, first: true)
+        phase = .idle
     }
 
     /// Stops as `stop()` does (a stop under way too), holding the main
@@ -561,13 +567,20 @@ final class MeetingRecorder {
 
     /// Makes `folder`'s transcript (one at a time), then opens it. A
     /// language this Mac cannot transcribe, or a failure: kept without one
-    /// (`pending`), its window says why.
-    func transcribe(_ folder: URL, record: MeetingRecord, again: Bool = false, engine: TranscriptEngine? = nil) {
+    /// (`pending`), its window says why. While a meeting records, it waits
+    /// for that meeting's transcript (docs/meeting-recorder-views.md,
+    /// "Import"); `first`: that meeting's, ahead of them.
+    func transcribe(_ folder: URL, record: MeetingRecord, again: Bool = false, engine: TranscriptEngine? = nil, first: Bool = false) {
         guard !quitting else { return leave(folder, record: record) }
-        queue.append((folder, record, again, engine))
-        // One worker for them all: several asked at once (the launch's) wait
-        // their turn.
-        guard worker == nil else { return }
+        let job = (folder, record, again: again, engine: engine)
+        if first { queue.insert(job, at: 0) } else { queue.append(job) }
+        startTranscribing()
+    }
+
+    /// One worker for them all: several asked at once (the launch's) wait
+    /// their turn; none while a meeting records or its files close.
+    private func startTranscribing() {
+        guard worker == nil, !queue.isEmpty, phase == .idle || phase == .listening else { return }
         worker = Task {
             await transcribeNext()
             worker = nil
@@ -589,7 +602,8 @@ final class MeetingRecorder {
     }
 
     private func transcribeNext() async {
-        while !queue.isEmpty, !quitting {
+        // A meeting starting meanwhile: the next waits for its transcript.
+        while !queue.isEmpty, !quitting, phase == .idle || phase == .listening {
             let (folder, record, again, engine) = queue.removeFirst()
             // The job is this one before anything is awaited: another asked
             // meanwhile waits in the queue.

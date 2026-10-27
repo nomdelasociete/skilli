@@ -235,6 +235,9 @@ final class RecorderCenter {
         guard let asleep = pausedForSleep else { return }
         pausedForSleep = nil
         guard recorder.phase == .paused else { return }
+        // A call's end card it replaces: offered again once this one is
+        // answered and the recording goes on, if the call is still over.
+        watch.offerAgain()
         card.showSlept(title: recorder.title, elapsed: recorder.elapsed,
                        line: "The Mac went to sleep at \(asleep.formatted(date: .omitted, time: .shortened)).")
     }

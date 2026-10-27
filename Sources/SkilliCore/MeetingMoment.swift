@@ -317,6 +317,14 @@ public struct CallEndWatch: Equatable, Sendable {
         keptAppLeft = false
     }
 
+    /// The Mac slept meanwhile, its wake card in the place of a call's end
+    /// card: what was offered is offered again once the recording goes on,
+    /// if it is still true. Keep Recording's answer stands.
+    public mutating func offerAgain() {
+        if !keptAppLeft { offeredAppLeft = false }
+        offeredQuiet = false
+    }
+
     /// Keep Recording answered to `reason`: not offered again.
     public mutating func kept(_ reason: Reason) {
         if case .appLeft = reason { keptAppLeft = true }
