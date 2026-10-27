@@ -113,6 +113,8 @@ final class MeetingFollowUpTests: XCTestCase {
         XCTAssertNil(MeetingFollowUp.seconds("soon"))
         XCTAssertNil(MeetingFollowUp.seconds("1:2:3:4"))
         XCTAssertEqual(MeetingFollowUp.languageName("fr-FR"), "French")
+        XCTAssertEqual(MeetingTranscript.clock(-1e20), "0:00", "no crash on a time no recording has")
+        XCTAssertEqual(MeetingTranscript.clock(.nan), "0:00")
     }
 
     func testARecordWithoutPhaseFiveFieldsStillReads() throws {
