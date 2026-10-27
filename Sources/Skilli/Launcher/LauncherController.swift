@@ -2829,6 +2829,8 @@ final class LauncherController: NSObject {
             return
         }
         guard results.indices.contains(row) else { return }
+        // The day's rates not here yet: nothing runs, nothing is remembered.
+        if case .calculation(let result) = results[row], result.isWaiting { return }
         rememberSearch()
         if case .catalog(let entry) = results[row] {
             runCatalog(entry, flags: flags)
@@ -3168,8 +3170,6 @@ final class LauncherController: NSObject {
             return
         }
         if case .calculation(let result) = picked {
-            // The day's rates are not here yet: nothing to paste.
-            if result.isWaiting { return }
             hide()
             onCalculation?(result, !flags.contains(.command))
             return
@@ -3630,7 +3630,9 @@ final class LauncherController: NSObject {
     /// The action `key` runs in `list` for `item`: ⌘C falls back to its
     /// first copy (⌘↩ where that copies), then to its title.
     private func action(_ key: LauncherAction.Key, in list: [LauncherAction], for item: LauncherItem) -> LauncherAction? {
-        LauncherAction.find(key, in: list) ?? (key == .copy ? copyTitleAction(item) : nil)
+        // The day's rates not here yet: ⌘C has nothing to copy either.
+        if case .calculation(let result) = item, result.isWaiting { return nil }
+        return LauncherAction.find(key, in: list) ?? (key == .copy ? copyTitleAction(item) : nil)
     }
 
     /// The selected row's action for `key`, run.

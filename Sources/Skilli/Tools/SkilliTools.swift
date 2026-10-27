@@ -392,7 +392,7 @@ final class SkilliTools {
                        group: .actions, risk: .read,
                        parameters: [.init(name: "amount", description: "The amount, digits with a dot for decimals: 100, 1299.99."),
                                     .init(name: "from", description: "The currency it is in: an ISO code (USD, TRY) or a name (euros)."),
-                                    .init(name: "to", description: "The currency wanted; empty: the user's own.", isRequired: false)]),
+                                    .init(name: "to", description: "The currency wanted; empty: the user's own (from it: the one last picked, else USD, EUR for dollar users).", isRequired: false)]),
         ToolDefinition(name: "list_timers", title: "List timers",
                        description: "The running timers and what is left.",
                        group: .actions, risk: .read, parameters: []),
@@ -800,16 +800,33 @@ final class SkilliTools {
 
     // MARK: - Running
 
-    /// `convert_currency`: the calculator's own reading, in English
-    /// numbers, the answer as JSON.
+    /// `convert_currency`: the calculator's own reading, numbers in
+    /// English, the ambiguous names ("dollars", "$") for the user's own
+    /// currency; the answer as JSON.
     private func convertCurrency(amount: String, from: String, to: String) throws -> String {
-        guard let context = currency?() else { throw Failure(message: "Convert Currencies is off (Settings → Catalog).") }
+        guard var context = currency?() else { throw Failure(message: "Convert Currencies is off (Settings → Catalog).") }
         guard let rates = context.rates else { throw Failure(message: "No exchange rates yet: skil.li has not read the day's table.") }
-        let english = Locale(identifier: "en_US")
-        let target = to.trimmingCharacters(in: .whitespaces).isEmpty ? (Locale.current.currency?.identifier ?? "USD") : to
-        let typed = "\(amount.trimmingCharacters(in: .whitespaces)) \(from.trimmingCharacters(in: .whitespaces)) in \(target.trimmingCharacters(in: .whitespaces))"
-        guard let result = Calculator.evaluate(typed, locale: english, currency: context), let conversion = result.conversion else {
-            throw Failure(message: "Cannot convert “\(typed)”: the amount must be a number and both currencies in the day's table (ISO codes such as USD, EUR, TRY).")
+        let home = Locale.current.currency?.identifier ?? "USD"
+        context.home = home
+        let fromName = from.trimmingCharacters(in: .whitespaces)
+        let toName = to.trimmingCharacters(in: .whitespaces)
+        guard let fromCode = Calculator.currencyCode(fromName, home: home), rates.rates[fromCode] != nil else {
+            throw Failure(message: "“\(fromName)” is not a currency in the day's table (ISO codes such as USD, EUR, TRY).")
+        }
+        var toCode: String?
+        if !toName.isEmpty {
+            guard let code = Calculator.currencyCode(toName, home: home), rates.rates[code] != nil else {
+                throw Failure(message: "“\(toName)” is not a currency in the day's table (ISO codes such as USD, EUR, TRY).")
+            }
+            toCode = code
+        }
+        // No target: the launcher's default (the user's currency; from it,
+        // the last picked, else USD, EUR for dollar users).
+        let typed = "\(amount.trimmingCharacters(in: .whitespaces)) \(fromCode)" + (toCode.map { " in \($0)" } ?? "")
+        guard let result = Calculator.evaluate(typed, locale: Locale(identifier: "en_US"), currency: context), let conversion = result.conversion,
+              conversion.from == fromCode, toCode == nil || conversion.to == toCode
+        else {
+            throw Failure(message: "Cannot convert “\(typed)”: the amount must be a number, and the two currencies different.")
         }
         let answer: [String: String] = [
             "amount": amount, "from": conversion.from, "to": conversion.to, "result": result.copy, "rate": conversion.rate,

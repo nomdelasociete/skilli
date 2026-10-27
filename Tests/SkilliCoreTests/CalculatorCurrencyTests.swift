@@ -125,6 +125,25 @@ final class CalculatorCurrencyTests: XCTestCase {
         XCTAssertEqual(pair("100 $ in €", french), "USD→EUR")
     }
 
+    func testTheUsersCurrencyCanDifferFromTheNumbersLocale() {
+        // A tool reads numbers in English for a Canadian user: "dollars" is CAD.
+        var context = context()
+        context.home = "CAD"
+        let result = Calculator.evaluate("100 dollars in €", locale: english, now: now, currency: context)
+        XCTAssertEqual(result?.conversion?.from, "CAD")
+        XCTAssertEqual(Calculator.evaluate("100 eur", locale: english, now: now, currency: context)?.conversion?.to, "CAD")
+        XCTAssertEqual(Calculator.currencyCode("dollars", home: "CAD"), "CAD")
+        XCTAssertEqual(Calculator.currencyCode("€", home: "USD"), "EUR")
+        XCTAssertEqual(Calculator.currencyCode("try", home: "USD"), "TRY")
+        XCTAssertNil(Calculator.currencyCode("pesos", home: "EUR"))
+    }
+
+    func testATargetTheTableLacksGivesNoRow() {
+        // XOF is a currency, but not in this table: no fallback to the user's.
+        XCTAssertNil(answer("800 TRY in xof", english))
+        XCTAssertNil(answer("800 TRY in eur, xof", english))
+    }
+
     func testEachCurrencyKeepsItsOwnDecimals() {
         XCTAssertEqual(answer("100 eur in jpy", english)?.copy, "17597")
         XCTAssertEqual(answer("100 eur in kwd", english)?.copy, "34.250")

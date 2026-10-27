@@ -109,7 +109,9 @@ public struct CatalogEntry: Identifiable, Equatable, Sendable {
     /// found by it (a contact in any search). Ask by Voice, Dictate, Do It
     /// Here and the case changes have no row there: no switch for them.
     public var canBeOff: Bool {
-        !id.hasPrefix("catalog.") || FeatureCatalog.rowOwners.contains { $0.entry == id }
+        // Convert Currencies: the calculator's rows stay theirs
+        // (`rowOwners`); off, only the conversions leave.
+        !id.hasPrefix("catalog.") || id == "catalog.currency" || FeatureCatalog.rowOwners.contains { $0.entry == id }
     }
 
     /// How well it fits the words typed (`FeatureCatalog.words`): each must

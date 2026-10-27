@@ -10,15 +10,25 @@ public struct CurrencyContext: Sendable {
     /// The currency last picked from each currency ("USD": "EUR"), for an
     /// amount typed in the user's own currency with no target.
     public var lastTargets: [String: String]
+    /// The user's currency, when it is not the number locale's (a tool
+    /// reads numbers in English for a Canadian user: "dollars" is CAD).
+    public var home: String?
 
-    public init(rates: CurrencyRates?, waiting: String = "Getting today's rates…", lastTargets: [String: String] = [:]) {
+    public init(rates: CurrencyRates?, waiting: String = "Getting today's rates…", lastTargets: [String: String] = [:], home: String? = nil) {
         self.rates = rates
         self.waiting = waiting
         self.lastTargets = lastTargets
+        self.home = home
     }
 }
 
 extension Calculator {
+    /// The ISO code `name` stands for ("euros", "€", "try"), the
+    /// ambiguous ones ("$", "dollars") read for a user of `home`.
+    public static func currencyCode(_ name: String, home: String) -> String? {
+        Money.code(name, home: home)
+    }
+
     /// A currency conversion's parts, for ⌘K (Copy Rate) and for learning
     /// the target picked.
     public struct Conversion: Equatable, Sendable {
@@ -36,7 +46,7 @@ extension Calculator {
     static func currencies(_ text: String, locale: Locale, now: Date, context: CurrencyContext) -> [Result] {
         // Most keys typed are words: nothing more to read.
         guard text.contains(where: \.isNumber) else { return [] }
-        let home = locale.currency?.identifier ?? "USD"
+        let home = context.home ?? locale.currency?.identifier ?? "USD"
         let known: (String) -> Bool = { code in context.rates.map { $0.rates[code] != nil } ?? true }
         for separator in [" in ", " to ", " en ", " into ", " → ", " -> ", " = "] {
             guard let range = text.range(of: separator, options: [.backwards, .caseInsensitive]) else { continue }
@@ -47,7 +57,9 @@ extension Calculator {
             var targets: [String] = []
             var partial = parts.isEmpty
             for part in parts {
-                if let code = Money.code(part, home: home), known(code) {
+                if let code = Money.code(part, home: home) {
+                    // A currency the day's table lacks: no guess.
+                    guard known(code) else { return [] }
                     if code != source.code, !targets.contains(code) { targets.append(code) }
                 } else if Money.couldStart(part) {
                     partial = true

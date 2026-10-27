@@ -22,6 +22,9 @@ final class CurrencyRateStore {
     private let fileURL: URL?
     private let fetches: Bool
     private var reading = false
+    /// After a failed read with no table: not before then, one timer.
+    private var retryAfter = Date.distantPast
+    private var retryPending = false
     private var observers: [NSObjectProtocol] = []
     private let network = NWPathMonitor()
     private var online = true
@@ -74,7 +77,7 @@ final class CurrencyRateStore {
     /// Reads the table again once the source's own validity has passed;
     /// a date compare otherwise (each launcher show calls it).
     func refreshIfDue(now: Date = .now) {
-        guard fetches, isOn(), !reading, (rates?.validUntil ?? .distantPast) <= now else { return }
+        guard fetches, isOn(), !reading, now >= retryAfter, (rates?.validUntil ?? .distantPast) <= now else { return }
         reading = true
         let etag = rates?.source == .centralBanks ? rates?.etag : nil
         Task {
@@ -82,6 +85,7 @@ final class CurrencyRateStore {
             reading = false
             switch read {
             case .new(let table):
+                retryAfter = .distantPast
                 rates = table
                 unreachable = false
                 save()
@@ -90,10 +94,17 @@ final class CurrencyRateStore {
                 rates?.fetched = .now
                 save()
             case .failed:
-                // The old table stays; a first one is asked again in ten minutes.
+                // The old table stays; asked again in ten minutes, not on
+                // every show or wake before then.
                 unreachable = rates == nil
-                rates?.validUntil = Date.now.addingTimeInterval(600)
-                if rates == nil { DispatchQueue.main.asyncAfter(deadline: .now() + 600) { [weak self] in self?.refreshIfDue() } }
+                retryAfter = Date.now.addingTimeInterval(600)
+                if rates == nil, !retryPending {
+                    retryPending = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 600) { [weak self] in
+                        self?.retryPending = false
+                        self?.refreshIfDue()
+                    }
+                }
             }
             onChange?()
         }

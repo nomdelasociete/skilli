@@ -16794,9 +16794,11 @@ final class SelfTest {
         calendar.timeZone = TimeZone(identifier: "UTC")!
         let today = calendar.dateComponents([.year, .month, .day], from: .now)
         let day = String(format: "%04d-%02d-%02d", today.year ?? 2026, today.month ?? 1, today.day ?? 1)
-        store.seed(CurrencyRates(rates: ["EUR": .init(perEuro: 1, day: day), "USD": .init(perEuro: Decimal(string: "1.1186")!, day: day),
-                                         "TRY": .init(perEuro: Decimal(string: "55.666")!, day: day), "GBP": .init(perEuro: Decimal(string: "0.83658")!, day: day)],
-                                 source: .centralBanks, fetched: .now, validUntil: .distantFuture))
+        var table: [String: CurrencyRates.Rate] = ["EUR": .init(perEuro: 1, day: day), "USD": .init(perEuro: Decimal(string: "1.1186")!, day: day),
+                                                   "TRY": .init(perEuro: Decimal(string: "55.666")!, day: day), "GBP": .init(perEuro: Decimal(string: "0.83658")!, day: day)]
+        // "800 try" goes to this Mac's currency until "eur" is typed: it needs a rate too.
+        if let home = Locale.current.currency?.identifier, table[home] == nil { table[home] = .init(perEuro: Decimal(string: "1.5")!, day: day) }
+        store.seed(CurrencyRates(rates: table, source: .centralBanks, fetched: .now, validUntil: .distantFuture))
         guard await focusTestWindow() else { return }
         window.makeFirstResponder(textView)
         textView.string = ""

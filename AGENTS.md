@@ -3390,7 +3390,8 @@ re-investigating.
   last picked, else USD, EUR for dollar users), "800 TRY in €", "49 £ en
   dollars", "100 usd in eur, gbp" (a row each), answered as typed:
   while the target is half typed ("800 TRY in e") the row stays on the
-  default; a target no currency starts with gives none. Codes in any
+  default; a target no currency starts with, or one the day's table
+  lacks, gives none. Codes in any
   case after the amount, before it only in capitals or as a symbol ("try
   800" is not one); names from Foundation in English, French and the
   Mac's languages, singular or plural; "$" and "dollar" follow the
@@ -3408,8 +3409,11 @@ re-investigating.
   skips it all (a word costs ~nothing more). A price selected where the
   launcher opens (≤ 40 characters) is converted first. Off with the
   Catalog's Convert Currencies (`catalog.currency`): no row, no read.
-  ⌘K: Copy with Currency ⇧⌘C, Copy Rate. Tool `convert_currency`
-  (JSON). Privacy: `PrivacyMap.exchangeRates`. `selftest calc`
+  ⌘K: Copy with Currency ⇧⌘C, Copy Rate; a waiting row runs, copies and
+  records nothing. A failed first read is asked again after 10 min, one
+  timer, not on each show. Tool `convert_currency` (JSON; numbers in
+  English, "dollars" for the user's own currency via
+  `CurrencyContext.home`; a target not resolved as asked is an error). Privacy: `PrivacyMap.exchangeRates`. `selftest calc`
   (`launcherConvertsCurrencies`): a seeded table, "800 try in eur"
   typed key by key, the first row read before ↩, ⌘K, ↩ pasted, EUR
   learned for TRY.
