@@ -41,6 +41,11 @@ final class PictureTrackWriter: @unchecked Sendable {
     /// When the source last went off: a picture shown before it, arriving
     /// late, is not written after the black one.
     private var blankedAt: Double?
+    /// A picture that must be in the file (held over a cut, black) the
+    /// encoder had no room for yet: written before the next, or at the
+    /// close; one never written leaves the file not whole.
+    private var pendingRequired: (pixels: CVPixelBuffer, time: Double)?
+    private var missedRequired = false
     /// Once closed, its length and whether it is whole; those waiting for
     /// a close under way.
     private var closedLength: (seconds: Double, complete: Bool)?
@@ -52,15 +57,24 @@ final class PictureTrackWriter: @unchecked Sendable {
     /// queue, once.
     var onFailure: (@Sendable (Error) -> Void)?
 
-    /// A file at `url` whose 0 is the host time `start`; `held` is the
-    /// picture the source shows then (it goes at 0).
-    init(url: URL, width: Int, height: Int, perSecond: Int, bitRate: Int, start: Double, held: CVPixelBuffer?, label: String) throws {
+    /// A file at `url` whose 0 is the host time `start`, cut by the
+    /// recording's `pauses` so far (a file made later in the recording);
+    /// `held` is the picture the source shows at host time `heldAt` (the
+    /// start, or when a source turned on later joined: nothing before it).
+    init(url: URL, width: Int, height: Int, perSecond: Int, bitRate: Int, start: Double, pauses: [(from: Double, to: Double?)] = [],
+         held: CVPixelBuffer?, heldAt: Double? = nil, label: String) throws {
         self.url = url
         // H.264 wants even sizes.
         self.width = max(16, width / 2 * 2)
         self.height = max(16, height / 2 * 2)
         queue = DispatchQueue(label: "com.nomdelasociete.Skilli.recorder.\(label)", qos: .userInitiated)
         timeline = PictureTimeline(start: start)
+        // The pauses before the held picture is placed: its time is the
+        // recording's, the pauses taken out.
+        for pause in pauses {
+            timeline.pause(at: pause.from)
+            if let to = pause.to { timeline.resume(at: to) }
+        }
         writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         writer.movieFragmentInterval = CMTime(seconds: 1, preferredTimescale: 600)
         input = AVAssetWriterInput(mediaType: .video, outputSettings: [
@@ -83,7 +97,8 @@ final class PictureTrackWriter: @unchecked Sendable {
         guard writer.startWriting() else { throw writer.error ?? Failure(message: "“\(url.lastPathComponent)” could not be written.") }
         writer.startSession(atSourceTime: .zero)
         latest = held
-        queue.async { self.placeHeld(at: start) }
+        let moment = heldAt ?? start
+        queue.async { self.placeHeld(at: moment) }
     }
 
     /// A picture from the source (any queue).
@@ -180,24 +195,32 @@ final class PictureTrackWriter: @unchecked Sendable {
             if let closedLength { done(closedLength.seconds, closedLength.complete) } else { closeWaiters.append(done) }
             return
         }
+        // A required picture still waiting: a bounded last chance.
+        if pendingRequired != nil, !failed, writer.status == .writing, !appendPending(tries: 40) {
+            pendingRequired = nil
+            missedRequired = true
+        }
         finished = true
         let end = timeline.finish(at: stop)
         latest = nil
         guard written > 0, !failed, writer.status == .writing else {
+            // None written, none failed, none required missed, the writer
+            // still fine: nothing to be whole. One that failed, or whose
+            // first picture never went in: not whole (read before the
+            // cancel, which ends the writing).
+            let whole = written == 0 && !failed && !missedRequired && writer.status == .writing
             if written == 0 {
                 writer.cancelWriting()
                 try? FileManager.default.removeItem(at: url)
             }
-            // None written: nothing to be whole. One that failed: it plays
-            // up to its last fragment, not whole.
-            closed(written > 0 ? end : 0, complete: written == 0, done)
+            closed(written > 0 ? end : 0, complete: whole, done)
             return
         }
         writer.endSession(atSourceTime: CMTime(seconds: end, preferredTimescale: 600))
         input.markAsFinished()
         writer.finishWriting {
             // Finished is not whole: the writer says which (Apple's rule).
-            self.queue.async { self.closed(end, complete: self.writer.status == .completed, done) }
+            self.queue.async { self.closed(end, complete: self.writer.status == .completed && !self.missedRequired, done) }
         }
     }
 
@@ -232,15 +255,51 @@ final class PictureTrackWriter: @unchecked Sendable {
     private func write(_ pixels: CVPixelBuffer, at time: Double, waiting: Bool) {
         guard !failed, !finished else { return }
         guard writer.status == .writing else { return fail() }
-        var tries = 0
-        while !input.isReadyForMoreMediaData {
-            guard waiting, tries < 20 else {
+        // A required picture still waiting goes first.
+        if pendingRequired != nil, !appendPending(tries: waiting ? 20 : 0) {
+            guard waiting else {
                 dropped += 1
                 return
             }
-            tries += 1
+            // Another required picture now: the one before is lost (its time
+            // is past), the file not whole.
+            pendingRequired = nil
+            missedRequired = true
+        }
+        guard ready(tries: waiting ? 20 : 0) else {
+            if waiting {
+                // Kept for later, never silently lost.
+                pendingRequired = (pixels, time)
+            } else {
+                dropped += 1
+            }
+            return
+        }
+        append(pixels, at: time)
+    }
+
+    /// Whether the encoder takes a picture now, asked `tries` more times 5
+    /// ms apart.
+    private func ready(tries: Int) -> Bool {
+        var left = tries
+        while !input.isReadyForMoreMediaData {
+            guard left > 0 else { return false }
+            left -= 1
             Thread.sleep(forTimeInterval: 0.005)
         }
+        return true
+    }
+
+    /// The required picture waiting, written if the encoder takes it.
+    private func appendPending(tries: Int) -> Bool {
+        guard let pending = pendingRequired else { return true }
+        guard ready(tries: tries) else { return false }
+        pendingRequired = nil
+        append(pending.pixels, at: pending.time)
+        return true
+    }
+
+    private func append(_ pixels: CVPixelBuffer, at time: Double) {
         guard adaptor.append(pixels, withPresentationTime: CMTime(seconds: time, preferredTimescale: 90000)) else { return fail() }
         written += 1
     }

@@ -26051,7 +26051,51 @@ final class SelfTest {
         await picturesRecordSlidesInStep(center, slides, camera)
         if !aborted { await picturesSayAWindowWithoutPictures(center, slides) }
         if !aborted { await picturesCommandRDoesNotWaitForTheWindow(center, slides) }
+        if !aborted { await picturesLateWindowStaysWithItsCard(center, slides) }
+        if !aborted { await picturesCardLevelBackAfterMacOSAsks(center) }
         if !aborted { await picturesInAScratchChrome(center) }
+    }
+
+    /// macOS asks (a source turned on) while the card shows the call's
+    /// end, or the Record card closes meanwhile: the card steps down under
+    /// the question and back up after, whatever it shows then (macOS's
+    /// question itself is never shown here: it needs a person).
+    private func picturesCardLevelBackAfterMacOSAsks(_ center: RecorderCenter) async {
+        let name = "Recorder's pictures: the card under macOS's question while it asks, back over the apps after, whether it shows the call's end or closed meanwhile"
+        defer {
+            if center.isCardVisible { center.dismissCardForTest() }
+        }
+        center.showCallEndedForTest(app: "Discord")
+        let ended = await waitUntil(timeout: 2) { center.isCardVisible } != nil
+        var during: NSWindow.Level?
+        await center.whileMacOSAsksForTest {
+            during = center.cardWindow?.level
+            await pause(200)
+        }
+        let after = center.cardWindow?.level
+        let endedOK = ended && during == .floating && after == .modalPanel && center.isCardVisible
+        center.dismissCardForTest()
+
+        // The Record card closed while macOS asks: shown again, over the apps.
+        context.preferences.recorderWebcam = false
+        context.preferences.recorderScreen = false
+        center.standInMicrophone(.none)
+        defer { center.standInMicrophone(nil) }
+        center.showCard(title: "Level check")
+        let shown = await waitUntil(timeout: 3) { center.isCardVisible && center.recorder.phase == .listening } != nil
+        await center.whileMacOSAsksForTest {
+            center.closeCardWithoutKeys()
+            await pause(200)
+        }
+        let hidden = !center.isCardVisible
+        center.showCard(title: "Level check")
+        let again = await waitUntil(timeout: 3) { center.isCardVisible } != nil
+        let reopened = center.cardWindow?.level
+        center.closeCardWithoutKeys()
+        _ = await waitUntil(timeout: 2) { center.recorder.phase == .idle }
+        record(name, endedOK && shown && hidden && again && reopened == .modalPanel,
+               "the call's end: shown \(ended), level while asked \(during.map { "\($0.rawValue)" } ?? "none"), after \(after.map { "\($0.rawValue)" } ?? "none") (over the apps \(NSWindow.Level.modalPanel.rawValue)); the Record card closed while asked: hidden \(hidden), shown again \(again) at \(reopened.map { "\($0.rawValue)" } ?? "none")",
+               nil)
     }
 
     /// The Record card over the test window, light and dark (skil.li's own
@@ -26293,6 +26337,9 @@ final class SelfTest {
         guard await waitUntil(timeout: 4, { center.recorder.isRecording && center.recorder.pictures.screen.window != nil }) != nil,
               let folder = center.recorder.folder else {
             record(name, false, "no recording with the screen (\(center.recorder.phase))", nil)
+            // A recording on all the same: stopped, the next check starts clean.
+            await momentStop(center)
+            center.openWindows.forEach { $0.close() }
             return
         }
         await pause(1500)
@@ -26335,7 +26382,7 @@ final class SelfTest {
     /// from the key, the screen joins once its window is found, in the same
     /// recording (its file's first picture then).
     private func picturesCommandRDoesNotWaitForTheWindow(_ center: RecorderCenter, _ slides: SlidesWindow) async {
-        let name = "Recorder's pictures: ⌘R with the screen on, the meeting's window found 2 s later: the sound records from the key (within 200 ms), the screen joins the same recording once found"
+        let name = "Recorder's pictures: ⌘R with the screen on, the meeting's window found 2 s later: the sound records from the key (within 200 ms), the screen joins the same recording once found, its first picture where it joined (a pause before it taken out)"
         let silence = recorderScratch.appendingPathComponent("silence.wav")
         _ = Self.clip(nil, seconds: 120, beeps: [], to: silence)
         center.recorder.standIn(microphone: silence, alsoLeaveOut: [])
@@ -26354,12 +26401,20 @@ final class SelfTest {
         let event = momentEvent("st-pictures-key", "Design sync", in: -60, link: false)
         let pressed = ContinuousClock.now
         center.recordMeeting(event, joining: false)
-        let soundAfter = await waitUntil(timeout: 3) { center.recorder.isRecording }
+        // From the key, as the screen's join is.
+        let soundAfter = await waitUntil(timeout: 3) { center.recorder.isRecording }.map { _ in ContinuousClock.now - pressed }
+        // Paused half a second before the screen joins: its file's time is
+        // the recording's, that pause taken out.
+        await pause(500)
+        center.control(.pause)
+        await pause(500)
+        center.control(.resume)
         let screenAfter = await waitUntil(timeout: 6) { center.recorder.sources.screen && center.recorder.pictures.screen.window?.id == window.id }
             .map { _ in ContinuousClock.now - pressed }
         await pause(2000)
         guard let folder = center.recorder.folder else {
             record(name, false, "nothing recorded (\(center.recorder.phase))", nil)
+            if center.recorder.isRecording { await momentStop(center) }
             return
         }
         await momentStop(center)
@@ -26369,10 +26424,49 @@ final class SelfTest {
         let lengths = (me: trackLength(folder.appendingPathComponent("me.m4a")), screen: await PictureCheck.length(screenFile))
         let sound = soundAfter.map { Double($0.components.seconds) + Double($0.components.attoseconds) / 1e18 } ?? 99
         let joined = screenAfter.map { Double($0.components.seconds) + Double($0.components.attoseconds) / 1e18 } ?? 99
-        record(name, sound <= 0.2 && joined >= 1.8 && joined < 4 && (first ?? 0) >= 1.5 && abs(lengths.screen - lengths.me) <= 0.15,
-               String(format: "recording after %.0f ms, the screen joined after %.2f s; screen.mp4's first picture at %@ s, %.2f s long (me %.2f s)",
-                      sound * 1000, joined, first.map { String(format: "%.2f", $0) } ?? "none", lengths.screen, lengths.me),
+        // Where it joined in the recording's time: the pause's 0.5 s out.
+        let expected = joined - 0.5
+        record(name, sound <= 0.2 && joined >= 1.8 && joined < 4 && abs((first ?? 0) - expected) <= 0.3 && abs(lengths.screen - lengths.me) <= 0.15,
+               String(format: "recording after %.0f ms, the screen joined after %.2f s (%.2f s in the recording, a 0.5 s pause before); screen.mp4's first picture at %@ s, %.2f s long (me %.2f s)",
+                      sound * 1000, joined, expected, first.map { String(format: "%.2f", $0) } ?? "none", lengths.screen, lengths.me),
                nil)
+    }
+
+    /// A card opened with the screen on (Settings → Recorder), its
+    /// meeting's window found only 2 s later; the card closed meanwhile and
+    /// another opened with the screen off: the late window never turns the
+    /// second card's screen on.
+    private func picturesLateWindowStaysWithItsCard(_ center: RecorderCenter, _ slides: SlidesWindow) async {
+        let name = "Recorder's pictures: a card's meeting window found after the card closed never turns on the screen of the card opened since"
+        guard let window = ScreenWindows.window(CGWindowID(slides.window.windowNumber)) else {
+            record(name, false, "the slides window is not in the window list", nil)
+            return
+        }
+        center.standInMicrophone(.none)
+        center.standInMeetingWindow = (window, .seconds(2))
+        defer {
+            center.standInMeetingWindow = nil
+            center.standInMicrophone(nil)
+            if center.isCardVisible { center.closeCardWithoutKeys() }
+        }
+        context.preferences.recorderWebcam = false
+        // Card A: the screen on by default, its window looked for.
+        context.preferences.recorderScreen = true
+        center.showCard(title: "Card A")
+        let first = await waitUntil(timeout: 3) { center.isCardVisible && center.recorder.phase == .listening } != nil
+        await pause(300)
+        center.closeCardWithoutKeys()
+        _ = await waitUntil(timeout: 2) { center.recorder.phase == .idle }
+        // Card B: the screen off; A's lookup answers while it is open.
+        context.preferences.recorderScreen = false
+        center.showCard(title: "Card B")
+        let second = await waitUntil(timeout: 3) { center.isCardVisible && center.recorder.phase == .listening } != nil
+        await pause(2600)
+        let screenOn = center.recorder.sources.screen || center.recorder.pictures.screen.window != nil
+        let line = center.cardView.screenLine
+        center.closeCardWithoutKeys()
+        record(name, first && second && !screenOn && line == "Off",
+               "card A shown \(first), card B shown \(second); 2.6 s later card B's screen: on \(screenOn), its row “\(line)”", nil)
     }
 
     /// A scratch Chrome showing a meeting's page: its window recorded,
@@ -26454,6 +26548,8 @@ final class SelfTest {
         center.recordForTest(screen: window)
         guard await waitUntil(timeout: 4, { center.recorder.isRecording && center.recorder.pictures.screen.window?.id == id }) != nil else {
             record(name, false, "Chrome's window not recorded (\(center.recorder.phase))", nil)
+            await momentStop(center)
+            center.openWindows.forEach { $0.close() }
             return
         }
         await pause(2000)

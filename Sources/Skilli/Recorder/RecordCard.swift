@@ -223,7 +223,9 @@ final class RecordCard {
     func whileMacOSAsks<T>(_ asking: Bool, _ work: () async -> T) async -> T {
         if asking { stepDown() }
         let done = await work()
-        if asking, content == .record { stepUp() }
+        // The card's level back whatever it shows now (shown again later
+        // too); the keys only to a Record card, the others never take them.
+        if asking { stepUp(takingKeys: content == .record) }
         return done
     }
 
@@ -385,9 +387,9 @@ final class RecordCard {
         panel?.level = .floating
     }
 
-    private func stepUp() {
+    private func stepUp(takingKeys: Bool = true) {
         panel?.level = .modalPanel
-        panel?.makeKeyAndOrderFront(nil)
+        if takingKeys { panel?.makeKeyAndOrderFront(nil) }
     }
 
     private func makePanel() -> RecordPanel {

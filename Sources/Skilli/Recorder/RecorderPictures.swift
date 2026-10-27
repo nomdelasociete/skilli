@@ -36,6 +36,8 @@ final class RecorderPictures {
     /// Each recording's start and stop, and the screen turned off: a
     /// screen file being set up across an await gives up when it moved.
     private var session = 0
+    /// A file asked for could not be made: the recording is not whole.
+    private var writerFailed = false
     /// A source changed, or the screen's window gives no picture: the
     /// card, the menu bar.
     var onChange: (() -> Void)?
@@ -87,7 +89,8 @@ final class RecorderPictures {
         }
         await screen.start(window)
         guard isRecording, screen.window != nil else { return }
-        await recordScreen(held: nil)
+        // Joining a recording on: its first picture where it joins.
+        await recordScreen(held: nil, from: HostClock.now)
     }
 
     /// Recording from host time `start`, into `folder`: each source on
@@ -98,17 +101,20 @@ final class RecorderPictures {
         self.start = start
         pauses = []
         session += 1
+        writerFailed = false
         if webcamOn, webcam.isOn {
             webcamWriter = makeWriter(Self.webcamFile, size: webcam.size, perSecond: WebcamTrack.perSecond, held: webcam.sink.latestPicture)
             webcam.record(into: webcamWriter)
         }
         if screenOn, screen.window != nil {
             let held = screen.sink.latestPicture
-            Task { await self.recordScreen(held: held) }
+            Task { await self.recordScreen(held: held, from: start) }
         }
     }
 
-    private func recordScreen(held: CVPixelBuffer?) async {
+    /// The screen's file, if none yet, its first picture at host time
+    /// `moment` (the start, or when the screen joined), then the pictures.
+    private func recordScreen(held: CVPixelBuffer?, from moment: Double) async {
         guard let folder else { return }
         let mine = session
         if screenWriter == nil {
@@ -118,7 +124,7 @@ final class RecorderPictures {
             // Stopped, or the screen turned off, meanwhile: nothing set up.
             guard session == mine, self.folder == folder else { return }
             if screenWriter == nil {
-                screenWriter = makeWriter(Self.screenFile, size: screen.plannedSize, perSecond: ScreenTrack.perSecond, held: full ?? held)
+                screenWriter = makeWriter(Self.screenFile, size: screen.plannedSize, perSecond: ScreenTrack.perSecond, held: full ?? held, heldAt: moment)
             }
         }
         if slides == nil {
@@ -134,21 +140,18 @@ final class RecorderPictures {
         await screen.record(into: screenWriter, reading: slides)
     }
 
-    /// A file for a source on now, its time the recording's (its pauses
-    /// so far replayed). Nil: it could not be made (said, the recording
-    /// goes on without it).
-    private func makeWriter(_ name: String, size: (width: Int, height: Int), perSecond: Int, held: CVPixelBuffer?) -> PictureTrackWriter? {
+    /// A file for a source on now, its time the recording's (its pauses so
+    /// far taken out). Nil: it could not be made (logged; the recording goes
+    /// on without it and is not counted whole at Stop).
+    private func makeWriter(_ name: String, size: (width: Int, height: Int), perSecond: Int, held: CVPixelBuffer?,
+                            heldAt: Double? = nil) -> PictureTrackWriter? {
         guard let folder else { return nil }
         // About 0.07 bits a pixel at the rate: 1.5 Mb/s for a 1280 × 720
         // webcam at 30, a 1920 × 1200 window at 15.
         let bitRate = max(500_000, min(2_500_000, Int(Double(size.width * size.height * perSecond) * 0.055)))
         do {
             let writer = try PictureTrackWriter(url: folder.appendingPathComponent(name), width: size.width, height: size.height, perSecond: perSecond,
-                                                bitRate: bitRate, start: start, held: held, label: name)
-            for pause in pauses {
-                writer.pause(at: pause.from)
-                if let to = pause.to { writer.resume(at: to) }
-            }
+                                                bitRate: bitRate, start: start, pauses: pauses, held: held, heldAt: heldAt, label: name)
             writer.onFailure = { [weak self] error in
                 let said = error.localizedDescription
                 DispatchQueue.main.async { MainActor.assumeIsolated { self?.onFailure?(said) } }
@@ -156,6 +159,7 @@ final class RecorderPictures {
             return writer
         } catch {
             Log.actions.error("Recorder: \(name, privacy: .public) not started (\(error.localizedDescription, privacy: .public))")
+            writerFailed = true
             return nil
         }
     }
@@ -202,7 +206,7 @@ final class RecorderPictures {
         let (webcamFile, screenFile) = await (webcamClosed, screenClosed)
         if let folder, kept.isEmpty { try? FileManager.default.removeItem(at: folder.appendingPathComponent(Self.slidesFile)) }
         pauses = []
-        return (webcamFile.seconds, screenFile.seconds, kept.count, webcamFile.complete && screenFile.complete)
+        return (webcamFile.seconds, screenFile.seconds, kept.count, webcamFile.complete && screenFile.complete && !writerFailed)
     }
 
     /// skil.li quits: every file closed at `stop` now, waited for until
@@ -212,7 +216,7 @@ final class RecorderPictures {
         session += 1
         markStop(at: stop)
         let writers = [webcamWriter, screenWriter].compactMap { $0 } + closing
-        let finished = writers.allSatisfy { $0.closeNow(at: stop, until: deadline) != nil }
+        let finished = writers.allSatisfy { $0.closeNow(at: stop, until: deadline) != nil } && !writerFailed
         let kept = (slides ?? closingSlides)?.finishNow(at: stop) ?? 0
         if let folder, kept == 0, slides != nil { try? FileManager.default.removeItem(at: folder.appendingPathComponent(Self.slidesFile)) }
         webcamWriter = nil

@@ -379,7 +379,10 @@ final class RecorderCenter {
         case "mac_sound":
             if sources.macSound != on { await recorder.setSource(.them, on: on) }
         case "webcam":
-            await recorder.setWebcam(on)
+            // macOS's question for the camera over the card, never under it.
+            let asks = on && card.isVisible && AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined
+                && (AVCaptureDevice.systemPreferredCamera ?? AVCaptureDevice.default(for: .video)) != nil
+            await card.whileMacOSAsks(asks) { await recorder.setWebcam(on) }
         case "screen":
             if !on {
                 await recorder.setScreen(nil)
@@ -391,7 +394,7 @@ final class RecorderCenter {
                 guard let window = found.window else {
                     throw MeetingRecorder.Failure(message: "No meeting's window is known: pick one in the Record card or the red dot's menu (Screen).")
                 }
-                await recorder.setScreen(window)
+                await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(window) }
                 card.setScreenNote(found.note, automation: found.automation)
             }
         default:
@@ -425,8 +428,9 @@ final class RecorderCenter {
     /// off for a click.
     private func startScreenForCard(_ reading: MeetingMoment.Reading) {
         guard reading.sources.screen else { return }
+        // This card's, taken now (before another card can open).
+        let asked = lookupMoment
         Task {
-            let asked = lookupMoment
             let found = await findMeetingWindow(reading)
             // Another card opened meanwhile (this one closed): not its window.
             guard still(asked) else { return }
@@ -983,6 +987,23 @@ final class RecorderCenter {
 
     /// Self-test: what the card shows now.
     var cardContent: RecordCard.Content? { card.content }
+
+    /// Self-test: the call's end offered now, as its watch offers it.
+    func showCallEndedForTest(app: String) {
+        let reason = CallEndWatch.Reason.appLeft(app)
+        card.showCallEnded(title: recorder.title, elapsed: recorder.elapsed, line: CallEndWatch.line(reason), reason: reason)
+    }
+
+    /// Self-test: `work` while macOS asks over the card, as a source turned
+    /// on asks.
+    func whileMacOSAsksForTest(_ work: () async -> Void) async {
+        await card.whileMacOSAsks(true, work)
+    }
+
+    /// Self-test: the card gone, as a call's app back withdraws it.
+    func dismissCardForTest() {
+        card.dismiss()
+    }
 
     /// Self-test: ⌘R's recording takes this long to start (an unfinished
     /// one found meanwhile).

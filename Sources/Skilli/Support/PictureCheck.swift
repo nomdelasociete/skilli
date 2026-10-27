@@ -121,15 +121,15 @@ enum PictureCheck {
         }
     }
 
-    /// When a picture file's first picture is (seconds; nil: none).
+    /// When a picture file's first picture shows, as it plays (seconds;
+    /// nil: none): where its first segment with pictures starts. A file
+    /// begun later in a recording starts with an empty segment, and a
+    /// reader's sample times are the media's own, not the playing time.
     static func firstPicture(in url: URL) async -> Double? {
         let asset = AVURLAsset(url: url)
-        guard let track = try? await asset.loadTracks(withMediaType: .video).first, let reader = try? AVAssetReader(asset: asset) else { return nil }
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
-        reader.add(output)
-        guard reader.startReading(), let first = output.copyNextSampleBuffer() else { return nil }
-        reader.cancelReading()
-        return CMSampleBufferGetPresentationTimeStamp(first).seconds
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+              let segments = try? await track.load(.segments) else { return nil }
+        return segments.first { !$0.isEmpty }?.timeMapping.target.start.seconds
     }
 
     /// A length in seconds, a file of any kind.
