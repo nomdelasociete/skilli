@@ -220,11 +220,14 @@ final class ClipboardHistory {
         guard let store else { return nil }
         let candidates = store.search("", limit: ClipboardMeaning.candidateLimit)
         guard !candidates.isEmpty else { return MeaningResult(items: [], label: "") }
-        let options = candidates.map { item in
-            DecisionQuestion.Option(value: "c\(item.id)", description: ClipboardMeaning.describe(
-                kind: ClipboardMeaning.Kind(rawValue: item.kind.rawValue) ?? .text, text: item.text, ocr: item.ocr,
-                appName: item.appName, copiedAt: item.copiedAt, tags: item.tags, now: now))
-        }
+        // Off the main thread: each text is read for what it is (Apple's data detectors).
+        let options = await Task.detached(priority: .userInitiated) {
+            candidates.map { item in
+                DecisionQuestion.Option(value: "c\(item.id)", description: ClipboardMeaning.describe(
+                    kind: ClipboardMeaning.Kind(rawValue: item.kind.rawValue) ?? .text, text: item.text, ocr: item.ocr,
+                    appName: item.appName, copiedAt: item.copiedAt, tags: item.tags, now: now))
+            }
+        }.value
         let question = DecisionQuestion(name: "copy", instructions: ClipboardMeaning.instructions,
                                         options: options + [.init(value: "none", description: "No copy fits what the user describes")])
         let input = ClipboardMeaning.input(request, now: now)
