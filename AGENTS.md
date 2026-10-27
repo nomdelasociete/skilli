@@ -2518,7 +2518,12 @@ re-investigating.
   sign-in, the accounts, the inbox grant, then the code with a link to
   GitHub's device page. The pairing waits for the device flow's token
   (`RelayDeviceSession.enroll`), then the id check, then the save; server
-  sync turns on (`paired(true)`). An older relay, a refusal or no pairing
+  sync turns on once the relay answers with the copy
+  (`GitHubBook.confirmServerSyncGrant`: every 5 s for 10 min, a 428 all
+  along leaves it off). Already signed in, the URL also carries this Mac's
+  GitHub id (`subject`, from GitHub's `/user`): a browser on another
+  account ends at the relay, no pairing and no grant kept; without that
+  id no inbox grant is asked for. An older relay, a refusal or no pairing
   opens GitHub's page from skil.li instead (`codeNotShown`, once). Live
   updates' Authorize this Mac… chains the inbox grant the same way. The strip under the search field
   (Settings → GitHub → Show under the search field, on by default, once

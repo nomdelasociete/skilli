@@ -63,7 +63,7 @@ struct GitHubPane: View {
             if let github, github.isSignedIn {
                 RelayEnrollmentControls(session: github.relayDevice, origin: relayOrigin,
                                         serverSync: preferences.githubServerSync ? nil : $serverSyncWanted,
-                                        serverSyncReady: { preferences.githubServerSync = true })
+                                        serverSyncReady: { github.confirmServerSyncGrant { preferences.githubServerSync = true } })
                 if github.relayDevice.canRevoke || preferences.githubServerSync {
                     ServerSyncControls(preferences: preferences, github: github)
                 }
@@ -221,6 +221,7 @@ private struct RelayEnrollmentControls: View {
     let origin: () -> String
     /// Server sync in the same trip, while it is off on this Mac.
     let serverSync: Binding<Bool>?
+    /// The grant was asked for in the tab: confirms it, then turns server sync on.
     let serverSyncReady: () -> Void
     @State private var confirmRevoke = false
 

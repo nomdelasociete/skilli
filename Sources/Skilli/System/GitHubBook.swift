@@ -512,6 +512,31 @@ final class GitHubBook {
         }
     }
 
+    /// The inbox grant was asked for in the relay's tab: `ready` runs once
+    /// the relay answers with the copy, so server sync turns on only with a
+    /// grant behind it. Asked every 5 s while the tab's grant can still
+    /// finish (10 min); a 428 all along leaves server sync off.
+    func confirmServerSyncGrant(then ready: @escaping () -> Void) {
+        let generation = accountGeneration
+        Task { [weak self] in
+            let until = Date.now.addingTimeInterval(600)
+            while Date.now < until {
+                guard let self, self.accountGeneration == generation else { return }
+                if let access = self.serverAccess() {
+                    do {
+                        _ = try await RelayInboxClient(access: access).inbox()
+                        guard self.accountGeneration == generation else { return }
+                        Log.actions.notice("GitHub: server sync grant confirmed by the relay")
+                        return ready()
+                    } catch RelayInboxFailure.wrongAccount {
+                        return
+                    } catch {}
+                }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+
     /// Deletes the relay's authorization and copy for all the user's Macs.
     func deleteServerSync() async throws {
         guard let access = serverAccess() else {
@@ -745,9 +770,11 @@ final class GitHubBook {
     /// (docs/github-single-sign-in.md): the relay's enrollment, server
     /// sync's grant when `serverSync`, then the code on GitHub's page. The
     /// pairing is saved once the token arrives and both name the same
-    /// GitHub id; `serverSyncReady` then runs if the grant was chained.
+    /// GitHub id; `serverSyncReady` then runs once the relay holds the grant
+    /// (`confirmServerSyncGrant`).
     func signIn(relayOrigin: String? = nil, serverSync: Bool = false, serverSyncReady: @escaping () -> Void = {}) {
-        signingIn?.cancel()
+        // A sign-in still waiting holds the relay enrollment: let both go.
+        cancelSignIn()
         signInProblem = nil
         let clientID = clientID()
         guard !clientID.isEmpty else {
@@ -771,7 +798,7 @@ final class GitHubBook {
                 }
                 if let relayOrigin, !relayDevice.canRevoke,
                    relayDevice.enroll(origin: relayOrigin, chain: RelaySignInChain(inbox: serverSync, userCode: code.userCode),
-                                      codeNotShown: codeElsewhere, paired: { if $0 { serverSyncReady() } }) {
+                                      codeNotShown: codeElsewhere, paired: { [weak self] in if $0 { self?.confirmServerSyncGrant(then: serverSyncReady) } }) {
                     Log.actions.notice("GitHub: signing in with live updates\(serverSync ? " and server sync" : "")")
                     chained = true
                 } else {

@@ -9,6 +9,8 @@ private actor RelayReplies {
     var subject = "100"
     var nativeID: Int64 = 100
     var identityStatus = 200
+    var githubStatus = 200
+    func failGitHub() { githubStatus = 401 }
     var delayIdentity = false
     var identityStarted = false
     func delayIdentityResponse() { delayIdentity = true }
@@ -17,7 +19,7 @@ private actor RelayReplies {
     }
     init(_ replies: [RelayHTTPReply]) { self.replies = replies }
     func send(_ request: URLRequest) async throws -> RelayHTTPReply {
-        if request.url?.host == "api.github.com" { githubRequests.append(request); return RelayHTTPReply(status: 200, data: Data("{\"id\":\(nativeID)}".utf8)) }
+        if request.url?.host == "api.github.com" { githubRequests.append(request); return RelayHTTPReply(status: githubStatus, data: Data("{\"id\":\(nativeID)}".utf8)) }
         if request.url?.path == "/computers/identity" {
             identityStarted = true
             if delayIdentity { try? await Task.sleep(for: .milliseconds(100)) }
@@ -617,7 +619,7 @@ final class RelayDeviceSessionTests: XCTestCase {
 
     // MARK: Single sign-in (docs/github-single-sign-in.md)
 
-    private let chainedGrant = #"{"device_code":"one-use-code","verification_uri":"https://auth.example/enroll?code=public-code&app=5332414","expires_in":600,"chain":["inbox","user_code"]}"#
+    private let chainedGrant = #"{"device_code":"one-use-code","verification_uri":"https://auth.example/enroll?code=public-code&app=5332414","expires_in":600,"chain":["inbox","user_code","subject"]}"#
 
     /// Signing in and enrolling together: no native token until the user
     /// typed the code on GitHub, the tab's last page.
@@ -751,7 +753,20 @@ final class RelayDeviceSessionTests: XCTestCase {
         let client = session(RelayVault(), server, browser: { opened = $0; return true })
         client.enroll(origin: origin, chain: RelaySignInChain(inbox: true), paired: { paired.append($0) })
         try await finish(client)
-        XCTAssertEqual(query(opened), ["code": "public-code", "app": "5332414", "inbox": "1"])
+        XCTAssertEqual(query(opened), ["code": "public-code", "app": "5332414", "subject": "100", "inbox": "1"],
+                       "the relay checks the browser's account against this Mac's before keeping a grant")
+        let github = await server.githubRequests
+        XCTAssertEqual(github.first?.value(forHTTPHeaderField: "Authorization"), "Bearer native-test-token")
         XCTAssertEqual(paired, [true])
+    }
+
+    func testSignedInMacAsksNoInboxGrantWhenItsGitHubIDIsUnknown() async throws {
+        let server = RelayReplies([response(201, chainedGrant), response(200, tokens)])
+        await server.failGitHub()
+        var opened: URL?
+        let client = session(RelayVault(), server, browser: { opened = $0; return true })
+        client.enroll(origin: origin, chain: RelaySignInChain(inbox: true))
+        try await finish(client)
+        XCTAssertEqual(query(opened), ["code": "public-code", "app": "5332414"])
     }
 }

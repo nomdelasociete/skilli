@@ -246,7 +246,10 @@ public final class RelayDeviceSession: ObservableObject {
     /// GitHub's device page; the native token then arrives after the
     /// pairing, which waits for it. `codeNotShown` runs (once) when the
     /// relay's tab will not show `userCode`: an older relay, or no pairing.
-    /// `paired` runs after the save, true when the inbox grant was chained.
+    /// `paired` runs after the save, true when the inbox grant was asked
+    /// for in the tab (whether the user finished it is the relay's to say).
+    /// Already signed in, this Mac's GitHub id goes along (`subject`): a
+    /// browser on another account ends at the relay, nothing kept there.
     /// False: nothing started.
     @discardableResult
     public func enroll(origin: String, chain: RelaySignInChain? = nil,
@@ -300,10 +303,17 @@ public final class RelayDeviceSession: ObservableObject {
                 // Only what this relay says `/enroll` chains: an older one
                 // would drop the rest and the tab would end without the code.
                 let chained = grant.chain ?? []
-                let inbox = chain?.inbox == true && chained.contains("inbox")
+                // Signed in already: the relay checks the browser's account
+                // against this one before keeping anything. Without that
+                // check, no inbox grant is asked for in the tab.
+                var subject: Int64?
+                if chained.contains("subject"), let enrollmentToken { subject = try? await githubUser(enrollmentToken) }
+                try Task.checkCancellation()
+                let inbox = chain?.inbox == true && chained.contains("inbox") && (enrollmentToken == nil || subject != nil)
                 let codeInTab = userCode != nil && chained.contains("user_code")
                 var page = URLComponents(url: grant.verification_uri, resolvingAgainstBaseURL: false)
                 var items = page?.queryItems ?? []
+                if let subject { items.append(URLQueryItem(name: "subject", value: String(subject))) }
                 if inbox { items.append(URLQueryItem(name: "inbox", value: "1")) }
                 if codeInTab, let userCode { items.append(URLQueryItem(name: "user_code", value: userCode)) }
                 page?.queryItems = items
@@ -401,20 +411,27 @@ public final class RelayDeviceSession: ObservableObject {
         }
     }
 
+    /// This GitHub token's numeric user id, asked of GitHub only.
+    private func githubUser(_ token: String) async throws -> Int64 {
+        var request = URLRequest(url: URL(string: "https://api.github.com/user")!)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("Skilli", forHTTPHeaderField: "User-Agent")
+        let userReply = try await send(request)
+        struct User: Decodable { let id: Int64 }
+        guard userReply.status == 200 else { throw URLError(.userAuthenticationRequired) }
+        let user = try JSONDecoder().decode(User.self, from: userReply.data)
+        guard user.id > 0 else { throw URLError(.cannotDecodeContentData) }
+        return user.id
+    }
+
     // Compare stable GitHub numeric IDs obtained independently from GitHub and
     // the authenticated authority. Never trust a browser login name or local ID.
     private func verifyIdentity(pair: RelayTokenPair, authority: URL) async -> (native: String, subject: String)? {
         guard let native = githubToken(), !native.isEmpty else { return nil }
         let generation = identityGeneration
         do {
-            var request = URLRequest(url: URL(string: "https://api.github.com/user")!)
-            request.setValue("Bearer \(native)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            request.setValue("Skilli", forHTTPHeaderField: "User-Agent")
-            let userReply = try await send(request)
-            struct User: Decodable { let id: Int64 }
-            guard userReply.status == 200 else { throw URLError(.userAuthenticationRequired) }
-            let user = try JSONDecoder().decode(User.self, from: userReply.data)
+            let userID = try await githubUser(native)
             let reply = try await RelayDeviceAPI(origin: authority, send: send)
                 .post("computers/identity", access: pair.access_token)
             struct Identity: Decodable { let subject: String }
@@ -422,7 +439,7 @@ public final class RelayDeviceSession: ObservableObject {
             let identity = try JSONDecoder().decode(Identity.self, from: reply.data)
             try Task.checkCancellation()
             guard githubToken() == native, generation == identityGeneration else { return nil }
-            guard user.id > 0, identity.subject == String(user.id) else {
+            guard identity.subject == String(userID) else {
                 message = "Live updates use a different GitHub account. Authorize this Mac again using the same account as the app."
                 return nil
             }

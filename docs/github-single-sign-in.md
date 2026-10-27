@@ -50,7 +50,13 @@ Sign In with GitHub…
   nothing: the code is only useful to someone signed in to GitHub, and a code
   approved by another account gives a token that fails the id check below.
 - **Already signed in on this Mac** (existing users): no `user_code`, the
-  final page says "Done". Live updates and server sync take one trip.
+  final page says "Done". Live updates and server sync take one trip. The
+  URL carries this Mac's GitHub id (`subject`, from GitHub's `/user`): a
+  browser on another account ends at the relay's callback, before any
+  pairing or inbox grant is kept (review, 2026-10-27: otherwise a grant
+  would stay on the relay for an account this Mac refuses).
+- **Server sync turns on only once the relay holds the grant**: skil.li asks
+  the relay's copy every 5 s while the tab can still finish (10 min).
 - **The inbox grant asks for the same scopes as the native token**
   (`repo notifications read:user`, today `read:user repo`). GitHub then
   shows one consent screen for the skil.li OAuth App, at step 3, and skips
