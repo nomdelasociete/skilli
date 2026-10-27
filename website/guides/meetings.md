@@ -83,6 +83,8 @@ Them 1, Them 2…, until you name them).
   recording's folder (its sound, pictures and transcript), and the
   window says when it ran.
 
+![A recording's ⌘K: Summary, Chapters, Action Items to Reminders, Recap Mail to the Attendees and Ask About This Meeting by Claude, then Transcribe Again, Show in Finder, Copy Transcript and Delete Recording](images/recorder-actions.png "Your SI's actions first, sent only when you pick one.")
+
 **Better transcription**: Settings → Recorder offers a 1.6 GB download
 (whisper large-v3-turbo) that runs on your Mac: about 40% fewer errors
 than macOS's own engine, and it knows the attendees' names.
