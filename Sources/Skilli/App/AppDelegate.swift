@@ -597,6 +597,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     "“\(record.title)” · " + record.started.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute()))
         }
         runner.followUpRecording = { [weak self] action, name, question in self?.recorderCenter.followUp(action, on: name, question: question) }
+        runner.renameRecording = { [weak self] name, title in
+            guard let self, let folder = self.recorderCenter.recording(named: name) else { return }
+            self.recorderCenter.rename(folder, to: title)
+        }
         runner.recordingWriter = { [weak self] in self?.ai.defaultModel.provider.title ?? WritingProvider.claude.title }
         runner.recordingTitle = { [weak self] in
             guard let recorder = self?.madeRecorderCenter?.recorder, recorder.isRecording else { return nil }

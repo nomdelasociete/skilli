@@ -66,6 +66,8 @@ final class LinkRunner {
     /// allowed, on that folder.
     var recordingNamed: (String) -> (id: String, shown: String)? = { _ in nil }
     var followUpRecording: (MeetingFollowUp.Action, String, String?) -> Void = { _, _, _ in }
+    /// A recording renamed, by its folder's name: once allowed.
+    var renameRecording: (String, String) -> Void = { _, _ in }
     /// Who the recording's words go to ("Claude").
     var recordingWriter: () -> String = { WritingProvider.claude.title }
     /// macOS may bring skil.li forward to open a link: the app the user was
@@ -158,7 +160,25 @@ final class LinkRunner {
             }
         case .recordingFollowUp(let action, let recording, let question):
             await askThenFollowUp(action, recording: recording, question: question)
+        case .renameRecording(let recording, let title):
+            await askThenRename(recording, to: title)
         }
+    }
+
+    /// A link renaming a recording (its folder too): asked every time, the
+    /// recording and the name named, never trusted.
+    private func askThenRename(_ recording: String, to title: String) async {
+        guard let (id, named) = recordingNamed(recording) else {
+            say("missing recording \(recording)", "No recording “\(recording)” in skil.li: it was deleted, or renamed.")
+            return
+        }
+        log.append("asked record rename")
+        guard await approve("Rename a recording", "\(named) becomes “\(title)”, its folder too. \(Self.fromALink)", false) != .deny else {
+            log.append("declined record rename")
+            return
+        }
+        log.append("did record rename")
+        if !dryRun { renameRecording(id, title) }
     }
 
     /// A link pausing, resuming or stopping the recording on now: asked

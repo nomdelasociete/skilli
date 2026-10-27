@@ -91,9 +91,15 @@ Them 1, Them 2…, until you name them).
 than macOS's own engine, and it knows the attendees' names.
 
 **Find it later**: `recs` in the launcher searches recordings by title,
-date, attendees, and the words said. **Import Recording** (`import`, or
-drop a file on a recording's window) turns a voice memo or another app's
-recording into one.
+date, attendees, and the words said. **Rename…** in a recording's ⌘K (or
+on its row in `recs`) renames it and its folder. **Import Recording**
+(`import`, or drop a file on a recording's window) turns a voice memo or
+another app's recording into one; while a meeting records, its
+transcript waits for that meeting's.
+
+**A transcript that could not be made** says why in its window, with the
+engine and the language to try, then Transcribe ↩. macOS's engine also
+covers the languages of macOS's dictation (Dutch, Polish, Swedish…).
 
 ## Settings
 

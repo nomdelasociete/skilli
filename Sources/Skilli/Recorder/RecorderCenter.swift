@@ -839,30 +839,44 @@ final class RecorderCenter {
     /// again on the folder it is in now. Not while it records or its
     /// transcript is made: said why.
     func rename(_ folder: URL, to typed: String) {
-        let title = typed.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty, var record = recordings.read(folder), title != record.title else { return }
+        do {
+            try renamed(folder, to: typed)
+        } catch {
+            notify(error.localizedDescription)
+        }
+    }
+
+    /// Rename's work, for a tool too: the folder it is in now; why not.
+    @discardableResult
+    func renamed(_ folder: URL, to typed: String) throws -> URL {
+        let title = String(typed.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120))
+        guard var record = recordings.read(folder) else { throw RecordingFollowUps.Failure(message: "The recording is gone.") }
+        guard !title.isEmpty, title != record.title else { return folder }
         if recorder.folder.map(Self.key) == Self.key(folder) || isBeingMade(folder) {
-            notify("“\(record.title)” was not renamed: it is being \(recorder.folder.map(Self.key) == Self.key(folder) ? "recorded" : "transcribed"). Rename it once it is done.")
-            return
+            let doing = recorder.folder.map(Self.key) == Self.key(folder) ? "recorded" : "transcribed"
+            throw RecordingFollowUps.Failure(message: "“\(record.title)” was not renamed: it is being \(doing). Rename it once it is done.")
         }
         let open = windows[Self.key(folder)]
         let frame = open?.nsWindow.frame
+        let moved: URL
         do {
-            let moved = try recordings.rename(folder, to: title, started: record.started)
+            moved = try recordings.rename(folder, to: title, started: record.started)
             record.title = title
             try recordings.write(record, to: moved)
-            if let lines = recordings.transcript(moved)?.lines {
-                try? MeetingTranscriber.markdown(record, lines: lines).write(to: moved.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)
-            }
-            Log.trace("Recorder: renamed “\(title)” (\(moved.lastPathComponent))")
-            NotificationCenter.default.post(name: Recordings.changed, object: nil)
-            guard let open else { return }
+        } catch {
+            throw RecordingFollowUps.Failure(message: "“\(record.title)” was not renamed: \(error.localizedDescription)")
+        }
+        if let lines = recordings.transcript(moved)?.lines {
+            try? MeetingTranscriber.markdown(record, lines: lines).write(to: moved.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)
+        }
+        Log.trace("Recorder: renamed “\(title)” (\(moved.lastPathComponent))")
+        NotificationCenter.default.post(name: Recordings.changed, object: nil)
+        if let open {
             open.close()
             self.open(moved)
             if let frame { windows[Self.key(moved)]?.nsWindow.setFrame(frame, display: true) }
-        } catch {
-            notify("“\(record.title)” was not renamed: \(error.localizedDescription)")
         }
+        return moved
     }
 
     /// Ask about a meeting from the launcher's row: answered in the card.
