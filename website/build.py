@@ -8,6 +8,7 @@ import posixpath
 from pathlib import Path
 import re
 import shutil
+import struct
 import sys
 
 # The renderer beside this file, also when the build is loaded by the tests.
@@ -166,7 +167,15 @@ DOCS = [('README.md', 'index.html', 'Overview'), ('header.md', 'header.html', 'H
         ('running.md', 'running.html', 'How it runs'), ('calling-skilli.md', 'calling-skilli.html', 'Calling skil.li')]
 # The guides to skil.li's features, the same way: website/guides/*.md → /guides/
 # (under website/: a guide changed alone publishes the site, as the docs under skillies/ do).
-GUIDES = [('README.md', 'index.html', 'Overview'), ('windows.md', 'windows.html', 'Windows')]
+GUIDES = [('README.md', 'index.html', 'Overview'), ('getting-started.md', 'getting-started.html', 'Getting started'),
+          ('launcher.md', 'launcher.html', 'The launcher'), ('keys.md', 'keys.html', 'Hyper Key and shortcuts'),
+          ('writing.md', 'writing.html', 'Your text, anywhere'), ('ask.md', 'ask.html', 'Ask'),
+          ('clipboard.md', 'clipboard.html', 'Clipboard, snippets and emoji'), ('windows.md', 'windows.html', 'Windows'),
+          ('meetings.md', 'meetings.html', 'Meetings'), ('mac.md', 'mac.html', 'Your Mac'),
+          ('apps.md', 'apps.html', 'Apps and GitHub'), ('skillies.md', 'skillies.html', 'Skillies, links and agents'),
+          ('privacy.md', 'privacy.html', 'Your SI and privacy'), ('troubleshooting.md', 'troubleshooting.html', 'Troubleshooting')]
+# A book's menu in parts: the page each part starts at, and its name.
+MENU_PARTS = {'guides': {'getting-started.html': 'Start here', 'writing.html': 'Every day', 'apps.html': 'Make it yours'}}
 # Each book: its Markdown folder, its pages, where it is on the site, its name in titles.
 BOOKS = {
     'docs': (ROOT / 'skillies/docs', DOCS, 'skillies/docs', 'Skillies docs'),
@@ -205,6 +214,41 @@ def docs_link(href, book='docs'):
     return f'{REPOSITORY}/{kind}/main/{relative}{anchor}'
 
 
+def picture_size(path):
+    """A PNG's size in CSS pixels: a Retina capture (144 dpi, or @2x in its name) is half its pixels."""
+    data = path.read_bytes()
+    if data[:8] != b'\x89PNG\r\n\x1a\n':
+        return None
+    width, height = struct.unpack('>II', data[16:24])
+    scale = 2 if '@2x' in path.name else 1
+    found = data.find(b'pHYs')
+    if found > 0:
+        per_metre, _, unit = struct.unpack('>IIB', data[found + 4:found + 13])
+        if unit == 1 and per_metre >= 5600:
+            scale = 2
+    return (width // scale, height // scale)
+
+
+def docs_asset(src, book='docs'):
+    """A picture or video written in a book's Markdown: it lives in the book's folder
+    (images/), copied beside the pages; a <name>-dark twin shows in dark mode."""
+    if src.startswith(('http://', 'https://')):
+        return {'src': src, 'dark': None, 'size': None}
+    folder = BOOKS[book][0]
+    path = (folder / src).resolve()
+    # A symbolic link, the file's or a folder's on the way, is never copied to the
+    # site (render_docs): refused here, not published broken. Without one, the
+    # resolved path is the written one.
+    written = Path(posixpath.normpath((folder.resolve() / src).as_posix()))
+    if folder.resolve() not in path.parents or not path.is_file() or path != written:
+        raise ValueError(f'{folder.relative_to(ROOT).as_posix()}: {src} is not a file in the book\'s folder')
+    dark = path.with_name(f'{path.stem}-dark{path.suffix}')
+    if dark.is_symlink():
+        raise ValueError(f'{folder.relative_to(ROOT).as_posix()}: {dark.name} is a symbolic link')
+    return {'src': src, 'dark': posixpath.join(posixpath.dirname(src), dark.name) if dark.is_file() else None,
+            'size': picture_size(path) if path.suffix == '.png' else None}
+
+
 def render_docs(template, target, book='docs'):
     """A book's Markdown as pages: one per file, the menu of all, this page's sections."""
     esc = html.escape
@@ -213,7 +257,7 @@ def render_docs(template, target, book='docs'):
     target.mkdir(parents=True, exist_ok=True)
     for index, (source, name, short) in enumerate(pages):
         text = (folder / source).read_text(encoding='utf-8')
-        page = Page(lambda href: docs_link(href, book))
+        page = Page(lambda href: docs_link(href, book), lambda src: docs_asset(src, book))
         content = page.render(text)
         h1 = next((h for h in page.headings if h[0] == 1), None)
         if h1 is None:
@@ -225,7 +269,9 @@ def render_docs(template, target, book='docs'):
         if len(description) > 160:
             description = description[:157].rsplit(' ', 1)[0] + '…'
         current = ' aria-current="page"'
-        menu = ''.join(f'<li><a href="{page_address(other)}"{current if other == name else ""}>{esc(label)}</a></li>'
+        parts = MENU_PARTS.get(book, {})
+        menu = ''.join((f'<li class="docs-menu-part">{esc(parts[other])}</li>' if other in parts else '')
+                       + f'<li><a href="{page_address(other)}"{current if other == name else ""}>{esc(label)}</a></li>'
                        for _, other, label in pages)
         sections = ''.join(f'<li class="level-{level}"><a href="#{anchor}">{label}</a></li>' for level, anchor, label in page.headings if level in (2, 3))
         steps = []
@@ -243,6 +289,16 @@ def render_docs(template, target, book='docs'):
         for key, value in values.items():
             result = result.replace(key, value)
         (target / name).write_text(result, encoding='utf-8')
+    # The pictures the pages show; in --preview the pages are written beside them already.
+    # Never a symbolic link: it could publish a file from outside the book.
+    images = folder / 'images'
+
+    def left_out(directory, names):
+        return set(shutil.ignore_patterns('*.md', '.*')(directory, names)) | {
+            name for name in names if (Path(directory) / name).is_symlink()}
+
+    if images.is_dir() and not images.is_symlink() and images.resolve() != (target / 'images').resolve():
+        shutil.copytree(images, target / 'images', dirs_exist_ok=True, ignore=left_out)
 
 
 def build(preview=False):

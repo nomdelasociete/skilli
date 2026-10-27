@@ -150,6 +150,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var spaceHint: String? { view.spaceHint }
     var shownHints: [String] { view.hintLabels }
     var shownLanes: [String] { view.shownLanes }
+    /// Both tracks' waveforms read and drawn (read off the main thread).
+    var showsWaveform: Bool { view.showsWaveform }
     var shownAbout: String { view.aboutText }
     var shownSlides: [SlideLog.Slide] { view.slides }
     var shownPictures: Int { view.pictureCount }
@@ -1016,6 +1018,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     private var laneNames: [String: String] = [:]
     /// Self-test hook: the lanes, by name.
     var shownLanes: [String] { waveform.lanesShown.map { laneNames[$0.rawValue] ?? $0.title } }
+    var showsWaveform: Bool { !waveform.me.isEmpty || !waveform.them.isEmpty }
     var aboutText: String { about.stringValue }
     var hintLabels: [String] { hints.shown.map(\.label) }
     private var languageIDs: [String] = []

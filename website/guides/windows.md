@@ -21,6 +21,8 @@ Hold the Hyper Key (✦, Caps Lock held), press W, then a key:
 | N P | Move to Next Display, Move to Previous Display |
 | R | Restore Window: back where it was before skil.li moved it |
 
+![The panel after ✦W: arrows, quarters, thirds, Maximize, Center, displays](images/leader-w.png "After ✦W, every place and its key.")
+
 The same places are in the launcher ("left half", "moitié gauche") and
 in Ask. Settings → Windows → *Space between windows* leaves a gap
 between windows and at the screen's edges.
@@ -35,10 +37,14 @@ folders and links. Typing the layout's name in the launcher puts every
 window back, opening the apps and files that are not open. Each display
 is known by who it is (its serial), never by its name alone.
 
+![The layout editor: every window drawn on its display, to move or leave out before saving](images/layout-editor.png "New Window Layout: move windows, leave apps out, then ↩.")
+
 When a display is plugged in, skil.li asks, in the middle of that
 display, which of its layouts to put back (↩ applies, esc ignores it
 once, ⌘K for the rest: always, never, ignore this monitor, edit, record a
 new one). A display coming back after sleep is not a display plugged in.
+
+![The card in the middle of a display just plugged in, offering its layouts](images/display-prompt.png)
 
 ## Windows that go where you put them
 

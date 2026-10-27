@@ -2,7 +2,9 @@
 
 Everything skil.li does, one area per section, in the order of Settings'
 sidebar: one feature, one place. Each section says how to reach the
-feature, what it does, then its settings (Settings → that pane).
+feature, what it does, then its settings (Settings → that pane). How to
+use each area, step by step with screenshots: the
+[guides](../website/guides/README.md) (skil.li/guides).
 
 ✦ is the Hyper Key: Caps Lock held. Keys are the defaults; every one can
 be changed in Settings → Keys. Whatever of yours you delete (a copy, a
