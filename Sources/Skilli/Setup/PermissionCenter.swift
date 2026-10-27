@@ -85,7 +85,7 @@ enum Permission: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .accessibility: "So ✦ shortcuts work everywhere, and commands can read and replace the text you select."
         case .screenRecording: "So “do it here” sees what an app shows when it tells Accessibility little, and clicks it for you. Read on this Mac: only the words of the window you act in go to your decision model, or one picture of it to TypeSafe Jev when they say too little."
-        case .microphone: "So you can talk to skil.li: ✦V to ask, ✦D to dictate into any app, and your side of a meeting you record. Speech is turned into text on this Mac."
+        case .microphone: "So you can talk to skil.li: ✦V to ask, ✦D to dictate into any app, and record a meeting: your side of a call, or the whole room in person. Speech is turned into text on this Mac."
         case .calendar: "So your next meeting is one key away, and “qu'est-ce que j'ai demain ?” is answered. Read on this Mac only."
         case .reminders: "So “rappelle-moi…” lands in your Reminders, and “todo” lists them to check off."
         case .contacts: "So you find people by anything you know of them (“@lumière”) and write to them. Read on this Mac only."

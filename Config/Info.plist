@@ -15,7 +15,7 @@
 	<key>NSContactsUsageDescription</key>
 	<string>skil.li finds the people you ask for (“@jean”, “qui est Jean-François de chez Lumière ?”) and writes to them. Your contacts stay on this Mac.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>skil.li listens when you use Ask by Voice (✦V) or Dictate (✦D), records your side of a meeting when you record one, and shows your microphone's level when you check it before a meeting; speech is turned into text on this Mac.</string>
+	<string>skil.li listens when you use Ask by Voice (✦V) or Dictate (✦D), records a meeting when you record one (your side of a call, or the whole room in person), and shows your microphone's level when you check it before a meeting; speech is turned into text on this Mac.</string>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>skil.li records the Mac's sound, the others in a call, when you record a meeting; it is transcribed on this Mac and sent nowhere.</string>
 	<key>NSCameraUsageDescription</key>
