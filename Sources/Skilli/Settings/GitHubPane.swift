@@ -218,7 +218,8 @@ struct GitHubPane: View {
                 Button("Read Now") { github.readNow() }
             }
         } label: {
-            LabelDetail("Last read", "\(summary(github)) · \(github.unreadNotifications.count)\(github.notificationsComplete ? "" : "+") unread")
+            LabelDetail("Last read", summary(github) + (github.notificationsRead
+                ? " · \(github.unreadNotifications.count)\(github.notificationsComplete ? "" : "+") unread" : " · notifications not read yet"))
         }
     }
 

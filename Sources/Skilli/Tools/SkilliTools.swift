@@ -1789,6 +1789,8 @@ final class SkilliTools {
                     + (pullRequest.needsUserAction ? " (the user's turn)" : "") + (pullRequest.canMerge ? " — can merge" : "") + " — \(pullRequest.url.absoluteString)"
             }.joined(separator: "\n")
         case "list_github_notifications":
+            // None read yet is not "no unread notification".
+            guard github.notificationsRead else { return stale(notifications: true) + "Notifications not read yet." }
             let shown = github.unreadNotifications.filter { fits([$0.title, $0.repository, $0.reasonTitle]) }
             let more = github.notificationsComplete ? "" : "\nMore unread notifications than listed: https://github.com/notifications"
             guard !shown.isEmpty else {
