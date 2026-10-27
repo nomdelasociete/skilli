@@ -62,7 +62,9 @@ has, never `list_tool_rights` or `set_tool_rights`):
   message you confirm before it goes); the others ask in the card. A link
   `open_url` opens with another scheme than http, https, mailto or System Settings' counts as
   a change.
-- Changes to skil.li's own settings ask every time.
+- Changes to skil.li's own settings ask every time; so do `get_transcript`
+  and `recording_followup`, naming the recording (its words leave the
+  Mac): no Always, no right or mode makes them silent.
 - What sends, deletes or pays is asked again during a `do_in_app` step.
 - `@skilli.needsConfirmation` replaces none of these: it asks once, before
   the whole script.
@@ -206,6 +208,9 @@ page: add a line here when you add a tool. -->
 | `resume_recording` | Resumes it. | |
 | `stop_recording` | Stops it; the transcript is made on the Mac. | |
 | `set_recording_source` | Turns the microphone, the Mac's sound, the webcam or the screen on or off from now on (Record card open or recording). | `source`, `on` |
+| `list_recordings` | The recordings, newest first: id (the folder's name), title, date, length, state, summary and chapters. No words. reads | |
+| `get_transcript` | A recording's transcript, as `transcript.md` has it; asked every time, the recording named. reads | `recording?` (an id or a title; empty: the newest) |
+| `recording_followup` | What its window's ⌘K does with your SI: `summary`, `chapters`, `action_items` (to Reminders), `recap_mail` (a mail opens, you send it), `ask` (with `question`); asked every time. | `action`, `recording?`, `question?` |
 
 ### Snippets and your own tools
 
@@ -265,6 +270,8 @@ Each change asks in the card, every time.
 | `skilli://record?title=…` | The Record card (nothing records before ↩). |
 | `skilli://record/pause`, `…/resume`, `…/stop` | Pauses, resumes or stops the recording on now; asked every time, no Always. |
 | `skilli://record/import?file=…` | The Import panel, at that file (nothing imported before ↩). |
+| `skilli://record/open?recording=…&at=…` | A recording's window (by its id or title), playing from `at` seconds. |
+| `skilli://record/summary?recording=…`, `…/chapters`, `…/actions`, `…/recap`, `…/ask?question=…` | What its window's ⌘K does with your SI; asked every time, the recording named, no Always. |
 | `skilli://skillies/import?url=…` | Shows a skillie from the web before Add. |
 | `skilli://apps/import?url=…` | Shows an app file before Add. |
 

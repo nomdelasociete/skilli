@@ -303,6 +303,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         followUps.ai = ai
         followUps.reminders = reminderBook
         followUps.ownName = center.ownName
+        followUps.askInCard = { [weak self] title, message in self?.aiActions.askAboutRecording(title, message: message) }
+        // Skillies for recordings: listed in ⌘K, one marked after every transcript.
+        followUps.skillies = { [weak self] in self?.scriptLibrary.all() ?? [] }
+        followUps.marked = { [preferences] in preferences.recorderAfterTranscript }
+        followUps.runInCard = { [weak self] skillie, folder, ran in
+            self?.runScript(skillie, arguments: [], recording: folder, ran: ran)
+        }
+        followUps.runQuietly = { [scriptLibrary] skillie, folder in
+            try await scriptLibrary.run(skillie, arguments: [], recording: folder)
+        }
         followUps.onPermissionNeeded = { [weak self] permission in self?.permissions.grant(permission) }
         followUps.ownAddresses = { [contactBook] in
             guard contactBook.isAllowed, let me = await contactBook.me() else { return [] }
@@ -581,6 +591,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         runner.openRecordCard = { [weak self] title in self?.recorderCenter.showCard(title: title, fromOutside: true) }
         runner.openImport = { [weak self] file in self?.recorderCenter.importRecording(selecting: file) }
         runner.openRecording = { [weak self] name, at in self?.recorderCenter.open(named: name, at: at) ?? false }
+        runner.recordingNamed = { [weak self] name in
+            guard let (_, record) = try? self?.recorderCenter.recordingForTool(name) else { return nil }
+            return "“\(record.title)” · " + record.started.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
+        }
+        runner.followUpRecording = { [weak self] action, name, question in self?.recorderCenter.followUp(action, on: name, question: question) }
+        runner.recordingWriter = { [weak self] in self?.ai.defaultModel.provider.title ?? WritingProvider.claude.title }
         runner.recordingTitle = { [weak self] in
             guard let recorder = self?.madeRecorderCenter?.recorder, recorder.isRecording else { return nil }
             return recorder.title
@@ -897,6 +913,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         launcher.onCopyRecordingTranscript = { [weak self] name in self?.copyTranscript(of: name) }
         launcher.onDeleteRecording = { [weak self] summary in self?.deleteRecording(summary) }
+        launcher.onAskAboutRecording = { [weak self] name, question in
+            guard let self else { return }
+            self.recorderCenter.ask(question, about: self.recordingLibrary.folder(name))
+        }
+        launcher.recordingProvider = { [weak self] in self?.ai.defaultModel.provider.title ?? WritingProvider.claude.title }
         toolServer.tools.recorder = { [weak self] in self?.recorderCenter }
         aiActions.startTimer = { [weak self] request in self?.startTimer(request) ?? UUID() }
         aiActions.cancelTimer = { [timers] id in timers.cancel(id) }
@@ -1462,8 +1483,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// A skillie, as Raycast runs a Script Command: asked first when it says so;
     /// silent leaves its last line a moment, compact its last line, full
-    /// output all of it, in the card.
-    private func runScript(_ command: ScriptCommand, arguments: [String], askFirst: Bool = false) {
+    /// output all of it, in the card. `recording`: a skillie for recordings
+    /// run on one (`SKILLI_RECORDING`), `ran` told how it went.
+    private func runScript(_ command: ScriptCommand, arguments: [String], askFirst: Bool = false, recording: URL? = nil,
+                           ran: (@MainActor @Sendable (ScriptLibrary.Run) -> Void)? = nil) {
         Task {
             if command.needsConfirmation || askFirst {
                 let detail = command.needsConfirmation ? "It asks before it runs." : command.description.isEmpty ? "One of your skillies." : command.description
@@ -1474,7 +1497,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let id = UUID().uuidString
             aiActions.notify(caller: command.title, working: "Running “\(command.title)”…", seconds: seconds, skillie: id,
                              showsWorking: command.showsRunning) { [scriptLibrary] in
-                let run = try await scriptLibrary.run(command, arguments: arguments, id: id)
+                let run = try await scriptLibrary.run(command, arguments: arguments, id: id, recording: recording)
+                ran?(run)
                 let text = command.mode == .fullOutput ? run.output.trimmingCharacters(in: .whitespacesAndNewlines) : ScriptCommand.lastLine(run.output)
                 guard run.succeeded else {
                     throw ScriptLibrary.Failure(message: text.isEmpty ? "“\(command.title)” failed (exit \(run.status))." : text)

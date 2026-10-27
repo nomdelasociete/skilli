@@ -77,6 +77,13 @@ final class SkilliLinkTests: XCTestCase {
         XCTAssertEqual(SkilliLink.parse(open.url), .openRecording("2026-10-22 14.00 Weekly sync", at: 724))
         XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/open?recording=Weekly%20sync"))), .openRecording("Weekly sync", at: nil))
         XCTAssertNil(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/open"))), "a recording named")
+        for action in MeetingFollowUp.Action.allCases {
+            let link = SkilliLink.recordingFollowUp(action, recording: "Weekly sync", question: action == .ask ? "Who sends the deck?" : nil)
+            XCTAssertEqual(SkilliLink.parse(link.url), link, action.rawValue)
+        }
+        XCTAssertEqual(SkilliLink.recordingFollowUp(.actionItems, recording: "", question: nil).url.absoluteString, "skilli://record/actions")
+        XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/recap"))), .recordingFollowUp(.recapMail, recording: "", question: nil))
+        XCTAssertNil(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/ask?recording=x"))), "ask needs its question")
     }
 
     func testWhatIsNotALink() throws {
@@ -118,7 +125,7 @@ final class SkilliLinkTests: XCTestCase {
                 XCTAssertEqual(SkilliLink.skillie(at: path, among: [skillie.path], folders: folders), skillie.path)
             case .doHere:
                 XCTFail("no Catalog entry is a “do it here”: \(entry.id)")
-            case .record, .recording, .importRecording, .openRecording:
+            case .record, .recording, .importRecording, .openRecording, .recordingFollowUp:
                 XCTFail("Record Meeting's and Import Recording's links are their entries': \(entry.id)")
             }
         }

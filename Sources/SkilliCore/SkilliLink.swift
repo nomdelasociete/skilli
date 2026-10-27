@@ -13,6 +13,7 @@ import Foundation
 ///     skilli://record/stop                    the recording on now: pause, resume or stop (asked first)
 ///     skilli://record/import?file=/Users/me/Call.m4a  Import Recording's panel, on that file (imported on ↩)
 ///     skilli://record/open?recording=2026-10-22%2014.00%20Weekly%20sync&at=724  a recording's window, playing from there
+///     skilli://record/summary?recording=Weekly%20sync  its summary, chapters, actions, recap, ask?question=… (asked first)
 ///
 /// `skilli://commands/import` stays `CommandLink`'s.
 public enum SkilliLink: Equatable, Sendable {
@@ -43,6 +44,10 @@ public enum SkilliLink: Equatable, Sendable {
     /// meeting), by its folder's name, else its title; `at` seconds in, the
     /// line said then.
     case openRecording(String, at: Double?)
+    /// What a recording's ⌘K does with the user's writer (phase 5), on
+    /// the recording named (its folder's name or title; empty: the newest):
+    /// asked in the card every time (its transcript leaves the Mac).
+    case recordingFollowUp(MeetingFollowUp.Action, recording: String, question: String?)
 
     public enum RecordingControl: String, CaseIterable, Sendable {
         case pause, resume, stop
@@ -101,6 +106,11 @@ public enum SkilliLink: Equatable, Sendable {
             components.percentEncodedPath = "/open"
             items.append(URLQueryItem(name: "recording", value: recording))
             if let at { items.append(URLQueryItem(name: "at", value: String(Int(max(0, at).rounded(.down))))) }
+        case .recordingFollowUp(let action, let recording, let question):
+            components.host = "record"
+            components.percentEncodedPath = "/" + action.linkName
+            if !recording.isEmpty { items.append(URLQueryItem(name: "recording", value: recording)) }
+            if let question, !question.isEmpty { items.append(URLQueryItem(name: "question", value: question)) }
         }
         if !items.isEmpty {
             // `+`, `&`, `=` and `#` encoded too: pages read `+` as a space.
@@ -136,6 +146,13 @@ public enum SkilliLink: Equatable, Sendable {
                 let recording = items.first { $0.name == "recording" }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 guard !recording.isEmpty else { return nil }
                 return .openRecording(recording, at: items.first { $0.name == "at" }?.value.flatMap(Double.init).map { max(0, $0) })
+            }
+            if let action = MeetingFollowUp.Action(linkName: target) {
+                func value(_ name: String) -> String { items.first { $0.name == name }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+                let question = value("question")
+                // A question to ask is the link's whole point.
+                if action == .ask, question.isEmpty { return nil }
+                return .recordingFollowUp(action, recording: value("recording"), question: question.isEmpty ? nil : String(question.prefix(500)))
             }
             return RecordingControl(rawValue: target.lowercased()).map(Self.recording)
         }

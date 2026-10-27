@@ -229,10 +229,11 @@ final class ToolSettings {
         save()
     }
 
-    /// A change to skil.li's own settings: it asks every time, whatever
-    /// its right (Block aside) or the mode.
+    /// A change to skil.li's own settings, or a recording's words handed
+    /// over (`SkilliTools.recordingWords`): it asks every time, whatever its
+    /// right (Block aside) or the mode, and offers no Always.
     nonisolated static func asksEveryTime(_ tool: String) -> Bool {
-        SettingsTable.Tool.changes.contains(tool)
+        SettingsTable.Tool.changes.contains(tool) || SkilliTools.recordingWords.contains(tool)
     }
 
     // MARK: - Servers' tools

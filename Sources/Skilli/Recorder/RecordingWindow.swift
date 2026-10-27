@@ -71,6 +71,13 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var onFollowUp: ((URL, MeetingFollowUp.Action) -> Void)?
     /// Remove Chapters: gone at once, the undo card offers them back.
     var onRemoveChapters: ((URL, MeetingRecord) -> Void)?
+    /// Ask About This Meeting…: the question typed in ⌘K's list.
+    var onAsk: ((URL, String) -> Void)?
+    /// The skillies for recordings ⌘K lists, the one marked to run after
+    /// every transcript (its path), and one run on this recording.
+    var skillies: () -> [ScriptCommand] = { [] }
+    var markedSkillie: () -> String = { "" }
+    var onRunSkillie: ((URL, ScriptCommand) -> Void)?
     /// Who writes for the AI's actions, as their titles name it ("Claude").
     var provider: () -> String = { "Claude" }
     /// The summary shown above the lines, from `summary.md`: its words and
@@ -154,6 +161,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var isEditingLine: Bool { view.editingLine != nil }
     var shownHint: String? { view.hintText }
     var shownWork: String? { view.workText }
+    var shownRan: String? { view.ranText }
     var shownChapters: [MeetingRecord.Chapter] { view.chapters }
     var shownChapterMarks: Int { view.chapterMarks }
     var shownSummary: String? { view.summaryShown }
@@ -199,6 +207,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             }
             made = (transcript.language, transcript.engine)
             summary = Self.summary(in: folder, record: record)
+            view.setRan(Self.ranLine(record))
             view.showLines(fresh.lines, names: fresh.names, slides: Self.slides(in: folder), chapters: record.chapters, summary: summary)
             view.setChapterMarks(record.chapters)
             considerBetterHint()
@@ -260,6 +269,17 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         let text = MeetingFollowUp.summary(inFile: file)
         guard !text.isEmpty else { return nil }
         return (text, summaryHeader(record.summarized))
+    }
+
+    /// The skillie marked, as it last ran after the transcript: "“Send to
+    /// Notes” ran after the transcript at 14:52: Sent."; nil: none ran.
+    static func ranLine(_ record: MeetingRecord) -> String? {
+        guard let ran = record.skillies?.last(where: \.automatic) else { return nil }
+        let when = Calendar.current.isDateInToday(ran.at) ? ran.at.formatted(date: .omitted, time: .shortened)
+            : ran.at.formatted(.dateTime.day().month(.abbreviated).hour().minute())
+        let line = ran.line.isEmpty ? "" : ": \(ran.line)"
+        return ran.status == 0 ? "“\(ran.title)” ran after the transcript at \(when)\(line)"
+            : "“\(ran.title)” failed after the transcript at \(when)\(line.isEmpty ? " (exit \(ran.status))" : line)"
     }
 
     /// "SUMMARY BY CLAUDE · 14:52"; another day's, its date too.
@@ -540,6 +560,17 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             }
             list.append(ai("Action Items to Reminders by \(by)", "checklist", .actionItems))
             list.append(ai(summary == nil ? "Recap Mail to the Attendees by \(by)" : "Recap Mail to the Attendees", "envelope", .recapMail))
+            list.append(LauncherAction(title: "Ask \(by) About This Meeting…", symbol: "questionmark.bubble", keepsOpen: true) { [weak self] in
+                self?.askAboutThisMeeting()
+            })
+            // The user's skillies for recordings; the one marked says so.
+            let marked = markedSkillie()
+            for skillie in skillies() {
+                list.append(LauncherAction(title: skillie.title + (skillie.path == marked ? " · after every transcript" : ""), symbol: "play") { [weak self] in
+                    guard let self else { return }
+                    self.onRunSkillie?(self.folder, skillie)
+                })
+            }
             list.append(LauncherAction(title: "Transcribe Again…", symbol: "arrow.triangle.2.circlepath") { [weak self] in self?.showTranscribeAgain() })
         }
         list.append(LauncherAction(title: "Show in Finder", symbol: "folder", key: .openSecond) { [weak self] in
@@ -569,12 +600,30 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         return list
     }
 
+    /// Ask About This Meeting…: the list becomes a field; ↩ sends the
+    /// question, the answer comes in the card.
+    private func askAboutThisMeeting() {
+        actionPanel.ask("Ask about “\(record.title)”", initial: "", placeholder: "What did they decide about…?",
+                         line: "Type your question, ↩ asks \(provider()), esc goes back") { [weak self] typed in
+            guard let self else { return }
+            let question = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.closeActions()
+            guard !question.isEmpty else { return }
+            self.onAsk?(self.folder, question)
+        }
+    }
+
     /// A key while ⌘K's list is open, as the launcher's: arrows move, ↩
     /// runs the selected action, an action's own key runs it, letters
     /// filter, esc or ⌘K close it. A key that does nothing here says so.
     private func actionPanelKey(_ event: NSEvent) {
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
         let code = Int(event.keyCode)
+        // A question typed in the list: ↩ sends it.
+        if actionPanel.isPrompting, flags.isEmpty, code == kVK_Return || code == kVK_ANSI_KeypadEnter {
+            actionPanel.submit()
+            return
+        }
         if code == kVK_Escape || (flags == .command && event.charactersIgnoringModifiers?.lowercased() == "k") {
             closeActions()
         } else if code == kVK_UpArrow {
@@ -941,6 +990,9 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     private let workLine = NSTextField(labelWithString: "")
     private let workSpinner = NSProgressIndicator()
     var workText: String? { workLine.isHidden ? nil : workLine.stringValue }
+    /// The skillie marked, as it last ran after the transcript (phase 5).
+    private let ranLine = NSTextField(labelWithString: "")
+    var ranText: String? { ranLine.isHidden ? nil : ranLine.stringValue }
     private(set) var lines: [TranscriptLine] = []
     private(set) var names: [String: String] = [:]
     /// The chapters heading the lines, and the summary above them (phase 5).
@@ -1083,8 +1135,12 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         workSpinner.style = .spinning
         workSpinner.controlSize = .small
         workSpinner.isDisplayedWhenStopped = false
+        ranLine.font = .systemFont(ofSize: 12)
+        ranLine.textColor = .secondaryLabelColor
+        ranLine.lineBreakMode = .byTruncatingTail
+        ranLine.isHidden = true
         for subview in [title, about, transcribeAgainButton, playButton, time, waveform, topLine, scroll, picturesColumn, state, languageMenu,
-                        transcribeButton, hintLine, workSpinner, workLine, bottomLine, hints, dropRing] as [NSView] {
+                        transcribeButton, hintLine, workSpinner, workLine, ranLine, bottomLine, hints, dropRing] as [NSView] {
             addSubview(subview)
         }
         registerForDraggedTypes([.fileURL])
@@ -1236,6 +1292,15 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         } else {
             update(lines: lines, names: names, select: selectedLine)
         }
+    }
+
+    /// How the skillie marked last ran after the transcript; nil: none.
+    func setRan(_ text: String?) {
+        guard text != ranText else { return }
+        ranLine.isHidden = text == nil
+        ranLine.stringValue = text ?? ""
+        ranLine.toolTip = text
+        needsLayout = true
     }
 
     /// The chapters' marks on the waveform.
@@ -1687,14 +1752,18 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         picturesColumn.isHidden = columnWidth == 0
         picturesColumn.frame = NSRect(x: width - inset - columnWidth, y: y + 16, width: columnWidth, height: max(0, bottom - y - 32))
         let linesInner = columnWidth > 0 ? inner - columnWidth - 20 : inner
-        // Under the lines: the hint taught once, what the AI is doing.
+        // Under the lines: the hint taught once, the skillie that ran, what
+        // the AI is doing.
         let hintHeight: CGFloat = hintLine.isHidden ? 0 : 30
+        let ranHeight: CGFloat = ranLine.isHidden ? 0 : 26
         let workHeight: CGFloat = workLine.isHidden ? 0 : 28
         hintLine.frame = NSRect(x: inset, y: bottom - hintHeight + 6, width: linesInner, height: 18)
-        let workY = bottom - hintHeight - workHeight + 6
+        ranLine.frame = NSRect(x: inset, y: bottom - hintHeight - ranHeight + 6, width: linesInner, height: 18)
+        let workY = bottom - hintHeight - ranHeight - workHeight + 6
         workSpinner.frame = NSRect(x: inset, y: workY + 1, width: 16, height: 16)
         workLine.frame = NSRect(x: inset + 22, y: workY, width: max(0, linesInner - 22), height: 18)
-        scroll.frame = NSRect(x: inset - 12, y: y + 1, width: linesInner + 24, height: max(0, bottom - y - 1 - hintHeight - workHeight))
+        let notes = hintHeight + ranHeight + workHeight
+        scroll.frame = NSRect(x: inset - 12, y: y + 1, width: linesInner + 24, height: max(0, bottom - y - 1 - notes))
         let tableWidth = scroll.contentSize.width
         if tableWidth != linesWidth {
             linesWidth = tableWidth

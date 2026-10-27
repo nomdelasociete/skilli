@@ -195,6 +195,30 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
     /// The attendees' mail addresses, from the event: the recap mail's (phase
     /// 5). Never sent anywhere else.
     public var addresses: [String]?
+    /// The skillies run on it (phase 5): from ⌘K, or on their own after its
+    /// transcript; the last 20.
+    public var skillies: [SkillieRun]?
+
+    /// A skillie run on a recording: which, when, how it went.
+    public struct SkillieRun: Codable, Equatable, Sendable {
+        public var title: String
+        public var path: String
+        public var at: Date
+        /// After the transcript, on its own (the one marked), not from ⌘K.
+        public var automatic: Bool
+        public var status: Int32
+        /// Its last line.
+        public var line: String
+
+        public init(title: String, path: String, at: Date, automatic: Bool, status: Int32, line: String) {
+            self.title = title
+            self.path = path
+            self.at = at
+            self.automatic = automatic
+            self.status = status
+            self.line = line
+        }
+    }
 
     /// The calendar's event a recording is of: which occurrence, and when
     /// it ends (the call's end is watched from then).

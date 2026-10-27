@@ -459,7 +459,8 @@ final class MCPService {
             Log.trace("Tool \(name) allowed with this run's first step on screen")
             return .go
         case .ask:
-            let once = ruled.reason != nil
+            // A rule asked, or the tool asks every time: no Always.
+            let once = ruled.reason != nil || ToolSettings.asksEveryTime(name)
             switch await presenter?.approve(title, detail: detail(), caller: caller, run: run, once: once, reason: ruled.reason?.line) ?? .deny {
             case .deny:
                 Log.actions.notice("Tool \(name, privacy: .public) declined")

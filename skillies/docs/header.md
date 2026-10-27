@@ -52,6 +52,7 @@ changes; SkillieDocsTests checks every key it reads has its row here. -->
 | `showsRunning` | no | `true` (default) / `false` | `false`: no "Running…" card while it runs. For a skillie that draws something of its own (a confetti cannon). Its final line or its error still shows. skil.li only. |
 | `refreshTime` | no | `10s`, `5m`, `1h`, `1d` | Inline only: how old its line may get before it is read again. 10 seconds at least. Without it: 10 s in the launcher, 1 min in the menu bar. |
 | `currentDirectoryPath` | no | a path, `~` allowed | The folder it runs in. Default: the script's own folder. |
+| `forRecordings` | no | `true` / `false` (default) | `true`: a skillie for recordings. A recording's ⌘K lists it (when it needs no argument), and runs it with the recording's folder in `SKILLI_RECORDING` ([running.md](running.md#environment)); Settings → Recorder → After each transcript can mark one to run on every recording once its transcript is made. Run elsewhere, `SKILLI_RECORDING` is not set. |
 
 ## Modes
 

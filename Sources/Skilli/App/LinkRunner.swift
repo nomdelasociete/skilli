@@ -60,6 +60,13 @@ final class LinkRunner {
     /// A recording's window, by its folder's name or its title, from a time
     /// in it; false when there is no such recording.
     var openRecording: (String, Double?) -> Bool = { _, _ in false }
+    /// A recording by its folder's name or title (empty: the newest), as
+    /// the card names it ("“Weekly sync” · Wed 22 Oct"), nil when none is;
+    /// and what its ⌘K does, once allowed.
+    var recordingNamed: (String) -> String? = { _ in nil }
+    var followUpRecording: (MeetingFollowUp.Action, String, String?) -> Void = { _, _, _ in }
+    /// Who the recording's words go to ("Claude").
+    var recordingWriter: () -> String = { WritingProvider.claude.title }
     /// macOS may bring skil.li forward to open a link: the app the user was
     /// in comes back first, so a window place or a snippet lands there. The
     /// self-test opens links itself, its own window in front: off.
@@ -148,6 +155,8 @@ final class LinkRunner {
             if !dryRun, !openRecording(recording, at) {
                 say("missing recording \(recording)", "No recording “\(recording)” in skil.li: it was deleted, or renamed.")
             }
+        case .recordingFollowUp(let action, let recording, let question):
+            await askThenFollowUp(action, recording: recording, question: question)
         }
     }
 
@@ -166,6 +175,25 @@ final class LinkRunner {
         }
         log.append("did record \(control.rawValue)")
         if !dryRun { controlRecording(control) }
+    }
+
+    /// A link sending a recording's words to the user's writer: asked every
+    /// time, the recording and where its words go named, never trusted (a
+    /// page could send any meeting).
+    private func askThenFollowUp(_ action: MeetingFollowUp.Action, recording: String, question: String?) async {
+        guard let named = recordingNamed(recording) else {
+            say("missing recording \(recording)", recording.isEmpty ? "No recordings in skil.li yet." : "No recording “\(recording)” in skil.li: it was deleted, or renamed.")
+            return
+        }
+        log.append("asked record \(action.linkName)")
+        let asked = question.map { "\n“\($0.prefix(200))”" } ?? ""
+        let detail = "\(named): its transcript goes to \(recordingWriter())." + asked + " \(Self.fromALink)"
+        guard await approve("\(action.asked) a recording", detail, false) != .deny else {
+            log.append("declined record \(action.linkName)")
+            return
+        }
+        log.append("did record \(action.linkName)")
+        if !dryRun { followUpRecording(action, recording, question) }
     }
 
     /// `do` links run one at a time, in the order they came, so a skillie

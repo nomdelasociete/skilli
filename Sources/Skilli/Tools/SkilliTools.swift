@@ -72,7 +72,7 @@ enum ToolGroup: String, CaseIterable, Identifiable, Sendable {
         case .personal: "Your webhooks, from Settings → Tools"
         case .screen: "Read the window in front, press its buttons, fill its fields, send keys"
         case .settings: "Read skil.li's settings; change one, an alias, a shortcut… each after your OK"
-        case .recorder: "Open the Record card (you start it); pause, resume or stop the recording on now"
+        case .recorder: "Open the Record card (you start it); pause, resume or stop the recording on now; list your recordings; a transcript, asked each time"
         }
     }
 
@@ -242,6 +242,12 @@ final class SkilliTools {
         self.ai = ai
     }
 
+    /// The tools that hand a recording's words to whoever calls them
+    /// (docs/meeting-recorder.md, "Privacy and consent"): asked every time
+    /// in the card, naming the recording; no Always, no right or mode makes
+    /// them silent (`ToolSettings.asksEveryTime`).
+    nonisolated static let recordingWords: Set<String> = ["get_transcript", "recording_followup"]
+
     nonisolated static let askUser = "ask_user"
     nonisolated static let approve = "approve"
     nonisolated static let doInApp = "do_in_app"
@@ -410,6 +416,19 @@ final class SkilliTools {
                        group: .recorder, risk: .changes,
                        parameters: [.init(name: "source", description: "Which one.", options: ["microphone", "mac_sound", "webcam", "screen"]),
                                     .init(name: "on", description: "true to turn it on, false off.", options: ["true", "false"])]),
+        ToolDefinition(name: "list_recordings", title: "List the recordings",
+                       description: "The meetings recorded or imported in skil.li, newest first: each its id (the folder's name), title, date, length, state, and whether it has a summary and chapters. No words: get_transcript gives a transcript, asked to the user each time.",
+                       group: .recorder, risk: .read, parameters: []),
+        ToolDefinition(name: "get_transcript", title: "Give a recording's transcript",
+                       description: "One recording's transcript, as transcript.md has it (its title, when, each line with its speaker and time, its chapters). The user is asked every time, the recording named; never ask for one they did not want read.",
+                       group: .recorder, risk: .read,
+                       parameters: [.init(name: "recording", description: "Its id from list_recordings, or its title (the newest of that title); empty: the newest recording.", isRequired: false)]),
+        ToolDefinition(name: "recording_followup", title: "Follow up a recording with your SI",
+                       description: "Does what the recording's window does in ⌘K, with the user's own SI (Settings → SI Accounts) reading its transcript: summary (written to summary.md, returned), chapters (written, returned), action_items (each added to Reminders, returned), recap_mail (a new mail to the attendees opens in the user's mail app with the summary; the user sends it), ask (answers `question` from the transcript). The user is asked every time, the recording named.",
+                       group: .recorder, risk: .changes,
+                       parameters: [.init(name: "action", description: "What to do.", options: MeetingFollowUp.Action.allCases.map(\.rawValue)),
+                                    .init(name: "recording", description: "Its id from list_recordings, or its title; empty: the newest recording.", isRequired: false),
+                                    .init(name: "question", description: "For ask: the question, as the user said it.", isRequired: false)]),
         ToolDefinition(name: "list_tabs", title: "List browser tabs",
                        description: "The tabs open in Safari, Chrome, Arc, Brave, Edge and others: browser and title.",
                        group: .apps, risk: .read, parameters: []),
@@ -705,6 +724,7 @@ final class SkilliTools {
     /// What the card shows for a call: the screen tools' element by its
     /// name ("button “Desktop & Dock” in System Settings"), never its id.
     func cardSummary(of definition: ToolDefinition, arguments: [String: Any]) -> String {
+        if Self.recordingWords.contains(definition.name) { return recordingSummary(definition, arguments: arguments) }
         guard ["press_ui", "set_ui_value"].contains(definition.name), let id = arguments["id"] as? String,
               let element = ui.describe(id) else {
             return Self.summary(of: definition, arguments: arguments)
@@ -713,6 +733,28 @@ final class SkilliTools {
         guard definition.name == "set_ui_value" else { return named }
         let text = (arguments["text"] as? String) ?? ""
         return named + "\n" + (text.count > 300 ? String(text.prefix(300)) + "…" : text)
+    }
+
+    /// A recording's words asked for: which recording, and where its words
+    /// go ("“Weekly sync” · Wed 22 Oct, 14:00 · 32 min").
+    private func recordingSummary(_ definition: ToolDefinition, arguments: [String: Any]) -> String {
+        guard let center = recorder?(), let (_, record) = try? center.recordingForTool(arguments["recording"] as? String) else {
+            return Self.summary(of: definition, arguments: arguments)
+        }
+        let named = "“\(record.title)” · \(record.started.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())) · "
+            + MeetingTranscriber.length(record.seconds)
+        guard definition.name == "recording_followup" else { return named + "\nIts whole transcript goes to the agent asking, then to its provider." }
+        let action = (arguments["action"] as? String).flatMap(MeetingFollowUp.Action.init(rawValue:))
+        let question = (arguments["question"] as? String).map { "\n“\($0.prefix(200))”" } ?? ""
+        let what: String = switch action {
+        case .summary?: "Its summary"
+        case .chapters?: "Its chapters"
+        case .actionItems?: "Its action items, added to Reminders"
+        case .recapMail?: "A recap mail, opened for you to send"
+        case .ask?: "An answer" + question
+        case nil: "A follow-up"
+        }
+        return named + "\n\(what): its transcript goes to \(center.followUps.provider), what comes back to the agent asking."
     }
 
     /// A step on the screen that may not be taken back: a button that
@@ -956,6 +998,28 @@ final class SkilliTools {
                 return "Stopped “\(title)” (\(length)): its transcript is being made on this Mac."
                     + (folder.map { "\nFolder: \($0.path)" } ?? "")
             }
+
+        case "list_recordings":
+            guard let center = recorder?() else { throw Failure(message: "The recorder is not available.") }
+            return center.recordingsListed()
+
+        case "get_transcript":
+            guard let center = recorder?() else { throw Failure(message: "The recorder is not available.") }
+            let (folder, record) = try center.recordingForTool(arguments["recording"] as? String)
+            guard let text = try? String(contentsOf: folder.appendingPathComponent("transcript.md"), encoding: .utf8), record.state == .done else {
+                throw Failure(message: "“\(record.title)” has no transcript yet.")
+            }
+            return text
+
+        case "recording_followup":
+            guard let center = recorder?() else { throw Failure(message: "The recorder is not available.") }
+            guard let action = MeetingFollowUp.Action(rawValue: try text("action")) else {
+                throw Failure(message: "action is one of: \(MeetingFollowUp.Action.allCases.map(\.rawValue).joined(separator: ", ")).")
+            }
+            let question = (arguments["question"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if action == .ask, question.isEmpty { throw Failure(message: "ask needs a question.") }
+            let (folder, _) = try center.recordingForTool(arguments["recording"] as? String)
+            return try await center.followUps.perform(action, on: folder, question: question)
 
         case "list_tabs":
             let tabs = BrowserTabs.all()

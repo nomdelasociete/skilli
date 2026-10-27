@@ -178,6 +178,9 @@ final class RecorderCenter {
     /// Transcripts made at launch for recordings closed as skil.li quit:
     /// no window opens when done (nobody asked for it then).
     private var madeQuietly: Set<String> = []
+    /// Transcripts made again (Transcribe Again): the skillie marked does
+    /// not run on them again.
+    private var madeAgain: Set<String> = []
     /// When the Mac went to sleep, the recording on paused for it; nil when
     /// it did not pause one (none on, or already paused by the user).
     private(set) var pausedForSleep: Date?
@@ -753,6 +756,8 @@ final class RecorderCenter {
     /// the lists have it; a window already open on it shows it.
     private func finished(_ folder: URL) {
         NotificationCenter.default.post(name: Recordings.changed, object: nil)
+        // A first transcript: the skillie marked runs on it (phase 5).
+        if madeAgain.remove(Self.key(folder)) == nil { followUps.transcriptDone(folder) }
         if madeQuietly.remove(Self.key(folder)) != nil {
             if let window = windows[Self.key(folder)], let record = recordings.read(folder) {
                 window.show(record, transcript: recordings.transcript(folder))
@@ -786,6 +791,54 @@ final class RecorderCenter {
         return true
     }
 
+    /// A link's follow-up, once allowed: a question answered in the card;
+    /// the rest in its window, opened for it.
+    func followUp(_ action: MeetingFollowUp.Action, on name: String, question: String?) {
+        guard let (folder, _) = try? recordingForTool(name) else { return }
+        if action == .ask {
+            followUps.ask(question ?? "", about: folder)
+            return
+        }
+        open(folder)
+        Task { await followUps.run(action, on: folder) }
+    }
+
+    /// Ask about a meeting from the launcher's row: answered in the card.
+    func ask(_ question: String, about folder: URL) {
+        followUps.ask(question, about: folder)
+    }
+
+    /// `list_recordings`: newest first, a line each, no words.
+    func recordingsListed() -> String {
+        let all = allRecordings()
+        guard !all.isEmpty else { return "No recordings." }
+        return all.map { folder, record in
+            var made: [String] = []
+            if record.summarized != nil { made.append("summary") }
+            if !record.chapters.isEmpty { made.append("\(record.chapters.count) chapters") }
+            let when = record.started.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).year().hour().minute())
+            return "\(folder.lastPathComponent) · “\(record.title)” · \(when) · \(MeetingTranscriber.length(record.seconds)) · \(record.state.rawValue)"
+                + (made.isEmpty ? "" : " · " + made.joined(separator: ", "))
+        }.joined(separator: "\n")
+    }
+
+    /// The recording a tool names (its id or title; empty: the newest),
+    /// or why none is.
+    func recordingForTool(_ name: String?) throws -> (URL, MeetingRecord) {
+        let name = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let folder = name.isEmpty ? allRecordings().first?.0 : recording(named: name)
+        guard let folder, let record = recordings.read(folder) else {
+            throw RecordingFollowUps.Failure(message: name.isEmpty ? "No recordings." : "No recording “\(name)”: list_recordings gives their ids.")
+        }
+        return (folder, record)
+    }
+
+    /// Every recording with its record, newest first.
+    private func allRecordings() -> [(URL, MeetingRecord)] {
+        let folders = (try? FileManager.default.contentsOfDirectory(at: recordings.root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        return folders.compactMap { folder in recordings.read(folder).map { (folder, $0) } }.sorted { $0.1.started > $1.1.started }
+    }
+
     /// A recording by its folder's name, else the newest whose title is
     /// `name` (case and accents aside).
     func recording(named name: String) -> URL? {
@@ -796,10 +849,7 @@ final class RecorderCenter {
             let exact = root.appendingPathComponent(name, isDirectory: true)
             if recordings.read(exact) != nil { return exact }
         }
-        let folders = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
-        return folders.compactMap { folder in recordings.read(folder).map { (folder, $0) } }
-            .filter { MeetingVoices.sameName($0.1.title, name) }
-            .max { $0.1.started < $1.1.started }?.0
+        return allRecordings().first { MeetingVoices.sameName($0.1.title, name) }?.0
     }
 
     /// A recording's window, its actions wired: delete, the folder, a
@@ -837,6 +887,10 @@ final class RecorderCenter {
             Task { await self.followUps.run(action, on: folder) }
         }
         window.onRemoveChapters = { [weak self] folder, _ in self?.followUps.removeChapters(in: folder) }
+        window.onAsk = { [weak self] folder, question in self?.followUps.ask(question, about: folder) }
+        window.skillies = { [weak self] in self?.followUps.recordingSkillies() ?? [] }
+        window.markedSkillie = { [weak self] in self?.followUps.marked() ?? "" }
+        window.onRunSkillie = { [weak self] folder, skillie in self?.followUps.run(skillie, on: folder) }
         window.provider = { [weak self] in self?.followUps.provider ?? WritingProvider.claude.title }
         if let work = followUps.work(for: folder) { window.showWork(work) }
         window.betterHint = { [weak self] record in
@@ -855,6 +909,7 @@ final class RecorderCenter {
     /// Transcribe Again (phase 4): the language and the engine as picked;
     /// the transcript before stays until the new one is written.
     private func transcribeAgain(_ folder: URL, record: MeetingRecord, engine: TranscriptEngine) {
+        madeAgain.insert(Self.key(folder))
         recorder.transcribe(folder, record: record, again: true, engine: engine)
     }
 

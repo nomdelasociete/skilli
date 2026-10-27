@@ -1091,6 +1091,9 @@ final class SettingTools {
                                                     // recordings go on the hourly pass.
                                                     self.preferences.recorderRetention = RecordingRetention(rawValue: raw)
                                                 })
+        // Read only: marking a skillie to get every recording is the user's
+        // (`paneOnly`).
+        bindings["recorderAfterTranscript"] = Binding(get: { [unowned self] in .text(self.preferences.recorderAfterTranscript) })
 
         // Reminders
         bindings["remindersDefaultList"] = string(\.remindersDefaultList) { [unowned self] in

@@ -168,7 +168,7 @@ enum ToolRightsTools {
         let everyTime = parsed.changes.filter { name == ToolRights.skilliServer && ToolSettings.asksEveryTime($0.key) && $0.value != .never && $0.value != nil }
         let rights = parsed.changes.filter { known.contains($0.key) && everyTime[$0.key] == nil }
         let unknown = parsed.changes.keys.filter { !known.contains($0) }.sorted()
-        let invalid = parsed.invalid + everyTime.keys.sorted().map { "\($0) (a settings change asks every time: only block or default)" }
+        let invalid = parsed.invalid + everyTime.keys.sorted().map { "\($0) (asks every time: only block or default)" }
         guard !rights.isEmpty else {
             throw Failure(message: "Nothing to change: use \"tool=right\" with a tool of \(name) and default, ask, allow or block."
                           + (unknown.isEmpty ? "" : " Unknown tools: \(unknown.joined(separator: ", ")).")

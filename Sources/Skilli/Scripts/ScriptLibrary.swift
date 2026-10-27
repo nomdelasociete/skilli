@@ -90,9 +90,10 @@ final class ScriptLibrary {
     /// status. Stopped after `timeout` (its own by default) with what it
     /// started: a step it waits for (`Skilli call`) stops with it. `id`:
     /// this run, told to its process (`SKILLI_SKILLIE`); `agentRun`: the
-    /// Act command whose agent runs it.
+    /// Act command whose agent runs it; `recording`: the recording a
+    /// skillie for recordings is run on (`SKILLI_RECORDING`).
     func run(_ command: ScriptCommand, arguments: [String], timeout: TimeInterval? = nil, id: String = UUID().uuidString,
-             agentRun: AgentContext? = nil) async throws -> Run {
+             agentRun: AgentContext? = nil, recording: URL? = nil) async throws -> Run {
         let url = URL(fileURLWithPath: command.path)
         let executable: URL
         let all: [String]
@@ -111,7 +112,8 @@ final class ScriptLibrary {
         Log.trace("Skillie “\(command.title)” run")
         running[id] = (command, agentRun)
         defer { running[id] = nil }
-        let environment = SkillieEnvironment.variables(cli: Bundle.main.executablePath, socket: toolSocket(), run: id)
+        var environment = SkillieEnvironment.variables(cli: Bundle.main.executablePath, socket: toolSocket(), run: id)
+        if let recording { environment[SkillieEnvironment.recording] = recording.path }
         let (output, status) = try await ChildProcess.run(executable, all, directory: directory, environment: environment, stopsGroup: true,
                                                           timeout: timeout ?? self.timeout)
         return Run(output: ScriptCommand.plain(output), status: status)

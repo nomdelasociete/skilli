@@ -444,6 +444,10 @@ final class LauncherController: NSObject {
     var onShowRecordingFolderNamed: ((String) -> Void)?
     var onCopyRecordingTranscript: ((String) -> Void)?
     var onDeleteRecording: ((RecordingSummary) -> Void)?
+    /// Ask about a meeting (phase 5): its folder's name and the question,
+    /// answered in the card by `recordingProvider` ("Claude").
+    var onAskAboutRecording: ((String, String) -> Void)?
+    var recordingProvider: () -> String = { WritingProvider.claude.title }
     /// Search Recordings' words said, for the text typed.
     private var recordingWords: (query: String, found: [(folder: String, snippet: String)])?
     private var recordingWordsTask: Task<Void, Never>?
@@ -3280,6 +3284,20 @@ final class LauncherController: NSObject {
     /// The results again for what is typed (an alias changed).
     func refreshResults() {
         updateResults(query: searchField.stringValue)
+    }
+
+    /// ⌘K → Ask About This Meeting…: the list becomes a field; ↩ sends the
+    /// question (empty: nothing), the answer comes in the card.
+    func askAboutRecording(_ summary: RecordingSummary) {
+        actionPanel.ask("Ask about “\(summary.title)”", initial: "", placeholder: "What did they decide about…?",
+                        line: "Type your question, ↩ asks \(recordingProvider()), esc goes back") { [weak self] typed in
+            guard let self else { return }
+            let question = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.closeActions()
+            guard !question.isEmpty else { return }
+            self.hide()
+            self.onAskAboutRecording?(summary.folder, question)
+        }
     }
 
     /// ⌘K → Set Alias…: the list becomes a field; ↩ saves (empty removes).

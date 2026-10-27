@@ -1827,6 +1827,57 @@ extension AIActionController: ToolPresenter {
         task = Task { await presentAgenda(request, in: calendar) }
     }
 
+    /// Ask about a meeting (docs/meeting-recorder-views.md, "Phase 5"):
+    /// `message` (the question with the recording's transcript) to Ask's
+    /// writer, the answer in the card as Ask's are, its status naming who
+    /// answered; ⇥ follows up, ⌘↩ goes on elsewhere, nothing kept.
+    func askAboutRecording(_ title: String, message: String) {
+        cancel()
+        placement = launcherSpot.map { .launcher($0()) } ?? nearSelection()
+        task = Task { await answerAboutRecording(title, message: message) }
+    }
+
+    private func answerAboutRecording(_ title: String, message: String) async {
+        output = .card
+        original = ""
+        result = ""
+        popover.show(title: title, at: placement, symbol: "waveform")
+        installOutsideClickMonitor()
+        guard let writer = ai.writer(for: nil) else {
+            needsSetup = true
+            popover.fail(ai.setupMessage(for: nil), hints: [("Open Settings", "↩"), ("Close", "esc")])
+            return
+        }
+        popover.startWriting()
+        lastMessage = message
+        let startedAt = ContinuousClock.now
+        var firstWord: Duration?
+        do {
+            for try await chunk in writer.engine.stream(AIRequest(message: message, model: writer.choice)) {
+                firstWord = firstWord ?? .now - startedAt
+                result += chunk
+                popover.stream(result, markdown: true)
+            }
+            guard !Task.isCancelled else { return }
+            result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !result.isEmpty else {
+                popover.fail("\(writer.choice.provider.title) answered nothing.")
+                return
+            }
+            let total = ContinuousClock.now - startedAt
+            lastRun = (firstWord ?? total, total)
+            conversation.add(request: message, answer: result)
+            followUp = .write(writer)
+            popover.continueHint = handoffTarget.map { ("In \($0.title)", "⌘↩") }
+            popover.finish(original: "", result: result, status: "\(writer.label) · \(Self.seconds(total))", output: .card, followUp: true)
+            Log.actions.notice("Recording asked via \(writer.label, privacy: .public): done \(total.compact, privacy: .public)")
+        } catch {
+            guard !Task.isCancelled else { return }
+            popover.fail(error.localizedDescription)
+            Log.actions.error("Recording asked: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     /// An event in the card, with what can be done with it as keycaps.
     func showEvent(_ event: AgendaEvent) {
         cancel()
