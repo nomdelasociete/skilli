@@ -228,6 +228,17 @@ public enum MeetingTranscript {
         return lines
     }
 
+    /// Each chapter by the line it starts on: the first line started at
+    /// its start or after (a chapter past the last line is left out).
+    public static func chapterLines(_ chapters: [MeetingRecord.Chapter], in lines: [TranscriptLine]) -> [Int: MeetingRecord.Chapter] {
+        var starts: [Int: MeetingRecord.Chapter] = [:]
+        for chapter in chapters {
+            guard let line = lines.firstIndex(where: { $0.start >= chapter.start - 0.001 }), starts[line] == nil else { continue }
+            starts[line] = chapter
+        }
+        return starts
+    }
+
     /// The line playing at `time`: the last one started by then.
     public static func line(at time: Double, in lines: [TranscriptLine]) -> Int? {
         var lo = 0, hi = lines.count
@@ -242,10 +253,13 @@ public enum MeetingTranscript {
 
     /// `transcript.md`: the title, a line saying when, how long and in
     /// which language (`about`), then each line under its speaker's name
-    /// and its time.
-    public static func markdown(title: String, about: String, lines: [TranscriptLine], names: [String: String] = [:]) -> String {
+    /// and its time, a chapter's heading before the line it starts on.
+    public static func markdown(title: String, about: String, lines: [TranscriptLine], names: [String: String] = [:],
+                                chapters: [MeetingRecord.Chapter] = []) -> String {
         var text = "# \(title)\n\n\(about)\n"
-        for line in lines {
+        let starts = chapterLines(chapters, in: lines)
+        for (index, line) in lines.enumerated() {
+            if let chapter = starts[index] { text += "\n## \(chapter.title)\n" }
             let name = names[line.speaker.rawValue] ?? line.speaker.title
             text += "\n**\(name)** · \(clock(line.start))\n\(line.text)\n"
         }
@@ -254,7 +268,8 @@ public enum MeetingTranscript {
 
     /// "0:04", "12:04", "1:02:03".
     public static func clock(_ seconds: Double) -> String {
-        let whole = max(0, Int(seconds.rounded(.down)))
+        // Never a crash on a time no recording has (a link's).
+        let whole = seconds.isFinite ? Int(min(max(seconds, 0), 1e9).rounded(.down)) : 0
         return whole >= 3600 ? String(format: "%d:%02d:%02d", whole / 3600, whole / 60 % 60, whole % 60)
             : String(format: "%d:%02d", whole / 60, whole % 60)
     }

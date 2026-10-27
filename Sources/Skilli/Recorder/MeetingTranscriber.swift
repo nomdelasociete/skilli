@@ -234,9 +234,10 @@ enum MeetingTranscriber {
         }
     }
 
-    /// `transcript.md`, with the line saying when, how long, which language.
+    /// `transcript.md`, with the line saying when, how long, which language,
+    /// and the chapters' headings.
     static func markdown(_ record: MeetingRecord, lines: [TranscriptLine]) -> String {
-        MeetingTranscript.markdown(title: record.title, about: about(record), lines: lines, names: record.speakers)
+        MeetingTranscript.markdown(title: record.title, about: about(record), lines: lines, names: record.speakers, chapters: record.chapters)
     }
 
     /// "Wednesday 22 October 2026, 14:00 · 32 min · English · with Paul,

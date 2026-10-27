@@ -113,7 +113,7 @@ Mac mini, driven from here:
 |---|---|---|
 | This Mac, any time | Unit tests, builds | `./script/build_and_run.sh test` |
 | This Mac, any time (no keys, no windows; restarts skil.li ~2 s) | Clipboard store, search, OCR; setup drawn off screen; live decisions (Ask, emoji, clipboard and files by meaning, nothing written) | `./script/build_and_run.sh selftest clipboard` / `selftest setup` / `selftest decide` |
-| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote pictures` (the recorder's webcam and screen: a stand-in camera, a slides window, a scratch Chrome, ~3 min), `remote voices` (the recorder's phase 4: the played-back calls' voices told apart, an import, a line edited and undone, speakers renamed, Transcribe Again, ~10 min), `remote whisper` (Better transcription: its download from a stand-in server, whisper on the played-back calls, the echo drop with its times, ~25 min), `remote` (all) |
+| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote pictures` (the recorder's webcam and screen: a stand-in camera, a slides window, a scratch Chrome, ~3 min), `remote voices` (the recorder's phase 4: the played-back calls' voices told apart, an import, a line edited and undone, speakers renamed, Transcribe Again, ~10 min), `remote whisper` (Better transcription: its download from a stand-in server, whisper on the played-back calls, the echo drop with its times, ~25 min), `remote followups` (the recorder's phase 5 in a recording's window: ⌘K, the recap mail, the summary, chapters, action items to a scratch Reminders list, with the Mac's own AI provider, ~5 min), `remote` (all) |
 
 Nothing else that opens skil.li runs on the developer's Mac: `selftest` refuses other
 scopes and `benchmark` refuses outright unless `SKILLI_LOCAL_UI=1` (a Mac
@@ -340,10 +340,11 @@ SkilliCore (framework + SwiftPM library, no AppKit)
 | `Sources/Skilli/Support/Benchmark.swift` | `--benchmark` report |
 | `Sources/Skilli/Support/SelfTest.swift` | `--selftest` end-to-end driver |
 | `Sources/Skilli/App/UndoableDeletes.swift` | Every delete of the user's data: at once, Undo ⌘Z for 10 s in the card (`offerUndo`) |
-| `Sources/Skilli/Recorder/*` | The meeting recorder: `MeetingRecorder` (the two tracks, pause, stop, sources on or off), `MacSoundTap` + `MicrophoneTrack` + `TrackWriter` (sources and files), `MeetingTranscriber`, `RecordCard`, `RecorderIndicator` (menu bar), `RecordingWindow`, `RecorderCenter` (what the rest of the app calls; the moment, the call's end), `RecordingLibrary` + `RecordingIndex` (the list, the words said and the text read on screen); phase 3: `RecorderPictures` (the webcam and the screen together), `WebcamTrack`, `ScreenTrack` + `ScreenWindows`, `PictureTrackWriter`, `SlideReader`, `MeetingTabSelect`; phase 4: `TranscriberHelper` (runs `skil.li Transcriber`), `RecordingImport`, `TranscribeAgainPanel` |
+| `Sources/Skilli/Recorder/*` | The meeting recorder: `MeetingRecorder` (the two tracks, pause, stop, sources on or off), `MacSoundTap` + `MicrophoneTrack` + `TrackWriter` (sources and files), `MeetingTranscriber`, `RecordCard`, `RecorderIndicator` (menu bar), `RecordingWindow`, `RecorderCenter` (what the rest of the app calls; the moment, the call's end), `RecordingLibrary` + `RecordingIndex` (the list, the words said and the text read on screen); phase 3: `RecorderPictures` (the webcam and the screen together), `WebcamTrack`, `ScreenTrack` + `ScreenWindows`, `PictureTrackWriter`, `SlideReader`, `MeetingTabSelect`; phase 4: `TranscriberHelper` (runs `skil.li Transcriber`), `RecordingImport`, `TranscribeAgainPanel`; phase 5: `RecordingFollowUps` (the summary, chapters, action items, the recap mail) |
 | `Sources/Transcriber/*` | `skil.li Transcriber`, the recorder's helper beside the app's executable (`Contents/MacOS`): the models' work for a transcript (SpeakerKit's voices, whisper's words), started for it, gone after; never linked by the app |
 | `Sources/Skilli/Recorder/BetterTranscription.swift`, `Sources/SkilliCore/WhisperTranscript.swift`, `Packages/WhisperCpp` | Better transcription: its download (pinned files, SHA-256, resume, Remove with ⌘Z), whisper's words, its two failures taken out, its prompt and languages; whisper.cpp's XCFramework |
 | `Sources/SkilliCore/MeetingVoices.swift`, `MeetingTranscriptEdits.swift` | The recorder's voices (words to voices, names, renames that merge) and a transcript's edits with their undo (`TranscriptDraft`, `TranscriptHistory`) |
+| `Sources/SkilliCore/MeetingFollowUp.swift` | The recorder's phase 5: what the user's writer is sent about a recording, and its answers read (chapters on their lines, action items with whose and when) |
 | `Sources/SkilliCore/MeetingMoment.swift` | The recorder's moment: the five cases, a place, call apps, `CallEndWatch`, `RecordingRetention`, `RecordingSearch` |
 | `Sources/SkilliCore/*` | Pure logic, unit-tested |
 
@@ -2435,6 +2436,29 @@ re-investigating.
   sixteen calls and the echo tracks, written under `voices/app-w` for the
   kit's scorers. The self-test keeps its models in its own scratch
   (`BetterTranscription.testFolder`).
+- The recorder's phase 5 in a recording's window
+  (docs/meeting-recorder-views.md, "Phase 5"): ⌘K opens the launcher's
+  list (`ActionPanelView`) over the window, its keys routed as the
+  launcher's (`RecordingWindowController.actionPanelKey`); the hint bar
+  says "Actions ⌘K". Summary, Chapters (3 minutes or more), Action Items
+  to Reminders and Recap Mail go to Ask's writer (`AIStore.writer(for:
+  nil)`, each title naming its provider) through `RecordingFollowUps`,
+  one at a time per recording, the window's work line saying it, a
+  failure said in the card. What is sent is `MeetingFollowUp.transcript`
+  (the lines with names and times, the user's marked, the text read on
+  screen, the title and date: never the sound, pictures or addresses);
+  Settings → Privacy lists it (`PrivacyMap.meetings`) and the Recorder
+  pane says it. Answers land on what is on disk at that moment (a
+  window's edits meanwhile kept): `summary.md` (the one before to the
+  Trash, `UndoableDeletes.summaryReplaced`), `meeting.json`'s `chapters`
+  and `transcript.md`'s `##` headings (`MeetingTranscript.chapterLines`;
+  Remove Chapters with its undo), reminders added at once with their
+  undo card (`remindersAdded`), each linking back
+  (`skilli://record/open?recording=…&at=…`). The recap is a `mailto:`
+  to `meeting.json`'s `addresses` (kept from the event as it records;
+  older recordings read the event again), My Card's left out. `remote
+  followups` (Mac mini): a stand-in meeting, the keys, each action on the
+  Mac's own provider, a scratch Reminders list.
 - Reminders (`ReminderItem`, `ReminderRequest`, `RemindersRequest`,
   `Reminders` in SkilliCore, `ReminderBook`; Permission `.reminders`):
   every list the Reminders app has, through EventKit, asked for at first

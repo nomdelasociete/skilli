@@ -30,6 +30,8 @@ final class MeetingRecorder {
         var kind: MeetingMoment.Kind = .nothing
         var event: MeetingRecord.EventLink?
         var attendees: [String] = []
+        /// Their mail addresses, from the event: the recap mail's (phase 5).
+        var addresses: [String] = []
         /// The call's app, by name.
         var app: String?
         var place: String?
@@ -292,6 +294,7 @@ final class MeetingRecorder {
         record.kind = starting.kind
         record.event = starting.event
         record.attendees = starting.attendees
+        record.addresses = starting.addresses.isEmpty ? nil : starting.addresses
         record.app = starting.app
         record.place = starting.place
         try recordings.write(record, to: folder)

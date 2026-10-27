@@ -12,6 +12,7 @@ import Foundation
 ///     skilli://record?title=Weekly%20sync     the Record card, that name in it (nothing recorded before ↩)
 ///     skilli://record/stop                    the recording on now: pause, resume or stop (asked first)
 ///     skilli://record/import?file=/Users/me/Call.m4a  Import Recording's panel, on that file (imported on ↩)
+///     skilli://record/open?recording=2026-10-22%2014.00%20Weekly%20sync&at=724  a recording's window, playing from there
 ///
 /// `skilli://commands/import` stays `CommandLink`'s.
 public enum SkilliLink: Equatable, Sendable {
@@ -38,6 +39,10 @@ public enum SkilliLink: Equatable, Sendable {
     /// 4), on the file named when one is: nothing is imported before the
     /// user's ↩ there.
     case importRecording(file: String?)
+    /// A recording's window (phase 5: a reminder's link back to its
+    /// meeting), by its folder's name, else its title; `at` seconds in, the
+    /// line said then.
+    case openRecording(String, at: Double?)
 
     public enum RecordingControl: String, CaseIterable, Sendable {
         case pause, resume, stop
@@ -57,6 +62,9 @@ public enum SkilliLink: Equatable, Sendable {
     public static let longestGoal = 300
 
     public static let scheme = CommandLink.scheme
+
+    /// A recording link's `at` is at most this (seconds: a week).
+    public static let longestRecording = 7.0 * 24 * 3600
 
     public var url: URL {
         var components = URLComponents()
@@ -91,6 +99,11 @@ public enum SkilliLink: Equatable, Sendable {
             components.host = "record"
             components.percentEncodedPath = "/import"
             if let file, !file.isEmpty { items.append(URLQueryItem(name: "file", value: file)) }
+        case .openRecording(let recording, let at):
+            components.host = "record"
+            components.percentEncodedPath = "/open"
+            items.append(URLQueryItem(name: "recording", value: recording))
+            if let at, at.isFinite { items.append(URLQueryItem(name: "at", value: String(format: "%g", min(max(0, at), Self.longestRecording)))) }
         }
         if !items.isEmpty {
             // `+`, `&`, `=` and `#` encoded too: pages read `+` as a space.
@@ -121,6 +134,13 @@ public enum SkilliLink: Equatable, Sendable {
             if target.lowercased() == "import" {
                 let file = items.first { $0.name == "file" }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 return .importRecording(file: file.isEmpty ? nil : file)
+            }
+            if target.lowercased() == "open" {
+                let recording = items.first { $0.name == "recording" }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard !recording.isEmpty else { return nil }
+                // A time no recording reaches is no time.
+                let at = items.first { $0.name == "at" }?.value.flatMap(Double.init).flatMap { $0.isFinite && $0 >= 0 && $0 <= Self.longestRecording ? $0 : nil }
+                return .openRecording(recording, at: at)
             }
             return RecordingControl(rawValue: target.lowercased()).map(Self.recording)
         }

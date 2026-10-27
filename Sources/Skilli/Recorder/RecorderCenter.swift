@@ -41,6 +41,14 @@ final class RecorderCenter {
     var contactNames: () async -> [String] = { [] }
     /// A pane of Settings (Better transcription's line in a window).
     var openSettings: (SettingsPane) -> Void = { _ in }
+    /// What the user does with a recording once written out (phase 5): the
+    /// summary, chapters, action items, the recap mail.
+    private(set) lazy var followUps: RecordingFollowUps = {
+        let followUps = RecordingFollowUps(recordings: recordings, deletes: deletes)
+        followUps.window = { [weak self] folder in self?.window(for: folder) }
+        followUps.notify = { [weak self] line in self?.notify(line) }
+        return followUps
+    }()
 
     /// Why a recording cannot start now, said: nil when it can.
     private var notNow: String? {
@@ -541,7 +549,8 @@ final class RecorderCenter {
         let named = title.isEmpty && reading.kind == .callWithoutEvent ? reading.app.map { MeetingMoment.callTitle($0, at: .now) } ?? "" : title
         return MeetingRecorder.Start(title: named, language: language, sources: sources, kind: reading.kind,
                                      event: reading.event.map { MeetingRecord.EventLink(id: $0.id, start: $0.start, end: $0.end) },
-                                     attendees: reading.attendees, app: reading.kind == .inPerson ? nil : reading.app?.name, place: reading.place)
+                                     attendees: reading.attendees, addresses: reading.event?.attendees.compactMap(\.email) ?? [],
+                                     app: reading.kind == .inPerson ? nil : reading.app?.name, place: reading.place)
     }
 
     /// A recording started from `reading`: its call watched for its end.
@@ -753,17 +762,44 @@ final class RecorderCenter {
         open(folder)
     }
 
-    /// A recording's window, opened (or brought forward and shown afresh).
-    func open(_ folder: URL) {
+    /// A recording's window, opened (or brought forward and shown afresh);
+    /// `at` seconds in, playing from the line said then.
+    func open(_ folder: URL, at: Double? = nil) {
         guard let record = recordings.read(folder) else { return }
         let transcript = recordings.transcript(folder)
-        if let window = windows[Self.key(folder)] {
+        let window: RecordingWindowController
+        if let open = windows[Self.key(folder)] {
+            window = open
             window.show(record, transcript: transcript)
-            window.present()
-            return
+        } else {
+            window = makeWindow(folder, record: record, transcript: transcript)
         }
-        let window = makeWindow(folder, record: record, transcript: transcript)
         window.present()
+        if let at { window.play(from: at) }
+    }
+
+    /// `skilli://record/open` (a reminder's link back to its meeting): by its
+    /// folder's name, else the newest of that title; false when none is.
+    func open(named name: String, at: Double?) -> Bool {
+        guard let folder = recording(named: name) else { return false }
+        open(folder, at: at)
+        return true
+    }
+
+    /// A recording by its folder's name, else the newest whose title is
+    /// `name` (case and accents aside).
+    func recording(named name: String) -> URL? {
+        let root = recordings.root
+        // A folder's name never holds a slash nor starts with a dot: a link
+        // never reaches outside the recordings.
+        if !name.contains("/"), !name.hasPrefix(".") {
+            let exact = root.appendingPathComponent(name, isDirectory: true)
+            if recordings.read(exact) != nil { return exact }
+        }
+        let folders = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        return folders.compactMap { folder in recordings.read(folder).map { (folder, $0) } }
+            .filter { MeetingVoices.sameName($0.1.title, name) }
+            .max { $0.1.started < $1.1.started }?.0
     }
 
     /// A recording's window, its actions wired: delete, the folder, a
@@ -795,6 +831,14 @@ final class RecorderCenter {
         }
         window.languages = { engine in await MeetingTranscriber.languages(for: engine) }
         window.onOpenSettings = { [weak self] in self?.openSettings(.recorder) }
+        // Phase 5: ⌘K's AI actions, done here; the window told what to show.
+        window.onFollowUp = { [weak self] folder, action in
+            guard let self else { return }
+            Task { await self.followUps.run(action, on: folder) }
+        }
+        window.onRemoveChapters = { [weak self] folder, _ in self?.followUps.removeChapters(in: folder) }
+        window.provider = { [weak self] in self?.followUps.provider ?? WritingProvider.claude.title }
+        if let work = followUps.work(for: folder) { window.showWork(work) }
         window.betterHint = { [weak self] record in
             // Taught once (docs/meeting-recorder-views.md, phase 4): the first
             // window on a transcript macOS's engine made, Better

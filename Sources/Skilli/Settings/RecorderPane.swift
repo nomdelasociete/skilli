@@ -83,6 +83,12 @@ struct RecorderPane: View {
                                            remove: { removeBetterTranscription(better) })
             }
 
+            if let line = PrivacyMap.line(for: SettingsPane.recorder.rawValue, .current(preferences, context)) {
+                Section {
+                    LeavesMacRow(line: line, open: open)
+                }
+            }
+
             Section {
                 LabeledContent("Keep recordings in") {
                     HStack {

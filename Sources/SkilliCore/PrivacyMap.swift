@@ -92,6 +92,12 @@ public enum PrivacyMap {
         sends: "Your request, the field's name and what it holds, and what was typed before.",
         when: "When doing it here needs words your request does not quote.",
         pane: "ask")
+    // RecordingFollowUps (a recording's ⌘K), with Ask's writer.
+    public static let meetings = Flow(
+        "meetings", "Recorded meetings",
+        sends: "A recording's transcript (its words, who said them and when), the text read on its screen, its title and date; never its sound or pictures.",
+        when: "When you pick its summary, chapters, action items or recap mail in its window's ⌘K.",
+        pane: "recorder")
     // ComputerControl.plan → AIActionController.planSteps.
     public static let plannedSteps = Flow(
         "plannedSteps", "Thinking it through",
@@ -291,7 +297,7 @@ public enum PrivacyMap {
     static let deciding = [route, doItHere, rules, quit, files, history, clipboard, snippets, emoji, findControl, autoQuit]
 
     /// Every flow, once.
-    public static let all: [Flow] = [ask, commands, followUps, mail, fieldWords, plannedSteps, agent, scheduled, continueIn, rightsHelp]
+    public static let all: [Flow] = [ask, commands, followUps, mail, fieldWords, plannedSteps, meetings, agent, scheduled, continueIn, rightsHelp]
         + deciding + [fallback, imagesCopied, imagesFolder, linkPreviews, github, githubActions, serverSync, relay, gifs, betterTranscription, servers,
                       webhooks, agents, places, speedTest]
 
@@ -484,7 +490,7 @@ public enum PrivacyMap {
         if writesAsk { rows.append(Row(ask)) }
         if !written.isEmpty { rows.append(Row(commands, note: list(written))) }
         if writesAsk || !written.isEmpty { rows.append(Row(followUps)) }
-        if writesAsk { rows += [Row(mail), Row(fieldWords), Row(plannedSteps)] }
+        if writesAsk { rows += [Row(mail), Row(fieldWords), Row(plannedSteps), Row(meetings)] }
         // Without Claude Code, a scheduled ask is written like Ask's answers.
         if writesAsk, !setup.claudeCode, !setup.scheduledAsks.isEmpty { rows.append(Row(scheduled, note: list(setup.scheduledAsks))) }
         return rows
@@ -591,6 +597,7 @@ public enum PrivacyMap {
         case "windows": windowsLine(setup)
         case "launcher": launcherLine(setup)
         case "skillies": skilliesLine(setup)
+        case "recorder": recorderLine(setup)
         case "github": githubLine(setup)
         case "backup": backupLine(setup)
         case "yourDetails": detailsLine(setup)
@@ -810,6 +817,18 @@ public enum PrivacyMap {
         }
         return PaneLine(text: "Skillies run on this Mac and send only what their own code sends. To pick one when you ask, Ask sends their names and what they do to \(spoken(to)).",
                         more: "privacy")
+    }
+
+    /// Recorder: recorded, transcribed and searched here; a recording's
+    /// transcript goes to Ask's writer only from its window's ⌘K; Better
+    /// transcription's download only on its button.
+    static func recorderLine(_ setup: Setup) -> PaneLine {
+        let local = "Recording, transcribing and searching happen on this Mac; Better transcription's download only when you click it."
+        guard let writer = setup.askWriter.map(Destination.init(writer:)) else {
+            return PaneLine(text: "Nothing else leaves this Mac. " + local, more: "aiAccounts")
+        }
+        return PaneLine(text: "When you pick a summary, chapters, action items or a recap in a recording's ⌘K, its transcript goes to \(spoken(writer)). "
+                            + local, more: "privacy")
     }
 
     /// Windows: windows move and layouts stay on this Mac (a link a layout

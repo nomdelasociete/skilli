@@ -534,6 +534,14 @@ Your meetings recorded on this Mac, both sides, then written out.
   downloaded, the default engine (Settings → Recorder → Engine); Remove
   puts it in the Trash (⌘Z brings it back). The first recording's window
   made with macOS's engine says it once.
+- **After the meeting, ⌘K** in its window: **Summary by Claude** (above
+  the lines, kept in `summary.md`), **Chapters by Claude** (3 minutes or
+  more: headings in the lines, marks on the waveform), **Action Items to
+  Reminders** (each at once, someone else's with their name, ⌘Z takes
+  them back; each links back to the moment it was said), **Recap Mail to
+  the Attendees** (a new message in your mail app: you send it). Each
+  goes to the SI you write with (Settings → SI Accounts), only when you
+  pick it: the transcript's words, never the sound or the pictures.
 - **Import Recording** (`import`): a sound or video file (a voice memo,
   a call app's own recording) made a recording, transcribed on this Mac,
   voices told apart; or drop the file on a recording's window. The file

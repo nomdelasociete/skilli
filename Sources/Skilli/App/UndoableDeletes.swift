@@ -88,6 +88,39 @@ final class UndoableDeletes {
         }
     }
 
+    /// Summary Again in a recording's window (phase 5): the summary before
+    /// went to the Trash as the new one was written; ⌘Z puts it back.
+    func summaryReplaced(_ title: String, trashed: URL, undo: @escaping @MainActor () throws -> Void) {
+        offer("Summary Replaced", UndoDelete.details(title, ": the summary before is in the Trash.")) {
+            guard FileManager.default.fileExists(atPath: trashed.path) else {
+                throw Failure(message: "The summary before is no longer in the Trash.")
+            }
+            try undo()
+        }
+    }
+
+    /// Remove Chapters in a recording's window (phase 5): gone at once; ⌘Z
+    /// puts them back.
+    func chaptersRemoved(_ title: String, count: Int, undo: @escaping @MainActor () throws -> Void) {
+        offer("Chapters Removed", UndoDelete.details(title, ": \(count) chapter\(count == 1 ? "" : "s").")) {
+            try undo()
+        }
+    }
+
+    /// Action Items to Reminders (phase 5): added at once, out of sight, so
+    /// the undo card says what was added; ⌘Z takes them all back.
+    func remindersAdded(_ items: [ReminderItem], in book: ReminderBook) {
+        guard !items.isEmpty else { return }
+        let titles = items.map(\.title)
+        let shown = titles.prefix(3).joined(separator: ", ") + (titles.count > 3 ? " and \(titles.count - 3) more" : "")
+        offer(items.count == 1 ? "Reminder Added" : "\(items.count) Reminders Added", UndoDelete.details(shown, ".")) {
+            let left = items.filter { (try? book.delete(id: $0.id)) == nil }
+            guard left.isEmpty else {
+                throw Failure(message: "\(left.count) of the \(items.count) reminders could not be taken back: delete them in Reminders (\(left.map(\.title).prefix(3).joined(separator: ", "))).")
+            }
+        }
+    }
+
     /// Settings → Recorder → Remove: Better transcription's files to the
     /// Trash at once (1.6 GB, downloaded again otherwise); ⌘Z moves them
     /// back.
