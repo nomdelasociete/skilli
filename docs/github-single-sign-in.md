@@ -178,8 +178,11 @@ the chain skips step 3.
 2. `RelayDeviceSession.enroll` takes `inbox` and `userCode`, appends them to
    the verification URL, and waits for the native token (up to the device
    code's expiry) before the id check and the save.
-3. Settings → GitHub: one sign-in section (button, server sync checkbox);
-   Live updates and Server sync below stay for managing and revoking.
+3. Settings → GitHub: signed out, the server sync checkbox sits beside
+   Sign In with GitHub…; signed in but not paired (the account row then
+   shows the account, no button), the same checkbox sits under Live
+   updates → Authorize this Mac…, until this Mac is paired. Live updates
+   and Server sync below stay for managing and revoking.
 4. Tests (`RelayDeviceSessionTests`): the requests sent (`/devices`, the URL
    opened with its parameters, `/devices/token`, GitHub `/user`,
    `/computers/identity`), pairing saved only after the native token
