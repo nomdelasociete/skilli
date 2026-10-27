@@ -99,6 +99,8 @@ usually put them*. Then, when an app opens a window (an app you launch,
 or ⌘N, a document opened in one already open), the window goes to its
 usual place, only when all of this is true:
 
+- it is an ordinary window (not a panel or a dialog), not minimized, not
+  full screen, of an app not in Never place;
 - skil.li is sure: you put that window there at least 3 times with
   these very displays, that place holds at least 70 % of the weight,
   and your last 3 placements of it were all there (moved elsewhere
