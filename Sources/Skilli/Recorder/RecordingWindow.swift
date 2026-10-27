@@ -434,7 +434,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private func playAll(from time: CMTime) {
         guard let player else { return }
         // A picture that cannot play is left out: the sound plays without it.
-        pictures.removeAll(where: Self.failed)
+        removeFailedPictures()
         guard !Self.failed(player) else { return cancelPendingPlay() }
         let all = [player] + pictures
         guard all.allSatisfy(Self.ready) else {
@@ -466,10 +466,18 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// left out).
     private func playWhenReady() {
         guard let time = pendingPlay, let player else { return }
-        pictures.removeAll(where: Self.failed)
+        removeFailedPictures()
         guard !Self.failed(player) else { return cancelPendingPlay() }
         guard ([player] + pictures).allSatisfy(Self.ready) else { return }
         playAll(from: time)
+    }
+
+    /// A picture that cannot play goes, its player and what showed it.
+    private func removeFailedPictures() {
+        let failed = pictures.filter(Self.failed)
+        guard !failed.isEmpty else { return }
+        pictures.removeAll(where: Self.failed)
+        view.removePictures(failed)
     }
 
     /// Ready to be started at a host time: the player and its item.
@@ -1511,6 +1519,12 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         needsLayout = true
     }
 
+    /// Pictures that cannot play: no longer shown.
+    func removePictures(_ players: [AVPlayer]) {
+        picturesColumn.remove(players)
+        needsLayout = true
+    }
+
     func setPeaks(me: [Float], them: [Float]) {
         waveform.me = me
         waveform.them = them
@@ -2328,6 +2342,17 @@ private final class PicturesColumn: NSView {
             view.layer?.addSublayer(layer)
             addSubview(view)
             return (view, size)
+        }
+        needsLayout = true
+    }
+
+    /// The pictures of these players taken out.
+    func remove(_ players: [AVPlayer]) {
+        shown.removeAll { picture in
+            guard let layer = picture.view.layer?.sublayers?.first as? AVPlayerLayer, let player = layer.player,
+                  players.contains(where: { $0 === player }) else { return false }
+            picture.view.removeFromSuperview()
+            return true
         }
         needsLayout = true
     }
