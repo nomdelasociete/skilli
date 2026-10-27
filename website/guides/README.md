@@ -7,7 +7,7 @@ where to change it. New here? Start with [Getting started](getting-started.md).
 
 | Guide | What you learn |
 | --- | --- |
-| [Getting started](getting-started.md) | Install, the one permission, the three keys to remember, your SI |
+| [Getting started](getting-started.md) | Install, the one permission, the three things to remember and where your keys are, your SI |
 | [The launcher](launcher.md) | Find and do anything from one field: modes, ⌘K actions, math, quicklinks |
 | [Hyper Key and shortcuts](keys.md) | Caps Lock as ✦, the default keys, a key of your own for anything |
 

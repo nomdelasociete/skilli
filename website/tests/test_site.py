@@ -25,18 +25,14 @@ class LandingContracts(unittest.TestCase):
         self.assertIn('brew install --cask nomdelasociete/tap/skilli', INDEX)
         self.assertNotRegex(INDEX, r'download\.(dmg|zip|pkg)')
 
-    def test_the_docs_are_one_click_away(self):
+    def test_one_entry_for_guides_and_docs(self):
+        # Guides only: the skillies docs are the last part of the guides' menu.
         nav = INDEX[INDEX.index('<nav id="site-nav"'):INDEX.index('</nav>', INDEX.index('<nav id="site-nav"'))]
-        self.assertEqual(nav.count('>Docs<'), 1)
-        self.assertIn('href="skillies/docs/">Docs<', nav)
+        self.assertNotIn('>Docs<', nav)
         self.assertIn('id="own-commands"', INDEX)
-        # Every page's footer, by its own path.
-        for page, href in (('index.html', 'skillies/docs/'), ('manifesto.html', 'skillies/docs/'), ('legal.html', 'skillies/docs/'),
-                           ('skillies/index.template.html', 'docs/'), ('skillies/docs.template.html', './'),
-                           ('guides.template.html', '../skillies/docs/')):
-            html = (ROOT / page).read_text()
-            footer = html[html.index('<nav aria-label="Footer">'):]
-            self.assertIn(f'<a href="{href}">Docs</a>', footer[:footer.index('</nav>')], page)
+        for page in ('index.html', 'manifesto.html', 'legal.html', 'skillies/index.template.html',
+                     'skillies/docs.template.html', 'guides.template.html'):
+            self.assertNotIn('>Docs</a>', (ROOT / page).read_text(), page)
 
     def test_the_guides_are_one_click_away(self):
         nav = INDEX[INDEX.index('<nav id="site-nav"'):INDEX.index('</nav>', INDEX.index('<nav id="site-nav"'))]
