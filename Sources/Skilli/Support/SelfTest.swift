@@ -16853,6 +16853,10 @@ final class SelfTest {
             record(name, false, "no exchange rates in this run", nil)
             return
         }
+        // The calculator and Convert Currencies on for this check, as they were after.
+        let offBefore = context.preferences.catalogOff
+        context.preferences.catalogOff.subtract(["catalog.calculator", "catalog.currency"])
+        defer { context.preferences.catalogOff = offBefore }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
         let today = calendar.dateComponents([.year, .month, .day], from: .now)

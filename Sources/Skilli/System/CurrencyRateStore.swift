@@ -68,7 +68,11 @@ final class CurrencyRateStore {
             Task { @MainActor in
                 guard let self, up != self.online else { return }
                 self.online = up
-                if up { self.refreshIfDue() }
+                // Back online: a read now, even inside a failed read's wait.
+                if up {
+                    self.retryAfter = .distantPast
+                    self.refreshIfDue()
+                }
             }
         }
         network.start(queue: .main)
@@ -81,7 +85,9 @@ final class CurrencyRateStore {
         reading = true
         let etag = rates?.source == .centralBanks ? rates?.etag : nil
         Task {
-            let read = await Self.read(etag: etag)
+            var read = await Self.readFrankfurter(etag: etag)
+            // Turned off meanwhile: no second request.
+            if case .failed = read, isOn() { read = await Self.readECB() }
             reading = false
             switch read {
             case .new(let table):
@@ -95,7 +101,7 @@ final class CurrencyRateStore {
                 save()
             case .failed:
                 // The old table stays; asked again in ten minutes, not on
-                // every show or wake before then.
+                // every show or wake before then (network return still asks).
                 unreachable = rates == nil
                 retryAfter = Date.now.addingTimeInterval(600)
                 if rates == nil, !retryPending {
@@ -143,9 +149,9 @@ final class CurrencyRateStore {
         case failed
     }
 
-    /// Frankfurter first (an unchanged table costs a 304), the ECB's file
-    /// when it does not answer.
-    nonisolated private static func read(etag: String?) async -> Read {
+    /// Frankfurter first (an unchanged table costs a 304); the ECB's file
+    /// when it does not answer (`readECB`).
+    nonisolated private static func readFrankfurter(etag: String?) async -> Read {
         var request = URLRequest(url: frankfurter)
         if let etag { request.setValue(etag, forHTTPHeaderField: "If-None-Match") }
         if let (data, response) = try? await session.data(for: request), let http = response as? HTTPURLResponse {
@@ -157,7 +163,11 @@ final class CurrencyRateStore {
                 return .new(table)
             }
         }
-        Log.trace("Currency: Frankfurter did not answer, reading the ECB's file")
+        Log.trace("Currency: Frankfurter did not answer")
+        return .failed
+    }
+
+    nonisolated private static func readECB() async -> Read {
         if let (data, response) = try? await session.data(from: ecb), (response as? HTTPURLResponse)?.statusCode == 200 {
             let now = Date.now
             // The ECB publishes once a working day, around 16:00 CET.

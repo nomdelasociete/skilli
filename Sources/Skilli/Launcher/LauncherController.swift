@@ -49,6 +49,8 @@ final class LauncherController: NSObject {
     }
     /// The selection as a quicklink's query (`Quicklink.query(fromSelection:)`).
     private var selectionQuery: String?
+    /// Counts the shows: a selection read for an earlier one is dropped.
+    private var selectionShow = 0
     private let emptyState = NSTextField(labelWithString: "No results")
     private let hints = HintBar()
     /// One line in the footer's place: what failed and what to do (rule 6:
@@ -849,7 +851,8 @@ final class LauncherController: NSObject {
         guard let selected = shownSelection, selected.count <= 40, !selected.contains(where: \.isNewline),
               FeatureCatalog.shows(row: "calculation", off: off), !off.contains("catalog.currency"), let context = currency()
         else { return nil }
-        return Calculator.answers(selected, currency: context).first { $0.conversion != nil }
+        // A conversion, or its row while the day's rates load.
+        return Calculator.answers(selected, currency: context).first { $0.conversion != nil || $0.isWaiting }
     }
 
     /// What a quicklink searches: what was typed for it, else the text
@@ -864,12 +867,15 @@ final class LauncherController: NSObject {
     private func showSelectionPreview(from focused: SelectionService.FocusedElement?) {
         selectionLabel.stringValue = ""
         shownSelection = nil
+        selectionShow &+= 1
         guard let focused else { return }
+        let show = selectionShow
         Task { [weak self] in
             let text = focused.isOwn
                 ? SelectionService.selectedText(in: focused)
                 : await Task.detached(priority: .userInitiated) { SelectionService.selectedText(in: focused) }.value
-            guard let self, self.panel.isVisible, let text else { return }
+            // Closed and opened again meanwhile: that selection is not this show's.
+            guard let self, self.panel.isVisible, show == self.selectionShow, let text else { return }
             let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
             self.shownSelection = text
             self.selectionLabel.stringValue = "Selected “\(line.count > 40 ? String(line.prefix(40)) + "…" : line)” · ⇥ asks about it"

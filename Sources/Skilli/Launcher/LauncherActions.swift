@@ -100,7 +100,8 @@ extension LauncherController {
         case .clip, .snippet, .emoji: ("Paste", "doc.on.clipboard")
         case .gif(let gif):
             GIFPaste.style(for: gif, frontApp: gifFrontApp, editors: gifEditors) == .markdown ? ("Paste Markdown", "text.badge.plus") : ("Paste", "doc.on.clipboard")
-        case .calculation: ("Paste Result", "doc.on.clipboard")
+        // The day's rates not here yet: ↩ does nothing, the footer offers nothing.
+        case .calculation(let result): result.isWaiting ? nil : ("Paste Result", "doc.on.clipboard")
         case .browserTab: ("Go to Tab", "macwindow")
         case .contact: ("Show Contact", "person.text.rectangle")
         case .event(let event): event.meeting != nil ? ("Join", "video") : ("Open in Calendar", "calendar")
