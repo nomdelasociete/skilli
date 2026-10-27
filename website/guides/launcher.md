@@ -4,6 +4,8 @@ One field for everything: apps, files, commands, what you copied, your
 calendar, your Mac. Open it from anywhere with ✦Space (Caps Lock held,
 then Space), or the keys you chose in the welcome.
 
+![The launcher with "screen" typed: CleanShot X's capture commands and Move to Next Display](images/launcher-results.png "A few letters find commands, apps and files; ↩ runs the first.")
+
 ## Find anything
 
 Type a few letters. The search forgives typos and learns what you pick:
@@ -24,6 +26,8 @@ The launcher remembers where you drag it (guides pull it to the middles);
 ## ⌘K: everything a row can do
 
 Every row has actions. Press **⌘K** on it to see them, with their keys:
+
+![⌘K on a contact: Show Contact, Message, Call, Email, Copy Name, Copy Phone](images/launcher-actions.png "⌘K on a contact found with @.")
 
 - what the row itself can do (Quit and Force Quit on a running app,
   Annotate on an image, Join on a meeting…);

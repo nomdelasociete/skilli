@@ -13,14 +13,16 @@ skil.li to Applications. Or, with Homebrew:
 brew install --cask nomdelasociete/tap/skilli
 ```
 
-It is signed and notarized by Apple, and it keeps itself up to date
-(or now: **Check for Updates…** in the menu bar's skil.li menu). It is free and open source; there is no account to
-create.
+It is signed and notarized by Apple, and it keeps itself up to date (to
+check now: **Check for Updates…** in the menu bar's skil.li menu). It is
+free and open source; there is no account to create.
 
 ## 2. The welcome
 
 The first launch opens a short welcome. Every step is something you do,
 not something you read, and you can skip any of them.
+
+![The welcome's Hyper Key step, Caps Lock held: A, C and Space light up with what they do](images/welcome.png "Hold Caps Lock: the keys light up with what they do.")
 
 1. **One switch.** Continue opens System Settings at the Accessibility
    list (Device Control and Data Access from macOS 27), with a small guide

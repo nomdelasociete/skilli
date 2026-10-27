@@ -64,6 +64,8 @@ use what needs it.
 **Settings → Privacy → Permissions** shows each one live, with what it
 turns on and its one button.
 
+![Settings → Privacy: each permission, what it turns on, and whether it is on](images/settings-privacy.png)
+
 ## Back up
 
 **Settings → Backup** saves your settings and files (snippets, commands,

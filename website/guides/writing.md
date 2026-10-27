@@ -12,6 +12,8 @@ place with ↩, and ⌘Z takes it back.
 4. **↩** puts it in place of your selection. **⌘C** copies it instead,
    **esc** leaves your text as it was.
 
+![The Fix Spelling & Grammar card: the fixed sentence with each change marked, and Replace ↩, Follow up ⇥, Copy ⌘C, Cancel esc](images/command-card.png "Each change is marked; ↩ puts the text in place.")
+
 Changed your mind after ↩? **⌘Z** in your app brings your text back.
 
 ## The commands it comes with

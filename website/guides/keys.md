@@ -21,6 +21,8 @@ A shortcut is one key (✦A) or a sequence (✦K, then G). After the first
 key of a sequence, a panel shows what comes next, so you never have to
 learn them by heart.
 
+![The panel after ✦K, listing each next key and its command](images/leader-k.png "After ✦K: each next key and what it does.")
+
 The keys skil.li starts with:
 
 | Keys | Does |
@@ -69,3 +71,5 @@ launcher may take ⌘Space from Spotlight (skil.li turns Spotlight's
 ⌘Space off, and back on if the launcher moves to other keys).
 
 Settings → Keys lists every shortcut in one place, whatever it runs.
+
+![Settings → Keys: the Hyper Key mapping and the list of shortcuts](images/settings-keys.png)

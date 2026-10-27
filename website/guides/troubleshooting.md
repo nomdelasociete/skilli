@@ -9,6 +9,8 @@ below.
 it works now, and where to fix it when it does not. Most problems are
 named there, with the button that fixes them.
 
+![Settings → About: the version, then Health, one line per part with its state](images/settings-about.png)
+
 ## Common cases
 
 **The Hyper Key or my shortcuts do nothing.**

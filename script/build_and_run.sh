@@ -189,6 +189,8 @@ case "$MODE" in
     # here, copies the app, runs it in that Mac's logged-in session (kept
     # awake while it runs), brings back the report and captures into
     # dist/remote. `remote ai`, `remote settings`… like `selftest`.
+    # `remote guides`: the user guides' pictures, into dist/remote/guides
+    # (script/guide-images.sh copies them to website/guides/images).
     # SKILLI_REMOTE names the SSH host (default `skilli-mini`); that Mac
     # needs skil.li in Accessibility and Screen Recording (`remote-app`).
     host="${SKILLI_REMOTE:-skilli-mini}"

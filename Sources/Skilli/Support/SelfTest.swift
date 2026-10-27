@@ -334,6 +334,11 @@ final class SelfTest {
         /// huggingface.co through the app's own download, checked, into the
         /// self-test's scratch (no keys; run once, the network's time).
         case whisperdownload
+        /// The user guides' pictures (website/guides): each surface staged
+        /// with invented people and data, light and dark, over a backdrop
+        /// of its own, into `guides/` (script/guide-images.sh copies them
+        /// to website/guides/images). Stand-ins only, no network (keys).
+        case guides
     }
 
     /// Extra trigger only the self-test registers. No Hyper tool listens to
@@ -748,6 +753,24 @@ final class SelfTest {
         }
         if scope == .whisperdownload {
             return await finish(after: [betterTranscriptionRealDownload])
+        }
+        if scope == .guides {
+            window.center()
+            return await finish(after: [
+                takeFocus,
+                guideWelcome,
+                guideLauncher,
+                guideLeader,
+                guideClipboard,
+                guideSnippets,
+                guideGIFs,
+                guideCommandCard,
+                guideAskAnswer,
+                guideAskApproval,
+                guideMeetingCard,
+                guideRecordingWindow,
+                guideWindowsAndSettings
+            ])
         }
         if scope == .emoji {
             window.center()
@@ -7064,6 +7087,12 @@ final class SelfTest {
     /// Puts `text` in the test window (selected, or the cursor at its end)
     /// and runs `command`.
     private func run(_ command: AICommand, on text: String, selected: Bool = true) async -> Bool {
+        await run(id: command.id, on: text, selected: selected)
+    }
+
+    /// The command `id` (a built-in one: "fix") on `text` in the test
+    /// window, as `run(_:on:)`.
+    private func run(id: String, on text: String, selected: Bool = true) async -> Bool {
         guard await focusTestWindow() else { return false }
         window.makeFirstResponder(textView)
         textView.string = text
@@ -7074,7 +7103,7 @@ final class SelfTest {
             textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
         }
         await pause(60)
-        context.aiActions.run(command.id, triggeredAt: .now)
+        context.aiActions.run(id, triggeredAt: .now)
         return await waitUntil(timeout: 2, { self.context.aiActions.popover.isVisible }) != nil
     }
 
@@ -13652,26 +13681,9 @@ final class SelfTest {
     /// Permissions frozen: macOS is never asked.
     private func drawWelcome() async {
         let name = "Welcome: every step drawn in each state, light and dark, inside its window"
-        let permissions = PermissionCenter()
-        let others = Dictionary(uniqueKeysWithValues: Permission.allCases.map { ($0, PermissionCenter.State.notAsked) })
-        permissions.frozenStates = others.merging([.accessibility: .granted]) { $1 }
-        let setup = SetupWindowController(permissions: permissions, ai: context.ai, preferences: context.preferences)
+        let (setup, freeze, done) = frozenWelcome()
         let model = setup.model
-        model.advancesByItself = false
-        // The self-test's own shortcuts; the launcher's keys put back after.
-        model.shortcuts = context.shortcuts
-        let launcherID = context.shortcuts.launcherEntry?.id ?? "launcher"
-        let launcherKeys = context.shortcuts.launcherEntry?.keys
-        model.keys = { [shortcuts = context.shortcuts] action in
-            shortcuts.config.shortcuts.first { $0.action == action }?.chords.map { $0.map(\.keycaps) } ?? []
-        }
-        setup.show()
-        defer {
-            context.shortcuts.cancelRecording()
-            try? context.shortcuts.setKeys(launcherKeys.flatMap { try? Chord.sequence($0) }, for: launcherID)
-            setup.setAppearance(nil)
-            setup.close()
-        }
+        defer { done() }
         typealias State = (file: String, step: WelcomeModel.Step, accessibility: PermissionCenter.State, apply: @MainActor (WelcomeModel) -> Void)
         let states: [State] = [
             ("welcome", .welcome, .granted, { _ in }),
@@ -13698,7 +13710,7 @@ final class SelfTest {
         ]
         var written: [String] = []
         for state in states {
-            permissions.frozenStates = others.merging([.accessibility: state.accessibility]) { $1 }
+            freeze(state.accessibility)
             model.start(at: state.step)
             model.hyperKey = .own
             state.apply(model)
@@ -13718,6 +13730,36 @@ final class SelfTest {
         let fits = abs(size.height - WelcomeView.size.height) < 1 && abs(size.width - WelcomeView.size.width) < 1
         record(name, written.count == states.count * 2 && fits,
                "\(written.count) captures (\(states.count) states × light, dark); window \(Int(size.width))×\(Int(size.height)) pt", nil)
+    }
+
+    /// A welcome of its own, shown, for pictures: the permissions frozen
+    /// (macOS is never asked; `freeze` sets Accessibility's state), the
+    /// self-test's own shortcuts; `done` puts the launcher's keys back and
+    /// closes it.
+    private func frozenWelcome() -> (setup: SetupWindowController, freeze: (PermissionCenter.State) -> Void, done: () -> Void) {
+        let permissions = PermissionCenter()
+        let others = Dictionary(uniqueKeysWithValues: Permission.allCases.map { ($0, PermissionCenter.State.notAsked) })
+        let freeze = { (accessibility: PermissionCenter.State) in
+            permissions.frozenStates = others.merging([.accessibility: accessibility]) { $1 }
+        }
+        freeze(.granted)
+        let setup = SetupWindowController(permissions: permissions, ai: context.ai, preferences: context.preferences)
+        let model = setup.model
+        model.advancesByItself = false
+        // The self-test's own shortcuts; the launcher's keys put back after.
+        model.shortcuts = context.shortcuts
+        let launcherID = context.shortcuts.launcherEntry?.id ?? "launcher"
+        let launcherKeys = context.shortcuts.launcherEntry?.keys
+        model.keys = { [shortcuts = context.shortcuts] action in
+            shortcuts.config.shortcuts.first { $0.action == action }?.chords.map { $0.map(\.keycaps) } ?? []
+        }
+        setup.show()
+        return (setup, freeze, { [context] in
+            context.shortcuts.cancelRecording()
+            try? context.shortcuts.setKeys(launcherKeys.flatMap { try? Chord.sequence($0) }, for: launcherID)
+            setup.setAppearance(nil)
+            setup.close()
+        })
     }
 
     /// D7 (2026-10-17): the first launch asks only for Accessibility
@@ -24029,10 +24071,19 @@ final class SelfTest {
         (395, .me, "Thanks, see you on the fourth.")
     ]
 
-    /// A recording written as the recorder writes one once transcribed (no
-    /// sound: the lines alone), in the self-test's Recordings folder.
+    /// The stand-in meeting's people: each voice's name and address (none
+    /// for the user).
+    private static let launchReviewPeople: [(voice: Voice, name: String, address: String?)] = [
+        (.me, "Camille", nil), (.them, "Margot Martin", "margot.martin@example.com"), (.them(2), "Paul Arnaud", "paul.arnaud@example.com")
+    ]
+
+    /// A recording written as the recorder writes one once transcribed, in
+    /// the self-test's Recordings folder: the lines, and both tracks of its
+    /// length, silent or, `voiced`, with a sound under each word said on
+    /// that track (the waveform as a call draws it).
     private func seedMeeting(_ center: RecorderCenter, title: String, script: [(at: Double, voice: Voice, words: String)],
-                             seconds: Double? = nil) -> URL? {
+                             seconds: Double? = nil, people: [(voice: Voice, name: String, address: String?)] = SelfTest.launchReviewPeople,
+                             voiced: Bool = false) -> URL? {
         let started = Date.now.addingTimeInterval(-2 * 3600)
         guard let folder = try? center.recordings.makeFolder(title: title, started: started) else { return nil }
         let lines = script.map { line in
@@ -24045,13 +24096,14 @@ final class SelfTest {
         record.engine = TranscriptEngine.macOS.rawValue
         record.seconds = seconds ?? ((lines.last?.end ?? 0) + 5)
         record.stopped = started.addingTimeInterval(record.seconds)
-        record.speakers = ["me": "Camille", "them": "Margot Martin", "them2": "Paul Arnaud"]
-        record.attendees = ["Margot Martin", "Paul Arnaud"]
-        record.addresses = ["margot.martin@example.com", "paul.arnaud@example.com"]
+        record.speakers = Dictionary(uniqueKeysWithValues: people.map { ($0.voice.rawValue, $0.name) })
+        record.attendees = people.filter { $0.voice != .me }.map(\.name)
+        record.addresses = people.compactMap(\.address)
         let file = MeetingTranscript.File(language: "en-US", engine: TranscriptEngine.macOS.rawValue, lines: lines)
-        // Both tracks, silent, its length: the player seeks as in a recording.
+        // Both tracks, its length: the player seeks as in a recording.
         for speaker in Speaker.allCases {
-            guard Self.writeSilence(to: folder.appendingPathComponent(speaker.file), seconds: record.seconds) else { return nil }
+            let spoken = voiced ? lines.filter { $0.speaker.track == speaker }.flatMap { $0.words.map { $0.start...$0.end } } : []
+            guard Self.writeTrack(to: folder.appendingPathComponent(speaker.file), seconds: record.seconds, spoken: spoken) else { return nil }
         }
         do {
             try file.encoded().write(to: folder.appendingPathComponent("transcript.json"))
@@ -24063,15 +24115,37 @@ final class SelfTest {
         return folder
     }
 
-    /// `seconds` of silence as the recorder writes a track (AAC, 48 kHz, mono).
-    nonisolated private static func writeSilence(to url: URL, seconds: Double) -> Bool {
-        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 48000, channels: 1, interleaved: false),
-              let file = try? AVAudioFile(forWriting: url, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 48000,
+    /// `seconds` of a track as the recorder writes one (AAC, 48 kHz, mono):
+    /// silence, but a voice-like murmur over each of the `spoken` times.
+    nonisolated private static func writeTrack(to url: URL, seconds: Double, spoken: [ClosedRange<Double>] = []) -> Bool {
+        let rate = 48000
+        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Double(rate), channels: 1, interleaved: false),
+              let file = try? AVAudioFile(forWriting: url, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: rate,
                                                                      AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64000],
                                           commonFormat: .pcmFormatFloat32, interleaved: false),
-              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 48000) else { return false }
-        buffer.frameLength = 48000
-        for _ in 0..<Int(seconds.rounded(.up)) {
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(rate)),
+              let samples = buffer.floatChannelData?[0] else { return false }
+        buffer.frameLength = AVAudioFrameCount(rate)
+        let words = spoken.sorted { $0.lowerBound < $1.lowerBound }
+        var next = 0
+        var noise: UInt32 = 0x2545_F491
+        for second in 0..<Int(seconds.rounded(.up)) {
+            for index in 0..<rate {
+                let time = Double(second) + Double(index) / Double(rate)
+                while next < words.count, words[next].upperBound < time { next += 1 }
+                guard next < words.count, words[next].contains(time) else {
+                    samples[index] = 0
+                    continue
+                }
+                // A word: noise under a rounded swell, louder for some.
+                let word = words[next]
+                let swell = sin(.pi * (time - word.lowerBound) / max(word.upperBound - word.lowerBound, 0.01))
+                noise ^= noise << 13
+                noise ^= noise >> 17
+                noise ^= noise << 5
+                let loudness = 0.35 + 0.5 * Double((next * 7) % 5) / 4
+                samples[index] = Float(swell * loudness * (Double(noise) / Double(UInt32.max) * 2 - 1))
+            }
             guard (try? file.write(from: buffer)) != nil else { return false }
         }
         return true
@@ -27832,6 +27906,525 @@ final class SelfTest {
     }
 
 
+    // MARK: - Guides: the pictures of website/guides
+
+    /// Backdrop shown around a guide's picture, each side (points).
+    private static let guideMargin: CGFloat = 36
+
+    /// `guides/` beside the report, made when first asked for.
+    private var guidesDirectory: URL? {
+        guard let directory = context.snapshotDirectory?.appendingPathComponent("guides", isDirectory: true) else { return nil }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    /// `windows` as they show, light then dark, over a quiet backdrop of
+    /// their own: `guides/<name>.png` and `<name>-dark.png`, cut
+    /// `guideMargin` around the first window's frame less `inset` (a glass
+    /// panel's room for its shadow). Only skil.li's own windows are drawn
+    /// in it: never another app's, the desktop or the menu bar.
+    /// `appearance`: how the windows take one (Settings: its sheets and
+    /// popovers too), given nil after.
+    private func captureGuide(_ name: String, _ windows: [NSWindow], inset: CGFloat = 0,
+                              appearance: ((NSAppearance?) -> Void)? = nil) async {
+        guard let directory = guidesDirectory, let first = windows.first, first.isVisible else {
+            return guideMissing(name, "nothing to capture: no window shown")
+        }
+        let area = first.frame.insetBy(dx: inset - Self.guideMargin, dy: inset - Self.guideMargin)
+        let saved = windows.map(\.appearance)
+        defer {
+            if let appearance { appearance(nil) } else { zip(windows, saved).forEach { $0.appearance = $1 } }
+        }
+        // Under the lowest of them, over everything else.
+        let bottom = windows.min { $0.level.rawValue < $1.level.rawValue } ?? first
+        var written: [String] = []
+        for (suffix, look) in GlassCheck.appearances {
+            let backdrop = Self.guideBackdrop(covering: area, dark: suffix == "dark")
+            backdrop.level = bottom.level
+            backdrop.order(.below, relativeTo: bottom.windowNumber)
+            if let appearance { appearance(look) } else { windows.forEach { $0.appearance = look } }
+            // The glass takes its tint over the backdrop, over a moment.
+            await pause(900)
+            let png = await WindowCapture.png(of: [backdrop] + windows, cropped: backdrop)
+            backdrop.orderOut(nil)
+            guard let png, let image = NSBitmapImageRep(data: png) else { continue }
+            let file = suffix == "light" ? "\(name).png" : "\(name)-\(suffix).png"
+            try? png.write(to: directory.appendingPathComponent(file))
+            written.append("\(file) \(image.pixelsWide)×\(image.pixelsHigh) px")
+        }
+        record("Guide picture: \(name)", written.count == GlassCheck.appearances.count,
+               written.joined(separator: ", ") + " (\(Int(area.width))×\(Int(area.height)) pt)", nil)
+    }
+
+    private func guideMissing(_ name: String, _ why: String) {
+        record("Guide picture: \(name)", false, why, nil)
+    }
+
+    /// A borderless window that only draws the guides' backdrop: a soft
+    /// gradient for the glass to show something of.
+    private static func guideBackdrop(covering rect: NSRect, dark: Bool) -> NSWindow {
+        let window = NSWindow(contentRect: rect, styleMask: .borderless, backing: .buffered, defer: false)
+        window.isOpaque = true
+        window.hasShadow = false
+        window.ignoresMouseEvents = true
+        window.isReleasedWhenClosed = false
+        window.animationBehavior = .none
+        window.contentView = GuideBackdropView(dark: dark)
+        return window
+    }
+
+    /// The window the frame `frame` belongs to (a panel the app does not
+    /// hand out: the display question, Settings).
+    private static func shownWindow(at frame: NSRect?) -> NSWindow? {
+        guard let frame else { return nil }
+        return NSApp.windows.first { $0.isVisible && $0.frame == frame }
+    }
+
+    /// The welcome on the Hyper Key step, Caps Lock held and felt.
+    private func guideWelcome() async {
+        let (setup, _, done) = frozenWelcome()
+        defer { done() }
+        setup.model.start(at: .hyperKey)
+        setup.model.hyperKey = .own
+        setup.model.freeze(hyperHeld: true, hyperFelt: true)
+        await pause(700)
+        guard let window = setup.shownWindow else { return guideMissing("welcome", "no welcome window") }
+        await captureGuide("welcome", [window], appearance: { setup.setAppearance($0) })
+    }
+
+    /// The launcher's contacts in the guides (never the Mac's own).
+    private static let guidePeople: [ContactRecord] = {
+        var margot = ContactRecord(id: "guide-margot")
+        margot.givenName = "Margot"
+        margot.familyName = "Martin"
+        margot.organization = "Lumière Studio"
+        margot.jobTitle = "Product Designer"
+        margot.phones = [.init("mobile", "+33 6 12 34 56 78"), .init("work", "+33 1 23 45 67 89")]
+        margot.emails = [.init("work", "margot.martin@example.com")]
+        var jeanFrancois = ContactRecord(id: "guide-jean-francois")
+        jeanFrancois.givenName = "Jean-François"
+        jeanFrancois.familyName = "Martaing"
+        jeanFrancois.organization = "Lumière Studio"
+        jeanFrancois.phones = [.init("mobile", "+33 6 98 76 54 32")]
+        jeanFrancois.emails = [.init("work", "jean-francois.martaing@example.com")]
+        return [margot, jeanFrancois]
+    }()
+
+    /// The launcher with "screen" typed, and ⌘K on a contact's row. Not the
+    /// empty launcher: its suggestions are the test Mac's own apps (public pictures).
+    private func guideLauncher() async {
+        let launcher = context.launcher
+        let book = launcher.contacts
+        book?.testRecords = Self.guidePeople
+        defer { book?.testRecords = nil }
+        guard await openLauncher() else { return guideMissing("launcher-results", "the launcher did not open") }
+        // System Settings' panes left out: they are named in the test
+        // Mac's language.
+        let savedOff = context.preferences.catalogOff
+        context.preferences.catalogOff = savedOff.union(["catalog.settingsPanes"])
+        defer { context.preferences.catalogOff = savedOff }
+        for character in "screen" { await pressKey(character) }
+        _ = await waitUntil(timeout: 2) { launcher.query == "screen" && launcher.resultTitles.count > 2 }
+        await pause(400)
+        await captureGuide("launcher-results", [launcher.window], inset: Theme.glassMargin)
+        await closeLauncher()
+        guard await openLauncher() else { return guideMissing("launcher-actions", "the launcher did not open again") }
+        for character in "@margot" { await pressKey(character) }
+        _ = await waitUntil(timeout: 2) { launcher.resultTitles.first == "Margot Martin" }
+        await pressKey("k", flags: .maskCommand)
+        if await waitUntil(timeout: 2, { launcher.isShowingActions }) != nil {
+            await pause(400)
+            await captureGuide("launcher-actions", [launcher.window], inset: Theme.glassMargin)
+        } else {
+            guideMissing("launcher-actions", "⌘K listed nothing (rows \(launcher.resultTitles.prefix(4)))")
+        }
+        await closeLauncher()
+    }
+
+    /// What ✦K and ✦W list: each chain's next keys.
+    private func guideLeader() async {
+        let overlay = context.overlay
+        for (key, name) in [(Character("k"), "leader-k"), (Character("w"), "leader-w")] {
+            var engine = context.shortcuts.makeEngine()
+            guard case .pending(let prefix, let title, let hints) = engine.handle(Chord(.character(key), .hyper), at: .now) else {
+                guideMissing(name, "✦\(key.uppercased()) is not a chain here")
+                continue
+            }
+            overlay.show(prefix: prefix, title: title, hints: hints.map(LeaderOverlay.Row.init))
+            await pause(300)
+            await captureGuide(name, [overlay.window], inset: Theme.glassMargin)
+            overlay.hide()
+        }
+    }
+
+    /// Clipboard History on a few copies of a working day, the newest (a
+    /// color) previewed.
+    private func guideClipboard() async {
+        let launcher = context.launcher
+        let preferences = context.preferences
+        guard let store = context.clipboard.store else { return guideMissing("clipboard", "no clipboard store") }
+        let wasOn = preferences.clipboardHistory
+        preferences.clipboardHistory = true
+        defer { preferences.clipboardHistory = wasOn }
+        let copies: [(text: String, app: String, appName: String)] = [
+            ("#3E8E7E", "com.apple.Safari", "Safari"),
+            ("margot.martin@example.com", "com.apple.mail", "Mail"),
+            ("Final screens by Friday, the release note by Monday, the demo on the 4th.", "com.apple.Notes", "Notes"),
+            ("18 rue des Lilas, 69003 Lyon", "com.apple.Maps", "Maps"),
+            ("+33 6 12 34 56 78", "com.apple.MobileSMS", "Messages"),
+            ("git switch -c onboarding-launch", "com.apple.Terminal", "Terminal"),
+            ("Onboarding launch: November 3, behind a flag for one week", "com.apple.mail", "Mail")
+        ]
+        // Newest first, minutes apart.
+        for (index, copy) in copies.enumerated() {
+            _ = try? store.add(.init(kind: .text, text: copy.text, app: copy.app, appName: copy.appName,
+                                     hash: ClipboardHistory.hash("text", Data(copy.text.utf8))),
+                               at: .now.addingTimeInterval(-Double(index) * 540))
+        }
+        guard await focusTestWindow() else { return }
+        launcher.toggle(into: .clipboard, triggeredAt: .now)
+        let preview = launcher.clipboardPreview
+        defer { launcher.hide() }
+        guard await waitUntil(timeout: 2, { launcher.isInClipboard && preview.shown == .color }) != nil else {
+            return guideMissing("clipboard", "the history did not preview the color (\(preview.shown.rawValue))")
+        }
+        await pause(400)
+        await captureGuide("clipboard", [launcher.window], inset: Theme.glassMargin)
+    }
+
+    /// Search Snippets on four snippets, the first previewed.
+    private func guideSnippets() async {
+        let launcher = context.launcher
+        let saved = [
+            Snippet(id: "", name: "Meeting Follow-up", keyword: ";fup",
+                    text: "Hi {cursor},\n\nThanks for your time today. As agreed, the final screens come by Friday and the release note by Monday.\n\nSee you on the 4th for the demo,\nCamille"),
+            Snippet(id: "", name: "Office Address", keyword: ";addr", text: "Lumière Studio\n18 rue des Lilas\n69003 Lyon, France"),
+            Snippet(id: "", name: "Out of Office", keyword: ";ooo",
+                    text: "Thanks for your message. I'm away until Monday; for anything urgent, write to margot.martin@example.com."),
+            Snippet(id: "", name: "Signature", keyword: ";sig", text: "Camille\nLumière Studio · camille@example.com")
+        ].map { context.snippets.save($0) }
+        defer { for snippet in saved { _ = context.snippets.delete(snippet.id) } }
+        guard await focusTestWindow() else { return }
+        launcher.toggle(into: .snippets, triggeredAt: .now)
+        defer { launcher.hide() }
+        guard await waitUntil(timeout: 2, { launcher.isInSnippets && launcher.resultTitles.count >= saved.count }) != nil else {
+            return guideMissing("snippets", "Search Snippets listed \(launcher.resultTitles)")
+        }
+        await pause(400)
+        await captureGuide("snippets", [launcher.window], inset: Theme.glassMargin)
+    }
+
+    /// Search GIFs' Trending, from the stand-in Klipy on 127.0.0.1 (GIFs
+    /// drawn here; no network) and no GIF of this Mac's.
+    private func guideGIFs() async {
+        let launcher = context.launcher
+        guard let library = launcher.gifLibrary else { return guideMissing("gifs", "no GIF library") }
+        let tiles = Self.guideGIFTiles()
+        guard let first = tiles.first else { return guideMissing("gifs", "the GIFs could not be drawn") }
+        let stand = KlipyStandIn(gif: first.gif, jpeg: first.jpeg, tiles: tiles)
+        guard let server = LoopbackServer(handler: { stand.answer($0) }), let port = await server.port(),
+              let base = URL(string: "http://127.0.0.1:\(port)") else {
+            return guideMissing("gifs", "the stand-in Klipy did not start")
+        }
+        defer { server.stop() }
+        stand.base = base.absoluteString
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/guide-gifs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let saved = (library.base, library.keyOverride, launcher.gifFolder)
+        defer {
+            (library.base, library.keyOverride, launcher.gifFolder) = saved
+            library.forgetRecents()
+        }
+        library.base = base
+        library.keyOverride = KlipyStandIn.key
+        library.forgetRecents()
+        launcher.gifFolder = folder
+        guard await focusTestWindow() else { return }
+        launcher.toggle(into: .gifs, triggeredAt: .now)
+        defer { launcher.hide() }
+        let grid = launcher.gifGridView
+        guard await waitUntil(timeout: 5, {
+            launcher.isInGIFs && launcher.isShowingGIFGrid && !launcher.isSearchingGIFs && grid.stillsLoaded >= 4
+        }) != nil else {
+            return guideMissing("gifs", "the grid did not fill (\(grid.stillsLoaded) stills, rows \(launcher.resultTitles.prefix(4)))")
+        }
+        await pause(900)
+        await captureGuide("gifs", [launcher.window], inset: Theme.glassMargin)
+    }
+
+    /// Trending in the guides' picture: eight GIFs of their own (a color,
+    /// an emoji that sways, a word).
+    private static func guideGIFTiles() -> [(slug: String, title: String, gif: Data, jpeg: Data)] {
+        let tiles: [(slug: String, title: String, emoji: String, color: NSColor)] = [
+            ("party-time", "Party Time", "🎉", NSColor(srgbRed: 0.98, green: 0.62, blue: 0.36, alpha: 1)),
+            ("thumbs-up", "Thumbs Up", "👍", NSColor(srgbRed: 0.33, green: 0.62, blue: 0.93, alpha: 1)),
+            ("coffee-first", "Coffee First", "☕️", NSColor(srgbRed: 0.58, green: 0.42, blue: 0.32, alpha: 1)),
+            ("high-five", "High Five", "🙌", NSColor(srgbRed: 0.95, green: 0.76, blue: 0.28, alpha: 1)),
+            ("mind-blown", "Mind Blown", "🤯", NSColor(srgbRed: 0.62, green: 0.42, blue: 0.88, alpha: 1)),
+            ("thank-you", "Thank You", "🙏", NSColor(srgbRed: 0.24, green: 0.56, blue: 0.49, alpha: 1)),
+            ("on-my-way", "On My Way", "🏃", NSColor(srgbRed: 0.90, green: 0.40, blue: 0.48, alpha: 1)),
+            ("so-proud", "So Proud", "🥹", NSColor(srgbRed: 0.36, green: 0.72, blue: 0.80, alpha: 1))
+        ]
+        return tiles.compactMap { tile in
+            guard let gif = guideGIF(emoji: tile.emoji, word: tile.title, color: tile.color), let jpeg = firstFrameJPEG(gif) else { return nil }
+            return (tile.slug, tile.title, gif, jpeg)
+        }
+    }
+
+    /// Two frames, looping: `emoji` swaying over `color`, `word` under it.
+    private static func guideGIF(emoji: String, word: String, color: NSColor) -> Data? {
+        let data = NSMutableData()
+        let (width, height) = (320, 240)
+        guard let destination = CGImageDestinationCreateWithData(data as CFMutableData, UTType.gif.identifier as CFString, 2, nil) else { return nil }
+        CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
+        for frame in 0..<2 {
+            guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+            let rect = NSRect(x: 0, y: 0, width: width, height: height)
+            NSGradient(colors: [color.highlight(withLevel: 0.25) ?? color, color.shadow(withLevel: 0.2) ?? color])?.draw(in: rect, angle: -60)
+            let glyph = NSAttributedString(string: emoji, attributes: [.font: NSFont.systemFont(ofSize: 104)])
+            let sway: CGFloat = frame == 0 ? -10 : 10
+            glyph.draw(at: NSPoint(x: (CGFloat(width) - glyph.size().width) / 2 + sway, y: 84 + (frame == 0 ? 0 : 8)))
+            let caption = NSAttributedString(string: word.uppercased(), attributes: [
+                .font: NSFont.systemFont(ofSize: 26, weight: .heavy), .foregroundColor: NSColor.white, .kern: 1.5
+            ])
+            caption.draw(at: NSPoint(x: (CGFloat(width) - caption.size().width) / 2, y: 28))
+            NSGraphicsContext.restoreGraphicsState()
+            guard let image = context.makeImage() else { return nil }
+            CGImageDestinationAddImage(destination, image, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.4]] as CFDictionary)
+        }
+        return CGImageDestinationFinalize(destination) ? data as Data : nil
+    }
+
+    /// Fix Spelling & Grammar's card on a hurried sentence, its changes
+    /// marked. The writer is the self-test's (no tokens).
+    private func guideCommandCard() async {
+        let popover = context.aiActions.popover
+        context.ai.testEngine = FakeTextEngine(chunks: ["Hi Margot, I'll send you the final screens on Friday. ",
+                                                        "I hope it's not too late for the release note."], delay: .milliseconds(250))
+        context.ai.testEngineLabel = "Claude · Haiku"
+        defer {
+            context.aiActions.cancel()
+            context.ai.testEngine = nil
+            context.ai.testEngineLabel = "Test"
+        }
+        guard await run(id: "fix", on: "Hi Margot, i'll send you the final screens on friday, i hope its not to late for the release note."),
+              await waitUntil(timeout: 4, { popover.phase == .done }) != nil else {
+            return guideMissing("command-card", "Fix Spelling & Grammar showed no answer (phase \(popover.phase))")
+        }
+        await pause(400)
+        await captureGuide("command-card", [popover.window], inset: Theme.glassMargin)
+    }
+
+    /// Ask (✦A) on a selected message: the question typed, the answer in
+    /// the card. The writer is the self-test's (no tokens).
+    private func guideAskAnswer() async {
+        let popover = context.aiActions.popover
+        context.ai.testEngine = FakeTextEngine(chunks: ["Two things: the final screens by Friday, ",
+                                                        "and a yes or no on inviting the support team to the demo on the 4th."], delay: .milliseconds(250))
+        context.ai.testEngineLabel = "Claude · Haiku"
+        context.aiActions.routeOverride = .answer
+        defer {
+            context.aiActions.cancel()
+            context.ai.testEngine = nil
+            context.ai.testEngineLabel = "Test"
+            context.aiActions.routeOverride = nil
+        }
+        guard await focusTestWindow() else { return }
+        window.makeFirstResponder(textView)
+        textView.string = "Hi Camille, could you send me the final screens by Friday? And should we invite the support team to the demo on the 4th? Margot"
+        textView.selectAll(nil)
+        await pause(60)
+        _ = await hyperChord(["a"], trigger: Self.ownTriggerKeyCode)
+        guard await waitUntil(timeout: 2, { popover.isVisible && popover.phase == .asking }) != nil else {
+            return guideMissing("ask-answer", "Ask asked nothing (phase \(popover.phase))")
+        }
+        for character in "what does margot need from me" { await pressKey(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 4, { popover.phase == .done }) != nil else {
+            return guideMissing("ask-answer", "no answer in the card (phase \(popover.phase))")
+        }
+        await pause(400)
+        await captureGuide("ask-answer", [popover.window], inset: Theme.glassMargin)
+    }
+
+    /// The card asking before Ask acts: Send ↩, esc. Denied after.
+    private func guideAskApproval() async {
+        let popover = context.aiActions.popover
+        guard await focusTestWindow() else { return }
+        let asked = Task {
+            await context.aiActions.approve("Send this email to Margot Martin?",
+                                            detail: "“Final screens” — they come on Friday, the release note on Monday. To margot.martin@example.com",
+                                            caller: "Ask", run: nil, once: true, verb: "Send", fromUser: true)
+        }
+        defer { context.aiActions.cancel() }
+        guard await waitUntil(timeout: 3, { popover.isVisible && popover.phase == .approving }) != nil else {
+            context.aiActions.cancel()
+            _ = await asked.value
+            return guideMissing("ask-approval", "the card did not ask (phase \(popover.phase))")
+        }
+        await pause(400)
+        await captureGuide("ask-approval", [popover.window], inset: Theme.glassMargin)
+        context.aiActions.cancel()
+        _ = await asked.value
+    }
+
+    /// A meeting's alert two minutes before: Join, Record.
+    private func guideMeetingCard() async {
+        let card = context.meetingCard
+        let start = Date.now.addingTimeInterval(2 * 60)
+        let event = AgendaEvent(id: "guide-meeting", title: "Onboarding launch review", start: start, end: start.addingTimeInterval(45 * 60),
+                                calendar: "Work", notes: "https://meet.google.com/abc-defg-hij",
+                                attendees: [.init(name: "Margot Martin", email: "margot.martin@example.com"),
+                                            .init(name: "Jean-François Martaing", email: "jean-francois.martaing@example.com")])
+        let offer = card.recordOffer
+        card.recordOffer = { _ in MeetingCard.RecordOffer(label: "Record", line: nil) }
+        defer {
+            card.recordOffer = offer
+            card.dismiss()
+        }
+        card.show(event, dark: false)
+        guard await waitUntil(timeout: 2, { card.isVisible }) != nil, let window = card.window else {
+            return guideMissing("meeting-card", "the meeting card did not show")
+        }
+        await pause(500)
+        await captureGuide("meeting-card", [window], inset: Theme.glassMargin)
+    }
+
+    /// A call's recording in its window: both waveforms, the transcript's
+    /// lines with their speakers.
+    private func guideRecordingWindow() async {
+        guard let center = context.recorder() else { return guideMissing("recorder-window", "no recorder") }
+        let people: [(voice: Voice, name: String, address: String?)] = [
+            (.me, "Camille", nil), (.them, "Margot Martin", "margot.martin@example.com"),
+            (.them(2), "Jean-François Martaing", "jean-francois.martaing@example.com")
+        ]
+        let script = Self.launchReview.map { ($0.at, $0.voice, $0.words.replacingOccurrences(of: "Paul", with: "Jean-François")) }
+        guard let folder = seedMeeting(center, title: "Onboarding launch review", script: script, people: people, voiced: true) else {
+            return guideMissing("recorder-window", "the call could not be written")
+        }
+        defer { center.openWindows.forEach { $0.close() } }
+        center.open(folder)
+        guard let controller = await waitForWindow(center, folder) else { return guideMissing("recorder-window", "no window for the call") }
+        guard await waitUntil(timeout: 20, { controller.showsWaveform }) != nil else {
+            return guideMissing("recorder-window", "the waveforms were not read")
+        }
+        await pause(400)
+        await captureGuide("recorder-window", [controller.nsWindow])
+    }
+
+    /// Three window layouts of invented windows on this Mac's display
+    /// (named "Studio Display"): one in the editor, the question when the
+    /// display is plugged in; then Settings' panes, the layouts in Windows.
+    private func guideWindowsAndSettings() async {
+        let arranger = context.arranger
+        var layouts: [SavedWindowLayout] = []
+        if var display = Displays.current().first {
+            display.fingerprint.name = "Studio Display"
+            let visible = display.visible
+            func window(_ bundleID: String, _ app: String, _ title: String, _ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> SavedWindowLayout.Window {
+                .init(bundleID: bundleID, appName: app, title: title, index: 0,
+                      frame: CGRect(x: visible.minX + visible.width * x, y: visible.minY + visible.height * y,
+                                    width: visible.width * width, height: visible.height * height), display: 0)
+            }
+            layouts = [
+                SavedWindowLayout(id: Snippet.fileID(for: "Morning"), name: "Morning", windows: [
+                    window("com.apple.mail", "Mail", "Inbox", 0, 0, 0.5, 1),
+                    window("com.apple.iCal", "Calendar", "Calendar", 0.5, 0, 0.5, 0.5),
+                    window("com.apple.MobileSMS", "Messages", "Messages", 0.5, 0.5, 0.5, 0.5)
+                ], displays: [display]),
+                SavedWindowLayout(id: Snippet.fileID(for: "Writing"), name: "Writing", windows: [
+                    window("com.apple.TextEdit", "TextEdit", "Release note.rtf", 0, 0, 2.0 / 3, 1),
+                    window("com.apple.Safari", "Safari", "Onboarding launch plan", 2.0 / 3, 0, 1.0 / 3, 1)
+                ], displays: [display]),
+                SavedWindowLayout(id: Snippet.fileID(for: "Review"), name: "Review", windows: [
+                    window("com.apple.Preview", "Preview", "Final screens.pdf", 0, 0, 0.5, 1),
+                    window("com.apple.Notes", "Notes", "Launch review", 0.5, 0, 0.5, 1)
+                ], displays: [display])
+            ]
+            for layout in layouts { try? arranger.store(layout) }
+
+            let editor = context.layoutEditor
+            editor.edit(layouts[0])
+            if await waitUntil(timeout: 3, { editor.isVisible }) != nil,
+               let shown = NSApp.windows.first(where: { $0.isVisible && $0.title == "Edit “Morning”" }) {
+                await pause(700)
+                await captureGuide("layout-editor", [shown])
+            } else {
+                guideMissing("layout-editor", "the editor did not open")
+            }
+            editor.close()
+
+            let prompt = context.displayPrompt
+            let offers = layouts.map { DisplayPrompt.Offer(layout: $0, certainty: .unit, exact: true) }
+                + [.arrange(placed: 7, of: 8, on: ArrangeOffer.displaySet([display.fingerprint]))]
+            prompt.show(offers, plugged: [display.fingerprint], centeredIn: NSScreen.screens.first?.visibleFrame ?? .zero)
+            if await waitUntil(timeout: 2, { prompt.isVisible }) != nil, let panel = Self.shownWindow(at: prompt.frame) {
+                await pause(500)
+                await captureGuide("display-prompt", [panel], inset: Theme.glassMargin)
+            } else {
+                guideMissing("display-prompt", "the question did not show")
+            }
+            prompt.hide()
+        } else {
+            guideMissing("layout-editor", "no display")
+            guideMissing("display-prompt", "no display")
+        }
+        defer { for layout in layouts { arranger.delete(layout.id) } }
+
+        let skillies = writeGuideSkillies()
+        defer { skillies.forEach { try? FileManager.default.removeItem(at: $0) } }
+        let settings = context.settings
+        let panes: [(pane: SettingsPane, name: String)] = [
+            (.keys, "settings-keys"), (.privacy, "settings-privacy"), (.apps, "settings-apps"),
+            (.skillies, "settings-skillies"), (.about, "settings-about"), (.windows, "settings-windows")
+        ]
+        // Apps: CleanShot X's page, drawn whether it is installed or not.
+        defer { settings.apps.page = nil }
+        for (pane, name) in panes {
+            settings.apps.page = pane == .apps ? .linked(LinkedApp.cleanShot.id) : nil
+            settings.show(pane: pane)
+            guard await waitUntil(timeout: 2, { settings.isVisible }) != nil, let shown = Self.shownWindow(at: settings.frame) else {
+                guideMissing(name, "Settings did not open")
+                continue
+            }
+            await pause(700)
+            settings.scrollPaneToTop()
+            await captureGuide(name, [shown], appearance: { settings.setAppearance($0) })
+        }
+        await closeSettings()
+    }
+
+    /// A few skillies in the self-test's own folder, for Settings →
+    /// Skillies; the files written.
+    private func writeGuideSkillies() -> [URL] {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/skillies", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let skillies: [(file: String, header: [String], body: String)] = [
+            ("week-number.sh", ["title Week Number", "mode compact", "packageName Everyday", "icon 🗓️",
+                                "description Show the current ISO week number."], "date +\"Week %V\""),
+            ("confetti-cannon.sh", ["title Confetti Cannon", "mode silent", "packageName Everyday", "icon 🎉",
+                                    "description Fire confetti from the bottom corners of the screen."], "osascript -e 'display notification \"🎉\"'"),
+            ("export-to-pdf.sh", ["title Export to PDF", "mode silent", "packageName Everyday", "icon 📄",
+                                  "description Export the front document as a PDF next to it."], "true"),
+            ("project-status.sh", ["title Project Status", "mode fullOutput", "packageName Developer", "icon 🌿",
+                                   "description Show the current branch and changed files in a Git project.",
+                                   "argument1 {\"type\":\"text\",\"placeholder\":\"Project folder\"}"], "git -C \"$1\" status --short --branch"),
+            ("file-checksum.sh", ["title File Checksum", "mode compact", "packageName Developer", "icon 🔐",
+                                  "description Copy a file's SHA-256 checksum.",
+                                  "argument1 {\"type\":\"text\",\"placeholder\":\"File\"}"], "shasum -a 256 \"$1\" | cut -d' ' -f1")
+        ]
+        return skillies.compactMap { skillie in
+            let url = folder.appendingPathComponent(skillie.file)
+            let text = (["#!/bin/sh", "# @skilli.schemaVersion 1"] + skillie.header.map { "# @skilli.\($0)" } + [skillie.body]).joined(separator: "\n") + "\n"
+            guard (try? text.write(to: url, atomically: true, encoding: .utf8)) != nil else { return nil }
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+            return url
+        }
+    }
+
     // MARK: - Event helpers
 
     /// Holds the Hyper trigger, presses `keys`, releases the trigger.
@@ -28282,6 +28875,26 @@ private final class LocalHook: @unchecked Sendable {
 }
 
 
+/// The quiet gradient behind a guide's picture (website/guides), light or
+/// dark: something for the glass to show.
+private final class GuideBackdropView: NSView {
+    private let dark: Bool
+
+    init(dark: Bool) {
+        self.dark = dark
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let colors = dark
+            ? [NSColor(srgbRed: 0.11, green: 0.13, blue: 0.19, alpha: 1), NSColor(srgbRed: 0.17, green: 0.12, blue: 0.19, alpha: 1)]
+            : [NSColor(srgbRed: 0.85, green: 0.89, blue: 0.95, alpha: 1), NSColor(srgbRed: 0.95, green: 0.89, blue: 0.92, alpha: 1)]
+        NSGradient(colors: colors)?.draw(in: bounds, angle: -35)
+    }
+}
+
 /// A stand-in Klipy for the self-test: Trending, a search ("cat"),
 /// items by slug, shares and the media, on 127.0.0.1; every request kept.
 private final class KlipyStandIn: @unchecked Sendable {
@@ -28291,10 +28904,14 @@ private final class KlipyStandIn: @unchecked Sendable {
     private var origin = ""
     private let gif: Data
     private let jpeg: Data
+    /// Trending's tiles, each with its own GIF and still (the guides'
+    /// pictures); none: six tiles of `gif`.
+    private let tiles: [(slug: String, title: String, gif: Data, jpeg: Data)]
 
-    init(gif: Data, jpeg: Data) {
+    init(gif: Data, jpeg: Data, tiles: [(slug: String, title: String, gif: Data, jpeg: Data)] = []) {
         self.gif = gif
         self.jpeg = jpeg
+        self.tiles = tiles
     }
 
     /// Where its media are served: "http://127.0.0.1:…".
@@ -28325,14 +28942,16 @@ private final class KlipyStandIn: @unchecked Sendable {
         let path = request.target.split(separator: "?").first.map(String.init) ?? request.target
         if path.hasPrefix("/media/") {
             let still = path.hasSuffix(".jpg")
-            return LoopbackServer.Response(headers: ["Content-Type": still ? "image/jpeg" : "image/gif"], body: still ? jpeg : gif)
+            let tile = tiles.first { path.hasPrefix("/media/\($0.slug)/") }
+            return LoopbackServer.Response(headers: ["Content-Type": still ? "image/jpeg" : "image/gif"],
+                                           body: still ? tile?.jpeg ?? jpeg : tile?.gif ?? gif)
         }
         let prefix = "/api/v1/\(Self.key)/gifs/"
         guard path.hasPrefix(prefix) else { return LoopbackServer.Response(status: 404) }
         let action = String(path.dropFirst(prefix.count))
         let query = Self.query(request.target)
         switch action {
-        case "trending": return page((1...6).map { ("trend-\($0)", "Trending \($0)") })
+        case "trending": return page(tiles.isEmpty ? (1...6).map { ("trend-\($0)", "Trending \($0)") } : tiles.map { ($0.slug, $0.title) })
         case "search": return page(query["q"] == "cat" ? (1...4).map { ("cat-\($0)", "Cat \($0)") } : [])
         case "items":
             let slugs = (query["slugs"] ?? "").split(separator: ",").map(String.init)

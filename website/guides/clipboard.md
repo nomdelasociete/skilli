@@ -8,6 +8,8 @@ and GIFs: typed where you are, in the app you are in.
 **✦C** (or `cb` in the launcher) shows what you copied: text, links,
 images, files, and your screenshots too.
 
+![Clipboard History: a color, an email address, a note, an address, a phone number, a command; the color previewed with its Hex, RGB and HSL](images/clipboard.png "Each copy previewed as what it is.")
+
 - **↩** pastes it in the app you were in. **⇧↩** pastes it as plain text,
   **⌘↩** only copies it.
 - **Search** by the words, without worrying about accents, even words
@@ -48,6 +50,8 @@ expand in password fields.
 of the snippet as it would type now. ↩ types it, ⌘↩ copies it, and **⇥**
 finds one by what you need ("my iban").
 
+![Search Snippets: four snippets beside a preview of the selected one](images/snippets.png)
+
 ## Emoji and symbols
 
 **⌃⌘Space** (it replaces macOS's Emoji & Symbols), or `:` in the
@@ -68,3 +72,5 @@ launcher.
 on your Mac whose name has the words. The selected one plays. **↩**
 pastes it animated (as a Markdown link in a terminal or code editor),
 **⌘↩** copies it, **⇧⌘C** copies its link.
+
+![Search GIFs: a grid of GIFs, the selected one playing](images/gifs.png)

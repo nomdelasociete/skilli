@@ -26,6 +26,8 @@ it.
 A card comes up before a meeting (or the screen dims, as you choose in
 Settings → Calendar → *Alerts*): its title, who is in it, and:
 
+![The card before a meeting: Weekly design review, Google Meet, Margot and Camille, with Join ↩ and Record ⌘R](images/meeting-card.png)
+
 | Key | Does |
 | --- | --- |
 | ↩ | Join the call |
@@ -63,6 +65,8 @@ the text on the slides is read and kept with its time.
 The recording opens in its own window: both sides' waveforms, and the
 transcript line by line, **Me** and **Them** (each voice on its own lines:
 Them 1, Them 2…, until you name them).
+
+![A recording's window: both sides' waveforms above the transcript, each line with its speaker and time](images/recorder-window.png "Click a line to play from there.")
 
 - **Click a line** to play from there.
 - **Name a speaker**: click the name (or ⌥↩), pick from the attendees.

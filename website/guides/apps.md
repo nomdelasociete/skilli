@@ -26,6 +26,8 @@ Selected Image**.
 without a word. Settings → Apps → CleanShot X says so, with a button to
 open it.
 
+![Settings → Apps → CleanShot X: its commands, each with its keys](images/settings-apps.png)
+
 ## Shortcuts
 
 Every shortcut in your Shortcuts library is a launcher row by its name.

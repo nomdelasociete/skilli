@@ -23,6 +23,8 @@ an agent.
 - **In the menu bar**: a skillie can keep its last line there, refreshed
   on its own (a price, a build status, a counter).
 
+![Settings → Skillies: the folder, and each skillie with its shortcut](images/settings-skillies.png)
+
 ## Links: run anything from anywhere
 
 Every Catalog entry has a link. In the launcher, select it, then **⌘K →

@@ -17,6 +17,8 @@ Press **✦A** (or type in the launcher, then **⇥**) and say it:
 - "write to Jean-François that I'll be late" → a new mail to that
   contact.
 
+![An answer in Ask's card](images/ask-answer.png "An answer, written as it comes; ⇥ asks a follow-up.")
+
 It reads what you mean, not a fixed phrase. If something is missing (how
 long, which app, when), the card asks just that; answer it and the rest
 is kept. Unsure between two things, it asks which.
@@ -44,6 +46,8 @@ Speech is turned into text on your Mac.
 What can be taken back happens at once, with ⌘Z right after. What cannot
 (quitting an app with unsaved work, sending, deleting, a menu item that
 closes something) waits for your ↩ in the card.
+
+![Ask's card asking before it acts](images/ask-approval.png "What cannot be taken back waits for ↩.")
 
 - **Do It Here**: "fill this form with my details", "pick the earliest
   delivery slot", on the window in front. skil.li clicks and types for
