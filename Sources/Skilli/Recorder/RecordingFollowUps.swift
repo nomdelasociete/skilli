@@ -351,6 +351,13 @@ final class RecordingFollowUps {
         skillies().filter { $0.forRecordings && !$0.needsArguments }
     }
 
+    /// Whether `skillie` is the one marked (`marked`, a path): by the file
+    /// it is (`/var` and `/private/var` are one folder).
+    nonisolated static func isMarked(_ skillie: ScriptCommand, _ marked: String) -> Bool {
+        !marked.isEmpty && URL(fileURLWithPath: skillie.path).resolvingSymlinksInPath().path
+            == URL(fileURLWithPath: marked).resolvingSymlinksInPath().path
+    }
+
     /// ⌘K on a recording: the skillie run on it, in the card.
     func run(_ skillie: ScriptCommand, on folder: URL) {
         runInCard(skillie, folder) { [weak self] run in self?.note(skillie, run, on: folder, automatic: false) }
@@ -362,9 +369,9 @@ final class RecordingFollowUps {
     /// failure (docs/meeting-recorder-views.md, "Skillies for recordings").
     func transcriptDone(_ folder: URL) {
         let path = marked()
-        guard !path.isEmpty, let skillie = recordingSkillies().first(where: { $0.path == path }),
+        guard !path.isEmpty, let skillie = recordingSkillies().first(where: { Self.isMarked($0, path) }),
               let record = recordings.read(folder), record.state == .done,
-              !(record.skillies ?? []).contains(where: { $0.automatic && $0.path == path }) else { return }
+              !(record.skillies ?? []).contains(where: { $0.automatic && $0.path == skillie.path }) else { return }
         Log.trace("Recorder: “\(skillie.title)” runs after the transcript of “\(record.title)”")
         Task { [weak self] in
             guard let self else { return }

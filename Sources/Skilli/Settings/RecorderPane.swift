@@ -189,15 +189,16 @@ struct RecorderPane: View {
     private var afterTranscript: some View {
         let skillies = context.skillies().filter { $0.forRecordings && !$0.needsArguments }
         let marked = preferences.recorderAfterTranscript
-        let title = skillies.first { $0.path == marked }?.title
+        let title = skillies.first { RecordingFollowUps.isMarked($0, marked) }?.title
         return Section {
             Picker("After each transcript", selection: Binding(get: { marked }, set: { mark($0, among: skillies) })) {
                 Text("None").tag("")
                 if !marked.isEmpty, title == nil {
                     Text("A skillie no longer there").tag(marked)
                 }
+                // The one marked under the path it was saved with.
                 ForEach(skillies, id: \.path) { skillie in
-                    Text(skillie.title).tag(skillie.path)
+                    Text(skillie.title).tag(RecordingFollowUps.isMarked(skillie, marked) ? marked : skillie.path)
                 }
             }
             .disabled(skillies.isEmpty && marked.isEmpty)

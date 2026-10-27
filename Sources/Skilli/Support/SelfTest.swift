@@ -24150,8 +24150,9 @@ final class SelfTest {
         let started = ContinuousClock.now
         let working = await waitUntil(timeout: 5) { controller.shownWork?.hasPrefix("Writing the summary for the recap with") == true } != nil
         let workSaid = controller.shownWork ?? ""
-        let streamed = await waitUntil(timeout: 120) { (controller.shownSummary?.count ?? 0) > 80 } != nil
+        // While it writes: the work line, the summary coming.
         if working { await captureRecordingWindow(controller, as: "recorder-working") }
+        let streamed = await waitUntil(timeout: 120) { (controller.shownSummary?.count ?? 0) > 80 } != nil
         let mailed = await waitUntil(timeout: 180) { !opened.isEmpty } != nil
         let seconds = Double((ContinuousClock.now - started).components.seconds)
         let file = (try? String(contentsOf: controller.folder.appendingPathComponent(Recordings.summary), encoding: .utf8)) ?? ""
@@ -24211,6 +24212,8 @@ final class SelfTest {
         let onLines = !chapters.isEmpty && chapters.allSatisfy { starts.contains($0.start) } && chapters.first?.start == controller.shownLines.first?.start
         let markdown = (try? String(contentsOf: controller.folder.appendingPathComponent("transcript.md"), encoding: .utf8)) ?? ""
         let headings = markdown.components(separatedBy: "\n").filter { $0.hasPrefix("## ") }.count
+        // The lines scrolled to the second chapter's heading, for the capture.
+        _ = controller.screenFrame(ofChapter: min(1, chapters.count - 1))
         await captureRecordingWindow(controller, as: "recorder-chapters")
         var clicked = false
         if chapters.count > 1, let frame = controller.screenFrame(ofChapter: 1) {
@@ -24278,7 +24281,7 @@ final class SelfTest {
         _ = await waitUntil(timeout: 2) { controller.isShowingActions }
         for character in "ask" { _ = await typeCharacter(character) }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
-        let prompting = await waitUntil(timeout: 2) { controller.isShowingActions && controller.shownActions.isEmpty } != nil
+        let prompting = await waitUntil(timeout: 2) { controller.isAskingInActions } != nil
         for character in "Who sends the final screens, and when?" { _ = await typeCharacter(character) }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         let popover = context.aiActions.popover

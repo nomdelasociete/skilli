@@ -166,6 +166,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var shownChapterMarks: Int { view.chapterMarks }
     var shownSummary: String? { view.summaryShown }
     var isShowingActions: Bool { !actionPanel.isHidden }
+    /// ⌘K's list turned into a field (Ask About This Meeting…).
+    var isAskingInActions: Bool { !actionPanel.isHidden && actionPanel.isPrompting }
     var shownActions: [(title: String, key: String?)] { actionPanel.shown.map { ($0.title, $0.key?.label) } }
     var shownActionsNote: String? { actionPanel.note }
     /// Where a chapter's heading is on screen, to click it.
@@ -568,7 +570,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             // The user's skillies for recordings; the one marked says so.
             let marked = markedSkillie()
             for skillie in skillies() {
-                list.append(LauncherAction(title: skillie.title + (skillie.path == marked ? " · after every transcript" : ""), symbol: "play") { [weak self] in
+                list.append(LauncherAction(title: skillie.title + (RecordingFollowUps.isMarked(skillie, marked) ? " · after every transcript" : ""),
+                                           symbol: "play") { [weak self] in
                     guard let self else { return }
                     self.onRunSkillie?(self.folder, skillie)
                 })
