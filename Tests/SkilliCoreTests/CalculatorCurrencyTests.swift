@@ -133,6 +133,11 @@ final class CalculatorCurrencyTests: XCTestCase {
         XCTAssertEqual(result?.conversion?.from, "CAD")
         XCTAssertEqual(Calculator.evaluate("100 eur", locale: english, now: now, currency: context)?.conversion?.to, "CAD")
         XCTAssertEqual(Calculator.currencyCode("dollars", home: "CAD"), "CAD")
+        // A dollar named stays that dollar.
+        for name in ["US dollars", "dollars américains", "dollars US", "dollars des États-Unis", "us$"] {
+            XCTAssertEqual(Calculator.currencyCode(name, home: "CAD"), "USD", name)
+        }
+        XCTAssertEqual(Calculator.currencyCode("dollars canadiens", home: "USD"), "CAD")
         XCTAssertEqual(Calculator.currencyCode("€", home: "USD"), "EUR")
         XCTAssertEqual(Calculator.currencyCode("try", home: "USD"), "TRY")
         XCTAssertNil(Calculator.currencyCode("pesos", home: "EUR"))

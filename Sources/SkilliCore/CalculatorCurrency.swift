@@ -231,7 +231,9 @@ extension Calculator {
                 }
             }
             let said: [String: [String]] = [
-                "dollar": ["dollar", "buck", "dollar americain", "us dollar"],
+                "dollar": ["dollar", "buck"],
+                // Named, never the user's own dollar.
+                "USD": ["us dollar", "dollar americain", "american dollar", "dollar us", "dollar des etats-uni"],
                 "EUR": ["euro", "balle"], "GBP": ["pound", "livre", "livre sterling", "sterling", "quid"],
                 "JPY": ["yen"], "CNY": ["yuan", "rmb", "renminbi"], "CHF": ["franc suisse", "swiss franc", "franc"],
                 "TRY": ["lira", "lire", "livre turque", "turkish lira"], "RUB": ["rouble", "ruble"], "INR": ["rupee", "roupie"],
