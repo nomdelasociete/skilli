@@ -23994,6 +23994,10 @@ final class SelfTest {
         if !aborted { await summaryWrittenAgainAndUndone(center, controller) }
         if !aborted { await chaptersHeadTheLines(center, controller) }
         if !aborted { await actionItemsBecomeReminders(center, controller) }
+        // Part (b): from elsewhere.
+        if !aborted { await askAboutTheMeetingInTheCard(controller) }
+        if !aborted { await skilliesForRecordingsRunOnThem(center, controller) }
+        if !aborted { await transcriptToolsAskEveryTime(center, folder) }
         if !aborted { await reminderLinkOpensTheMeeting(center, folder) }
         controller.close()
     }
@@ -24092,7 +24096,8 @@ final class SelfTest {
         let provider = context.ai.defaultModel.provider.title
         let titles = controller.shownActions.map(\.title)
         let expected = ["Summary by \(provider)", "Chapters by \(provider)", "Action Items to Reminders by \(provider)",
-                        "Recap Mail to the Attendees by \(provider)", "Transcribe Again…", "Show in Finder", "Copy Transcript", "Delete Recording"]
+                        "Recap Mail to the Attendees by \(provider)", "Ask \(provider) About This Meeting…", "Transcribe Again…", "Show in Finder",
+                        "Copy Transcript", "Delete Recording"]
         await captureRecordingWindow(controller, as: "recorder-actions")
         for character in "sum" { _ = await typeCharacter(character) }
         let filtered = await waitUntil(timeout: 1) { controller.shownActions.map(\.title) == ["Summary by \(provider)"] } != nil
@@ -24257,6 +24262,155 @@ final class SelfTest {
         let passed = added && requests.count >= 3 && screens != nil && friday && mine && linked && takenBack
         record(name, passed,
                "card “\(card)” \(added): \(titles.joined(separator: " · ")); Paul's screens on a Friday \(friday); the room the user's \(mine); links and notes \(linked); ⌘Z \(takenBack)",
+               nil)
+    }
+
+    /// ⌘K → Ask Claude About This Meeting…: the list becomes a field, the
+    /// question typed, ↩; the answer in the card names who answered.
+    private func askAboutTheMeetingInTheCard(_ controller: RecordingWindowController) async {
+        let name = "Recorder phase 5: Ask About This Meeting… in ⌘K: the question typed in the list, the answer from the transcript in the card, its status naming who answered"
+        guard await recordingWindowHasKeys(controller, name) else { return }
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 2) { controller.isShowingActions }
+        for character in "ask" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let prompting = await waitUntil(timeout: 2) { controller.isShowingActions && controller.shownActions.isEmpty } != nil
+        for character in "Who sends the final screens, and when?" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let popover = context.aiActions.popover
+        let shown = await waitUntil(timeout: 5) { popover.isVisible && popover.shownTitle == "Onboarding launch review" } != nil
+        let answered = await waitUntil(timeout: 120) { popover.phase == .done && popover.shownText.contains("Paul") } != nil
+        let text = popover.shownText
+        let says = text.contains("Paul") && text.lowercased().contains("friday")
+        let status = popover.shownStatus
+        let writer = context.ai.writer(for: nil)?.label ?? "?"
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        _ = await waitUntil(timeout: 2) { !popover.isVisible }
+        record(name, prompting && shown && answered && says && status.hasPrefix(writer),
+               "the list a field \(prompting); card \(shown), answered \(answered): “\(text.prefix(120))”, says Paul and Friday \(says); status “\(status)”", nil)
+    }
+
+    /// A skillie for recordings (`@skilli.forRecordings`): listed in ⌘K,
+    /// run there with the recording's folder; marked after each transcript
+    /// (the undo card says it, its ⌘Z unmarks), it runs once on the next
+    /// transcript made, out of sight, and the window says so.
+    private func skilliesForRecordingsRunOnThem(_ center: RecorderCenter, _ controller: RecordingWindowController) async {
+        let name = "Recorder phase 5: a skillie for recordings is listed in a recording's ⌘K and runs there with SKILLI_RECORDING; marked after each transcript (undo card, ⌘Z), it runs once on the next transcript, the window saying so"
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/skillies", isDirectory: true)
+        let told = recorderScratch.appendingPathComponent("skillie-told.txt")
+        try? FileManager.default.removeItem(at: told)
+        let script = folder.appendingPathComponent("keep-the-folder.sh")
+        let text = """
+            #!/bin/sh
+            # @skilli.schemaVersion 1
+            # @skilli.title Keep the Folder
+            # @skilli.mode compact
+            # @skilli.forRecordings true
+            printf '%s\\n' "$SKILLI_RECORDING" >> '\(told.path)'
+            echo "Kept $(basename "$SKILLI_RECORDING")."
+            """
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try text.write(to: script, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        } catch {
+            record(name, false, "the skillie could not be written: \(error.localizedDescription)", nil)
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: script) }
+        let marked = context.preferences.recorderAfterTranscript
+        defer { context.preferences.recorderAfterTranscript = marked }
+        context.preferences.recorderAfterTranscript = ""
+        guard await recordingWindowHasKeys(controller, name) else { return }
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 2) { controller.isShowingActions }
+        let listed = controller.shownActions.map(\.title).contains("Keep the Folder")
+        for character in "keep" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let ranHere = await waitUntil(timeout: 10) {
+            center.recordings.read(controller.folder)?.skillies?.last.map { !$0.automatic && $0.status == 0 } == true
+        } != nil
+        let toldHere = ((try? String(contentsOf: told, encoding: .utf8)) ?? "").contains(controller.folder.lastPathComponent)
+        // Marked, as Settings → Recorder marks it: said, and ⌘Z unmarks.
+        let popover = context.aiActions.popover
+        _ = await waitUntil(timeout: 6) { !popover.isVisible }
+        context.preferences.recorderAfterTranscript = script.path
+        context.deletes?.skillieMarked("Keep the Folder", previous: "", in: context.preferences)
+        let said = await waitUntil(timeout: 2) { popover.isVisible && popover.shownTitle == "After Every Transcript" } != nil
+        let card = popover.shownText
+        await pressKey("z", flags: .maskCommand)
+        let unmarked = await waitUntil(timeout: 2) { self.context.preferences.recorderAfterTranscript.isEmpty } != nil
+        context.preferences.recorderAfterTranscript = script.path
+        let rowSays = controller.actions().contains { $0.title == "Keep the Folder · after every transcript" }
+        // The next transcript: a stand-in meeting, done.
+        guard let next = seedMeeting(center, title: "Next standup", script: Array(Self.launchReview.prefix(4))) else {
+            record(name, false, "no second meeting", nil)
+            return
+        }
+        center.followUps.transcriptDone(next)
+        let ranAfter = await waitUntil(timeout: 10) { center.recordings.read(next)?.skillies?.contains(where: \.automatic) == true } != nil
+        center.followUps.transcriptDone(next)
+        await pause(1500)
+        let once = center.recordings.read(next)?.skillies?.filter(\.automatic).count == 1
+        center.open(next)
+        let window = await waitForWindow(center, next)
+        let ranSaid = window?.shownRan ?? ""
+        if let window { await captureRecordingWindow(window, as: "recorder-skillie-ran") }
+        window?.close()
+        let passed = listed && ranHere && toldHere && said && card.contains("gets every recording") && unmarked && rowSays && ranAfter && once
+            && ranSaid.hasPrefix("“Keep the Folder” ran after the transcript at") && ranSaid.hasSuffix("Kept \(next.lastPathComponent).")
+        record(name, passed,
+               "listed \(listed), ran from ⌘K \(ranHere), told its folder \(toldHere); marked: card \(said) “\(card.prefix(90))”, ⌘Z \(unmarked); its row says it \(rowSays); after the next transcript \(ranAfter), once \(once); the window: “\(ranSaid)”",
+               nil)
+    }
+
+    /// The agents' tools: list_recordings (no words); get_transcript asked
+    /// every time with no Always, even with Always Allow and an allow
+    /// right, naming the recording; recording_followup asked the same way,
+    /// naming where the words go; a follow-up link asked too.
+    private func transcriptToolsAskEveryTime(_ center: RecorderCenter, _ folder: URL) async {
+        let name = "Recorder phase 5: list_recordings gives no words; get_transcript and recording_followup ask every time (Always Allow and an allow right change nothing, no Always offered), naming the recording; a follow-up link asks too"
+        let (listedStatus, listed) = await skilliCall("list_recordings")
+        let noWords = listedStatus == 0 && listed.contains(folder.lastPathComponent) && !listed.contains("final screens")
+        let tools = context.tools.settings
+        let mode = tools.mode
+        tools.mode = .always
+        tools.setOverride(.always, for: "get_transcript")
+        defer {
+            tools.mode = mode
+            tools.setOverride(nil, for: "get_transcript")
+        }
+        let popover = context.aiActions.popover
+        guard await focusTestWindow() else { return }
+        async let given = skilliCall("get_transcript", "{\"recording\":\"\(folder.lastPathComponent)\"}")
+        let asked = await waitUntil(timeout: 3) { popover.isVisible && popover.phase == .approving } != nil
+        await pause(250)
+        let hints = popover.hintTitles
+        let named = popover.shownText.contains("“Onboarding launch review”")
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let transcript = await given
+        guard await focusTestWindow() else { return }
+        async let refused = skilliCall("recording_followup", "{\"action\":\"summary\",\"recording\":\"\(folder.lastPathComponent)\"}")
+        let askedAgain = await waitUntil(timeout: 3) { popover.isVisible && popover.phase == .approving } != nil
+        await pause(250)
+        let followHints = popover.hintTitles
+        let whereSaid = popover.shownText.contains("its transcript goes to \(context.ai.defaultModel.provider.title)")
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let declined = await refused
+        var linkAsked = false
+        if let links = context.links {
+            guard await focusTestWindow() else { return }
+            let opening = Task { await links.openNow(SkilliLink.recordingFollowUp(.summary, recording: folder.lastPathComponent, question: nil).url) }
+            linkAsked = await waitUntil(timeout: 3) { popover.isVisible && popover.shownText.contains("Onboarding launch review") } != nil
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            await opening.value
+            linkAsked = linkAsked && links.log.last == "declined record summary"
+        }
+        let passed = noWords && asked && hints == ["Allow", "Deny"] && named && transcript.status == 0
+            && transcript.output.hasPrefix("# Onboarding launch review") && askedAgain && followHints == ["Allow", "Deny"] && whereSaid
+            && declined.status != 0 && linkAsked
+        record(name, passed,
+               "list_recordings (\(listedStatus)) \(listed.split(separator: "\n").count) lines, no words \(noWords); get_transcript asked \(asked) \(hints), named \(named), given (\(transcript.status)) \(transcript.output.count) characters; recording_followup asked \(askedAgain) \(followHints), says where \(whereSaid), Esc (\(declined.status)); the link asked and declined \(linkAsked)",
                nil)
     }
 
