@@ -142,6 +142,10 @@ final class SelfTest {
         /// Only Ask's routes on volume (`AskRouteCorpus`, both halves) on
         /// the user's decision keys: no keys typed, nothing opened.
         case routes
+        /// Only the clipboard searched by meaning on volume
+        /// (`ClipboardMeaningCorpus`, both halves) on the user's decision
+        /// keys: a scratch store, no keys typed, nothing opened.
+        case clipmeaning
         /// Only the clipboard history on a scratch store and a private
         /// pasteboard (OCR included): no keys, safe while the Mac is in use.
         case clipboard
@@ -807,12 +811,16 @@ final class SelfTest {
         if scope == .routes {
             return await finish(after: [askRoutesOnVolume])
         }
+        if scope == .clipmeaning {
+            return await finish(after: [clipboardMeaningOnVolume])
+        }
         if scope == .decide {
             return await finish(after: [
                 askRoutesOnVolume,
                 filesPickedByMeaning,
                 emojiByFeelingLive,
                 clipboardFindsByMeaning,
+                clipboardMeaningOnVolume,
                 askRoutesLive,
                 approvalRulesJudgedLive,
                 askFindsFinderMenus,
@@ -15279,6 +15287,61 @@ final class SelfTest {
                 details.append("“\(request)” → \(first.map { "\($0.kind.rawValue) from \($0.appName ?? "?")" } ?? "nothing")\(first?.id == expected ? "" : " (wrong)")")
             }
             record(name, passed, details.joined(separator: "; ") + ", slowest \(Int(slowest.milliseconds)) ms", slowest.milliseconds)
+        }
+    }
+
+    /// The clipboard searched by meaning on volume: every request of
+    /// `ClipboardMeaningCorpus` on each decision key, among its ~110
+    /// copies. Right when the first result is a copy asked for (or one
+    /// that answers too); how many of the copies asked for are shown, and
+    /// how often nothing is. Only the tuned half's misses are listed.
+    private func clipboardMeaningOnVolume() async {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-clipboard-volume-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        guard let store = try? ClipboardStore(folder: folder) else {
+            record("Clipboard by meaning on volume", false, "no scratch store", nil)
+            return
+        }
+        let history = ClipboardHistory(preferences: context.preferences, store: store,
+                                       pasteboard: NSPasteboard(name: NSPasteboard.Name("skilli-selftest-\(UUID().uuidString)")))
+        let now = Date.now
+        var keys: [Int64: String] = [:]
+        for copy in ClipboardMeaningCorpus.copies {
+            guard let item = try? store.add(.init(kind: copy.kind, text: copy.text, app: nil, appName: copy.app, hash: "volume-\(copy.key)"),
+                                            at: now.addingTimeInterval(-copy.hours * 3_600)).item else { continue }
+            if let ocr = copy.ocr { try? store.setOCR(ocr, for: item.id) }
+            keys[item.id] = copy.key
+        }
+        for provider in DecisionProvider.allCases {
+            for (half, cases, listsMisses) in [("tuned on", ClipboardMeaningCorpus.tune, true), ("never tuned on", ClipboardMeaningCorpus.holdout, false)] {
+                let name = "Clipboard by meaning on volume with \(provider.title), the half \(half): \(cases.count) requests among \(keys.count) copies, 85 % right or more"
+                guard let key = userDecisionKeys[provider] else {
+                    checks.append(Check(name: name, passed: true, skipped: true, detail: "no \(provider.title) key saved in Settings", latencyMs: nil))
+                    continue
+                }
+                var right = 0, empty = 0, shown = 0, asked = 0
+                var misses: [String] = []
+                var slowest: Duration = .zero
+                for request in cases {
+                    let start = ContinuousClock.now
+                    let found = await history.searchByMeaning(request.request, keys: [provider: key], now: now)
+                    slowest = max(slowest, .now - start)
+                    let picked = found?.items.compactMap { keys[$0.id] } ?? []
+                    if picked.isEmpty { empty += 1 }
+                    shown += request.wanted.filter(picked.contains).count
+                    asked += request.wanted.count
+                    if let first = picked.first, request.wanted.contains(first) || request.fits.contains(first) {
+                        right += 1
+                    } else {
+                        misses.append("“\(request.request)” → \(picked.isEmpty ? "nothing" : picked.prefix(3).joined(separator: ", "))")
+                    }
+                }
+                record(name, Double(right) >= 0.85 * Double(cases.count),
+                       "\(right)/\(cases.count) right, nothing shown \(empty) times, \(shown)/\(asked) copies asked for shown"
+                           + (listsMisses && !misses.isEmpty ? "; missed: " + misses.joined(separator: "; ") : "")
+                           + "; slowest \(Int(slowest.milliseconds)) ms",
+                       slowest.milliseconds)
+            }
         }
     }
 
