@@ -592,8 +592,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         runner.openImport = { [weak self] file in self?.recorderCenter.importRecording(selecting: file) }
         runner.openRecording = { [weak self] name, at in self?.recorderCenter.open(named: name, at: at) ?? false }
         runner.recordingNamed = { [weak self] name in
-            guard let (_, record) = try? self?.recorderCenter.recordingForTool(name) else { return nil }
-            return "“\(record.title)” · " + record.started.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
+            guard let (folder, record) = try? self?.recorderCenter.recordingForTool(name) else { return nil }
+            return (folder.lastPathComponent,
+                    "“\(record.title)” · " + record.started.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute()))
         }
         runner.followUpRecording = { [weak self] action, name, question in self?.recorderCenter.followUp(action, on: name, question: question) }
         runner.recordingWriter = { [weak self] in self?.ai.defaultModel.provider.title ?? WritingProvider.claude.title }
@@ -1497,7 +1498,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let id = UUID().uuidString
             aiActions.notify(caller: command.title, working: "Running “\(command.title)”…", seconds: seconds, skillie: id,
                              showsWorking: command.showsRunning) { [scriptLibrary] in
-                let run = try await scriptLibrary.run(command, arguments: arguments, id: id, recording: recording)
+                let run: ScriptLibrary.Run
+                do {
+                    run = try await scriptLibrary.run(command, arguments: arguments, id: id, recording: recording)
+                } catch {
+                    // A run that could not start or was stopped is a run too.
+                    ran?(ScriptLibrary.Run(output: error.localizedDescription, status: -1))
+                    throw error
+                }
                 ran?(run)
                 let text = command.mode == .fullOutput ? run.output.trimmingCharacters(in: .whitespacesAndNewlines) : ScriptCommand.lastLine(run.output)
                 guard run.succeeded else {

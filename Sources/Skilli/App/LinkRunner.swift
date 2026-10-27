@@ -60,10 +60,11 @@ final class LinkRunner {
     /// A recording's window, by its folder's name or its title, from a time
     /// in it; false when there is no such recording.
     var openRecording: (String, Double?) -> Bool = { _, _ in false }
-    /// A recording by its folder's name or title (empty: the newest), as
-    /// the card names it ("“Weekly sync” · Wed 22 Oct"), nil when none is;
-    /// and what its ⌘K does, once allowed.
-    var recordingNamed: (String) -> String? = { _ in nil }
+    /// A recording by its folder's name or title (empty: the newest): its
+    /// folder's name, the one allowed, and as the card names it ("“Weekly
+    /// sync” · Wed 22 Oct"); nil when none is. And what its ⌘K does, once
+    /// allowed, on that folder.
+    var recordingNamed: (String) -> (id: String, shown: String)? = { _ in nil }
     var followUpRecording: (MeetingFollowUp.Action, String, String?) -> Void = { _, _, _ in }
     /// Who the recording's words go to ("Claude").
     var recordingWriter: () -> String = { WritingProvider.claude.title }
@@ -181,7 +182,7 @@ final class LinkRunner {
     /// time, the recording and where its words go named, never trusted (a
     /// page could send any meeting).
     private func askThenFollowUp(_ action: MeetingFollowUp.Action, recording: String, question: String?) async {
-        guard let named = recordingNamed(recording) else {
+        guard let (id, named) = recordingNamed(recording) else {
             say("missing recording \(recording)", recording.isEmpty ? "No recordings in skil.li yet." : "No recording “\(recording)” in skil.li: it was deleted, or renamed.")
             return
         }
@@ -193,7 +194,8 @@ final class LinkRunner {
             return
         }
         log.append("did record \(action.linkName)")
-        if !dryRun { followUpRecording(action, recording, question) }
+        // The recording the card named, whatever is newest by now.
+        if !dryRun { followUpRecording(action, id, question) }
     }
 
     /// `do` links run one at a time, in the order they came, so a skillie

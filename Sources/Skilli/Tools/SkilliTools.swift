@@ -735,6 +735,16 @@ final class SkilliTools {
         return named + "\n" + (text.count > 300 ? String(text.prefix(300)) + "…" : text)
     }
 
+    /// The call's `recording` as the folder's name it resolves to now (an
+    /// id, a title, empty for the newest), so the card and the call read
+    /// the same one; left as given when none is (the call says why).
+    func pinningRecording(_ arguments: [String: Any]) -> [String: Any] {
+        guard let center = recorder?(), let (folder, _) = try? center.recordingForTool(arguments["recording"] as? String) else { return arguments }
+        var pinned = arguments
+        pinned["recording"] = folder.lastPathComponent
+        return pinned
+    }
+
     /// A recording's words asked for: which recording, and where its words
     /// go ("“Weekly sync” · Wed 22 Oct, 14:00 · 32 min").
     private func recordingSummary(_ definition: ToolDefinition, arguments: [String: Any]) -> String {

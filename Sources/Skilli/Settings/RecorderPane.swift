@@ -187,7 +187,8 @@ struct RecorderPane: View {
     /// for recordings that gets every recording from now on, said under it
     /// and in the undo card (⌘Z puts back what was there).
     private var afterTranscript: some View {
-        let skillies = context.skillies().filter { $0.forRecordings && !$0.needsArguments }
+        // Never one that asks first: after a transcript nobody is there to answer.
+        let skillies = context.skillies().filter(RecordingFollowUps.runsOnItsOwn)
         let marked = preferences.recorderAfterTranscript
         let title = skillies.first { RecordingFollowUps.isMarked($0, marked) }?.title
         return Section {
@@ -207,7 +208,7 @@ struct RecorderPane: View {
             if let title {
                 Text("“\(title)” gets every recording from now on: its folder, with the sound, the pictures and the words. What it does with them is its own script's.")
             } else if skillies.isEmpty {
-                Text("No skillie for recordings yet: one says @skilli.forRecordings true in its header. ⌘K in a recording's window runs one on it.")
+                Text("No skillie for recordings that runs without asking: one says @skilli.forRecordings true in its header, and not needsConfirmation. ⌘K in a recording's window runs one on it.")
             } else {
                 Text("A skillie for recordings can run on each recording once its transcript is made. ⌘K in a recording's window runs one on it.")
             }
