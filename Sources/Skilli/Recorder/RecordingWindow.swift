@@ -30,6 +30,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private var correcting: [ObjectIdentifier: CMTime] = [:]
     /// Loading it: once, however often the window is shown meanwhile.
     private var loadingPlayer = false
+    /// The players' readiness watched for a play asked before it (`playAll`).
+    private var readyWatch: [NSKeyValueObservation] = []
     /// Where to play from once the player is loaded (a link's `at`).
     private var playOnLoad: Double?
     private var observer: Any?
@@ -409,15 +411,42 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     }
 
     /// Every player from `time`, started at the same host time a moment
-    /// from now: the pictures in step with the sound.
+    /// from now: the pictures in step with the sound. A player not ready
+    /// yet (a window just opened at a time: a reminder's link) is waited
+    /// for: `setRate(_:time:atHostTime:)` raises until it is, and that
+    /// exception, through this task's frames, left Swift's executor state
+    /// pointing into a gone frame (skil.li crashed on the next actor check).
     private func playAll(from time: CMTime) {
         guard let player else { return }
+        let all = [player] + pictures
+        guard all.allSatisfy({ $0.status == .readyToPlay }) else {
+            readyWatch = all.filter { $0.status != .readyToPlay }.map { each in
+                each.observe(\.status, options: [.new]) { [weak self] _, _ in
+                    Task { @MainActor in self?.playWhenReady(from: time) }
+                }
+            }
+            return
+        }
+        readyWatch = []
         let host = CMTimeAdd(CMClockGetTime(CMClockGetHostTimeClock()), CMTime(value: 1, timescale: 20))
         for each in [player] + pictures {
             each.setRate(1, time: time, atHostTime: host)
         }
         // Each picture starts then: nothing to correct before.
         correcting = Dictionary(uniqueKeysWithValues: pictures.map { (ObjectIdentifier($0), host) })
+    }
+
+    /// A play waiting for its players: done once each is ready, dropped if
+    /// one cannot play.
+    private func playWhenReady(from time: CMTime) {
+        guard let player, !readyWatch.isEmpty else { return }
+        let all = [player] + pictures
+        if all.contains(where: { $0.status == .failed }) {
+            readyWatch = []
+            return
+        }
+        guard all.allSatisfy({ $0.status == .readyToPlay }) else { return }
+        playAll(from: time)
     }
 
     /// While playing, a picture more than a frame off the sound (a file
@@ -430,7 +459,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             let key = ObjectIdentifier(picture)
             if let pending = correcting[key], CMTimeCompare(hostNow, pending) < 0 { continue }
             correcting[key] = nil
-            guard let item = picture.currentItem, item.duration.isNumeric else { continue }
+            guard picture.status == .readyToPlay, let item = picture.currentItem, item.duration.isNumeric else { continue }
             let wanted = min(now.seconds, item.duration.seconds)
             if abs(picture.currentTime().seconds - wanted) > 0.07, now.seconds < item.duration.seconds {
                 let host = CMTimeAdd(hostNow, CMTime(value: 1, timescale: 20))
