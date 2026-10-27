@@ -24659,6 +24659,7 @@ final class SelfTest {
         if !aborted, let call { await speakersRenamedAndMerged(call) }
         if !aborted, let call { await transcribeAgainAsPicked(call) }
         if !aborted, let call { await transcribeAgainLeftAtQuit(call) }
+        if !aborted { await aLanguageOnlyDictationHasIsTranscribed() }
     }
 
     /// The played-back calls (`script/recorder-measure`), their names
@@ -25277,6 +25278,52 @@ final class SelfTest {
         let passed = toMake.count == 1 && started && made && after?.state == .done && after?.language == "en-US" && lines > 0 && noWindow && !again
         record(name, passed,
                "found \(toMake.count), made again at once \(started), done \(made) (“\(after?.state.rawValue ?? "?")”, \(after?.language ?? "?"), \(linesBefore) → \(lines) lines), window \(noWindow ? "none" : "opened"), found again after \(again)",
+               nil)
+    }
+
+    /// A language `SpeechTranscriber` does not have, `DictationTranscriber`
+    /// does (Dutch; docs/meeting-recorder.md, "A language this Mac cannot
+    /// transcribe"): an import in it is transcribed by macOS's engine all
+    /// the same, its model downloaded the first time, Dutch offered among
+    /// macOS's languages.
+    private func aLanguageOnlyDictationHasIsTranscribed() async {
+        let name = "Recorder: a language only DictationTranscriber has (Dutch) is transcribed by macOS's engine, and offered among its languages"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        guard let model = await MeetingTranscriber.model(for: "nl-NL") else {
+            record(name, false, "no model for Dutch on this Mac at all", nil)
+            return
+        }
+        let offered = await MeetingTranscriber.languages(for: .macOS).contains { $0.id.hasPrefix("nl") }
+        let sentence = "Goedemorgen allemaal. Vandaag bespreken we de nieuwe planning voor het project en de begroting voor volgend jaar."
+        guard let spoken = await spokenFile(sentence, language: "nl") else {
+            record(name, false, "no Dutch voice on this Mac", nil)
+            return
+        }
+        let file = recorderScratch.appendingPathComponent("Planning overleg.aiff")
+        try? FileManager.default.removeItem(at: file)
+        try? FileManager.default.moveItem(at: spoken, to: file)
+        // The recorder's language (else Ask's): Dutch, as a user would set it.
+        let language = context.preferences.recorderLanguage
+        context.preferences.recorderLanguage = "nl-NL"
+        defer { context.preferences.recorderLanguage = language }
+        center.openWindows.forEach { $0.close() }
+        center.importFiles([file])
+        let made = await waitUntil(timeout: 300) {
+            center.openWindows.contains { $0.record.imported == "Planning overleg.aiff" && ($0.record.state == .done || $0.record.state == .pending) }
+                && center.recorder.transcribing == nil
+        } != nil
+        let controller = center.openWindows.first { $0.record.imported == "Planning overleg.aiff" }
+        let meeting = controller.flatMap { center.recordings.read($0.folder) }
+        let text = controller.flatMap { center.recordings.transcript($0.folder) }?.lines.map(\.text).joined(separator: " ") ?? ""
+        let dutch = ["planning", "project", "begroting", "goedemorgen"].filter { text.lowercased().contains($0) }
+        center.openWindows.forEach { $0.close() }
+        let passed = model.dictation && offered && made && meeting?.state == .done && meeting?.engine == TranscriptEngine.macOS.rawValue
+            && meeting?.language.hasPrefix("nl") == true && dutch.count >= 2
+        record(name, passed,
+               "Dutch's model \(model.dictation ? "DictationTranscriber's" : "SpeechTranscriber's") (\(model.locale.identifier(.bcp47))), offered \(offered); made \(made), “\(meeting?.state.rawValue ?? "?")” by \(meeting?.engine ?? "?") in \(meeting?.language ?? "?")\(meeting?.failed.map { ", failed: \($0)" } ?? ""); heard \(dutch.joined(separator: ", ")): “\(text.prefix(140))”",
                nil)
     }
 
