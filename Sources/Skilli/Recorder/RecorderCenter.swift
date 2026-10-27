@@ -47,7 +47,7 @@ final class RecorderCenter {
         let followUps = RecordingFollowUps(recordings: recordings, deletes: deletes)
         followUps.window = { [weak self] folder in self?.window(for: folder) }
         followUps.reshow = { [weak self] folder in self?.reshow(folder) }
-        followUps.isBeingMade = { [weak self] folder in self?.isBeingMade(folder) ?? false }
+        followUps.isBeingMade = { [weak self] folder in self?.recorder.makesAgain(folder) ?? false }
         followUps.notify = { [weak self] line in self?.notify(line) }
         return followUps
     }()

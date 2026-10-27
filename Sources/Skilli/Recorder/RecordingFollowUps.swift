@@ -26,8 +26,8 @@ final class RecordingFollowUps {
     /// The window shown again as its recording is now (its transcript, or
     /// where one being made again is: `RecorderCenter`).
     var reshow: (URL) -> Void = { _ in }
-    /// Its transcript being made again, or waiting its turn: what is read
-    /// from it now would be replaced.
+    /// Its transcript being made again (Transcribe Again), or waiting its
+    /// turn to be: what is read from it now would be replaced.
     var isBeingMade: (URL) -> Bool = { _ in false }
     /// One line in the card: a failure, said once.
     var notify: (String) -> Void = { _ in }

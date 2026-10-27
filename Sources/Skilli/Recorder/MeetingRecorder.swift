@@ -44,6 +44,8 @@ final class MeetingRecorder {
         let folder: URL
         let title: String
         var step: MeetingTranscriber.Step
+        /// Made again (Transcribe Again), a transcript there before.
+        var again = false
     }
 
     let recordings: Recordings
@@ -578,12 +580,20 @@ final class MeetingRecorder {
         return queue.contains { $0.0.resolvingSymlinksInPath().standardizedFileURL.path == key }
     }
 
+    /// Whether `folder`'s transcript is being made again, or waits its turn
+    /// to be (Transcribe Again): the one there now is to be replaced.
+    func makesAgain(_ folder: URL) -> Bool {
+        let key = folder.resolvingSymlinksInPath().standardizedFileURL.path
+        if let transcribing, transcribing.again, transcribing.folder.resolvingSymlinksInPath().standardizedFileURL.path == key { return true }
+        return queue.contains { $0.again && $0.0.resolvingSymlinksInPath().standardizedFileURL.path == key }
+    }
+
     private func transcribeNext() async {
         while !queue.isEmpty, !quitting {
             let (folder, record, again, engine) = queue.removeFirst()
             // The job is this one before anything is awaited: another asked
             // meanwhile waits in the queue.
-            transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0))
+            transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0), again: again)
             // Made again: the record as it is before, put back if it fails.
             let before = again ? recordings.read(folder) : nil
             transcribingBefore = before?.state == .done ? before : nil
