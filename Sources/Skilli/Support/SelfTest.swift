@@ -24585,7 +24585,7 @@ final class SelfTest {
     /// Rename… in a recording's ⌘K (docs/meeting-recorder.md, "Where it
     /// lives"): the list becomes a field with its title; typed and ↩, the
     /// recording and its folder are renamed, `transcript.md`'s heading too,
-    /// and its window opens again on the folder it is in now.
+    /// and its window stays, on the folder it is in now.
     private func recordingRenamedFromItsWindow(_ center: RecorderCenter) async {
         let name = "Recorder: Rename… in a recording's ⌘K renames it and its folder by the same rules, transcript.md's heading too, its window on the folder it is in now"
         guard let folder = seedMeeting(center, title: "Kickoff", script: Array(Self.launchReview.prefix(3))) else {

@@ -840,9 +840,9 @@ final class RecorderCenter {
 
     /// Rename… (the window's ⌘K, a recording's row in the launcher): its
     /// title, and its folder by the same rules (docs/meeting-recorder.md,
-    /// "Where it lives"), `transcript.md`'s heading too; its window opened
-    /// again on the folder it is in now. Not while it records or its
-    /// transcript is made: said why.
+    /// "Where it lives"), `transcript.md`'s heading too; its window stays,
+    /// on the folder it is in now. Not while it records, its transcript is
+    /// made or an action of its ⌘K runs: said why.
     func rename(_ folder: URL, to typed: String) {
         do {
             try renamed(folder, to: typed)
@@ -867,7 +867,6 @@ final class RecorderCenter {
             throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(doing). Rename it once it is done.")
         }
         let open = windows[Self.key(folder)]
-        let frame = open?.nsWindow.frame
         let moved: URL
         do {
             moved = try recordings.rename(folder, to: title, started: record.started)
@@ -887,14 +886,14 @@ final class RecorderCenter {
         }
         Log.trace("Recorder: renamed “\(title)” (\(moved.lastPathComponent))")
         NotificationCenter.default.post(name: Recordings.changed, object: nil)
+        // Its window stays, on the folder it is in now: one closed and
+        // opened again under the pointer had AppKit route the closed one's
+        // mouse exit to it once freed.
         if let open {
-            // Asked from that window (a key in its ⌘K): closed once the key
-            // is handled, never freed under its own event.
-            DispatchQueue.main.async { [weak self] in
-                open.close()
-                self?.open(moved)
-                if let frame { self?.windows[Self.key(moved)]?.nsWindow.setFrame(frame, display: true) }
-            }
+            windows[Self.key(folder)] = nil
+            open.moved(to: moved)
+            windows[Self.key(moved)] = open
+            show(open, record, moved)
         }
         return moved
     }

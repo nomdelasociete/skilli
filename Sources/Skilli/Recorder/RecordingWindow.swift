@@ -17,7 +17,8 @@ import UniformTypeIdentifiers
 /// summary tops them (phase 5). Built when opened, released when closed.
 @MainActor
 final class RecordingWindowController: NSObject, NSWindowDelegate {
-    let folder: URL
+    /// Its recording's folder: another once it is renamed (`moved(to:)`).
+    private(set) var folder: URL
     private(set) var record: MeetingRecord
     private let window: RecordingWindow
     private let view = RecordingView()
@@ -316,6 +317,13 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     func close() {
         window.close()
+    }
+
+    /// Its recording renamed, its folder moved: the same window on the
+    /// folder it is in now (every file is read from `folder` when needed;
+    /// the sound playing goes on).
+    func moved(to folder: URL) {
+        self.folder = folder
     }
 
     // MARK: - Playing
