@@ -46,10 +46,7 @@ final class RecorderCenter {
     private(set) lazy var followUps: RecordingFollowUps = {
         let followUps = RecordingFollowUps(recordings: recordings, deletes: deletes)
         followUps.window = { [weak self] folder in self?.window(for: folder) }
-        followUps.transcribing = { [weak self] folder in
-            guard let transcribing = self?.recorder.transcribing, Self.key(transcribing.folder) == Self.key(folder) else { return nil }
-            return transcribing.step
-        }
+        followUps.transcribing = { [weak self] folder in self?.transcribingStep(folder) }
         followUps.notify = { [weak self] line in self?.notify(line) }
         return followUps
     }()
@@ -775,16 +772,25 @@ final class RecorderCenter {
     /// `at` seconds in, playing from the line said then.
     func open(_ folder: URL, at: Double? = nil) {
         guard let record = recordings.read(folder) else { return }
-        let transcript = recordings.transcript(folder)
+        // Made again now: the window follows that, not the transcript before.
+        let step = transcribingStep(folder)
+        let transcript = step == nil ? recordings.transcript(folder) : nil
         let window: RecordingWindowController
         if let open = windows[Self.key(folder)] {
             window = open
-            window.show(record, transcript: transcript)
+            window.show(record, transcript: transcript, transcribing: step)
         } else {
             window = makeWindow(folder, record: record, transcript: transcript)
+            if let step { window.show(record, transcript: nil, transcribing: step) }
         }
         window.present()
         if let at { window.play(from: at) }
+    }
+
+    /// Where `folder`'s transcript is when it is being made now.
+    private func transcribingStep(_ folder: URL) -> MeetingTranscriber.Step? {
+        guard let transcribing = recorder.transcribing, Self.key(transcribing.folder) == Self.key(folder) else { return nil }
+        return transcribing.step
     }
 
     /// `skilli://record/open` (a reminder's link back to its meeting): by its
