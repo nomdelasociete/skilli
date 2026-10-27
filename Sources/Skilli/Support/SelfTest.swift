@@ -24078,6 +24078,7 @@ final class SelfTest {
             record("Recorder phase 5", false, "no recorder", nil)
             return
         }
+        await aClosedWindowLeavesNothingUnderThePointer(center)
         guard let folder = seedMeeting(center, title: "Onboarding launch review", script: Self.launchReview) else {
             record("Recorder phase 5", false, "the stand-in meeting could not be written", nil)
             return
@@ -24216,6 +24217,50 @@ final class SelfTest {
             guard (try? file.write(from: buffer)) != nil else { return false }
         }
         return true
+    }
+
+    /// A recording's window with chapter marks closed under the pointer,
+    /// then another opened there, the pointer moving over it: skil.li goes
+    /// on (it crashed in AppKit's tracking-area routing, the closed window
+    /// and its views freed inside its close).
+    private func aClosedWindowLeavesNothingUnderThePointer(_ center: RecorderCenter) async {
+        let name = "Recorder: a recording's window with chapter marks closed under the pointer, another opened there, the pointer moving over it: skil.li goes on"
+        guard let first = seedMeeting(center, title: "Closed under the pointer", script: Self.launchReview),
+              var record = center.recordings.read(first) else {
+            record(name, false, "no meeting", nil)
+            return
+        }
+        record.chapters = [MeetingRecord.Chapter(title: "Launch", start: 0.5), MeetingRecord.Chapter(title: "Pricing", start: 135)]
+        try? center.recordings.write(record, to: first)
+        center.open(first)
+        guard let window = await waitForWindow(center, first),
+              await waitUntil(timeout: 20, { window.showsWaveform }) != nil else {
+            self.record(name, false, "no window with its waveform", nil)
+            return
+        }
+        // The pointer over it, across the chapter marks.
+        let frame = window.nsWindow.frame
+        let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        let source = CGEventSource(stateID: .hidSystemState)
+        func move(to x: CGFloat, _ y: CGFloat) async {
+            CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: CGPoint(x: x, y: screenHeight - y),
+                    mouseButton: .left)?.post(tap: .cghidEventTap)
+            await pause(80)
+        }
+        for step in 0..<10 { await move(to: frame.minX + frame.width * (0.2 + 0.06 * CGFloat(step)), frame.maxY - 210) }
+        window.close()
+        await pause(200)
+        guard let second = seedMeeting(center, title: "Opened under the pointer", script: Array(Self.launchReview.prefix(3))) else {
+            self.record(name, false, "no second meeting", nil)
+            return
+        }
+        center.open(second)
+        let opened = await waitForWindow(center, second) != nil
+        for step in 0..<10 { await move(to: frame.minX + frame.width * (0.8 - 0.06 * CGFloat(step)), frame.maxY - 200) }
+        await pause(1500)
+        center.openWindows.forEach { $0.close() }
+        await pause(300)
+        self.record(name, opened, "the second window opened \(opened); still running after the pointer moved over it", nil)
     }
 
     private func waitForWindow(_ center: RecorderCenter, _ folder: URL) async -> RecordingWindowController? {
