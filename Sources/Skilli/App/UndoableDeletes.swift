@@ -114,7 +114,10 @@ final class UndoableDeletes {
         let titles = items.map(\.title)
         let shown = titles.prefix(3).joined(separator: ", ") + (titles.count > 3 ? " and \(titles.count - 3) more" : "")
         offer(items.count == 1 ? "Reminder Added" : "\(items.count) Reminders Added", UndoDelete.details(shown, ".")) {
-            for item in items { _ = try? book.delete(id: item.id) }
+            let left = items.filter { (try? book.delete(id: $0.id)) == nil }
+            guard left.isEmpty else {
+                throw Failure(message: "\(left.count) of the \(items.count) reminders could not be taken back: delete them in Reminders (\(left.map(\.title).prefix(3).joined(separator: ", "))).")
+            }
         }
     }
 

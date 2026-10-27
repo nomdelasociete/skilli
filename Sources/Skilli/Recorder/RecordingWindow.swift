@@ -340,6 +340,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// A link's `at` (a reminder's way back): the line said then selected,
     /// played from its start.
     func play(from seconds: Double) {
+        // Never past the recording's end (a link's `at` is anyone's).
+        let seconds = seconds.isFinite ? min(max(0, seconds), max(record.seconds, 0)) : 0
         let line = MeetingTranscript.line(at: seconds + 0.05, in: view.lines)
         if let line { view.select(line, scrollToIt: true) }
         let start = line.map { view.lines[$0].start } ?? seconds
@@ -2226,12 +2228,18 @@ private final class WaveformView: NSView {
         (lanes.minX + CGFloat(min(1, max(0, chapter.start / max(duration, 0.001)))) * lanes.width).rounded()
     }
 
+    /// The tool tips' owners: AppKit keeps them weakly.
+    private var tipOwners: [NSString] = []
+
     /// Each chapter's title, said by the pointer over its mark.
     private func updateTips() {
         removeAllToolTips()
+        tipOwners = []
         guard duration > 0 else { return }
         for chapter in chapters {
-            addToolTip(NSRect(x: chapterX(chapter) - 5, y: 0, width: 10, height: bounds.height), owner: chapter.title as NSString, userData: nil)
+            let owner = chapter.title as NSString
+            tipOwners.append(owner)
+            addToolTip(NSRect(x: chapterX(chapter) - 5, y: 0, width: 10, height: bounds.height), owner: owner, userData: nil)
         }
     }
 

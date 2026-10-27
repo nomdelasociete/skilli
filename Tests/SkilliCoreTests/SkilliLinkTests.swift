@@ -73,8 +73,11 @@ final class SkilliLinkTests: XCTestCase {
         XCTAssertEqual(SkilliLink.importRecording(file: "/Users/me/Call.m4a").url.absoluteString, "skilli://record/import?file=%2FUsers%2Fme%2FCall%2Em4a")
         XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/import?file="))), .importRecording(file: nil))
         let open = SkilliLink.openRecording("2026-10-22 14.00 Weekly sync", at: 724.6)
-        XCTAssertEqual(open.url.absoluteString, "skilli://record/open?recording=2026-10-22%2014%2E00%20Weekly%20sync&at=724")
-        XCTAssertEqual(SkilliLink.parse(open.url), .openRecording("2026-10-22 14.00 Weekly sync", at: 724))
+        XCTAssertEqual(open.url.absoluteString, "skilli://record/open?recording=2026-10-22%2014%2E00%20Weekly%20sync&at=724%2E6")
+        XCTAssertEqual(SkilliLink.parse(open.url), open, "its fraction kept: the line that starts then")
+        XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/open?recording=x&at=1e20"))), .openRecording("x", at: nil),
+                       "a time no recording reaches")
+        XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/open?recording=x&at=nan"))), .openRecording("x", at: nil))
         XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/open?recording=Weekly%20sync"))), .openRecording("Weekly sync", at: nil))
         XCTAssertNil(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/open"))), "a recording named")
     }

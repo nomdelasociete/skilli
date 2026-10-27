@@ -63,6 +63,9 @@ public enum SkilliLink: Equatable, Sendable {
 
     public static let scheme = CommandLink.scheme
 
+    /// A recording link's `at` is at most this (seconds: a week).
+    public static let longestRecording = 7.0 * 24 * 3600
+
     public var url: URL {
         var components = URLComponents()
         components.scheme = Self.scheme
@@ -100,7 +103,7 @@ public enum SkilliLink: Equatable, Sendable {
             components.host = "record"
             components.percentEncodedPath = "/open"
             items.append(URLQueryItem(name: "recording", value: recording))
-            if let at { items.append(URLQueryItem(name: "at", value: String(Int(max(0, at).rounded(.down))))) }
+            if let at, at.isFinite { items.append(URLQueryItem(name: "at", value: String(format: "%g", min(max(0, at), Self.longestRecording)))) }
         }
         if !items.isEmpty {
             // `+`, `&`, `=` and `#` encoded too: pages read `+` as a space.
@@ -135,7 +138,9 @@ public enum SkilliLink: Equatable, Sendable {
             if target.lowercased() == "open" {
                 let recording = items.first { $0.name == "recording" }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 guard !recording.isEmpty else { return nil }
-                return .openRecording(recording, at: items.first { $0.name == "at" }?.value.flatMap(Double.init).map { max(0, $0) })
+                // A time no recording reaches is no time.
+                let at = items.first { $0.name == "at" }?.value.flatMap(Double.init).flatMap { $0.isFinite && $0 >= 0 && $0 <= Self.longestRecording ? $0 : nil }
+                return .openRecording(recording, at: at)
             }
             return RecordingControl(rawValue: target.lowercased()).map(Self.recording)
         }
