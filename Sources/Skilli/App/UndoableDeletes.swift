@@ -88,6 +88,18 @@ final class UndoableDeletes {
         }
     }
 
+    /// Settings → Recorder → Remove: Better transcription's files to the
+    /// Trash at once (1.6 GB, downloaded again otherwise); ⌘Z moves them
+    /// back.
+    func betterTranscription(_ store: BetterTranscription) throws {
+        let moved = try store.moveToTrash()
+        guard !moved.isEmpty else { return }
+        Log.trace("Better transcription: moved to the Trash")
+        offer("Better Transcription Removed", UndoDelete.details("whisper large-v3-turbo", ": moved to the Trash, macOS's engine from now on.")) {
+            try store.putBack(moved)
+        }
+    }
+
     /// ⌘K → Delete Layout and Settings → Windows: the layout and its
     /// shortcuts; ⌘Z puts both back.
     func layout(_ layout: SavedWindowLayout, in arranger: WindowArranger, shortcuts: ShortcutStore) {

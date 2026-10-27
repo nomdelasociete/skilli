@@ -139,6 +139,7 @@ public enum SettingsSearch {
         ("windows", "section.arrangeWindows", "Arrange Windows"),
         ("windows", "section.forgetPlaces", "Forget What skil.li Learned"),
         ("windows", "section.appsStoppedUsing", "Apps You Stopped Using"),
+        ("recorder", "section.betterTranscription", "Better Transcription"),
         ("ask", "section.whenItActs", "When It Acts"),
         ("commands", "section.builtIn", "Built In"),
         ("aiAccounts", "section.writing", "Writing"),

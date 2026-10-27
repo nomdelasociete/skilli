@@ -85,6 +85,8 @@ struct SettingsContext {
     var openRecording: @MainActor (String) -> Void = { _ in }
     var moveRecordings: @MainActor (URL) async -> String? = { _ in nil }
     var deleteRecording: @MainActor (RecordingSummary) -> Void = { _ in }
+    /// Better transcription's download, made when the pane shows.
+    var betterTranscription: @MainActor () -> BetterTranscription? = { nil }
 }
 
 /// The panes, named by what they do for the user, in the sidebar's order.

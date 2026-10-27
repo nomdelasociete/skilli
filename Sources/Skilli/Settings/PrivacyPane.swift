@@ -318,6 +318,7 @@ private struct DestinationRow: View {
         case .claude, .chatGPT, .openAI, .typeSafe: .aiAccounts
         case .github: .github
         case .klipy: .gifs
+        case .huggingFace: .recorder
         case .websites, .yours, .apple: nil
         }
     }
@@ -331,6 +332,7 @@ private struct DestinationRow: View {
         case .typeSafe: "arrow.triangle.branch"
         case .github: SettingsPane.github.symbol
         case .klipy: SettingsPane.gifs.symbol
+        case .huggingFace: "arrow.down.circle.fill"
         case .websites: "globe"
         case .yours: SettingsPane.tools.symbol
         case .apple: "apple.logo"
@@ -345,6 +347,7 @@ private struct DestinationRow: View {
         case .typeSafe: .orange
         case .github: .gray
         case .klipy: SettingsPane.gifs.tint
+        case .huggingFace: SettingsPane.recorder.tint
         case .websites: .blue
         case .yours: SettingsPane.tools.tint
         case .apple: .gray

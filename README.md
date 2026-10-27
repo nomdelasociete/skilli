@@ -86,6 +86,8 @@ skil.li is free software under the [GNU General Public License v3.0](LICENSE).
 The website's fonts are under the SIL Open Font License (`website/assets/fonts/`).
 The meeting recorder tells voices apart with Argmax's SpeakerKit (MIT) and
 pyannote community-1's models converted by Argmax (CC BY 4.0), fetched when
-the app is built and shipped in it.
+the app is built and shipped in it. Its Better transcription runs whisper
+large-v3-turbo (MIT) with whisper.cpp (MIT), both downloaded or fetched from
+their projects, the model only on your click.
 
 Made by [Nom de la société](https://nomdelasociete.com).

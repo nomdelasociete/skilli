@@ -15,6 +15,9 @@ struct RecorderPane: View {
     /// The languages this Mac transcribes, read as the pane opens.
     @State private var languages: [(id: String, name: String)] = []
     @State private var moveRefused: String?
+    /// Better transcription's download, made as the pane shows.
+    @State private var better: BetterTranscription?
+    @State private var removeFailed: String?
 
     private enum Keep: Hashable {
         case never, week, month, quarter, year, custom
@@ -73,6 +76,11 @@ struct RecorderPane: View {
                 Text("Sources")
             } footer: {
                 Text("On when the meeting says nothing else. In person, only the microphone; a call, both sides. The screen is the meeting's window, never in person.")
+            }
+
+            if let better {
+                BetterTranscriptionSection(better: better, preferences: preferences, removeFailed: removeFailed,
+                                           remove: { removeBetterTranscription(better) })
             }
 
             Section {
@@ -157,6 +165,22 @@ struct RecorderPane: View {
         .task {
             library?.reload()
             languages = await MeetingTranscriber.languages()
+        }
+        .onAppear {
+            better = context.betterTranscription()
+            better?.refresh()
+            better?.isShown = true
+        }
+        .onDisappear { better?.isShown = false }
+    }
+
+    /// Remove: to the Trash, the undo card offers it back for 10 s.
+    private func removeBetterTranscription(_ better: BetterTranscription) {
+        do {
+            removeFailed = nil
+            try context.deletes.betterTranscription(better)
+        } catch {
+            removeFailed = "Not moved to the Trash: \(error.localizedDescription)"
         }
     }
 
@@ -278,5 +302,99 @@ private struct RecordingRow: View {
             Divider()
             Button("Delete", role: .destructive, action: delete)
         }
+    }
+}
+
+/// Better transcription (docs/meeting-recorder-views.md, phase 4): what it
+/// is and where it comes from, its download as it goes, then the engine.
+/// Nothing is downloaded but from its button.
+private struct BetterTranscriptionSection: View {
+    let better: BetterTranscription
+    @Bindable var preferences: Preferences
+    let removeFailed: String?
+    let remove: () -> Void
+
+    var body: some View {
+        Section {
+            LabeledContent {
+                buttons
+            } label: {
+                LabelDetail("Better transcription", detail)
+            }
+            .settingAnchor("section.betterTranscription")
+            if case .downloading(let received, let total, let line) = better.state {
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(value: Double(received), total: Double(max(1, total)))
+                    Text(line)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            if let warning {
+                Text(warning)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if better.state == .downloaded {
+                Picker("Engine", selection: engine) {
+                    Text(TranscriptEngine.whisper.title).tag(TranscriptEngine.whisper.rawValue)
+                    Text(TranscriptEngine.macOS.title).tag(TranscriptEngine.macOS.rawValue)
+                }
+                .settingAnchor("recorderEngine")
+            }
+        } footer: {
+            Text(better.state == .downloaded
+                 ? "Transcripts are made with the engine picked; a language it lacks goes to the other."
+                 : "Until it is downloaded, macOS's own engine makes the transcripts.")
+        }
+    }
+
+    private var detail: String {
+        switch better.state {
+        case .downloaded:
+            "Downloaded · \(ModelDownload.size(better.total)) · whisper large-v3-turbo, on this Mac. For the recorder only."
+        case .checking:
+            "Checking the file…"
+        default:
+            "whisper large-v3-turbo, on this Mac: 40 % fewer errors than macOS's engine, two names in three right. Downloaded from huggingface.co, nothing sent. For the recorder only."
+        }
+    }
+
+    /// What went wrong, or why it cannot start.
+    private var warning: String? {
+        switch better.state {
+        // Not enough room to go on: said instead of the stop's reason.
+        case .stopped(let why, _): better.roomLine ?? why
+        case .wrongFile: "The file downloaded is not the one expected (another checksum): nothing was kept."
+        case .notDownloaded: better.roomLine
+        default: removeFailed
+        }
+    }
+
+    @ViewBuilder private var buttons: some View {
+        switch better.state {
+        case .notDownloaded, .wrongFile:
+            Button("Download (\(ModelDownload.size(better.total)))") { better.download() }
+                .disabled(better.roomLine != nil)
+        case .stopped(_, let resumable):
+            Button(resumable ? "Resume" : "Download") { better.download() }
+                .disabled(better.roomLine != nil)
+        case .downloading:
+            Button("Cancel") { better.cancel() }
+        case .checking:
+            ProgressView()
+                .controlSize(.small)
+        case .downloaded:
+            Button("Remove") { remove() }
+        }
+    }
+
+    private var engine: Binding<String> {
+        Binding(
+            get: { TranscriptEngine.standard(preferred: TranscriptEngine(stored: preferences.recorderEngine), whisperReady: true).rawValue },
+            set: { preferences.recorderEngine = $0 }
+        )
     }
 }

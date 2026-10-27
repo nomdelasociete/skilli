@@ -117,9 +117,13 @@ public enum BackupPlan {
     /// audio and video, other people's words; a restore removed the
     /// recordings made since the backup), and the index of the words said
     /// in them with SQLite's files beside it (2026-10-25: every
-    /// transcript's text). Each by its exact name: an item merely named
-    /// like one is the user's and is backed up.
-    public static let neverCopied: Set<String> = Set(["mcp.sock", "Clipboard", "Recordings"] + RecordingSearch.indexFiles)
+    /// transcript's text), and Better transcription's model (2026-10-26:
+    /// 1.6 GB, downloaded again). Each by its exact name: an item merely
+    /// named like one is the user's and is backed up.
+    public static let neverCopied: Set<String> = Set(["mcp.sock", "Clipboard", "Recordings", modelsFolder] + RecordingSearch.indexFiles)
+    /// Better transcription's model (1.6 GB), downloaded again rather than
+    /// backed up.
+    public static let modelsFolder = "Models"
 
     /// A restore, by item of skil.li's folder: what goes from the folder
     /// now (all but `neverCopied`), then what comes back from the backup

@@ -69,6 +69,10 @@ final class SettingTools {
         var check: (@MainActor (SettingValue) throws -> Void)?
         var add: (@MainActor (String) async throws -> ListChange)?
         var remove: (@MainActor (String) throws -> ListChange)?
+        /// What set_setting compares a request with, when the value kept
+        /// is not the one in use (the recorder's engine, macOS's until the
+        /// one picked is downloaded).
+        var kept: (@MainActor () -> SettingValue)?
         /// A secret: only whether one is set.
         var isSet: (@MainActor () -> Bool)?
         /// A list's items as get_settings reports them: what may be read
@@ -385,7 +389,7 @@ final class SettingTools {
         let options = await binding.options?() ?? SettingsTable.options(of: entry)
         let value = try SettingsTable.parse(raw, for: entry, options: options, paneTitle: pane, isFolder: Self.isFolder)
         try binding.check?(value)
-        let before = binding.get()
+        let before = binding.kept?() ?? binding.get()
         let shown = SettingsTable.shown(value, for: entry, options: options)
         if before == value { return .already(entry.personal ? "\(label) is so already." : "\(label) is \(shown) already.") }
         let was = SettingsTable.shown(before, for: entry, options: options)
@@ -1058,6 +1062,20 @@ final class SettingTools {
         bindings["recorderLanguage"] = string(\.recorderLanguage) {
             [SettingOption("", "As Ask")] + (await MeetingTranscriber.languages()).map { SettingOption($0.id, $0.name) }
         }
+        // Read: the engine in use. Compared with a request: the one picked
+        // (Better transcription unless macOS was), so macOS asked for while
+        // the model is not downloaded is not "already" so.
+        var recorderEngine = Binding(get: { [unowned self] in
+            .text(TranscriptEngine.standard(preferred: TranscriptEngine(stored: self.preferences.recorderEngine),
+                                            whisperReady: BetterTranscription.isReady()).rawValue)
+        }, set: { [unowned self] value in
+            guard case .text(let raw) = value else { return }
+            self.preferences.recorderEngine = raw
+        })
+        recorderEngine.kept = { [unowned self] in
+            .text((TranscriptEngine(stored: self.preferences.recorderEngine) ?? .whisper).rawValue)
+        }
+        bindings["recorderEngine"] = recorderEngine
         var recordingsFolder = Binding(get: { [unowned self] in .text(self.preferences.recorderFolderPath) })
         recordingsFolder.setAsync = { [unowned self] value in
             guard case .text(let path) = value else { return }

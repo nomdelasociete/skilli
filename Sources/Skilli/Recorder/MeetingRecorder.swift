@@ -96,8 +96,11 @@ final class MeetingRecorder {
     private(set) var resumeJumps: [Speaker: [Double]] = [:]
     /// Transcripts wait their turn: one at a time.
     /// Transcripts waiting their turn; `again`: Transcribe Again, the
-    /// transcript before kept when it fails.
-    private var queue: [(URL, MeetingRecord, again: Bool)] = []
+    /// transcript before kept when it fails; `engine`: the one picked.
+    private var queue: [(URL, MeetingRecord, again: Bool, engine: TranscriptEngine?)] = []
+    /// The default engine, whether Better transcription is downloaded,
+    /// the contacts' names for its prompt: read as each transcript starts.
+    var transcriptSetup: () async -> MeetingTranscriber.Setup = { MeetingTranscriber.Setup() }
     /// The transcripts' one worker, while there is one.
     private var worker: Task<Void, Never>?
     /// What a stop under way closes: the moment it stops at, the
@@ -554,9 +557,9 @@ final class MeetingRecorder {
     /// Makes `folder`'s transcript (one at a time), then opens it. A
     /// language this Mac cannot transcribe, or a failure: kept without one
     /// (`pending`), its window says why.
-    func transcribe(_ folder: URL, record: MeetingRecord, again: Bool = false) {
+    func transcribe(_ folder: URL, record: MeetingRecord, again: Bool = false, engine: TranscriptEngine? = nil) {
         guard !quitting else { return leave(folder, record: record) }
-        queue.append((folder, record, again))
+        queue.append((folder, record, again, engine))
         // One worker for them all: several asked at once (the launch's) wait
         // their turn.
         guard worker == nil else { return }
@@ -568,17 +571,26 @@ final class MeetingRecorder {
 
     private func transcribeNext() async {
         while !queue.isEmpty, !quitting {
-            let (folder, record, again) = queue.removeFirst()
+            let (folder, record, again, engine) = queue.removeFirst()
+            // The job is this one before anything is awaited: another asked
+            // meanwhile waits in the queue.
+            transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0))
             // Made again: the record as it is before, put back if it fails.
             let before = again ? recordings.read(folder) : nil
             transcribingBefore = before?.state == .done ? before : nil
-            transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0))
+            let setup = await transcriptSetup()
+            // Quit meanwhile: closeForQuit left it as it should be.
+            if quitting {
+                transcribing = nil
+                transcribingBefore = nil
+                break
+            }
             var working = record
             working.state = .transcribing
             working.recorder = Recordings.ownProcess
             try? recordings.write(working, to: folder)
             do {
-                let done = try await MeetingTranscriber.transcribe(folder, record: working) { [weak self] step in
+                let done = try await MeetingTranscriber.transcribe(folder, record: working, picked: engine, setup: setup) { [weak self] step in
                     DispatchQueue.main.async {
                         MainActor.assumeIsolated {
                             guard let self, self.transcribing?.folder == folder else { return }
