@@ -221,6 +221,9 @@ final class GitHubBook {
     private(set) var serverHold: GitHubServerHold?
     /// False when GitHub had more unread notifications than the relay keeps.
     private(set) var notificationsComplete = true
+    /// False until notifications were read (since sign-in, or since the
+    /// relay's copy was dropped): none read is not "no unread".
+    private(set) var notificationsRead = false
 
     /// Changed (the strip and the GitHub mode redraw).
     @ObservationIgnored var onChange: (() -> Void)?
@@ -460,11 +463,15 @@ final class GitHubBook {
         pullRequests = server.pullRequests ?? []
         notifications = server.notifications ?? []
         notificationsComplete = server.notificationsComplete
+        notificationsRead = server.notifications != nil
         if let login = server.login { self.login = login }
         serverHold = server.hold
         problem = server.hold?.message
         lastRefresh = server.lastInboxRead
-        if server.pullRequests != nil { Log.trace("GitHub (relay): \(GitHubInbox.summary(pullRequests)), \(unreadNotifications.count) unread") }
+        // What is shown, and what holds each read back: an empty list says why.
+        let held = [server.inboxHold.map { "pull requests held: \($0)" }, server.notificationsHold.map { "notifications held: \($0)" }]
+        let notes = notificationsRead ? "\(unreadNotifications.count) unread" : "notifications not read"
+        Log.trace((["GitHub (relay): \(GitHubInbox.summary(pullRequests))", notes] + held.compactMap { $0 }).joined(separator: ", "))
         schedule()
         onChange?()
     }
@@ -577,6 +584,7 @@ final class GitHubBook {
         case .changed(let list, let complete, let modified, let interval)?:
             notifications = list
             notificationsComplete = complete
+            notificationsRead = true
             lastModified = modified
             pollInterval = max(interval, 30)
             nextNotifications = .now.addingTimeInterval(pollInterval)
@@ -866,6 +874,7 @@ final class GitHubBook {
         pullRequests = []
         notifications = []
         notificationsComplete = true
+        notificationsRead = false
         lastModified = nil
         lastRefresh = nil
         problem = nil

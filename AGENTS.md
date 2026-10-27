@@ -2601,7 +2601,11 @@ re-investigating.
   (`POST`). Turn Off on This Mac goes back to native reads (the user's
   choice, never a fallback); Delete for All Macs is `DELETE /inbox`.
   Agents' lists say "Not up to date: …" when their kind could not be read
-  again.
+  again. Notifications not read yet (`notificationsRead`: since sign-in,
+  or since the relay's copy was dropped) show no count, never "0 unread";
+  the `GitHub (relay):` trace names any hold. The relay itself answers
+  428 only for a grant that is gone: a read that crossed a new grant is
+  read again there.
   "pr " / "prs " or GitHub Inbox: the GitHub mode (grey chip; "gh " stays
   GitHub's search quicklink): Return opens (a notification is then read),
   ⌘Return copies the link, ⌘K (or ⇥) its actions (Open, the merge method,
