@@ -269,7 +269,7 @@ public enum MeetingTranscript {
     /// "0:04", "12:04", "1:02:03".
     public static func clock(_ seconds: Double) -> String {
         // Never a crash on a time no recording has (a link's).
-        let whole = seconds.isFinite ? max(0, Int(min(seconds, 1e9).rounded(.down))) : 0
+        let whole = seconds.isFinite ? Int(min(max(seconds, 0), 1e9).rounded(.down)) : 0
         return whole >= 3600 ? String(format: "%d:%02d:%02d", whole / 3600, whole / 60 % 60, whole % 60)
             : String(format: "%d:%02d", whole / 60, whole % 60)
     }
