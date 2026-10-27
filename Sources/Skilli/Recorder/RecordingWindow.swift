@@ -391,10 +391,12 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     func togglePlay() {
         guard let player else { return }
-        // A play still waiting for its players: this one stops it.
-        if pendingPlay != nil {
+        // A play still waiting for its players: this one stops it, at the
+        // time it asked (the next press plays from there).
+        if let time = pendingPlay {
             cancelPendingPlay()
-            view.played(to: player.currentTime().seconds, playing: false)
+            for each in [player] + pictures { each.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) }
+            view.played(to: time.seconds, playing: false)
             return
         }
         if player.rate > 0 {
@@ -432,17 +434,21 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private func playAll(from time: CMTime) {
         guard let player else { return }
         // A picture that cannot play is left out: the sound plays without it.
-        pictures.removeAll { $0.status == .failed }
-        guard player.status != .failed else { return cancelPendingPlay() }
+        pictures.removeAll(where: Self.failed)
+        guard !Self.failed(player) else { return cancelPendingPlay() }
         let all = [player] + pictures
-        guard all.allSatisfy({ $0.status == .readyToPlay }) else {
-            // Each watched from now (`.initial`: one ready meanwhile is not
-            // missed); the time played is the latest asked.
+        guard all.allSatisfy(Self.ready) else {
+            // Each watched from now, the player and its item (`.initial`: one
+            // ready meanwhile is not missed); the time played is the latest
+            // asked.
             pendingPlay = time
-            readyWatch = all.filter { $0.status != .readyToPlay }.map { each in
-                each.observe(\.status, options: [.initial, .new]) { [weak self] _, _ in
-                    Task { @MainActor in self?.playWhenReady() }
+            readyWatch = all.filter { !Self.ready($0) }.flatMap { each -> [NSKeyValueObservation] in
+                let changed: @Sendable () -> Void = { [weak self] in Task { @MainActor in self?.playWhenReady() } }
+                var watched = [each.observe(\.status, options: [.initial, .new]) { _, _ in changed() }]
+                if let item = each.currentItem {
+                    watched.append(item.observe(\.status, options: [.initial, .new]) { _, _ in changed() })
                 }
+                return watched
             }
             return
         }
@@ -460,10 +466,20 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     /// left out).
     private func playWhenReady() {
         guard let time = pendingPlay, let player else { return }
-        pictures.removeAll { $0.status == .failed }
-        guard player.status != .failed else { return cancelPendingPlay() }
-        guard ([player] + pictures).allSatisfy({ $0.status == .readyToPlay }) else { return }
+        pictures.removeAll(where: Self.failed)
+        guard !Self.failed(player) else { return cancelPendingPlay() }
+        guard ([player] + pictures).allSatisfy(Self.ready) else { return }
         playAll(from: time)
+    }
+
+    /// Ready to be started at a host time: the player and its item.
+    private static func ready(_ player: AVPlayer) -> Bool {
+        player.status == .readyToPlay && player.currentItem?.status == .readyToPlay
+    }
+
+    /// The player or its item cannot play.
+    private static func failed(_ player: AVPlayer) -> Bool {
+        player.status == .failed || player.currentItem?.status == .failed
     }
 
     /// No play waits any more: paused, sought without playing, or played.
@@ -482,7 +498,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             let key = ObjectIdentifier(picture)
             if let pending = correcting[key], CMTimeCompare(hostNow, pending) < 0 { continue }
             correcting[key] = nil
-            guard picture.status == .readyToPlay, let item = picture.currentItem, item.duration.isNumeric else { continue }
+            guard Self.ready(picture), let item = picture.currentItem, item.duration.isNumeric else { continue }
             let wanted = min(now.seconds, item.duration.seconds)
             if abs(picture.currentTime().seconds - wanted) > 0.07, now.seconds < item.duration.seconds {
                 let host = CMTimeAdd(hostNow, CMTime(value: 1, timescale: 20))
