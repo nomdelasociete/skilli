@@ -42,7 +42,8 @@ struct GitHubError: LocalizedError {
 
 /// Talks to GitHub with the user's token. Pull requests in one GraphQL
 /// request; notifications asked with `If-Modified-Since`, so an unchanged
-/// answer (304) costs nothing.
+/// answer (304) costs nothing, every page read when something changed
+/// (`GitHubNotifications.read`).
 actor GitHubClient {
     let endpoints: GitHubEndpoints
     private let session: URLSession = {
@@ -56,10 +57,6 @@ actor GitHubClient {
         self.endpoints = endpoints
     }
 
-    enum NotificationsAnswer: Sendable {
-        case unchanged(pollInterval: TimeInterval)
-        case changed([GitHubNotification], lastModified: String?, pollInterval: TimeInterval)
-    }
 
     func inbox(token: String) async throws -> (login: String, pullRequests: [PullRequest]) {
         let body: [String: Any] = ["query": GitHubInbox.query, "variables": ["reviewRequested": GitHubInbox.reviewRequestedSearch]]
@@ -73,15 +70,17 @@ actor GitHubClient {
         }
     }
 
-    func notifications(token: String, since lastModified: String?) async throws -> NotificationsAnswer {
-        var components = URLComponents(url: endpoints.api.appendingPathComponent("notifications"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [URLQueryItem(name: "per_page", value: "50")]
-        var request = Self.request(components.url!, "GET", token: token)
-        if let lastModified { request.setValue(lastModified, forHTTPHeaderField: "If-Modified-Since") }
-        let (data, response) = try await send(request, notModifiedIsFine: true)
-        let interval = TimeInterval(Self.header("X-Poll-Interval", in: response) ?? "") ?? 60
-        if response.statusCode == 304 { return .unchanged(pollInterval: interval) }
-        return .changed(try GitHubNotifications.parse(data), lastModified: Self.header("Last-Modified", in: response), pollInterval: interval)
+    func notifications(token: String, since lastModified: String?) async throws -> GitHubNotificationsRead {
+        try await GitHubNotifications.read(since: lastModified) { number, since in
+            var components = URLComponents(url: endpoints.api.appendingPathComponent("notifications"), resolvingAgainstBaseURL: false)!
+            components.queryItems = [URLQueryItem(name: "per_page", value: "50"), URLQueryItem(name: "page", value: String(number))]
+            var request = Self.request(components.url!, "GET", token: token)
+            if let since { request.setValue(since, forHTTPHeaderField: "If-Modified-Since") }
+            let (data, response) = try await send(request, notModifiedIsFine: true)
+            return GitHubNotificationsPage(status: response.statusCode, data: data, lastModified: Self.header("Last-Modified", in: response),
+                                           pollInterval: TimeInterval(Self.header("X-Poll-Interval", in: response) ?? ""),
+                                           hasNext: Self.header("Link", in: response)?.contains("rel=\"next\"") ?? false)
+        }
     }
 
     func merge(_ pullRequest: PullRequest, token: String) async throws {
@@ -564,7 +563,7 @@ final class GitHubBook {
         }
     }
 
-    private func apply(login: String?, pullRequests: [PullRequest]?, notifications answer: GitHubClient.NotificationsAnswer?) {
+    private func apply(login: String?, pullRequests: [PullRequest]?, notifications answer: GitHubNotificationsRead?) {
         if let pullRequests {
             let before = Set(self.pullRequests.map { "\($0.id)\($0.group)\($0.headSHA)" })
             let after = Set(pullRequests.map { "\($0.id)\($0.group)\($0.headSHA)" })
@@ -575,8 +574,9 @@ final class GitHubBook {
             Log.trace("GitHub: \(GitHubInbox.summary(pullRequests)), \(unreadNotifications.count) unread")
         }
         switch answer {
-        case .changed(let list, let modified, let interval)?:
+        case .changed(let list, let complete, let modified, let interval)?:
             notifications = list
+            notificationsComplete = complete
             lastModified = modified
             pollInterval = max(interval, 30)
             nextNotifications = .now.addingTimeInterval(pollInterval)
