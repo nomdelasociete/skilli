@@ -81,6 +81,17 @@ final class RecordingFollowUps {
         }
     }
 
+    /// What the window says until the AI is asked.
+    private static func starting(_ action: MeetingFollowUp.Action) -> String {
+        switch action {
+        case .summary: "Writing the summary…"
+        case .chapters: "Finding chapters…"
+        case .actionItems: "Reading the action items…"
+        case .recapMail: "Writing the recap…"
+        case .ask: "Answering a question…"
+        }
+    }
+
     /// How a failure starts in the card.
     private static func failed(_ action: MeetingFollowUp.Action) -> String {
         switch action {
@@ -98,6 +109,14 @@ final class RecordingFollowUps {
         }
         let key = Self.key(folder)
         if let busy = working[key] { throw Failure(message: "one at a time, and this one is \(busy.prefix(1).lowercased() + busy.dropFirst())") }
+        // Taken before the first wait (Reminders' question, My Card), given
+        // back once the action is done: one at a time, all the way.
+        working[key] = Self.starting(action)
+        window(folder)?.showWork(Self.starting(action))
+        defer {
+            working[key] = nil
+            window(folder)?.showWork(nil)
+        }
         switch action {
         case .summary:
             return try await summarize(folder, record: record, transcript: transcript)
@@ -145,18 +164,14 @@ final class RecordingFollowUps {
                                           slides: RecordingWindowController.slides(in: folder))
     }
 
-    /// `message` written by `writer`, the window saying `doing` meanwhile;
+    /// `message` written by `writer`, the window saying `doing` meanwhile
+    /// (the action's slot, `perform`'s, given back when it is done);
     /// `chunk` gets the text so far.
     private func write(_ message: String, with writer: AIStore.Writer, in folder: URL, doing: String,
                        chunk: ((String) -> Void)? = nil) async throws -> String {
-        let key = Self.key(folder)
         let said = "\(doing) with \(writer.label)…"
-        working[key] = said
+        working[Self.key(folder)] = said
         window(folder)?.showWork(said)
-        defer {
-            working[key] = nil
-            window(folder)?.showWork(nil)
-        }
         var text = ""
         Log.trace("Recorder: \(doing.lowercased()) of “\(folder.lastPathComponent)” with \(writer.label)")
         for try await piece in writer.engine.stream(AIRequest(message: message, model: writer.choice)) {

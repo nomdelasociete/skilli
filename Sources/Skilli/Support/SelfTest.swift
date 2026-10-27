@@ -23977,6 +23977,9 @@ final class SelfTest {
             record("Recorder phase 5", false, "the stand-in meeting could not be written", nil)
             return
         }
+        // Every recording window closed whatever happens: the link's check
+        // opens one of its own.
+        defer { center.openWindows.forEach { $0.close() } }
         center.open(folder)
         guard let controller = await waitForWindow(center, folder) else {
             record("Recorder phase 5", false, "no window for the stand-in meeting", nil)
@@ -23999,7 +24002,6 @@ final class SelfTest {
         if !aborted { await skilliesForRecordingsRunOnThem(center, controller) }
         if !aborted { await transcriptToolsAskEveryTime(center, folder) }
         if !aborted { await reminderLinkOpensTheMeeting(center, folder) }
-        controller.close()
     }
 
     /// The stand-in meeting (invented people): Camille is the user, Margot
@@ -24099,6 +24101,8 @@ final class SelfTest {
                         "Recap Mail to the Attendees by \(provider)", "Ask \(provider) About This Meeting…", "Transcribe Again…", "Show in Finder",
                         "Copy Transcript", "Delete Recording"]
         await captureRecordingWindow(controller, as: "recorder-actions")
+        // The captures switch its appearance: the keys made sure again.
+        guard await recordingWindowHasKeys(controller, name) else { return }
         for character in "sum" { _ = await typeCharacter(character) }
         let filtered = await waitUntil(timeout: 1) { controller.shownActions.map(\.title) == ["Summary by \(provider)"] } != nil
         for _ in 0..<3 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }

@@ -13,7 +13,10 @@ being built: its moment, views and states in the same file ("Phase
 transcription. 2026-10-27: phase 5, the last, being built: its moment,
 views and states in the same file ("Phase 5"); ⌘K's order in Done
 changed by it (the AI's actions first, the copies after, as every ⌘K
-list).
+list). Built in two pull requests: first the window's ⌘K, chapters, the
+summary, action items and the recap mail; then Ask about a meeting,
+skillies for recordings, the agents' tools and the links, which Done,
+Where it lives and Privacy name already.
 
 Asked for: a meeting recorder like omarchy-meeting-recorder (an
 open-source recorder for Omarchy Linux): your microphone and the
