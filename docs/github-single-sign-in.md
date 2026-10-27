@@ -103,14 +103,42 @@ the chain skips step 3.
 
 ## Moment
 
-- **When**: Settings → GitHub, the first time (and after Sign Out).
+**First sign-in** (and after Sign Out)
+
+- **When**: the user opens Settings → GitHub to use pull requests in the
+  launcher, not signed in.
 - **Path**: one button, one checkbox under it; the browser does the rest.
 - **Hint/push**: none added; Settings → GitHub already says what is missing.
-- **Deterministic**: no AI.
+- **Deterministic**: no AI. To the relay: the device code and, with the box
+  ticked, the inbox grant made in the browser; the native token stays here.
 - **Cost of being wrong**: a mismatched account gives no pairing and says
   so (as today); a trip abandoned halfway leaves what finished (native token
   alone, or the pairing without the inbox) and each step can be done again
   on its own.
+
+**Signed in, not paired** (existing users before this change)
+
+- **When**: the user is signed in on this Mac and opens Settings → GitHub,
+  where Live updates says this Mac is not authorized.
+- **Path**: Live updates → Authorize this Mac…, with the server sync
+  checkbox under it.
+- **Hint/push**: none; the Live updates section is the hint, as today.
+- **Deterministic**: no AI. To the relay: the inbox grant when ticked; no
+  device code (already signed in), so the tab ends on "Done".
+- **Cost of being wrong**: an account mismatch saves nothing and says so;
+  server sync ticked by mistake is turned off in Server sync (Turn Off on
+  This Mac, or Delete for All Macs).
+
+**Paired, server sync off**
+
+- **When**: the user wants one read for all their Macs and opens Server
+  sync.
+- **Path**: Server sync → Turn On…, its alert, then one browser trip, as
+  today (no change).
+- **Hint/push**: none.
+- **Deterministic**: no AI. To the relay: the inbox grant only.
+- **Cost of being wrong**: Turn Off on This Mac goes back to native reads;
+  Delete for All Macs removes the relay's grant and copy.
 
 ## Not in this change
 

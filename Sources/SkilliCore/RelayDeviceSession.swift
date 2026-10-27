@@ -328,7 +328,10 @@ public final class RelayDeviceSession: ObservableObject {
                     // in the tab, so this Mac's token arrives after the
                     // pairing. Nothing is saved before the ids are compared.
                     var arrived = enrollmentToken
-                    let nativeDeadline = Date().addingTimeInterval(pair.expires_in - 30)
+                    // The access token's life starts now, not at the save:
+                    // the wait for GitHub's code would otherwise outlast it.
+                    let pairExpiresAt = Date().addingTimeInterval(pair.expires_in)
+                    let nativeDeadline = pairExpiresAt.addingTimeInterval(-30)
                     while arrived == nil {
                         message = "Last step: enter the code on GitHub. skil.li finishes by itself."
                         guard Date() < nativeDeadline else {
@@ -345,7 +348,7 @@ public final class RelayDeviceSession: ObservableObject {
                     guard identityGeneration == enrollmentGeneration, githubToken() == native else { return }
                     // One atomic Keychain item holds both tokens. Never overwrite the legacy item.
                     try persist(RelayDeviceCredentials(origin: url.absoluteString, pair: pair,
-                        expiresAt: Date().addingTimeInterval(pair.expires_in), authorityOrigin: authority.absoluteString))
+                        expiresAt: pairExpiresAt, authorityOrigin: authority.absoluteString))
                     verifiedNativeToken = native
                     verifiedAccessToken = pair.access_token
                     verifiedSubject = verified.subject

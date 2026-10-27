@@ -646,7 +646,9 @@ final class RelayDeviceSessionTests: XCTestCase {
         XCTAssertNil(vault.value, "nothing is saved before this Mac's own token is compared")
         let githubBefore = await server.githubRequests.count
         XCTAssertEqual(githubBefore, 0)
+        let pairArrived = Date()
 
+        try await Task.sleep(for: .milliseconds(50))
         native.value = "native-test-token"
         try await finish(client)
         XCTAssertEqual(opened.count, 1)
@@ -666,6 +668,8 @@ final class RelayDeviceSessionTests: XCTestCase {
         let identity = await server.identityStarted
         XCTAssertTrue(identity)
         XCTAssertEqual(vault.writes, 1)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(client.credentials?.expiresAt), pairArrived.addingTimeInterval(900),
+                                 "the access token's life counts from its arrival, not from the save")
         XCTAssertEqual(client.configuration(origin: origin)?.token, "v2.new")
         XCTAssertEqual(client.verifiedSubject, "100")
         XCTAssertEqual(paired, [true])
