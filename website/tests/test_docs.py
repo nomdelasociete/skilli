@@ -176,6 +176,13 @@ class Markdown(unittest.TestCase):
             self.assertTrue((Path(scratch) / 'images/welcome.png').is_file())
             self.assertFalse((Path(scratch) / 'images/outside.png').exists())
 
+    def test_a_picture_that_is_a_symlink_stops_the_build(self):
+        link = build.ROOT / 'website/guides/images/linked.png'
+        link.symlink_to('welcome.png')
+        self.addCleanup(link.unlink)
+        with self.assertRaises(ValueError):
+            build.docs_asset('images/linked.png', 'guides')
+
     def test_a_dark_twin_shows_in_dark_mode(self):
         page = Page(lambda href: href, lambda src: {'src': src, 'dark': 'a-dark.png', 'size': (400, 300)})
         self.assertEqual(page.render('![A](a.png)'),

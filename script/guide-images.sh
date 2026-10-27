@@ -32,7 +32,11 @@ if missing:
     sys.exit('Missing from dist/remote/guides: ' + ', '.join(missing) + ': nothing copied.')
 PY
 mkdir -p "$TARGET"
-# The run's pictures replace them all: a surface the scope no longer captures goes.
+# The run's pictures replace them all (a surface the scope no longer captures
+# goes), and only once every copy is made: a failed copy leaves the old set.
+staging="$(mktemp -d "$ROOT_DIR/dist/guide-images.XXXXXX")"
+trap 'rm -rf "$staging"' EXIT
+cp "${pictures[@]}" "$staging/"
 rm -f "$TARGET"/*.png
-cp "${pictures[@]}" "$TARGET/"
+mv "$staging"/*.png "$TARGET/"
 echo "${#pictures[@]} pictures copied to website/guides/images."
