@@ -168,6 +168,14 @@ final class RecorderCenter {
     /// window, but never changes the screen picked since.
     private var screenPicks = 0
 
+    /// A screen change by the user starts: lookups and slower changes
+    /// started before it give way. Its number, to know whether it is still
+    /// the last once it awaited.
+    private func newScreenPick() -> Int {
+        screenPicks += 1
+        return screenPicks
+    }
+
     /// Whether the card and the recording are still those `moment` named.
     private func still(_ moment: (card: Int, folder: URL?)) -> Bool {
         moment.card == cardSession && moment.folder == recorder.folder
@@ -375,12 +383,11 @@ final class RecorderCenter {
                 && (AVCaptureDevice.systemPreferredCamera ?? AVCaptureDevice.default(for: .video)) != nil
             Task { await card.whileMacOSAsks(asks && card.isVisible) { await recorder.setWebcam(on) } }
         case .screen:
-            screenPicks += 1
-            let picks = screenPicks
+            let picks = newScreenPick()
             guard !recorder.sources.screen else {
                 Task {
                     await recorder.setScreen(nil)
-                    card.setScreenNote(nil, automation: false)
+                    if picks == screenPicks { card.setScreenNote(nil, automation: false) }
                 }
                 return
             }
@@ -393,7 +400,7 @@ final class RecorderCenter {
                 guard picks == screenPicks else { return }
                 if let window = found.window {
                     await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(.window(window)) }
-                    card.setScreenNote(found.note, automation: found.automation)
+                    if picks == screenPicks { card.setScreenNote(found.note, automation: found.automation) }
                 } else if card.isVisible, card.content == .record {
                     card.showWindows()
                 }
@@ -430,10 +437,13 @@ final class RecorderCenter {
                 && (AVCaptureDevice.systemPreferredCamera ?? AVCaptureDevice.default(for: .video)) != nil
             await card.whileMacOSAsks(asks) { await recorder.setWebcam(on) }
         case "screen":
-            screenPicks += 1
-            let picks = screenPicks
+            // A change counts once it is one that can be made: a screen not
+            // found changes nothing, a lookup waiting goes on.
+            let superseded = MeetingRecorder.Failure(message: "Another screen was picked meanwhile: it stays.")
             if !on {
+                let picks = newScreenPick()
                 await recorder.setScreen(nil)
+                guard picks == screenPicks else { throw superseded }
                 card.setScreenNote(nil, automation: false)
             } else if display != nil || id != nil {
                 let found = if let id { ScreenDisplays.list(meeting: meetingWindow?.id).first { $0.id == id } }
@@ -443,14 +453,20 @@ final class RecorderCenter {
                     let names = ScreenDisplays.list().map { "“\($0.name)”" }
                     throw MeetingRecorder.Failure(message: "No screen “\(display ?? "")”: main, meeting, or \(names.formatted(.list(type: .or))).")
                 }
+                let picks = newScreenPick()
                 await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(.display(screen)) }
+                // Another pick, or Off, since: that one stands, and says so itself.
+                guard picks == screenPicks else { throw superseded }
                 sayScreen(.display(screen))
                 switch recorder.pictures.screen.state {
                 case .failed(let why): throw MeetingRecorder.Failure(message: "The whole screen is not recorded: \(why).")
                 case .denied: throw MeetingRecorder.Failure(message: "The whole screen is not recorded: Screen Recording is not allowed for skil.li (System Settings → Privacy & Security).")
-                default: return "The screen on: \(screen.title)."
+                default:
+                    guard recorder.pictures.screen.target?.isSame(as: .display(screen)) == true else { throw superseded }
+                    return "The screen on: \(screen.title)."
                 }
             } else if !sources.screen {
+                let picks = newScreenPick()
                 let asked = lookupMoment
                 let found = await findMeetingWindow(card.meetingReading ?? reading ?? moment(for: nil))
                 guard still(asked) else { throw MeetingRecorder.Failure(message: "The recording changed while its window was looked for: nothing turned on.") }
@@ -460,6 +476,7 @@ final class RecorderCenter {
                     throw MeetingRecorder.Failure(message: "No meeting's window is known: pick one in the Record card or the red dot's menu (Screen), or the whole screen (display=main).")
                 }
                 await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(.window(window)) }
+                guard picks == screenPicks else { throw superseded }
                 card.setScreenNote(found.note, automation: found.automation)
             }
         default:
@@ -478,10 +495,11 @@ final class RecorderCenter {
     /// A window or a whole screen picked for the screen (the card's list,
     /// the red dot's menu): recorded from now on.
     private func pickScreen(_ target: ScreenTarget) {
-        screenPicks += 1
+        let picks = newScreenPick()
         Task {
             await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(target) }
-            sayScreen(target)
+            // A slower pick than the one after it never says its line over it.
+            if picks == screenPicks { sayScreen(target) }
         }
     }
 

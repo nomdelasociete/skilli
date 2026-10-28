@@ -27945,11 +27945,13 @@ final class SelfTest {
     /// screen: a slides window of skil.li's own let in (the known
     /// picture: its corner flashes with the stand-in microphone's beeps),
     /// another of its own shown once recording, magenta, left out as every
-    /// one of skil.li's is. `screen.mp4` is the screen's shape at the
-    /// file's size, its pictures keep coming, the flashes land at the
-    /// beeps' times, the magenta never shows, its length the sound's.
+    /// one of skil.li's is; another app's window (Preview showing a green
+    /// picture) in it. `screen.mp4` is the screen's shape at the file's
+    /// size, its pictures keep coming, the flashes land at the beeps'
+    /// times, the magenta never shows, the green does, its length the
+    /// sound's.
     private func recorderRecordsTheWholeScreen() async {
-        let name = "Recorder: the whole screen picked in the Record card's list (its row, its note), 9 s recorded in step with the sound, skil.li's own windows left out"
+        let name = "Recorder: the whole screen picked in the Record card's list (its row, its note), 9 s recorded in step with the sound, skil.li's own windows left out, another app's in it"
         guard let center = context.recorder(), let main = ScreenDisplays.list().first(where: { $0.id == CGMainDisplayID() }),
               let screen = NSScreen.screens.first(where: { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == main.id })
         else {
@@ -27973,8 +27975,24 @@ final class SelfTest {
         hidden.level = .floating
         hidden.isReleasedWhenClosed = false
         ScreenTrack.alsoRecorded = [CGWindowID(slides.window.windowNumber)]
+        // Another app's window, its pixels in the file: Preview showing a
+        // green picture (only when the test opens Preview itself, and quits it).
+        let green = recorderScratch.appendingPathComponent("whole-screen-green.png")
+        let previewOpen = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Preview").isEmpty
+        var preview: NSRunningApplication?
+        if !previewOpen, PictureCheck.writeSolid(green, width: 480, height: 320, red: 0, green: 1, blue: 0),
+           let previewURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Preview") {
+            // In front once, so its window is above the other apps' (the test
+            // window takes the keyboard back below).
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            preview = try? await NSWorkspace.shared.open([green], withApplicationAt: previewURL, configuration: configuration)
+            let pid = preview?.processIdentifier ?? 0
+            _ = await waitUntil(timeout: 8) { pid != 0 && MicrophoneUse.frontWindow(of: pid) != nil }
+        }
         center.standInMicrophone(MicrophoneHolders.none)
         defer {
+            preview?.terminate()
             (preferences.recorderConsentShown, preferences.recorderWebcam, preferences.recorderScreen) = saved
             ScreenTrack.alsoRecorded = []
             slides.window.orderOut(nil)
@@ -27985,6 +28003,11 @@ final class SelfTest {
         preferences.recorderConsentShown = true
         preferences.recorderWebcam = false
         preferences.recorderScreen = false
+        // Preview may have taken the keyboard: the test window has it again.
+        guard await focusTestWindow() else {
+            record(name, false, "the test window did not take the keyboard back after Preview opened", nil)
+            return
+        }
         let beeps: [Double] = [1, 2.5, 4, 5.5, 7, 8.5]
         let end = 9.5
         let mic = recorderScratch.appendingPathComponent("whole-screen-me.wav")
@@ -28092,11 +28115,18 @@ final class SelfTest {
         // Each picture: its time, its corner white, the left-out window's place magenta.
         let (size, read) = await PictureCheck.pictures(in: urls.screen) { pixels, time in
             let left = PictureCheck.color(pixels, in: hiddenRegion)
-            return (time, PictureCheck.color(pixels, in: flashRegion).green > 85, left.red > 180 && left.green < 90 && left.blue > 180)
+            // Green as the screen's color space gives it back (sRGB's on a P3
+            // screen is about 117, 252, 63): well above red and blue.
+            let previewGreen = PictureCheck.share(pixels) { red, green, blue in green > 190 && green - max(red, blue) > 90 }
+            return (time, PictureCheck.color(pixels, in: flashRegion).green > 85, left.red > 180 && left.green < 90 && left.blue > 180, previewGreen)
         }
         let times = read.map(\.0)
         let flashes = zip(read, [false] + read.map(\.1)).filter { $0.0.1 && !$0.1 }.map(\.0.0)
         let magenta = read.filter { $0.0 > 1 && $0.2 }.count
+        // Preview's picture in most of the file's pictures (none: Preview was
+        // open already, not used).
+        let greenShown = read.filter { $0.3 >= 0.01 }.count
+        let otherApp = preview == nil ? previewOpen : greenShown * 2 >= read.count
         let offsets = PictureCheck.offsets(found, flashes)
         func spread(_ values: [Double]) -> Double { (values.max() ?? 0) - (values.min() ?? 0) }
         func mean(_ values: [Double]) -> Double { values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count) }
@@ -28108,14 +28138,16 @@ final class SelfTest {
         let gaps = zip(times.dropFirst(), times).map { $0 - $1 }
         let rising = gaps.allSatisfy { $0 > 0 }
         let inStep = found.count == beeps.count && offsets.count == beeps.count && spread(offsets) <= 0.09 && abs(mean(offsets)) <= 0.15
-        let passed = rowRight && noteRight && listed.contains("Whole Screen") && inStep && magenta == 0 && hiddenShown && sizeRight && rising
+        let passed = rowRight && noteRight && listed.contains("Whole Screen") && inStep && magenta == 0 && hiddenShown && otherApp && sizeRight && rising
             && times.count >= Int(lengths.me * 3) && (gaps.max() ?? 9) <= 0.6 && abs(lengths.screen - lengths.me) <= 0.15 && menu.hasPrefix("Screen · \(main.title)")
         record(name, passed,
-               String(format: "listed %@; the row “%@”, note %@; the menu “%@”; screen.mp4 %@ (expected %d × %d from %d × %d px), %d pictures, the longest gap %.2f s, rising %@; beeps %d of %d, flashes %d, offsets %@ (spread %.0f ms, mean %.0f ms); the magenta window shown %@, seen in %d pictures; lengths me %.2f s, screen %.2f s",
+               String(format: "listed %@; the row “%@”, note %@; the menu “%@”; screen.mp4 %@ (expected %d × %d from %d × %d px), %d pictures, the longest gap %.2f s, rising %@; beeps %d of %d, flashes %d, offsets %@ (spread %.0f ms, mean %.0f ms); the magenta window shown %@, seen in %d pictures; Preview's green picture in %@; lengths me %.2f s, screen %.2f s",
                       "\(listed)", view.screenLine, noteRight ? "said" : "missing", menu, size.map { "\(Int($0.width)) × \(Int($0.height))" } ?? "unread",
                       expected.width, expected.height, pixels.width, pixels.height, times.count, gaps.max() ?? 0, rising ? "yes" : "no", found.count, beeps.count,
                       flashes.count, offsets.map { String(format: "%.0f", $0 * 1000) }.joined(separator: ","), spread(offsets) * 1000, mean(offsets) * 1000,
-                      hiddenShown ? "yes" : "no", magenta, lengths.me, lengths.screen),
+                      hiddenShown ? "yes" : "no", magenta,
+                      preview == nil ? (previewOpen ? "none (Preview was open already: not used)" : "none (Preview did not open)") : "\(greenShown) of \(read.count) pictures",
+                      lengths.me, lengths.screen),
                nil)
     }
 
@@ -28160,7 +28192,9 @@ final class SelfTest {
         settings.mode = .always
         let (lateStatus, _) = await skilliCall("set_recording_source", #"{"source":"screen","on":"true","display":"main"}"#)
         settings.mode = mode
-        await pause(2600)
+        // The late lookup answered (its window is the meeting's now), and the pick stayed.
+        let lateAnswered = await waitUntil(timeout: 4) { center.meetingWindow?.id == CGWindowID(late.windowNumber) } != nil
+        await pause(300)
         let pickStands = center.recorder.pictures.screen.target?.isSame(as: .display(main)) == true
         let lateLine = center.cardView.screenLine
         center.standInMeetingWindow = nil
@@ -28204,11 +28238,11 @@ final class SelfTest {
         _ = await waitUntil(timeout: 8) { !popover.isVisible }
         _ = await momentStop(center)
         center.openWindows.forEach { $0.close() }
-        let passed = lateCard && lateStatus == 0 && pickStands && onStatus == 0 && onSaid.contains("The screen on: \(main.title).") && wholeOn && missingStatus != 0 && missingSaid.contains("No screen “Nowhere”")
+        let passed = lateCard && lateStatus == 0 && lateAnswered && pickStands && onStatus == 0 && onSaid.contains("The screen on: \(main.title).") && wholeOn && missingStatus != 0 && missingSaid.contains("No screen “Nowhere”")
             && webcamStatus != 0 && webcamSaid.contains("display goes with source=screen") && stillWhole && offAsks && turnedOff && wholeAsks && namesIt
             && declined && missingLink
         record(name, passed,
-               "a late meeting's window: card \(lateCard), picked exit \(lateStatus), the whole screen kept \(pickStands) (“\(lateLine)”); tool: exit \(onStatus) “\(onSaid)”, on \(wholeOn); a missing screen exit \(missingStatus) “\(missingSaid.prefix(120))”; the webcam exit \(webcamStatus) “\(webcamSaid.prefix(80))”, still whole \(stillWhole); link off asks \(offAsks), off \(turnedOff); link whole asks \(wholeAsks) (\(wholeCard)), names it \(namesIt), declined \(declined); a missing screen \(missingLink) (log \(links.log.suffix(1)))",
+               "a late meeting's window: card \(lateCard), picked exit \(lateStatus), the lookup answered \(lateAnswered), the whole screen kept \(pickStands) (“\(lateLine)”); tool: exit \(onStatus) “\(onSaid)”, on \(wholeOn); a missing screen exit \(missingStatus) “\(missingSaid.prefix(120))”; the webcam exit \(webcamStatus) “\(webcamSaid.prefix(80))”, still whole \(stillWhole); link off asks \(offAsks), off \(turnedOff); link whole asks \(wholeAsks) (\(wholeCard)), names it \(namesIt), declined \(declined); a missing screen \(missingLink) (log \(links.log.suffix(1)))",
                nil)
     }
 

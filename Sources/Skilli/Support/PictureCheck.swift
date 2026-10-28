@@ -5,6 +5,8 @@
 #if SKILLI_SELFTEST
 import AppKit
 import AVFoundation
+import ImageIO
+import UniformTypeIdentifiers
 
 /// The test's slides: a dark window, its text large; at each flash a small
 /// square in its bottom left corner white for a moment (a corner's clock
@@ -182,6 +184,36 @@ enum PictureCheck {
         }
         let n = max(1, count)
         return (sum.0 / n, sum.1 / n, sum.2 / n)
+    }
+
+    /// The share of a picture's pixels (every eighth one, each way) whose
+    /// color `matches` (red, green, blue, 0…255).
+    static func share(_ pixels: CVPixelBuffer, matching matches: (Int, Int, Int) -> Bool) -> Double {
+        CVPixelBufferLockBaseAddress(pixels, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixels, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(pixels)?.assumingMemoryBound(to: UInt8.self) else { return 0 }
+        let row = CVPixelBufferGetBytesPerRow(pixels), height = CVPixelBufferGetHeight(pixels), width = CVPixelBufferGetWidth(pixels)
+        var hits = 0, count = 0
+        for y in stride(from: 0, to: height, by: 8) {
+            for x in stride(from: 0, to: width, by: 8) {
+                let pixel = base + y * row + x * 4
+                if matches(Int(pixel[2]), Int(pixel[1]), Int(pixel[0])) { hits += 1 }
+                count += 1
+            }
+        }
+        return Double(hits) / Double(max(1, count))
+    }
+
+    /// A picture of one color, `width` × `height` pixels, as a PNG file.
+    static func writeSolid(_ url: URL, width: Int, height: Int, red: CGFloat, green: CGFloat, blue: CGFloat) -> Bool {
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+        context.setFillColor(CGColor(srgbRed: red, green: green, blue: blue, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        guard let image = context.makeImage(),
+              let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else { return false }
+        CGImageDestinationAddImage(destination, image, nil)
+        return CGImageDestinationFinalize(destination)
     }
 
     /// A length in seconds, a file of any kind.
