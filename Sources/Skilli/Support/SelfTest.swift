@@ -26812,6 +26812,8 @@ final class SelfTest {
             after.buffer = center.recorder.trackTimes(.me).buffer
             after.restarts = center.recorder.microphone.restarts - restartsBefore
         })
+        // Put back before the next check reads it (the change takes a moment).
+        _ = await setNominalRate(rate, of: output)
         guard made != nil else { return }
         let lastBuffer = after.buffer.map { after.at + 5 - $0 } ?? .infinity
         let passed = changed && after.restarts >= 1 && lastBuffer < 0.5
@@ -26861,6 +26863,7 @@ final class SelfTest {
                                            center.recorder.macSound.formats)
         })
         play?.terminate()
+        _ = await setNominalRate(rate, of: output)
         guard let (folder, changeAt) = made else { return }
         // The other side's beeps after the change: 2 kHz and half a second
         // apart when called by their rate (44.1 kHz ones called 48 kHz come
