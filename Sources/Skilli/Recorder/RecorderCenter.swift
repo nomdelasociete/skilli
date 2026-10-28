@@ -538,6 +538,8 @@ final class RecorderCenter {
             // The user picked a screen meanwhile (or turned it off): it stands.
             guard picks == screenPicks, let window = found.window, recorder.phase == .listening, card.content == .record else { return }
             await card.whileMacOSAsks(!ScreenTrack.isAllowed) { await recorder.setScreen(.window(window)) }
+            // A pick while macOS asked: its line, not the meeting's window's.
+            guard picks == screenPicks else { return }
             card.setScreenNote(found.note, automation: found.automation)
         }
     }
@@ -636,6 +638,8 @@ final class RecorderCenter {
         // A screen picked or turned off meanwhile (the red dot's menu): it stands.
         guard picks == screenPicks, let window = found.window, recorder.isRecording, !recorder.sources.screen else { return }
         await recorder.setScreen(.window(window))
+        // A pick meanwhile: no tab brought forward for a screen not recorded.
+        guard picks == screenPicks else { return }
         bringMeetingTabForward()
     }
 
