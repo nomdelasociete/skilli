@@ -14434,7 +14434,7 @@ final class SelfTest {
     /// hour (a real power assertion, its end in the menu); "allow sleep"
     /// typed in Ask lets it sleep again, without a model.
     private func keepAwakeForAWhile() async {
-        let name = "Keep Awake for a while: “awake 1 hour” in the launcher, “do not sleep 2” read as hours, “awa 3h” (the word cut short), the cup in the menu bar; Ask's values from the model (1 h 30, done with ⌘Z when unsure, off with no time)"
+        let name = "Keep Awake for a while: “awake 1 hour” in the launcher, “do not sleep 2” read as hours, “awa 3h” (the word cut short), “zk 4h” (an alias), the cup in the menu bar; Ask's values from the model (1 h 30, done with ⌘Z when unsure, off with no time)"
         guard let commands = context.tools.tools.systemCommands else {
             record(name, false, "no system commands", nil)
             return
@@ -14443,6 +14443,9 @@ final class SelfTest {
             (try? await ClaudeCLI.run(URL(fileURLWithPath: "/usr/bin/pmset"), ["-g", "assertions"], timeout: 10)) ?? ""
         }
         defer { if commands.isKeepingAwake { _ = commands.keepAwake(.allowSleep) } }
+        let savedAliases = context.preferences.launcherAliases
+        defer { context.preferences.launcherAliases = savedAliases }
+        context.preferences.launcherAliases = [LauncherAlias(id: "system:keepAwake", alias: "zk", title: "Keep Awake")]
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
         for character in "do not sleep 2" { await pressKey(character) }
@@ -14452,6 +14455,11 @@ final class SelfTest {
         for character in "awa 3h" { await pressKey(character) }
         let shortened = await waitUntil(timeout: 1) { (self.context.launcher.topResultName ?? "").hasPrefix("Keep Awake · 3 h") } != nil
         for _ in 0..<6 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+        // An alias then the length: the read row first, not the alias's
+        // plain Keep Awake row.
+        for character in "zk 4h" { await pressKey(character) }
+        let aliased = await waitUntil(timeout: 1) { (self.context.launcher.topResultName ?? "").hasPrefix("Keep Awake · 4 h") } != nil
+        for _ in 0..<5 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
         for character in "awake 1 hour" { await pressKey(character) }
         let listed = await waitUntil(timeout: 1) { (self.context.launcher.topResultName ?? "").hasPrefix("Keep Awake · 1 h (until ") } != nil
         let title = context.launcher.topResultName ?? ""
@@ -14532,9 +14540,9 @@ final class SelfTest {
         await pause(300)
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         let cupGone = context.awakeIndicator.shown == nil
-        record(name, hours && shortened && listed && held && anHour && cup && quiet && saidAnHour && checked && keptAfterReturn && released && cupGone && commands.awakeUntil == nil
+        record(name, hours && shortened && aliased && listed && held && anHour && cup && quiet && saidAnHour && checked && keptAfterReturn && released && cupGone && commands.awakeUntil == nil
                    && unreadSaid && unreadKept,
-               "“do not sleep 2” → 2 h: \(hours); “awa 3h” → 3 h: \(shortened); listed “\(title)”: \(listed); held: \(held), \(Int(left)) s left; cup in the menu bar “\(cupShown)”: \(cup), no card: \(quiet); "
+               "“do not sleep 2” → 2 h: \(hours); “awa 3h” → 3 h: \(shortened); “zk 4h” → 4 h: \(aliased); listed “\(title)”: \(listed); held: \(held), \(Int(left)) s left; cup in the menu bar “\(cupShown)”: \(cup), no card: \(quiet); "
                    + "Ask “… une heure trente” → 1 h 30: \(saidAnHour); unsure, done at once with Undo: \(checked), ⌘Z let it sleep: \(keptAfterReturn); "
                    + "Keep Awake again with no time released it: \(released), cup gone: \(cupGone); nothing read: said \(unreadSaid), left on \(unreadKept)", nil)
     }

@@ -12,8 +12,9 @@ typed whole, cut short, or replaced by the user's alias:
 | Typed | Read as | Row first |
 |---|---|---|
 | `awake 2h` | (as before) | Keep Awake · 2 h (until 16:05) |
-| `awa 2h`, `aw 2` | `awake 2h` | same |
-| `tim 10 tea`, `ti 1:30` | `timer 10 tea` | Start Timer · Tea · 10 min |
+| `awa 2h`, `aw 2` | `awake 2h`, `awake 2` | Keep Awake · 2 h (a bare number is hours) |
+| `tim 10 tea` | `timer 10 tea` | Start Timer · Tea · 10 min |
+| `ti 1:30` | `timer 1:30` | Start Timer · 1 min 30 s |
 | `vo 30`, `volu 30` | `volume 30` | Set Volume to 30 % |
 | `a 2h` (alias `a` on Keep Awake) | `awake 2h` | Keep Awake · 2 h |
 | `r Weekly sync` (alias `r` on Record Meeting) | `rec Weekly sync` | Record “Weekly sync” |
