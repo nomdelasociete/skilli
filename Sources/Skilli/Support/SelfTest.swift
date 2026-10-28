@@ -15588,14 +15588,16 @@ final class SelfTest {
         let launcher = context.launcher
         let saved = (launcher.clipboardMeaningAvailable, launcher.clipboardMeaning)
         defer { (launcher.clipboardMeaningAvailable, launcher.clipboardMeaning) = saved }
-        // Slow first (stopped when typed on), then no answer.
-        var asks = 0, stopped = 0
+        // Slow first (stopped when typed on, then answering late), then no
+        // answer.
+        var asks = 0, stopped = 0, late = 0
         launcher.clipboardMeaningAvailable = { true }
         launcher.clipboardMeaning = { _ in
             asks += 1
             guard asks == 1 else { return ClipboardHistory.MeaningResult(items: [], label: "", unanswered: "Jev did not answer") }
             do { try await Task.sleep(for: .seconds(8)) } catch { stopped += 1 }
-            return nil
+            late += 1
+            return ClipboardHistory.MeaningResult(items: [], label: "", unanswered: "Late answer")
         }
 
         guard await focusTestWindow() else { return }
@@ -15615,7 +15617,10 @@ final class SelfTest {
         await pressKey("s")
         let typedOn = await waitUntil(timeout: 1) { stopped == 1 && !launcher.isShowingMeaningSpinner } != nil
         await pressKey(nil, code: CGKeyCode(kVK_Delete))
-        let wordsBack = await waitUntil(timeout: 1) { launcher.resultTitles.first?.hasPrefix("Rendez-vous plombier") == true } != nil
+        // The late answer is back and dropped: the words' results stay.
+        let wordsBack = await waitUntil(timeout: 1) {
+            late == 1 && launcher.resultTitles.first?.hasPrefix("Rendez-vous plombier") == true
+        } != nil && !launcher.isShowingMeaning && launcher.emptyStateText == nil
         await pressKey(nil, code: CGKeyCode(kVK_Tab))
         let unanswered = await waitUntil(timeout: 1) {
             launcher.emptyStateText == "Jev did not answer: ⇥ tries again" && !launcher.isShowingMeaningSpinner
@@ -15627,7 +15632,7 @@ final class SelfTest {
         let askedAgain = await waitUntil(timeout: 1) { asks == 3 } != nil
         await closeLauncher()
         record(name, byWords && waiting && noTabWhileSearching && typedOn && wordsBack && unanswered && offersAgain && askedAgain,
-               "found by words: \(byWords), searching line with spinner: \(waiting), footer while searching \(searchingFooter), typing on stopped it: \(typedOn), words back: \(wordsBack), "
+               "found by words: \(byWords), searching line with spinner: \(waiting), footer while searching \(searchingFooter), typing on stopped it: \(typedOn), words back, the late answer dropped: \(wordsBack), "
                    + "no answer said: \(unanswered), footer \(footer), ⇥ asked again: \(askedAgain)", nil)
     }
 
