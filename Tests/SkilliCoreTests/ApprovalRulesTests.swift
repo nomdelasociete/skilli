@@ -184,6 +184,9 @@ final class ApprovalRulesTests: XCTestCase {
             "memo": "Carte 4111 1111 1111 1111 exp 12/28"
         ])
         XCTAssertEqual(summary, "body: “Virement sur (an IBAN) demain”, memo: “Carte (a card number) exp 12/28”, note: “RIB : (a bank account number)”")
+        XCTAssertEqual(ToolCallSummary.arguments(["note": "12345\t67890\t12345678901\t04"]), "note: (hidden)", "tabs between groups")
+        XCTAssertEqual(ToolCallSummary.arguments(["note": "RIB\t12345\t67890\t12345678901\t04"]), "note: “RIB (a bank account number)”")
+        XCTAssertEqual(ToolCallSummary.arguments(["note": "Please act on 2026 delete files"]), "note: “Please act on 2026 delete files”")
     }
 
     func testOrdinaryValuesStay() {

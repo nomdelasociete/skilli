@@ -288,7 +288,8 @@ public enum ToolCallSummary {
         case is NSNull:
             return "null"
         case let text as String:
-            let flat = text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            // Tabs and line breaks as spaces: the masking reads words between spaces.
+            let flat = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
             if looksSecret(flat) { return hidden }
             // A bank or card number or a key inside the text goes as what it is.
             let shown = maskingSecrets(withoutQuery(flat))
@@ -416,13 +417,14 @@ public enum ToolCallSummary {
         return looksSecret(value) ? "(a key)" : nil
     }
 
+    /// What may come before a number and stays out of it.
+    private static let openers: Set<Character> = ["(", "[", "{", "<", "\"", "'", "«", "“", "‘"]
+
     /// Free text with each bank or card number and each key in it replaced
     /// by what it is: the words around stay, the number never goes. A
     /// number written in groups ("FR76 3000 6000 …") is one: an IBAN whose
     /// check digits match or a RIB whose key matches exactly, else the
     /// longest run of up to nine words that looks like one.
-    private static let openers: Set<Character> = ["(", "[", "{", "<", "\"", "'", "«", "“", "‘"]
-
     public static func maskingSecrets(_ text: String) -> String {
         let words = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
         var kept: [String] = []
@@ -430,30 +432,37 @@ public enum ToolCallSummary {
         while index < words.count {
             var masked = false
             let ends = Array(stride(from: min(words.count, index + 9), to: index, by: -1))
-            // Punctuation after it stays out of it ("…189,"), and a bracket
-            // or quote before it ("(1234…").
+            // A label glued to it stays ("RIB:…" → "RIB:(a bank account
+            // number)"); punctuation after it ("…189,", "…>") and a bracket or
+            // quote before it ("(1234…") stay out of it.
+            let first = words[index]
+            var label = ""
+            if let colon = first.firstIndex(where: { $0 == ":" || $0 == "=" }), colon != first.startIndex,
+               first.index(after: colon) != first.endIndex, first[..<colon].allSatisfy(\.isLetter) {
+                label = String(first[...colon])
+            }
             func span(_ end: Int) -> String {
-                var text = words[index..<end].joined(separator: " ")
-                while let last = text.unicodeScalars.last, CharacterSet.punctuationCharacters.contains(last) { text.removeLast() }
-                while let first = text.first, openers.contains(first) { text.removeFirst() }
+                var text = String(words[index..<end].joined(separator: " ").dropFirst(label.count))
+                while let last = text.unicodeScalars.last, CharacterSet.punctuationCharacters.contains(last) || last == ">" { text.removeLast() }
+                while let first = text.first, openers.contains(first) || first == " " { text.removeFirst() }
                 return text
             }
             if let end = ends.first(where: { hasIBANCheckDigits(span($0)) }) {
-                kept.append("(an IBAN)")
+                kept.append(label + "(an IBAN)")
                 index = end
                 continue
             }
             if let end = ends.first(where: { isRIB(span($0)) }) {
-                kept.append("(a bank account number)")
+                kept.append(label + "(a bank account number)")
                 index = end
                 continue
             }
             for end in ends {
                 // Several words: a number in groups; a key is one word.
                 let text = span(end)
-                let kind = end - index > 1 ? (isIBAN(text) ? "(an IBAN)" : isCardNumber(text) ? "(a card number)" : nil) : secretKind(text)
+                let kind = end - index > 1 ? (looksLikeGroupedIBAN(text) ? "(an IBAN)" : isCardNumber(text) ? "(a card number)" : nil) : secretKind(text)
                 if let kind {
-                    kept.append(kind)
+                    kept.append(label + kind)
                     index = end
                     masked = true
                     break
@@ -465,6 +474,15 @@ public enum ToolCallSummary {
             }
         }
         return kept.joined(separator: " ")
+    }
+
+    /// An IBAN in groups whose check digits may be wrong (a typo): as
+    /// written, in capitals and digits, digits for half of it at least, so
+    /// words after a year ("on 2026 delete files") are not one.
+    static func looksLikeGroupedIBAN(_ value: String) -> Bool {
+        guard isIBAN(value), !value.contains(where: \.isLowercase) else { return false }
+        let compact = value.filter { $0 != " " }
+        return compact.filter(\.isNumber).count * 2 >= compact.count
     }
 
     /// An IBAN whose check digits match (ISO 13616: the first four moved to
