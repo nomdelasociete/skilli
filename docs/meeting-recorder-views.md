@@ -1549,3 +1549,84 @@ reads in the Dock and ⌘⇥.
 - The Default look only: the Dock draws skil.li's own icon in its Default
   look in dark mode too. One picture is set, so the Dark, Clear and
   Tinted icon styles are not followed.
+
+# A track that records nothing
+
+Spec, 2026-10-28, from `docs/meeting-recorder.md`'s "A track that
+records nothing" (when it is said, and why a card): a call recorded
+with a Bluetooth headset lost the user's side whole and nothing said so.
+Shown while recording only; nothing changes in the Record card, which
+already says the Mac's sound blocked before ↩.
+
+## The menu bar
+
+```
+ ● 12:04 ⣀⣤⣶⣤ 🎙̸      ← the microphone records nothing: an orange mark
+```
+
+- **The label**: the dot, the time and the waves as before; after the
+  waves, for each track that records nothing, its symbol struck through
+  in orange (the microphone `mic.slash.fill`, the Mac's sound
+  `speaker.slash.fill`), before the screen's mark when both show. Its
+  accessibility label adds "the microphone records nothing" (or "the
+  Mac's sound records nothing"). It goes once the track records
+  something.
+- **The red dot's menu**: the track's item says why in place of its
+  device, that part in orange, its level after it as before:
+
+  ```
+  ✓ Microphone · nothing comes from AirPods Pro   ▂▄▆█
+  ✓ The Mac's Sound · Every app                   ▂▄▆█
+  ```
+
+  "nothing comes from AirPods Pro" (no buffer for 3 s), "only silence
+  from AirPods Pro" (exact zeros since it started); the Mac's sound:
+  "nothing comes", "only silence". A click turns it off as before
+  (turned on again, it starts afresh).
+
+## The card
+
+The call's end card's place, frame and type, once for a stretch:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ● NOTHING RECORDED                                12:04  │  orange dot
+│                                                          │
+│ Weekly design review                                     │
+│ Nothing comes from AirPods Pro: what you say isn't       │
+│ recorded.                                                │
+│ ──────────────────────────────────────────────────────── │
+│ Keep Recording esc                       ( Start Again ↩ )│
+└──────────────────────────────────────────────────────────┘
+```
+
+- **The line**, by track and reason:
+  - "Nothing comes from AirPods Pro: what you say isn't recorded."
+  - "AirPods Pro gives only silence: what you say isn't recorded."
+  - "Nothing comes from the Mac's sound: the others aren't recorded."
+  - "The Mac's sound gives only silence while Google Chrome plays: allow
+    skil.li in Screen & System Audio Recording." with Privacy ⌘↩ beside
+    Keep Recording esc, opening that list.
+- **Start Again ↩**: that source made afresh (the microphone: a new
+  engine; the Mac's sound: the tap and its aggregate again), counted from
+  then: still nothing after 3 s (5 s of silence), the card comes again.
+- **Keep Recording esc**: the card goes; not offered again until the
+  track gives sound, the mark staying meanwhile.
+- The track records something again: the card goes by itself.
+- Never over another card (the call's end, the wake card, the Record
+  card): it comes once that one has gone; the call's end offered while
+  it shows comes once it has gone too. Never while paused: a pause
+  closes it, offered again at Resume if the track still records
+  nothing. It never takes the keys from the app the user types in; a
+  click does, or a second without a key.
+- The line wraps: the card grows to hold all of it (what to allow
+  included).
+
+## Said, and not said
+
+- Said: no buffer for 3 s; exact zeros for 5 s since the source started
+  (the Mac's sound: while an app has played sound for 5 s).
+- Not said: a quiet stretch after the track gave sound since its source
+  started (muted, nobody talking), a source turned off, a paused
+  recording (the mark goes at the pause, each track is read again at
+  Resume), the Record card's meters (the card says it there already).

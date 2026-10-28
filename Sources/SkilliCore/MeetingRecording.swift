@@ -577,3 +577,117 @@ public struct TrackTimeline: Sendable {
         return nil
     }
 }
+
+/// A track that records nothing while its source is on
+/// (docs/meeting-recorder.md, "A track that records nothing"): since the
+/// source last started, no buffer for 3 s, or buffers holding only
+/// digital silence for 5 s. A microphone gives some noise even in a quiet
+/// room; one that records nothing gives exact zeros, or no buffer at all
+/// (an engine started again without its tap: measured, 22 minutes of a
+/// call). The Mac's sound gives exact zeros whenever nothing plays: there
+/// they count only while an app plays sound. Once a track has given sound
+/// since its source started, a quiet stretch is only quiet (the user
+/// muted, nobody talking), never said.
+public struct SilentTrack: Equatable, Sendable {
+    public enum Reason: Equatable, Sendable {
+        /// No buffer came for that long: the source gives nothing.
+        case nothing
+        /// Buffers came, only digital silence since the source started.
+        case zeros
+    }
+
+    public static let nothingFor = 3.0
+    public static let zerosFor = 5.0
+
+    /// The host time (seconds) the source last started: counted from then.
+    public private(set) var since: Double
+    /// Since when an app plays sound (the Mac's sound), while it does.
+    private var playingSince: Double?
+    /// Said in the card for this stretch, and Keep Recording answered: the
+    /// card not offered again until the track gives sound.
+    private var offered = false
+    private var kept = false
+
+    public init(since: Double) {
+        self.since = since
+    }
+
+    /// The source started again by itself at `time` (a change of the audio
+    /// setup): counted from then, the card's answer kept.
+    public mutating func started(at time: Double) {
+        if time > since { since = time }
+    }
+
+    /// Start Again in the card: counted from `time`, offered again if it
+    /// still records nothing.
+    public mutating func startedAgain(at time: Double) {
+        started(at: time)
+        offered = false
+        kept = false
+    }
+
+    /// Keep Recording: not offered again until the track gives sound.
+    public mutating func keep() {
+        kept = true
+    }
+
+    /// The card busy with something else: offered at the next update, if
+    /// the track still records nothing.
+    public mutating func offerAgain() {
+        offered = false
+    }
+
+    /// Once a second: why the track records nothing at `now` (nil: it
+    /// records something), and whether the card offers it now (once for a
+    /// stretch). `lastBuffer`, `lastSound`: when the last buffer, and the
+    /// last one holding more than digital silence, came (host seconds; nil:
+    /// none yet). `playing`: the Mac's sound only, whether an app plays
+    /// sound now (asked only while it matters); nil for a microphone, whose
+    /// zeros always count.
+    public mutating func update(now: Double, lastBuffer: Double?, lastSound: Double?, playing: (() -> Bool)? = nil) -> (reason: Reason?, offer: Bool) {
+        let heard = (lastSound ?? -.infinity) >= since
+        let nothing = now - max(since, lastBuffer ?? -.infinity) >= Self.nothingFor
+        var zerosFrom: Double? = since
+        if let playing {
+            if !heard, !nothing, playing() {
+                playingSince = playingSince ?? now
+            } else {
+                playingSince = nil
+            }
+            zerosFrom = playingSince.map { max($0, since) }
+        }
+        let zeros = !heard && zerosFrom.map { now - $0 >= Self.zerosFor } == true
+        let reason: Reason? = nothing ? .nothing : zeros ? .zeros : nil
+        if heard, !nothing {
+            // It records something: a later stretch is offered again.
+            offered = false
+            kept = false
+        }
+        guard let reason, !offered, !kept else { return (reason, false) }
+        offered = true
+        return (reason, true)
+    }
+
+    /// The card's line: "Nothing comes from AirPods Pro: what you say isn't
+    /// recorded.", "The Mac's sound gives only silence while Google Chrome
+    /// plays: allow skil.li in Screen & System Audio Recording."
+    public static func line(_ reason: Reason, speaker: Speaker, device: String, playing app: String? = nil) -> String {
+        switch (speaker, reason) {
+        case (.me, .nothing): "Nothing comes from \(device): what you say isn't recorded."
+        case (.me, .zeros): "\(device) gives only silence: what you say isn't recorded."
+        case (.them, .nothing): "Nothing comes from the Mac's sound: the others aren't recorded."
+        case (.them, .zeros): "The Mac's sound gives only silence while \(app ?? "an app") plays: allow skil.li in Screen & System Audio Recording."
+        }
+    }
+
+    /// The red dot's menu, in place of the device: "nothing comes from
+    /// AirPods Pro", "only silence from AirPods Pro"; the Mac's sound (no
+    /// device): "nothing comes", "only silence".
+    public static func menuLine(_ reason: Reason, device: String?) -> String {
+        let from = device.map { " from \($0)" } ?? ""
+        return switch reason {
+        case .nothing: "nothing comes\(from)"
+        case .zeros: "only silence\(from)"
+        }
+    }
+}

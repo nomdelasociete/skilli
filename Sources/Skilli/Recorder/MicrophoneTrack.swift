@@ -5,9 +5,14 @@ import Synchronization
 /// The microphone, the user's side: macOS's default input through
 /// `AVAudioEngine`. A change of the audio setup (a device plugged, the
 /// default input chosen again, a rate changed) stops an engine and nothing
-/// starts it again (Measured: it stopped after 62 s): it is started again
-/// at once, its next buffer placed by the host clock, so the track keeps
-/// its time.
+/// starts it again (Measured: it stopped after 62 s): a new engine is
+/// started at once, its next buffer placed by the host clock, so the track
+/// keeps its time. Never the same engine again: it keeps its input's
+/// format from before the change, and a Bluetooth headset gone to 24 kHz
+/// for a call had AVAudioEngine refuse the tap at 48 kHz ("Failed to create
+/// tap, config change pending!"), tell the caller nothing and run on
+/// without it: nothing reached the track for the rest of a 22-minute call.
+/// An engine that gives no buffer 2 s after it started is replaced too.
 @MainActor
 final class MicrophoneTrack {
     enum State: Equatable {
@@ -24,6 +29,11 @@ final class MicrophoneTrack {
     private(set) var restarts = 0
     private var engine: AVAudioEngine?
     private var observer: NSObjectProtocol?
+    /// Whether the engine started last gives buffers, checked 2 s after;
+    /// engines started in a row that gave none (a fourth is not tried:
+    /// the track then says it records nothing, `SilentTrack`).
+    private var expecting: Task<Void, Never>?
+    private var startsGivingNothing = 0
     #if SKILLI_SELFTEST
     /// Self-test: a file plays as the microphone (the test Mac has none),
     /// through the same engine and tap, from `playStandIn`.
@@ -64,34 +74,73 @@ final class MicrophoneTrack {
     }
 
     func stop() {
+        #if SKILLI_SELFTEST
+        standInPlaying = false
+        #endif
+        startsGivingNothing = 0
+        dropEngine()
+        if case .on = state { state = .off }
+    }
+
+    /// The engine, its tap, its observer and its buffers' check let go.
+    private func dropEngine() {
+        expecting?.cancel()
+        expecting = nil
         if let observer { NotificationCenter.default.removeObserver(observer) }
         observer = nil
         if let engine { removeTap(from: engine) }
         #if SKILLI_SELFTEST
+        // The stand-in's player belongs to that engine.
         player?.stop()
         player = nil
-        standInPlaying = false
         #endif
         engine?.stop()
         engine = nil
-        if case .on = state { state = .off }
     }
 
-    private func startEngine() {
+    /// A new engine on the default input as it is now. `again`: after one
+    /// before it (its failure logged so, the state kept).
+    private func startEngine(again: Bool = false) {
         let engine = AVAudioEngine()
         self.engine = engine
+        // Heard before it starts: a change while it starts starts another.
+        observer = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.startAgain() }
+        }
+        let started = HostClock.now
         do {
             try install(on: engine)
             engine.prepare()
             try engine.start()
         } catch {
-            Log.actions.error("Recorder: the microphone did not start (\(error.localizedDescription, privacy: .public))")
-            state = .none
+            Log.actions.error("Recorder: the microphone did not start\(again ? " again" : "") (\(error.localizedDescription, privacy: .public))")
+            if !again { state = .none }
+            expectBuffers(since: started)
             return
         }
         state = .on(deviceName)
-        observer = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.startAgain() }
+        expectBuffers(since: started)
+    }
+
+    /// 2 s after an engine started: no buffer from it (its tap refused, its
+    /// device in the middle of a change) and a new one is started.
+    private func expectBuffers(since started: Double) {
+        expecting?.cancel()
+        #if SKILLI_SELFTEST
+        // The stand-in gives buffers only once a check plays it.
+        if standIn != nil { return }
+        #endif
+        expecting = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let self, self.engine != nil else { return }
+            if let last = self.inbox.times.buffer, last >= started {
+                self.startsGivingNothing = 0
+                return
+            }
+            self.startsGivingNothing += 1
+            guard self.startsGivingNothing <= 3 else { return }
+            Log.actions.error("Recorder: the microphone gave nothing 2 s after it started: a new engine (\(self.startsGivingNothing))")
+            self.startAgain()
         }
     }
 
@@ -136,23 +185,29 @@ final class MicrophoneTrack {
         engine.inputNode.removeTap(onBus: 0)
     }
 
-    /// The audio setup changed: the engine stopped; started again on what
-    /// the setup is now.
+    /// The audio setup changed: the engine stopped; a new one on what the
+    /// setup is now.
     private func startAgain() {
-        guard let engine else { return }
+        guard engine != nil else { return }
         restarts += 1
         inbox.markRestart()
-        removeTap(from: engine)
-        do {
-            try install(on: engine)
-            try engine.start()
-            #if SKILLI_SELFTEST
-            if standInPlaying { resumeStandIn() }
-            #endif
-            state = .on(deviceName)
-            Log.trace("Recorder: the microphone started again (\(restarts))")
-        } catch {
-            Log.actions.error("Recorder: the microphone did not start again (\(error.localizedDescription, privacy: .public))")
+        dropEngine()
+        startEngine(again: true)
+        #if SKILLI_SELFTEST
+        if standInPlaying { resumeStandIn() }
+        #endif
+        Log.trace("Recorder: the microphone started again (\(restarts))")
+    }
+
+    /// Start Again (the card): a new engine, or the microphone started when
+    /// none runs.
+    func restart() async {
+        startsGivingNothing = 0
+        if engine != nil {
+            startAgain()
+        } else {
+            inbox.markRestart()
+            await start()
         }
     }
 
@@ -178,6 +233,12 @@ final class MicrophoneTrack {
     /// Self-test: the engine as a change of the audio setup leaves it.
     func simulateConfigurationChange() {
         startAgain()
+    }
+
+    /// Self-test: the stand-in stops giving buffers, as an engine whose tap
+    /// was refused; started again, it goes on where the call is.
+    func silenceStandIn() {
+        player?.stop()
     }
 
     /// The engine started again: an engine reset drops what its player had

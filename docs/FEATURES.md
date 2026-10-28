@@ -428,7 +428,10 @@ Your meetings recorded on this Mac, both sides, then written out.
   nothing before ↩; during a meeting, it is that meeting's. While it
   records, a red dot, the time and both sides' waves in the menu bar,
   whose menu pauses, resumes and stops, turns a source off or on, and
-  says which app the call is in. When that app leaves the call, or the
+  says which app the call is in. A side that records nothing (no sound
+  at all from the microphone, or only silence from the Mac's sound
+  while an app plays) is said within seconds: an orange mark in the menu
+  bar, and a card offering Start Again. When that app leaves the call, or the
   meeting is over and quiet for a minute, a card offers Stop. Then its
   window: both sides' waveforms, played in step, and the transcript line
   by line, Me and Them (Room in person); a click plays from a line; ⌘C

@@ -54,7 +54,9 @@ others must agree to be recorded.
 **While it records**, a red dot in the menu bar shows the time and both
 sides' sound. Its menu pauses, resumes, stops, or turns a source off.
 When the call app leaves the call, or the meeting is over and quiet for a
-minute, a card offers to stop.
+minute, a card offers to stop. If a side records nothing (your headset's
+microphone giving no sound at all, for example), an orange mark shows in
+the menu bar within seconds, and a card offers **Start Again**.
 
 **Webcam and screen** are off until you turn them on, from the card or
 the red dot's menu: the meeting's window is recorded with the sound, and

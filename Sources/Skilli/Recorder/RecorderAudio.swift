@@ -44,6 +44,8 @@ final class AudioInbox: @unchecked Sendable {
     private var count = 0
     private var chunkCount = 0
     private var restartNext = false
+    /// When the source last started again (host ticks).
+    private var restartedAt: UInt64 = 0
     /// The last buffer's level (root mean square), for the meters.
     private var lastLevel: Float = 0
     private var lastPut: UInt64 = 0
@@ -98,6 +100,7 @@ final class AudioInbox: @unchecked Sendable {
     func markRestart() {
         os_unfair_lock_lock(lock)
         restartNext = true
+        restartedAt = mach_absolute_time()
         os_unfair_lock_unlock(lock)
     }
 
@@ -195,6 +198,16 @@ final class AudioInbox: @unchecked Sendable {
         return HostClock.seconds(mach_absolute_time() - max(lastSound, firstPut))
     }
 
+    /// When the last buffer came, the last one holding more than digital
+    /// silence, and the source last started again (host seconds; nil:
+    /// never): whether the track records anything (`SilentTrack`).
+    var times: (buffer: Double?, sound: Double?, restarted: Double?) {
+        os_unfair_lock_lock(lock)
+        defer { os_unfair_lock_unlock(lock) }
+        func seconds(_ ticks: UInt64) -> Double? { ticks == 0 ? nil : HostClock.seconds(ticks) }
+        return (seconds(lastPut), seconds(lastSound), seconds(restartedAt))
+    }
+
     var dropped: Int {
         os_unfair_lock_lock(lock)
         defer { os_unfair_lock_unlock(lock) }
@@ -208,10 +221,13 @@ final class AudioInbox: @unchecked Sendable {
 /// Core Audio's real-time thread (no queue): on a dispatch queue macOS let
 /// it fall behind with the display off (Measured: 23 minutes missing in an
 /// hour). The default output changing (headphones, a display) rebuilds the
-/// aggregate on the new one; the tap's next buffer is placed by the host
-/// clock. macOS asks once, the first time (System Audio Recording, even
-/// with Screen Recording allowed, on the test Mac); not allowed, the tap
-/// records silence, every call succeeding (`AudioInbox.silentFor`).
+/// aggregate on the new one, and so does the same output changing its rate
+/// (a Bluetooth headset going to 24 kHz once a microphone is in use: its
+/// buffers, still called 48 kHz, put 22 minutes of a call in 11); the tap's
+/// next buffer is placed by the host clock. macOS asks once, the first time
+/// (System Audio Recording, even with Screen Recording allowed, on the test
+/// Mac); not allowed, the tap records silence, every call succeeding
+/// (`AudioInbox.silentFor`).
 final class MacSoundTap: @unchecked Sendable {
     struct Failure: LocalizedError {
         let call: String
@@ -228,6 +244,15 @@ final class MacSoundTap: @unchecked Sendable {
     private var channels = 2
     private var rate = 48000.0
     private var listening = false
+    /// The output under the aggregate, whose rate is listened to with the
+    /// aggregate's and the tap's format.
+    private var output = AudioObjectID(kAudioObjectUnknown)
+    /// One block, so that it can be removed (a closure passed again would
+    /// be another block).
+    private lazy var formatListener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.followFormat() }
+    /// Rebuilds that failed in a row (a device in the middle of a change):
+    /// tried again a second later, three times.
+    private var failedRebuilds = 0
     /// The output its clock comes from, by name (the card says "every app").
     private(set) var outputName = ""
     /// Self-test: processes left out too (the self-test's other skil.li).
@@ -250,11 +275,41 @@ final class MacSoundTap: @unchecked Sendable {
 
     func stop() {
         queue.sync {
+            // Started again, it may try its three rebuilds afresh.
+            failedRebuilds = 0
             destroyAggregate()
-            if tap != kAudioObjectUnknown { AudioHardwareDestroyProcessTap(tap) }
+            if tap != kAudioObjectUnknown {
+                Self.listen(tap, kAudioTapPropertyFormat, formatListener, on: queue, add: false)
+                AudioHardwareDestroyProcessTap(tap)
+            }
             tap = AudioObjectID(kAudioObjectUnknown)
         }
     }
+
+    /// Start Again (the card): the tap and its aggregate made afresh.
+    func restart() throws {
+        stop()
+        inbox.markRestart()
+        try start()
+    }
+
+    #if SKILLI_SELFTEST
+    /// Self-test: the rate the IO block calls its buffers, and the rebuilds.
+    var calledRate: Double { queue.sync { rate } }
+    private(set) var rebuilds = 0
+    /// Self-test: the rates now of the tap's format, the aggregate and the
+    /// output under it.
+    var formats: (tap: Double, aggregate: Double, output: Double) {
+        queue.sync {
+            var format = AudioStreamBasicDescription()
+            var aggregateRate = 0.0, outputRate = 0.0
+            Self.read(tap, kAudioTapPropertyFormat, &format)
+            Self.read(aggregate, kAudioDevicePropertyNominalSampleRate, &aggregateRate)
+            Self.read(Self.defaultOutput(), kAudioDevicePropertyNominalSampleRate, &outputRate)
+            return (format.mSampleRate, aggregateRate, outputRate)
+        }
+    }
+    #endif
 
     private func makeTap() throws {
         guard tap == kAudioObjectUnknown else { return }
@@ -269,16 +324,18 @@ final class MacSoundTap: @unchecked Sendable {
         let status = AudioHardwareCreateProcessTap(description, &made)
         guard status == noErr else { throw Failure(call: "AudioHardwareCreateProcessTap", status: status) }
         tap = made
+        Self.listen(tap, kAudioTapPropertyFormat, formatListener, on: queue, add: true)
     }
 
     private func makeAggregate() throws {
-        // The tap's format follows the output it is on.
+        // The tap's channels; its rate only until the aggregate says its own.
         var format = AudioStreamBasicDescription()
         if Self.read(tap, kAudioTapPropertyFormat, &format) {
             channels = max(1, Int(format.mChannelsPerFrame))
             if format.mSampleRate > 0 { rate = format.mSampleRate }
         }
         let output = Self.defaultOutput()
+        self.output = output
         let uid = Self.string(output, kAudioDevicePropertyDeviceUID) ?? ""
         outputName = Self.string(output, kAudioObjectPropertyName) ?? ""
         var settings: [String: Any] = [
@@ -297,6 +354,14 @@ final class MacSoundTap: @unchecked Sendable {
         var status = AudioHardwareCreateAggregateDevice(settings as CFDictionary, &device)
         guard status == noErr else { throw Failure(call: "AudioHardwareCreateAggregateDevice", status: status) }
         aggregate = device
+        // Its buffers come at the aggregate's rate, the output's: the one they
+        // are called (the tap's format said 48 kHz with the output at 44.1 kHz,
+        // on the test Mac).
+        var nominal = 0.0
+        if Self.read(device, kAudioDevicePropertyNominalSampleRate, &nominal), nominal > 0 { rate = nominal }
+        for object in [device, output] where object != kAudioObjectUnknown {
+            Self.listen(object, kAudioDevicePropertyNominalSampleRate, formatListener, on: queue, add: true)
+        }
         var made: AudioDeviceIOProcID?
         status = AudioDeviceCreateIOProcIDWithBlock(&made, device, nil, Self.ioBlock(inbox, channels: channels, rate: rate))
         guard status == noErr, let made else {
@@ -312,6 +377,10 @@ final class MacSoundTap: @unchecked Sendable {
     }
 
     private func destroyAggregate() {
+        for object in [aggregate, output] where object != kAudioObjectUnknown {
+            Self.listen(object, kAudioDevicePropertyNominalSampleRate, formatListener, on: queue, add: false)
+        }
+        output = AudioObjectID(kAudioObjectUnknown)
         if aggregate != kAudioObjectUnknown, let proc {
             AudioDeviceStop(aggregate, proc)
             AudioDeviceDestroyIOProcID(aggregate, proc)
@@ -336,15 +405,64 @@ final class MacSoundTap: @unchecked Sendable {
         var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultSystemOutputDevice,
                                                  mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, queue) { [weak self] _, _ in
-            guard let self, self.aggregate != kAudioObjectUnknown else { return }
-            self.destroyAggregate()
-            self.inbox.markRestart()
-            do {
-                try self.makeAggregate()
-                Log.trace("Recorder: the Mac's sound on \(self.outputName) now")
-            } catch {
-                Log.actions.error("Recorder: the Mac's sound lost (\(error.localizedDescription, privacy: .public))")
+            // Started (a tap made), even when its last rebuild failed.
+            guard let self, self.tap != kAudioObjectUnknown else { return }
+            self.rebuild()
+        }
+    }
+
+    /// The output's, the aggregate's or the tap's rate or channels changed
+    /// (a headset going to its call mode): the aggregate again, its buffers
+    /// called by the rate they come at. A change that leaves them as they
+    /// are rebuilds nothing.
+    private func followFormat() {
+        guard tap != kAudioObjectUnknown else { return }
+        guard aggregate != kAudioObjectUnknown else { return rebuild() }
+        var format = AudioStreamBasicDescription()
+        var nominal = 0.0
+        let channels = Self.read(tap, kAudioTapPropertyFormat, &format) ? max(1, Int(format.mChannelsPerFrame)) : self.channels
+        let rate = Self.read(aggregate, kAudioDevicePropertyNominalSampleRate, &nominal) && nominal > 0 ? nominal
+            : format.mSampleRate > 0 ? format.mSampleRate : self.rate
+        guard rate != self.rate || channels != self.channels else { return }
+        Log.trace("Recorder: the Mac's sound now \(Int(rate)) Hz, \(channels) channels (was \(Int(self.rate)) Hz, \(self.channels))")
+        rebuild()
+    }
+
+    /// The aggregate made again (on the queue); its next buffer placed by
+    /// the host clock. Failed (a device in the middle of a change), tried
+    /// again a second later, three times; then the track says it records
+    /// nothing (`SilentTrack`).
+    private func rebuild() {
+        destroyAggregate()
+        inbox.markRestart()
+        #if SKILLI_SELFTEST
+        rebuilds += 1
+        #endif
+        do {
+            try makeAggregate()
+            failedRebuilds = 0
+            Log.trace("Recorder: the Mac's sound on \(outputName) now, \(Int(rate)) Hz")
+        } catch {
+            failedRebuilds += 1
+            Log.actions.error("Recorder: the Mac's sound lost (\(error.localizedDescription, privacy: .public))")
+            guard failedRebuilds < 3 else { return }
+            // For this tap only: one made since (Start Again) has its own.
+            let forTap = tapID
+            queue.asyncAfter(deadline: .now() + 1) { [weak self] in
+                guard let self, self.tap != kAudioObjectUnknown, self.tapID == forTap, self.aggregate == kAudioObjectUnknown else { return }
+                self.rebuild()
             }
+        }
+    }
+
+    /// `block` on `selector` of `object` added (or removed), on `queue`.
+    private static func listen(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector, _ block: @escaping AudioObjectPropertyListenerBlock,
+                               on queue: DispatchQueue, add: Bool) {
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        if add {
+            AudioObjectAddPropertyListenerBlock(object, &address, queue, block)
+        } else {
+            AudioObjectRemovePropertyListenerBlock(object, &address, queue, block)
         }
     }
 

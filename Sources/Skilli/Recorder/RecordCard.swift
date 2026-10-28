@@ -8,8 +8,9 @@ import SkilliCore
 /// recorded before ↩. While a meeting is on, the card is that meeting's
 /// (its attendees, its case's sources). The same card, at launch, offers a
 /// recording never stopped: Save ↩, Later esc, Discard ⌘⌫; when the
-/// call being recorded ends: Stop ↩, Keep Recording esc; and at wake, a
-/// recording the Mac's sleep paused: Resume ↩, Stop ⌘↩, Keep Paused esc.
+/// call being recorded ends: Stop ↩, Keep Recording esc; at wake, a
+/// recording the Mac's sleep paused: Resume ↩, Stop ⌘↩, Keep Paused esc;
+/// and when a track records nothing: Start Again ↩, Keep Recording esc.
 @MainActor
 final class RecordCard {
     enum Content: Equatable {
@@ -17,6 +18,9 @@ final class RecordCard {
         case unfinished(URL, MeetingRecord)
         case callEnded(CallEndWatch.Reason)
         case slept
+        /// A track records nothing (`SilentTrack`); `privacy`: ⌘↩ opens
+        /// Screen & System Audio Recording.
+        case silent(Speaker, privacy: Bool)
     }
 
     /// The meeting the card records: its case, and whether ↩ joins its
@@ -33,6 +37,9 @@ final class RecordCard {
     /// Stop ↩ as the call ended (⌘↩ after a sleep); Keep Recording esc.
     var onStop: (() -> Void)?
     var onKeepRecording: ((CallEndWatch.Reason) -> Void)?
+    /// Start Again ↩ and Keep Recording esc for a track that records nothing.
+    var onStartAgain: ((Speaker) -> Void)?
+    var onKeepSilent: ((Speaker) -> Void)?
     /// Resume ↩ at wake.
     var onResume: (() -> Void)?
     /// A source's row clicked: on or off.
@@ -140,6 +147,17 @@ final class RecordCard {
     func showSlept(title: String, elapsed: Double, line: String) {
         content = .slept
         view.showSlept(title: title, elapsed: MeetingTranscript.clock(elapsed), line: line)
+        let typing = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < 1
+        show(takingKeys: !typing)
+        keysFrom = typing ? .now + MeetingCard.typingGrace : nil
+    }
+
+    /// A track records nothing: Start Again ↩, Keep Recording esc (⌘↩ the
+    /// permission when it says one). It never takes keys from the app the
+    /// user is typing in.
+    func showSilent(_ speaker: Speaker, title: String, elapsed: Double, line: String, privacy: Bool) {
+        content = .silent(speaker, privacy: privacy)
+        view.showSilent(title: title, elapsed: MeetingTranscript.clock(elapsed), line: line, privacy: privacy)
         let typing = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) < 1
         show(takingKeys: !typing)
         keysFrom = typing ? .now + MeetingCard.typingGrace : nil
@@ -316,6 +334,9 @@ final class RecordCard {
         case .slept:
             dismiss()
             onResume?()
+        case .silent(let speaker, _):
+            dismiss()
+            onStartAgain?(speaker)
         case nil:
             break
         }
@@ -336,6 +357,10 @@ final class RecordCard {
         case .slept:
             // Keep Paused: the menu bar resumes it.
             dismiss()
+        case .silent(let speaker, _):
+            // Keep Recording: not offered again until the track gives sound.
+            dismiss()
+            onKeepSilent?(speaker)
         case nil:
             break
         }
@@ -360,6 +385,8 @@ final class RecordCard {
         case (.slept, _) where isReturn && flags == .command:
             dismiss()
             onStop?()
+        case (.silent(_, privacy: true), _) where isReturn && flags == .command:
+            onOpenPrivacy?(.screenRecording)
         case (.unfinished(let folder, let record), kVK_Delete) where flags == .command:
             dismiss()
             onDiscard?(folder, record)
@@ -690,6 +717,30 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         layoutContent()
     }
 
+    /// A track records nothing: the recording's name, why, Start Again ↩.
+    func showSilent(title: String, elapsed: String, line: String, privacy: Bool) {
+        isRecordCard = false
+        window?.makeFirstResponder(nil)
+        setEyebrow("NOTHING RECORDED", dot: .systemOrange, hollow: false)
+        clock.stringValue = elapsed
+        clock.isHidden = false
+        nameField.stringValue = title
+        nameField.isSelectable = false
+        nameField.isEditable = false
+        languageMenu.isHidden = true
+        detail.isHidden = false
+        detail.stringValue = line
+        for row in [microphoneRow, macRow, webcamRow, screenRow] { row.isHidden = true }
+        consent.isHidden = true
+        inPersonNote = nil
+        note.isHidden = true
+        soundMissing = nil
+        button.title = "Start Again"
+        button.alphaValue = 1
+        leftHints.setHints([("Keep Recording", "esc")] + (privacy ? [("Privacy", "⌘↩")] : []))
+        layoutContent()
+    }
+
     /// At wake, the recording the Mac's sleep paused: its name, when it
     /// paused, Resume ↩.
     func showSlept(title: String, elapsed: String, line: String) {
@@ -953,8 +1004,16 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         y = nameField.frame.maxY + 8
 
         if !detail.isHidden {
-            detail.frame = NSRect(x: inset, y: y, width: inner, height: 20)
-            y += isRecordCard ? 22 : 28
+            // The Record card's attendees on one line; what the other cards
+            // say (a track that records nothing and what to allow) wraps.
+            detail.maximumNumberOfLines = isRecordCard ? 1 : 0
+            detail.cell?.wraps = !isRecordCard
+            detail.lineBreakMode = isRecordCard ? .byTruncatingTail : .byWordWrapping
+            let height = isRecordCard ? 20 : max(20, ceil((detail.stringValue as NSString).boundingRect(
+                with: NSSize(width: inner, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: [.font: detail.font ?? .systemFont(ofSize: 14)]).height))
+            detail.frame = NSRect(x: inset, y: y, width: inner, height: height)
+            y += isRecordCard ? 22 : height + 8
         }
 
         if !microphoneRow.isHidden {
