@@ -49,6 +49,9 @@ final class FileRankingTests: XCTestCase {
         XCTAssertFalse(FileRanking.matchesFolderWords(words, name: "Notes.txt", folder: "Clients/Margot Martin/Invoices"),
                        "one word at least in the name")
         XCTAssertTrue(FileRanking.matchesFolderWords(FileRanking.words("électricité"), name: "Facture-electricite.pdf", folder: ""))
+        XCTAssertFalse(FileRanking.matchesFolderWords(FileRanking.words("mon contrat de location"), name: "Contrat-location.pdf",
+                                                      folder: "Desktop/Mon dossier"), "two letters: in the name only")
+        XCTAssertFalse(FileRanking.matchesFolderWords(words, name: "Invoice.pdf", folder: "Clients/Dupontmartin"), "a folder word starts a word")
     }
 
     func testMatchOrder() {

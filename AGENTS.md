@@ -3256,8 +3256,12 @@ re-investigating.
   then PDFs, office files, archives, videos, audio and screenshots
   changed this week, a project's only if opened), one line each (kind, readable name, folder, "yesterday 18:02") in
   one Choice to Jev or OpenAI Decisions; the likely ones (≥ 4 %) best
-  first, ~0.3 s. Only on ⇥ and with Settings → Launcher → Search files by
-  meaning on (default). Spotlight's C API (`MDQuery`), synchronous, one
+  first, ~0.3 s. On ⇥, or on its own when the name search found nothing
+  and the text stayed put 400 ms more (`searchFiles`); only with Settings
+  → Launcher → Search files by meaning on (default) and a decision key.
+  A word of one or two letters counts only in a name, a folder word must
+  start a folder's word: "mon contrat de location" is not a name because
+  of a Desktop folder, so the search by meaning still starts. Spotlight's C API (`MDQuery`), synchronous, one
   query at a time on its own queue, stopped when no longer wanted or after
   3 s: queries started together (one per key) were seen waiting forever,
   and NSMetadataQuery's main-run-loop notifications crashed the Swift

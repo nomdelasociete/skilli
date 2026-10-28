@@ -19171,7 +19171,7 @@ final class SelfTest {
     /// "f contrat-location…" finds the file by name and ⌘Return shows it in
     /// Finder; "f mon contrat de location" ⇥ finds it by meaning.
     private func launcherFindsFiles() async {
-        let name = "Search Files: “f …” finds a file by name, ⌘Return shows it in Finder; a description ⇥ finds it by meaning"
+        let name = "Search Files: “f …” finds a file by name, ⌘Return shows it in Finder; a description no name fits finds it by meaning on its own"
         let marker = Int.random(in: 1000...9999)
         let lease = "Contrat-location-appartement-\(marker).pdf"
         guard let folder = await seedFiles([lease, "Facture-EDF-octobre-\(marker).pdf"]) else { return }
@@ -19202,12 +19202,19 @@ final class SelfTest {
             guard await focusTestWindow() else { return }
             _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
             for character in "f mon contrat de location" { await pressKey(character) }
-            await pressKey(nil, code: CGKeyCode(kVK_Tab))
-            let byMeaning = await waitUntil(timeout: 8) { launcher.isShowingFileMeaning && launcher.resultTitles.prefix(3).contains(lease) } != nil
+            // No file is named so: by meaning on its own, no ⇥; ⇥ after,
+            // only to tell the two apart in the report.
+            let leaseShown: @MainActor @Sendable () -> Bool = { launcher.isShowingFileMeaning && launcher.resultTitles.prefix(3).contains(lease) }
+            let onItsOwn = await waitUntil(timeout: 10, leaseShown) != nil
+            var withTab = onItsOwn
+            if !onItsOwn {
+                await pressKey(nil, code: CGKeyCode(kVK_Tab))
+                withTab = await waitUntil(timeout: 8, leaseShown) != nil
+            }
             await captureLauncher(as: "launcher-files-meaning.png")
             await pressKey(nil, code: CGKeyCode(kVK_Escape))
-            meaningPassed = byMeaning
-            meaningDetail = "by meaning: \(byMeaning) (\(launcher.resultTitles.first ?? "nothing"))"
+            meaningPassed = onItsOwn
+            meaningDetail = "by meaning on its own: \(onItsOwn)" + (onItsOwn ? "" : ", with ⇥: \(withTab)") + " (\(launcher.resultTitles.first ?? "nothing"))"
         }
         await closeLauncher()
         record(name, filesMode && found && shown && meaningPassed,

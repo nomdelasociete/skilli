@@ -5,8 +5,9 @@ Proposal and build, 2026-10-28.
 **Status**: built the same day: the ranking, the places left out, cloud
 drives, folder words. Asked: "in the files search, it needs to be way
 smarter than now… now it also searches in gh repos in the packages
-installation and such." Not built: ⇥ by meaning run on its own when no
-name fits (see Moment, 4).
+installation and such." Then, the same day: by meaning on its own when
+no file is named so (asked: "Run by meaning on its own when no name
+fits"; Moment, 3 and 4).
 
 ## Short answer
 
@@ -52,25 +53,29 @@ no longer receive `node_modules` names, and see cloud files.
    name ("mon bail").
 2. **The path**: `f ` (or Search Files) in the launcher, as before. No new
    key, no new setting.
-3. **Hint or push**: nothing new is shown. The rows are better; the
-   header and the ⇥ hint stay as they were.
+3. **Hint or push**: no hint to learn. When no file is named so and the
+   text stays put 400 ms, the search by meaning starts on its own (the
+   header says "Searching by meaning…", as on ⇥); ⇥ still starts it at
+   once. More typing stops it.
 4. **Deterministic or AI**: (a) and (b) are code: Spotlight's index, the
    path, the user's own "last opened" date (`kMDItemLastUsedDate`, set
    when a file is opened from Finder or an app): which files are someone
    else's is a fact of the path, not a judgment, and every keystroke has
    to answer in a few hundred milliseconds. (c) is a judgment: Jev or
-   Decisions on ⇥, the user's action, as the setting and Settings →
-   Privacy say ("Search files by meaning with ⇥"). What ⇥ sends: the
+   Decisions, on ⇥ or on its own when no file is named so, under
+   Settings → Launcher → Search files by meaning (Settings → Privacy says
+   both). A word of one or two letters ("de", "le") counts only in a
+   name, so a description is never taken for a folder's name. What it sends: the
    request, and for up to 240 candidates (the cleaned name matches, then
    files opened in 90 days, then documents changed this week, cloud
    drives' included) each one's name, kind, folder and modified date;
-   never a file's content. Running it on its own
-   when no name fits would send file names without a key pressed: not
-   done; to be decided with the setting's wording if wanted.
+   never a file's content, and nothing while names fit.
 5. **Wrong**: a file left out that was wanted (a README in a dependency
    the user is reading): Finder's own search still finds it, and once
    opened from there it is "used" and comes back for build output (not
-   for dependency folders: they stay out). A wrong order costs a ↓.
+   for dependency folders: they stay out). A wrong order costs a ↓. A
+   search by meaning nobody wanted costs one decision call (~0.2 s with
+   Jev) and the rows of what fits; esc or more typing.
 
 ## Measures
 

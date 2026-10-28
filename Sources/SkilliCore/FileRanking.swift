@@ -91,11 +91,15 @@ public enum FileRanking {
         text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
     }
 
-    /// Every word in the name or in a folder above it, one at least in the
-    /// name: "martin invoice" → "Clients/Margot Martin/Invoice.pdf".
+    /// Every word in the name or starting a word in a folder above it, one
+    /// at least in the name: "martin invoice" → "Clients/Margot
+    /// Martin/Invoice.pdf". A word of one or two letters only in the name:
+    /// "de" in "Desktop" would make "mon contrat de location" a name,
+    /// and no search by meaning would start on its own.
     public static func matchesFolderWords(_ words: [String], name: String, folder: String) -> Bool {
-        let name = fold(name), folder = fold(folder)
-        return words.contains { name.contains($0) } && words.allSatisfy { name.contains($0) || folder.contains($0) }
+        let folded = fold(name)
+        return words.contains { folded.contains($0) }
+            && words.allSatisfy { folded.contains($0) || ($0.count > 2 && startsWord($0, in: folder)) }
     }
 
     /// Higher first. Nil when the words do not all fit (see

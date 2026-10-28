@@ -2039,7 +2039,8 @@ final class LauncherController: NSObject {
     }
 
     /// Spotlight by name once typing pauses (100 ms); the rows come back a
-    /// moment later.
+    /// moment later. No file named so ("f mon bail"): by meaning on its
+    /// own once the text stays put 400 ms more, as ⇥ does at once.
     private func searchFiles(_ text: String) {
         guard !text.trimmingCharacters(in: .whitespaces).isEmpty else {
             fileResults = (text, [])
@@ -2053,6 +2054,10 @@ final class LauncherController: NSObject {
             guard let self, !Task.isCancelled, self.mode == .files, self.searchField.stringValue == text else { return }
             self.fileResults = (text, files)
             self.updateResults(query: text)
+            guard files.isEmpty, self.fileMeaningOn, self.fileMeaningPending != text, self.fileMeaning?.query != text else { return }
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, self.mode == .files, self.searchField.stringValue == text else { return }
+            self.searchFilesByMeaning()
         }
     }
 
@@ -2303,7 +2308,7 @@ final class LauncherController: NSObject {
         }
     }
 
-    /// ⇥: the decision model picks among recent files.
+    /// ⇥, or no file named so: the decision model picks among recent files.
     private func searchFilesByMeaning() {
         let text = searchField.stringValue
         guard fileMeaningOn, !text.trimmingCharacters(in: .whitespaces).isEmpty, let keys = fileDecisionKeys?() else { return }

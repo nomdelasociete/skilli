@@ -154,8 +154,8 @@ public enum PrivacyMap {
     public static let files = Flow(
         "files", "Files by meaning",
         sends: "Your words, and the names, kinds, folders and dates of up to \(FileMeaning.candidateLimit) files that may fit.",
-        when: "Only when you press ⇥ in Search Files.",
-        pane: "launcher", toggle: "Search files by meaning with ⇥")
+        when: "When no file is named like what you typed in Search Files, or when you press ⇥ there.",
+        pane: "launcher", toggle: "Search files by meaning")
     public static let history = Flow(
         "history", "Browser history by meaning",
         sends: "Your words, and the titles, sites and dates of your last \(HistoryMeaning.candidateLimit) pages.",

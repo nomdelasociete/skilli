@@ -215,8 +215,8 @@ public enum SettingsTable {
                 note: "Opened again before then, it shows what was typed, its mode and the row selected. ↑ in the empty field brings back recent searches either way."),
         setting("launcher", "historyMeaningSearch", "Search browser history by meaning with ⇥", .toggle,
                 note: "On ⇥ only, the last pages' titles, sites and dates go to the user's TypeSafe Jev or OpenAI Decisions key."),
-        setting("launcher", "fileMeaningSearch", "Search files by meaning with ⇥", .toggle,
-                note: "On ⇥ only, names, kinds, folders and dates of recent files go to the user's TypeSafe Jev or OpenAI Decisions key."),
+        setting("launcher", "fileMeaningSearch", "Search files by meaning", .toggle,
+                note: "When no file is named like what was typed, or on ⇥, names, kinds, folders and dates of recent files go to the user's TypeSafe Jev or OpenAI Decisions key."),
         setting("launcher", "launcherEnglishInput", "Type in English while open", .toggle,
                 note: "Under Advanced. While the launcher is open the keyboard types with the user's own English layout (ABC, else U.S.), then theirs again; shortcuts keep their keys. Does nothing when no English layout is turned on in System Settings → Keyboard."),
 
