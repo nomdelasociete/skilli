@@ -14434,7 +14434,7 @@ final class SelfTest {
     /// hour (a real power assertion, its end in the menu); "allow sleep"
     /// typed in Ask lets it sleep again, without a model.
     private func keepAwakeForAWhile() async {
-        let name = "Keep Awake for a while: “awake 1 hour” in the launcher, “do not sleep 2” read as hours, the cup in the menu bar; Ask's values from the model (1 h 30, done with ⌘Z when unsure, off with no time)"
+        let name = "Keep Awake for a while: “awake 1 hour” in the launcher, “do not sleep 2” read as hours, “awa 3h” (the word cut short), “zk 4h” (an alias), the cup in the menu bar; Ask's values from the model (1 h 30, done with ⌘Z when unsure, off with no time)"
         guard let commands = context.tools.tools.systemCommands else {
             record(name, false, "no system commands", nil)
             return
@@ -14443,11 +14443,23 @@ final class SelfTest {
             (try? await ClaudeCLI.run(URL(fileURLWithPath: "/usr/bin/pmset"), ["-g", "assertions"], timeout: 10)) ?? ""
         }
         defer { if commands.isKeepingAwake { _ = commands.keepAwake(.allowSleep) } }
+        let savedAliases = context.preferences.launcherAliases
+        defer { context.preferences.launcherAliases = savedAliases }
+        context.preferences.launcherAliases = [LauncherAlias(id: "system:keepAwake", alias: "zk", title: "Keep Awake")]
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
         for character in "do not sleep 2" { await pressKey(character) }
         let hours = await waitUntil(timeout: 1) { (self.context.launcher.topResultName ?? "").hasPrefix("Keep Awake · 2 h") } != nil
         for _ in 0..<14 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+        // The word cut short, then its length (`LauncherShorthand`).
+        for character in "awa 3h" { await pressKey(character) }
+        let shortened = await waitUntil(timeout: 1) { (self.context.launcher.topResultName ?? "").hasPrefix("Keep Awake · 3 h") } != nil
+        for _ in 0..<6 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+        // An alias then the length: the read row first, not the alias's
+        // plain Keep Awake row.
+        for character in "zk 4h" { await pressKey(character) }
+        let aliased = await waitUntil(timeout: 1) { (self.context.launcher.topResultName ?? "").hasPrefix("Keep Awake · 4 h") } != nil
+        for _ in 0..<5 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
         for character in "awake 1 hour" { await pressKey(character) }
         let listed = await waitUntil(timeout: 1) { (self.context.launcher.topResultName ?? "").hasPrefix("Keep Awake · 1 h (until ") } != nil
         let title = context.launcher.topResultName ?? ""
@@ -14528,9 +14540,9 @@ final class SelfTest {
         await pause(300)
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         let cupGone = context.awakeIndicator.shown == nil
-        record(name, hours && listed && held && anHour && cup && quiet && saidAnHour && checked && keptAfterReturn && released && cupGone && commands.awakeUntil == nil
+        record(name, hours && shortened && aliased && listed && held && anHour && cup && quiet && saidAnHour && checked && keptAfterReturn && released && cupGone && commands.awakeUntil == nil
                    && unreadSaid && unreadKept,
-               "“do not sleep 2” → 2 h: \(hours); listed “\(title)”: \(listed); held: \(held), \(Int(left)) s left; cup in the menu bar “\(cupShown)”: \(cup), no card: \(quiet); "
+               "“do not sleep 2” → 2 h: \(hours); “awa 3h” → 3 h: \(shortened); “zk 4h” → 4 h: \(aliased); listed “\(title)”: \(listed); held: \(held), \(Int(left)) s left; cup in the menu bar “\(cupShown)”: \(cup), no card: \(quiet); "
                    + "Ask “… une heure trente” → 1 h 30: \(saidAnHour); unsure, done at once with Undo: \(checked), ⌘Z let it sleep: \(keptAfterReturn); "
                    + "Keep Awake again with no time released it: \(released), cup gone: \(cupGone); nothing read: said \(unreadSaid), left on \(unreadKept)", nil)
     }
@@ -19287,13 +19299,15 @@ final class SelfTest {
     /// "f contrat-location…" finds the file by name and ⌘Return shows it in
     /// Finder; "f mon contrat de location" ⇥ finds it by meaning.
     private func launcherFindsFiles() async {
-        let name = "Search Files: “f …” finds a file by name, ⌘Return shows it in Finder; a description no name fits finds it by meaning on its own"
+        let name = "Search Files: “f …” finds a file by name, ⌘Return shows it in Finder; a description no name fits finds it by meaning on its own; ⇥ keeps what the name found"
         let marker = Int.random(in: 1000...9999)
         let lease = "Contrat-location-appartement-\(marker).pdf"
-        guard let folder = await seedFiles([lease, "Facture-EDF-octobre-\(marker).pdf"]) else { return }
+        let bill = "Facture-EDF-octobre-\(marker).pdf"
+        guard let folder = await seedFiles([lease, bill]) else { return }
         defer { try? FileManager.default.removeItem(at: folder) }
-        guard await spotlightFinds(lease) else {
-            record(name, false, "Spotlight never indexed the file", nil)
+        // Spotlight takes seeded files seconds apart: each waited for.
+        guard await spotlightFinds(lease), await spotlightFinds(bill) else {
+            record(name, false, "Spotlight never indexed the files", nil)
             return
         }
         let launcher = context.launcher
@@ -19336,6 +19350,18 @@ final class SelfTest {
             meaningPassed = onItsOwn
             meaningDetail = "by meaning on its own: \(onItsOwn)" + (onItsOwn ? "" : ", with ⇥: \(withTab)")
                 + (named ? ", a file is named so on this Mac" : "")
+
+            // ⇥ on a name that fits: the file named so stays among the rows,
+            // whatever the model picks.
+            guard await focusTestWindow() else { return }
+            _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+            for character in "f edf octobre \(marker)" { await pressKey(character) }
+            let billNamed = await waitUntil(timeout: 5) { launcher.resultTitles.contains(bill) } != nil
+            await pressKey(nil, code: CGKeyCode(kVK_Tab))
+            let billKept = await waitUntil(timeout: 15) { launcher.isShowingFileMeaning && launcher.resultTitles.contains(bill) } != nil
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            meaningPassed = meaningPassed && billNamed && billKept
+            meaningDetail += "; by name: \(billNamed), still there with ⇥: \(billKept)"
         }
         await closeLauncher()
         record(name, filesMode && found && shown && meaningPassed,

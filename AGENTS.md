@@ -1024,8 +1024,23 @@ starts from it.
 - Typed then a space (`LauncherAliases.split`): a command that turns the
   launcher into a mode opens it with the rest as its filter ("e smile",
   `LauncherController.mode(for:)`); a skillie with arguments asks its first
-  one; a quicklink takes the rest as its query. Typed alone, or for what
-  opens no mode: the item comes first, its alias as a keycap on the row.
+  one; a quicklink takes the rest as its query; a row that reads a value
+  takes it ("a 2h" with `a` on Keep Awake, "r Weekly sync" on Record
+  Meeting; `LauncherShorthand.aliased`), its read row first. Typed alone,
+  or for what opens no mode: the item comes first, its alias as a keycap
+  on the row.
+- A word cut short then a space and a value (asked 2026-10-28: "awa" in a
+  hurry, ⇥ asks, ↩ toggles; spec `docs/launcher-shorthand.md`): "awa 2h",
+  "tim 10 tea", "vo 30" are read as "awake 2h", "timer 10 tea", "volume
+  30" by the same parsers (`LauncherShorthand.expand`). Two letters or
+  more, the start of one taught word whose value is strict (a duration, a
+  time, a level); free-text values ("event", "remind me", "rec") only
+  after the whole word or an alias, so a search like "visual st" never
+  becomes a command. An alias typed wins (`aw` on an app is never cut
+  short to "awake"). Nothing read: the launcher as before. No new key, ⇥
+  stays Ask. A new value word: add it to `LauncherShorthand.shortened`
+  only if its parser rejects plain words (a test keeps the two-letter
+  starts apart).
 
 ### Root search ("our way": fewer knobs than Raycast)
 
@@ -1152,7 +1167,8 @@ starts from it.
   read (`LauncherController.controlTextDidChange`, `ProcessListing.query`,
   the `modeFilter`s): the first of each is the Catalog's keycap. The words
   Return types ("timer ", "awake ", "event ", "remind me ") are the
-  parsers' own constants; a test parses them with words after.
+  parsers' own constants; a test parses them with words after. "timer",
+  "awake" and "volume" also work cut short ("aw 2h", `LauncherShorthand`).
 - An entry's id is its launcher row's `learningID` ("cmd:emoji"), so the
   alias is the row's; "catalog.…" when it has none (no alias then).
   `selftest catalog` checks they match.
@@ -2142,7 +2158,9 @@ re-investigating.
   the bar stays short, "12 min left · then Standup 14:30" (never a bare
   "12 min" read as the time to the next one), and the menu adds "Next: …"
   with its own Join; the menu joins, shows it in Calendar, opens the
-  agenda, dismisses);
+  agenda, dismisses: that occurrence only, until it ends, saved across
+  relaunches and full calendar syncs, `MeetingDismissals` keyed by the
+  server's id (`calendarItemExternalIdentifier`) and the start);
   "Alerts" (`MeetingAlert`, `MeetingAlerts` in SkilliCore): each On
   time or 1, 2, 5, 10, 15, 30 min or 1 h before, as the card or the card
   with every screen dark around it; each once at its minute (the Mac
@@ -2675,7 +2693,8 @@ re-investigating.
 - Keep Awake for a while (`AwakeRequest` in SkilliCore,
   `SystemCommands.keepAwake`): "awake 1 hour", "do not sleep 1", "garde le
   mac éveillé 2h", "caffeinate until 6pm", "pas de veille jusqu'à 18h30",
-  "turn off awake" typed in the launcher (whole words, accents ignored; a
+  "turn off awake" typed in the launcher, "awa 2h" too (the word cut
+  short or an alias, `LauncherShorthand`; whole words, accents ignored; a
   bare number is hours up to 24, minutes above; "until/jusqu'à" a time,
   today or tomorrow) show "Keep Awake · 1 h (until 14:05)" first. The
   same power assertion as Keep
@@ -3296,13 +3315,14 @@ re-investigating.
   attributes: read one by one, a common word's dates took seconds).
   docs/file-search.md has the measures. Return opens,
   ⌘Return shows in Finder. ⇥ searches by meaning
-  (`FileSearch.searchByMeaning`): up to 240 candidates (files named with
-  the request's words, ranked as above, then opened in the last 90 days,
+  (`FileSearch.searchByMeaning`): up to 240 candidates (the rows the
+  name search shows, files named with the request's words, ranked as above, then opened in the last 90 days,
   then PDFs, office files, archives, videos, audio and screenshots
   changed this week, a project's only if opened), one line each (kind, readable name, folder, "yesterday 18:02") in
   one Choice to Jev or OpenAI Decisions (the 240 is what Spotlight
   gathers, not a part of a longer list: files have no rounds); the likely ones (≥ 4 %) best
-  first, ~0.3 s. On ⇥, or on its own when the name search found nothing
+  first, ~0.3 s, then every row the name search showed: by meaning never
+  loses a file named so. On ⇥, or on its own when the name search found nothing
   and the text stayed put 400 ms more (`searchFiles`); only with Settings
   → Launcher → Search files by meaning on (default) and a decision key.
   A word of one or two letters counts only in a name, a folder word must

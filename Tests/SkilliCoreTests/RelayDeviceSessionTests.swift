@@ -625,6 +625,8 @@ final class RelayDeviceSessionTests: XCTestCase {
         var nativeToken = "alice"
         client.githubToken = { nativeToken }
         XCTAssertTrue(client.checksIdentity(origin: origin), "Not verified yet, not failed: checking")
+        var changes = 0
+        client.onChange = { changes += 1 }
         XCTAssertFalse(client.checksIdentity(origin: "https://other-relay.example"), "Saved for another relay: not this one's check")
         client.activate(origin: origin)
         for _ in 0..<500 {
@@ -633,6 +635,7 @@ final class RelayDeviceSessionTests: XCTestCase {
         }
         XCTAssertNotNil(client.configuration(origin: origin))
         XCTAssertFalse(client.checksIdentity(origin: origin))
+        XCTAssertGreaterThanOrEqual(changes, 2, "Said when the check starts and when it passes")
         nativeToken = "alice-again"
         XCTAssertTrue(client.checksIdentity(origin: origin), "Another GitHub sign-in is checked again")
         nativeToken = "alice"

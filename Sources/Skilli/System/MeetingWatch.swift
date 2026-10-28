@@ -15,6 +15,7 @@ import SkilliCore
 final class MeetingWatch: NSObject, NSMenuDelegate {
     private let calendar: CalendarBook
     private let preferences: Preferences
+    private let defaults: UserDefaults
     /// Whether a call is on on this Mac (another app on the microphone).
     let microphone = MicrophoneUse()
     /// Occurrences seen joined (a call begun around their start): they stay
@@ -37,8 +38,9 @@ final class MeetingWatch: NSObject, NSMenuDelegate {
     /// The next one, beside the meeting on now.
     private var shownNext: AgendaEvent?
     private var timer: Timer?
-    /// Dismissed from the menu bar until the next meeting.
-    private var dismissed: Set<String> = []
+    /// Dismissed from the menu bar, each occurrence until it ends: saved,
+    /// so a relaunch does not bring it back.
+    private var dismissed: MeetingDismissals
     /// Already joined or offered as it started.
     private var started: Set<String> = []
     /// Alerts already shown (`MeetingAlerts.due`'s keys).
@@ -58,9 +60,11 @@ final class MeetingWatch: NSObject, NSMenuDelegate {
     var itemMenu: NSMenu? { item?.menu }
     var nextChange: Date? { timer?.fireDate }
 
-    init(calendar: CalendarBook, preferences: Preferences) {
+    init(calendar: CalendarBook, preferences: Preferences, defaults: UserDefaults = .standard) {
         self.calendar = calendar
         self.preferences = preferences
+        self.defaults = defaults
+        dismissed = MeetingDismissals(defaults: defaults)
         super.init()
         microphone.onChange = { [weak self] in self?.refresh() }
         let workspace = NSWorkspace.shared.notificationCenter
@@ -83,6 +87,8 @@ final class MeetingWatch: NSObject, NSMenuDelegate {
             return
         }
         let events = calendar.soonEvents(now: now).filter { !$0.isAllDay && !$0.declined }
+        let kept = dismissed.refreshed(with: events, now: now)
+        if kept != dismissed { saveDismissed(kept) }
         var next: Date?
         func wait(until date: Date) {
             if date > now, date < (next ?? .distantFuture) { next = date }
@@ -99,7 +105,7 @@ final class MeetingWatch: NSObject, NSMenuDelegate {
         // window, for the calls the menu bar shows, alerts or joins at once:
         // CoreAudio comes into skil.li then, not at launch.
         if !microphone.isStarted {
-            let calls = events.filter { $0.meeting != nil && ((options.lead != nil && !dismissed.contains($0.id)) || !alerts.isEmpty || joining) }
+            let calls = events.filter { $0.meeting != nil && ((options.lead != nil && !dismissed.contains($0)) || !alerts.isEmpty || joining) }
             let from = { (event: AgendaEvent) in event.start.addingTimeInterval(-MeetingBar.joinLead - 60) }
             if calls.contains(where: { now >= from($0) && now < $0.start.addingTimeInterval(MeetingBar.lateWindow) }) {
                 microphone.start()
@@ -303,8 +309,17 @@ final class MeetingWatch: NSObject, NSMenuDelegate {
     }
 
     @objc private func dismiss() {
-        if let shown { dismissed.insert(shown.id) }
+        if let shown {
+            var more = dismissed
+            more.insert(shown)
+            saveDismissed(more)
+        }
         refresh()
+    }
+
+    private func saveDismissed(_ kept: MeetingDismissals) {
+        dismissed = kept
+        kept.save(to: defaults)
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -312,9 +327,10 @@ final class MeetingWatch: NSObject, NSMenuDelegate {
         record.isHidden = !recordable(shown)
     }
 
-    /// Self-test hook: forget what was dismissed, offered or joined.
+    /// Self-test hook: forget what was dismissed, offered or joined. The
+    /// dismissals saved stay (the user's): read again at the next launch.
     func resetForTest() {
-        dismissed = []
+        dismissed = MeetingDismissals()
         started = []
         alerted = []
         seenInCall = []

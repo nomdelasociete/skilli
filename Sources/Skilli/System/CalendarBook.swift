@@ -452,7 +452,7 @@ final class CalendarBook {
                                      ? String(participant.url.absoluteString.dropFirst(7)) : nil)
         }
         let declined = event.attendees?.first(where: \.isCurrentUser)?.participantStatus == .declined
-        return AgendaEvent(id: event.calendarItemIdentifier, title: event.title ?? "", start: event.startDate, end: event.endDate,
+        return AgendaEvent(id: event.calendarItemIdentifier, externalID: event.calendarItemExternalIdentifier, title: event.title ?? "", start: event.startDate, end: event.endDate,
                            isAllDay: event.isAllDay, calendar: event.calendar?.title ?? "", location: event.location ?? "",
                            notes: event.notes ?? "", url: event.url?.absoluteString, attendees: attendees, declined: declined)
     }
