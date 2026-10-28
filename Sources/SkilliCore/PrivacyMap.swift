@@ -158,12 +158,12 @@ public enum PrivacyMap {
         pane: "launcher", toggle: "Search files by meaning with ⇥")
     public static let history = Flow(
         "history", "Browser history by meaning",
-        sends: "Your words, and the titles, sites and dates of your last \(HistoryMeaning.candidateLimit) pages.",
+        sends: "Your words, and the titles, sites and dates of the pages your browsers keep: every one, or, past \(MeaningRounds.questionSize), those from the days your words name; \(MeaningRounds.questionSize) to a question, the likely ones asked again together.",
         when: "Only when you press ⇥ in Browser History.",
         pane: "launcher", toggle: "Search browser history by meaning with ⇥")
     public static let clipboard = Flow(
         "clipboard", "Clipboard by meaning",
-        sends: "Your words, and your last \(ClipboardMeaning.candidateLimit) copies in short: \(ClipboardMeaning.excerptLength) characters each (words read in images, what images show), their app and date; a bank or card number or a key goes as what it is, never itself.",
+        sends: "Your words, and your kept copies in short: every one, or, past \(MeaningRounds.questionSize), those from the days and of the kind your words name; \(MeaningRounds.questionSize) to a question, the likely ones asked again together. \(ClipboardMeaning.excerptLength) characters each (words read in images, what images show), their app and date; a bank or card number or a key goes as what it is, never itself.",
         when: "Only when you press ⇥ in Clipboard History.",
         pane: "clipboard", toggle: "Search by meaning with ⇥")
     public static let snippets = Flow(
@@ -760,7 +760,7 @@ public enum PrivacyMap {
         let going = goingFrom("clipboard", setup)
         var sentences: [String] = []
         if let to = going.first(where: { $0.flow == clipboard.id })?.to {
-            sentences.append("when you press ⇥, short excerpts of your last copies go to \(spoken(to))")
+            sentences.append("when you press ⇥, short excerpts of your copies go to \(spoken(to))")
         }
         let images = going.filter { [imagesCopied.id, imagesFolder.id].contains($0.flow) }
         if let to = images.first?.to {
@@ -812,7 +812,7 @@ public enum PrivacyMap {
         let going = goingFrom("launcher", setup)
         var sentences: [String] = []
         if let to = going.first(where: { $0.flow == history.id })?.to {
-            sentences.append("when you press ⇥ in Search Browser History, your words and the titles, sites and dates of your last pages go to \(spoken(to))")
+            sentences.append("when you press ⇥ in Search Browser History, your words and the titles, sites and dates of your pages go to \(spoken(to))")
         }
         if let to = going.first(where: { $0.flow == files.id })?.to {
             sentences.append("in Search Files, your words and the names, kinds, folders and dates of the files that may fit go to \(spoken(to))")

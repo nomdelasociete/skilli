@@ -814,7 +814,7 @@ final class SelfTest {
             return await finish(after: [askRoutesOnVolume])
         }
         if scope == .clipmeaning {
-            return await finish(after: [clipboardMeaningOnVolume, clipboardMeaningAnswersFast])
+            return await finish(after: [clipboardMeaningOnVolume, clipboardMeaningAnswersFast, clipboardMeaningOverAMonth])
         }
         if scope == .decide {
             return await finish(after: [
@@ -823,6 +823,7 @@ final class SelfTest {
                 emojiByFeelingLive,
                 clipboardFindsByMeaning,
                 clipboardMeaningOnVolume,
+                clipboardMeaningOverAMonth,
                 askRoutesLive,
                 approvalRulesJudgedLive,
                 askFindsFinderMenus,
@@ -15375,6 +15376,82 @@ final class SelfTest {
         }
     }
 
+    /// The whole kept history searched, not its last 240: over 3,000
+    /// copies spread over 30 days (the corpus, a few older ones planted,
+    /// chat and notes between), requests with and without days and kinds
+    /// named. Each: the copies read once narrowed, the questions asked,
+    /// the time, whether the copy asked for came first.
+    private func clipboardMeaningOverAMonth() async {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-clipboard-month-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        guard let store = try? ClipboardStore(folder: folder) else {
+            record("Clipboard by meaning over a month", false, "no scratch store", nil)
+            return
+        }
+        let history = ClipboardHistory(preferences: context.preferences, store: store,
+                                       pasteboard: NSPasteboard(name: NSPasteboard.Name("skilli-selftest-\(UUID().uuidString)")))
+        let now = Date.now
+        let calendar = Calendar.current
+        // Wednesday of last week, 10:00: what "last week" names.
+        let lastWeek = calendar.dateInterval(of: .weekOfYear, for: calendar.date(byAdding: .day, value: -7, to: now) ?? now)?.start
+            .addingTimeInterval(2 * 86_400 + 10 * 3_600) ?? now.addingTimeInterval(-8 * 86_400)
+        let planted: [ClipboardMeaningCopy] = [
+            .init("old.wifi", "Code wifi du chalet : Lumiere-Horizon-2026, réseau « Chalet Martin »", "Messages", 20 * 24 + 5),
+            .init("old.rib", "RIB Jean-François Martaing : FR76 3000 6000 0112 3456 7890 189", "Mail", 17 * 24 + 3),
+            .init("old.figma", "https://www.figma.com/file/k9Lm2/Horizon-Roadmap-Q4", "Figma", now.timeIntervalSince(lastWeek) / 3_600)
+        ]
+        let filler = ClipboardMeaningCorpus.filler
+        let spread = (0..<2_960).map { index -> ClipboardMeaningCopy in
+            let copy = filler[index % filler.count]
+            // Across 30 days, newest first, a little off the hour.
+            return ClipboardMeaningCopy("month.\(index)", "\(copy.text) (\(index / filler.count))", copy.app, Double(index) * 30 * 24 / 2_960 + 0.3)
+        }
+        var keys: [Int64: String] = [:]
+        for copy in ClipboardMeaningCorpus.copies + planted + spread {
+            guard let item = try? store.add(.init(kind: copy.kind, text: copy.text, app: nil, appName: copy.app, hash: "month-\(copy.key)"),
+                                            at: now.addingTimeInterval(-copy.hours * 3_600)).item else { continue }
+            if let ocr = copy.ocr { try? store.setOCR(ocr, for: item.id) }
+            keys[item.id] = copy.key
+        }
+        let cases: [(request: String, wanted: String)] = [
+            ("la facture d'électricité", "bill"),
+            ("le code wifi du chalet", "old.wifi"),
+            ("le billet de train que j'ai copié hier", "ticket"),
+            ("l'adresse mail de Margot", "email.margot"),
+            ("the screenshot where the payout failed", "payout"),
+            ("le lien figma Horizon de la semaine dernière", "old.figma"),
+            ("le RIB de Jean-François", "old.rib")
+        ]
+        for provider in DecisionProvider.allCases {
+            let name = "Clipboard by meaning over a month with \(provider.title): \(cases.count) requests among \(keys.count) copies over 30 days, "
+                + "all but one found first, none past 15 s"
+            guard let key = userDecisionKeys[provider] else {
+                checks.append(Check(name: name, passed: true, skipped: true, detail: "no \(provider.title) key saved in Settings", latencyMs: nil))
+                continue
+            }
+            var right = 0, questions = 0
+            var seconds: [Double] = []
+            var details: [String] = []
+            for (request, wanted) in cases {
+                let start = ContinuousClock.now
+                let found = await history.searchByMeaning(request, keys: [provider: key], now: now)
+                let took = (ContinuousClock.now - start).milliseconds / 1_000
+                seconds.append(took)
+                questions += found?.questions ?? 0
+                let first = found?.items.first.flatMap { keys[$0.id] }
+                if first == wanted { right += 1 }
+                details.append("“\(request)” → \(first ?? "nothing")\(first == wanted ? "" : " (wrong)"): "
+                               + "\(found?.candidates ?? 0) copies, \(found?.questions ?? 0) questions, " + String(format: "%.2f s", took))
+            }
+            let sorted = seconds.sorted()
+            record(name, right >= cases.count - 1 && (sorted.last ?? 0) < 15,
+                   "\(right)/\(cases.count) right, \(questions) questions, " + String(format: "total %.2f s, median %.2f s, slowest %.2f s; ",
+                                                                                      seconds.reduce(0, +), sorted[sorted.count / 2], sorted.last ?? 0)
+                       + details.joined(separator: "; "),
+                   sorted[sorted.count / 2] * 1_000)
+        }
+    }
+
     /// How long ⇥ waits on each decision key with a full history (240
     /// copies, as on a Mac in use): 20 requests in a row, the median, the
     /// slowest, and how many got no answer within
@@ -15391,7 +15468,7 @@ final class SelfTest {
         let now = Date.now
         let corpus = ClipboardMeaningCorpus.copies
         let filler = ClipboardMeaningCorpus.filler
-        let copies = corpus + (0..<(ClipboardMeaning.candidateLimit - corpus.count)).map { index in
+        let copies = corpus + (0..<(MeaningRounds.questionSize - corpus.count)).map { index in
             let copy = filler[index % filler.count]
             return ClipboardMeaningCopy("more.\(index)", "\(copy.text) (\(index))", copy.app, 300 + Double(index))
         }

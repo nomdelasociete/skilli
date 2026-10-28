@@ -64,6 +64,7 @@
 		248524430DC784D101D065D4 /* HyperKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 738E57A49A152A4B343380FA /* HyperKey.swift */; };
 		24E0278210384D17E7295196 /* AppsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C84E87B826384FE9FC6322 /* AppsPane.swift */; };
 		264FC3DFE1EF9979B7C3CD91 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = DC502FE7B06F11ADA87636D4 /* Sparkle */; };
+		26A93005AEFF15C6E775D4B9 /* MeaningSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90463C73E58643E235F10DDC /* MeaningSearch.swift */; };
 		26BDDD8535975F352047D9FC /* BetterTranscription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A15004F1495188F0F4861D6 /* BetterTranscription.swift */; };
 		2761257AF0CC9E9615FED396 /* MeetingRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FB001360B30A9859D5118CF /* MeetingRecording.swift */; };
 		2768B2E634DC0060FB5B9A85 /* MeetingVoices.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE9F3C56B7086391D5DDC6E1 /* MeetingVoices.swift */; };
@@ -649,6 +650,7 @@
 		8F8ECF7BCD7E0CE2A77DF0EE /* AskSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskSchedule.swift; sourceTree = "<group>"; };
 		8FB368F0A0595301FA6F64AD /* SnippetLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetLibrary.swift; sourceTree = "<group>"; };
 		8FC2DCFD5F3A0C7F5B65178B /* MeetingFollowUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingFollowUp.swift; sourceTree = "<group>"; };
+		90463C73E58643E235F10DDC /* MeaningSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeaningSearch.swift; sourceTree = "<group>"; };
 		909C3A5CA605D8B57F2E96C8 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
 		90B7BF5796FEB3580C0E2EFE /* RecordingFollowUps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingFollowUps.swift; sourceTree = "<group>"; };
 		91117DB0BC9995D196DB1F61 /* LinkCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkCardView.swift; sourceTree = "<group>"; };
@@ -910,6 +912,7 @@
 				44F1A43CD8C38CC1E4CD3742 /* MCPImport.swift */,
 				4F4086CD6F54E9BD93594CDD /* MCPOAuth.swift */,
 				F27A226061344551B2C0E8BB /* MCPToolList.swift */,
+				90463C73E58643E235F10DDC /* MeaningSearch.swift */,
 				F6BF0BBE7DD28A30361C6987 /* MeetingAlert.swift */,
 				D91CD308B15A5E0DC4E6BC74 /* MeetingBar.swift */,
 				8FC2DCFD5F3A0C7F5B65178B /* MeetingFollowUp.swift */,
@@ -1686,6 +1689,7 @@
 				0123F70D95712AC71E3B7035 /* MacReadings.swift in Sources */,
 				A7B441CF88F542D1E2D6CE54 /* MailDraft.swift in Sources */,
 				664D720DE4E16FB9C3456BAA /* MarkdownBlocks.swift in Sources */,
+				26A93005AEFF15C6E775D4B9 /* MeaningSearch.swift in Sources */,
 				F3F28EC722CF8EF122FB6E18 /* MeetingAlert.swift in Sources */,
 				C93CD3DF22722B8F18A5AF75 /* MeetingBar.swift in Sources */,
 				CF69A0117B0FFEAC560382A1 /* MeetingFollowUp.swift in Sources */,

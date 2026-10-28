@@ -118,7 +118,7 @@ Mac mini, driven from here:
 | Where | What | Command |
 |---|---|---|
 | This Mac, any time | Unit tests, builds | `./script/build_and_run.sh test` |
-| This Mac, any time (no keys, no windows; restarts skil.li ~2 s) | Clipboard store, search, OCR; setup drawn off screen; live decisions (Ask, emoji, clipboard and files by meaning, nothing written) | `./script/build_and_run.sh selftest clipboard` / `selftest setup` / `selftest decide` |
+| This Mac, any time (no keys, no windows; restarts skil.li ~2 s) | Clipboard store, search, OCR; setup drawn off screen; live decisions (Ask, emoji, clipboard and files by meaning, nothing written); the clipboard by meaning on volume and over a month | `./script/build_and_run.sh selftest clipboard` / `selftest setup` / `selftest decide` / `selftest clipmeaning` |
 | Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote clipmeaning`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (a recording's window in the Dock with its icon, then records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote pictures` (the recorder's webcam and screen: a stand-in camera, a slides window, a scratch Chrome, ~3 min), `remote voices` (the recorder's phase 4: the played-back calls' voices told apart, an import, a line edited and undone, speakers renamed, Transcribe Again, ~10 min), `remote whisper` (Better transcription: its download from a stand-in server, whisper on the played-back calls, the echo drop with its times, ~25 min), `remote followups` (the recorder's phase 5 in a recording's window: ⌘K, the recap mail, the summary, chapters, action items to a scratch Reminders list, with the Mac's own AI provider, ~5 min), `remote guides` (the guides' pictures, light and dark, into `dist/remote/guides`; `script/guide-images.sh` then copies them to `website/guides/images`), `remote` (all) |
 
 Nothing else that opens skil.li runs on the developer's Mac: `selftest` refuses other
@@ -2957,7 +2957,9 @@ re-investigating.
   app behind it. Search Snippets ("snip ", `LauncherController.Mode.snippets`,
   a pink chip): every snippet by name, keyword or first words; ⇥ by
   meaning (`SnippetLibrary.searchByMeaning`): "mon iban", "adresse du
-  bureau" go to Jev or OpenAI Decisions in one Choice, each snippet told
+  bureau" go to Jev or OpenAI Decisions in one Choice (past 240
+  snippets, those holding a kind the request names, then in parts:
+  `MeaningNarrowing`, `MeaningRounds`), each snippet told
   by its name, keyword and first 80 characters as written (placeholders
   unfilled, never the rest; a bank or card number or a key goes as what it
   is, "(an IBAN)", never itself: `ToolCallSummary.maskingSecrets`, also in
@@ -3254,7 +3256,8 @@ re-investigating.
   the request's words, then opened in the last 90 days, then PDFs,
   office files, archives, videos, audio and screenshots changed this
   week), one line each (kind, readable name, folder, "yesterday 18:02") in
-  one Choice to Jev or OpenAI Decisions; the likely ones (≥ 4 %) best
+  one Choice to Jev or OpenAI Decisions (the 240 is what Spotlight
+  gathers, not a part of a longer list: files have no rounds); the likely ones (≥ 4 %) best
   first, ~0.3 s. Only on ⇥ and with Settings → Launcher → Search files by
   meaning on (default). Spotlight's C API (`MDQuery`), synchronous, one
   query at a time on its own queue, stopped when no longer wanted or after
@@ -3589,9 +3592,11 @@ re-investigating.
   escaped) once typing pauses 100 ms; rows: title, site · "21:08" /
   "yesterday" / "Mon" / "12 Oct", the browser's icon. Return opens the page
   in the browser it came from, ⌘Return copies its address. ⇥ by meaning
-  (`BrowserHistory.searchByMeaning`): the last 240 pages, one line each
-  (title, site, "yesterday 18:02"), in one Choice to Jev or OpenAI
-  Decisions, only on ⇥ and with Settings → Launcher → Search browser
+  (`BrowserHistory.searchByMeaning`): every page the browsers keep
+  (2026-10-28: no longer only the last 240), one line each (title, site,
+  "yesterday 18:02"), in one Choice to Jev or OpenAI Decisions; past 240,
+  narrowed to the days the request names, then in parts as the
+  clipboard's (`MeaningNarrowing`, `MeaningRounds`), only on ⇥ and with Settings → Launcher → Search browser
   history by meaning on (default). Agents: `search_history`.
   `selftest history` (scratch Chrome, Zen and Safari histories).
 - Skillies (`ScriptLibrary`, `ScriptCommand` in SkilliCore, Settings →
@@ -3798,12 +3803,25 @@ re-investigating.
   `PreviewParts.swift`, shared with Search Snippets') made for each kind of
   copy (below), then Information (copied as a relative date, times copied:
   `copies` column, added to older files on open). ⇥ searches by meaning
-  (`ClipboardHistory.searchByMeaning`, `ClipboardMeaning`): the last 240
-  copies, one line each (kind, app, "yesterday 18:02", 200 characters of
+  (`ClipboardHistory.searchByMeaning`, `ClipboardMeaning`): every kept
+  copy (2026-10-28: no longer only the last 240), one line each (kind,
+  app, "yesterday 18:02", 200 characters of
   text or OCR; a text that is one value says which, as the preview reads
   it with `CopiedValue`: "An email address from Front, …", "A link",
   "Code in Swift", so "email" finds the addresses), in one Choice to Jev or OpenAI Decisions with now's date;
-  the likely ones (≥ 4 %) best first, ~0.25 s. While it waits the list is
+  the likely ones (≥ 4 %) best first, ~0.25 s. Past 240 copies (one
+  Choice holds 255 options), `MeaningNarrowing` (SkilliCore) first keeps
+  those from the days the request names (today, yesterday, avant-hier,
+  last week, Monday, 3 days ago…, one day of slack each side), then
+  those of a kind it names (email, link, image/screenshot/capture,
+  phone, IBAN/RIB, file: found in the text or OCR, or the copy's kind);
+  a step that would leave nothing is skipped. What is still past 240 goes
+  in parts of 240, asked together (16 at a time), each part's likely ones
+  (≥ 4 %, eight at most) then asked again together (`MeaningRounds`);
+  each question gets `answerLimit`, a part that does not answer is left
+  out and the header says so ("Jev · 1.84 s · 12 of 13 parts"). The
+  store reads every copy's first 1,000 characters
+  (`ClipboardStore.meaningCandidates`), the picked ones whole. While it waits the list is
   one line, "Searching by meaning…" with a spinner (the copies the words
   found are not the answer); typing on cancels the request. Each model gets
   `ClipboardHistory.answerLimit` (5 s, the whole wait, not the request's
@@ -3815,7 +3833,9 @@ re-investigating.
   `ClipboardMeaningCorpus` (a kind of copy, which one, what it was about;
   tune and held-out halves, as `AskRouteCorpus`) among 91 copies, then
   times 20 requests among 240 copies (median under 1.5 s, at most one past
-  5 s). Only on ⇥ and with Settings
+  5 s), then 7 requests among 3,054 copies over 30 days (days, kinds,
+  neither; all but one right, none past 15 s). `clipmeaning` types
+  nothing: it runs on this Mac too (`selftest clipmeaning`). Only on ⇥ and with Settings
   → Clipboard → Search by meaning on (default); typing never sends
   anything, and the trace logs the request and picked ids, not the copies. Kept in
   `~/Library/Application Support/skil.li/Clipboard` (0700): `history.sqlite`

@@ -14,8 +14,9 @@ images, files, and your screenshots too.
 - **↩** pastes it in the app you were in. **⇧↩** pastes it as plain text,
   **⌘↩** only copies it.
 - **Search** by the words, without worrying about accents, even words
-  inside images. **⇥** searches by meaning: "my train ticket from
-  yesterday", or what a copy is: "email", "a link", "phone number".
+  inside images. **⇥** searches by meaning, through all the history you
+  keep: "my train ticket from yesterday", or what a copy is: "email", "a
+  link", "phone number".
   While it searches, the list says so; keep typing to stop it.
 - **The preview** beside the list shows each copy as what it is: a link
   as a card (picture, title, site), a color as a swatch with its Hex, RGB
