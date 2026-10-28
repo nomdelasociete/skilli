@@ -103,24 +103,31 @@ final class SnippetLibrary: @unchecked Sendable {
 
     /// "my iban", "adresse bureau": the decision model picks among the
     /// snippets, each told by its name, keyword and first 80 characters as
-    /// written (`SnippetMeaning`). Only on ⇥ in Search Snippets (Settings →
-    /// Snippets); nil when no key answered. `maybe`: none picked, the
-    /// snippet "none" narrowly won over (`SnippetMeaning.maybe`).
+    /// written (`SnippetMeaning`); more than one question holds are first
+    /// narrowed to the kinds the request names (`MeaningNarrowing`), then
+    /// asked in parts (`MeaningRounds`). Only on ⇥ in Search Snippets
+    /// (Settings → Snippets); nil when no key answered. `maybe`: none
+    /// picked, the snippet "none" narrowly won over (`SnippetMeaning.maybe`).
     func searchByMeaning(_ request: String, keys: [DecisionProvider: String]) async -> (snippets: [Snippet], maybe: Snippet?, label: String)? {
-        let candidates = Array(all.prefix(SnippetMeaning.candidateLimit))
+        let candidates = MeaningNarrowing(request).narrowed(all, date: { _ in nil }) { snippet, kind in
+            MeaningNarrowing.holds(kind, copy: .text, text: snippet.text)
+        }
         guard !candidates.isEmpty else { return ([], nil, "") }
-        let question = DecisionQuestion(
-            name: "snippet", instructions: SnippetMeaning.instructions,
-            options: candidates.enumerated().map { index, snippet in
-                .init(value: SnippetMeaning.value(index), description: SnippetMeaning.describe(snippet))
-            } + [.init(value: "none", description: "No snippet fits what the user needs")]
-        )
         for provider in [DecisionProvider.typeSafe, .openAI] {
             guard let key = keys[provider] else { continue }
             let start = ContinuousClock.now
             do {
-                let answers = try await DecisionClient.decide([question], input: SnippetMeaning.input(request), provider: provider, key: key)
-                guard let answer = answers[question.name] else { continue }
+                let outcome = try await MeaningRounds.decide(candidates.indices.map(SnippetMeaning.value)) { values in
+                    let question = DecisionQuestion(
+                        name: "snippet", instructions: SnippetMeaning.instructions,
+                        options: values.compactMap { value in
+                            Int(value.dropFirst()).map { .init(value: value, description: SnippetMeaning.describe(candidates[$0])) }
+                        } + [.init(value: "none", description: "No snippet fits what the user needs")]
+                    )
+                    let answers = try await DecisionClient.decide([question], input: SnippetMeaning.input(request), provider: provider, key: key)
+                    return answers[question.name].map { MeaningRounds.Answer(choice: $0.choice, probabilities: $0.probabilities) }
+                }
+                guard let answer = outcome?.answer else { continue }
                 let picked = SnippetMeaning.picked(answer.probabilities, choice: answer.choice, count: candidates.count).map { candidates[$0] }
                 let maybe = SnippetMeaning.maybe(answer.probabilities, choice: answer.choice, count: candidates.count).map { candidates[$0] }
                 let elapsed = ContinuousClock.now - start
@@ -131,7 +138,9 @@ final class SnippetLibrary: @unchecked Sendable {
                     let shown = entry.key.first == "s" ? Int(entry.key.dropFirst()).flatMap { candidates.indices.contains($0) ? candidates[$0].name : nil } : nil
                     return "\(shown ?? entry.key) \(Int((entry.value * 100).rounded())) %"
                 }
-                Log.trace("Snippets by meaning “\(request)”: \(candidates.count) snippets, \(name) picked \(picked.prefix(3).map(\.name))"
+                Log.trace("Snippets by meaning “\(request)”: \(candidates.count) snippets"
+                          + (outcome.map { $0.questions > 1 ? ", \($0.questions) questions" : "" } ?? "")
+                          + ", \(name) picked \(picked.prefix(3).map(\.name))"
                           + (maybe.map { ", maybe \($0.name)" } ?? "") + " \(likeliest) in \(elapsed.compact)")
                 return (picked, maybe, "\(name) · \(String(format: "%.2f s", elapsed.milliseconds / 1_000))")
             } catch {

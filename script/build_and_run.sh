@@ -159,7 +159,7 @@ case "$MODE" in
     # On this Mac, only the scopes without keys or windows: the others
     # take the keyboard and the screen of whoever uses it (`remote`).
     case "${2:-all}" in
-      clipboard|setup|decide) ;;
+      clipboard|setup|decide|clipmeaning) ;;
       *)
         if [[ "${SKILLI_LOCAL_UI:-}" != 1 ]]; then
           echo "selftest ${2:-all} takes this Mac's keyboard and screen: run 'remote ${2:-all}' (the Mac mini), or set SKILLI_LOCAL_UI=1 on a Mac nobody is using." >&2
