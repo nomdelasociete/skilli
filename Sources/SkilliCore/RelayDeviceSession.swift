@@ -411,7 +411,6 @@ public final class RelayDeviceSession: ObservableObject {
         let generation = identityGeneration
         identityTarget = current.pair.access_token
         identityNative = native
-        let retrying = identityCheckFailed
         identityCheckFailed = false
         identityTask = Task { [weak self] in
             guard let self else { return }
@@ -435,9 +434,10 @@ public final class RelayDeviceSession: ObservableObject {
                 self.onChange?()
             }
         }
-        // A failed check tried again: "Checking this Mac…" again, not the
-        // hold. After the task is set, so this cannot start another.
-        if retrying { onChange?() }
+        // Every new check, first or tried again: "Checking this Mac…"
+        // before the reads say more. After the task is set, so this cannot
+        // start another.
+        onChange?()
     }
 
     /// This GitHub token's numeric user id, asked of GitHub only.
