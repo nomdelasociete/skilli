@@ -73,7 +73,10 @@ enum FileSearch {
     }
 
     /// GIFs whose name holds every word (Search GIFs' "On this Mac"),
-    /// recently used or changed first. `folder`: the self-test's own.
+    /// recently used or changed first, left out like any file (`execute`):
+    /// a library's spinner.gif in node_modules or an asset catalog is not
+    /// a reaction; GIFs kept in Photos have id names no word fits.
+    /// `folder`: the self-test's own.
     static func gifs(_ text: String, in folder: URL? = nil, limit: Int = 24) async -> [URL] {
         let words = text.split(whereSeparator: \.isWhitespace).map(String.init).filter { !$0.isEmpty }
         guard !words.isEmpty else { return [] }

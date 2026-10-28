@@ -3379,7 +3379,9 @@ re-investigating.
   section; "Search KLIPY" as the field's placeholder (required). Nothing
   typed: Recently Used, then Trending on Klipy (one request as the mode
   opens); typed, once typing pauses 250 ms: Klipy's GIFs, then On this
-  Mac (Spotlight, `com.compuserve.gif` whose name holds every word), each
+  Mac (Spotlight, `com.compuserve.gif` whose name holds every word, in
+  the home and cloud drives, dependency folders, packages and build
+  output left out as in Search Files), each
   its own section; each search's answer kept for the mode's life. Tiles
   show Klipy's `md.jpg` still (~20 KB, sharp at 2×), decoded off the main
   thread at the tile's pixels into an `NSCache` of 16 MB; only the
