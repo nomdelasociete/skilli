@@ -26304,13 +26304,11 @@ final class SelfTest {
             Self.makeFrontmost(pid: textEditPID)
             otherInFront = await waitUntil(timeout: 4) { NSWorkspace.shared.frontmostApplication?.processIdentifier == textEditPID } != nil
             if otherInFront {
-                AXUIElementPerformAction(tile.item, kAXPressAction as CFString)
-                dockBrings = await waitUntil(timeout: 3) { self.recordingWindowInFront(controller) } != nil
+                dockBrings = await pressDockTile(tile.item) { self.recordingWindowInFront(controller) }
             }
             controller.nsWindow.miniaturize(nil)
             if await waitUntil(timeout: 3, { controller.nsWindow.isMiniaturized }) != nil {
-                AXUIElementPerformAction(tile.item, kAXPressAction as CFString)
-                fromMinimized = await waitUntil(timeout: 3) { !controller.nsWindow.isMiniaturized && self.recordingWindowInFront(controller) } != nil
+                fromMinimized = await pressDockTile(tile.item) { !controller.nsWindow.isMiniaturized && self.recordingWindowInFront(controller) }
             }
             // The scratch file closed in TextEdit, TextEdit quit if it was not open.
             Self.makeFrontmost(pid: textEditPID)
@@ -26344,6 +26342,18 @@ final class SelfTest {
                && afterSettings && closed && bothRecorder && settingsKeeps && allClosed,
                "before: \(before); window open: \(openedState) \(opened), Dock tile \(tile != nil), TextEdit in front \(otherInFront), the Dock's icon brought skil.li and the window in front \(dockBrings), brought it back minimized \(fromMinimized) (Settings shown \(settingsAfterDock)); Settings opened too \(withSettings), closed: \(afterSettingsState) \(afterSettings); window closed: \(closedState) \(closed); Settings then a window: recorder icon \(bothRecorder), window closed: \(settingsKeepsState) \(settingsKeeps); all closed, accessory \(allClosed)",
                nil)
+    }
+
+    /// Presses skil.li's tile in the Dock, as a click on it: whether skil.li
+    /// handled the click (`applicationShouldHandleReopen`) and `brought`
+    /// holds within 3 s. The Dock makes skil.li active before it sends the
+    /// click, so a window in front is not yet the click handled: minimized
+    /// in between, the window is put back in front by the click before it
+    /// ever minimizes.
+    private func pressDockTile(_ tile: AXUIElement, until brought: @MainActor () -> Bool) async -> Bool {
+        let handled = AppDelegate.reopens
+        AXUIElementPerformAction(tile, kAXPressAction as CFString)
+        return await waitUntil(timeout: 3) { AppDelegate.reopens > handled && brought() } != nil
     }
 
     /// Whether the icon AppKit gives skil.li now is the recorder's: drawn at
