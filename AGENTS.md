@@ -3729,10 +3729,17 @@ re-investigating.
   text or OCR; a text that is one value says which, as the preview reads
   it with `CopiedValue`: "An email address from Front, …", "A link",
   "Code in Swift", so "email" finds the addresses), in one Choice to Jev or OpenAI Decisions with now's date;
-  the likely ones (≥ 4 %) best first, ~0.25 s. Measured on volume:
+  the likely ones (≥ 4 %) best first, ~0.25 s. While it waits the list is
+  one line, "Searching by meaning…" with a spinner (the copies the words
+  found are not the answer); typing on cancels the request. Each model gets
+  `ClipboardHistory.answerLimit` (5 s, the whole wait, not the request's
+  idle timeout), then the next key; none answering says "Jev did not
+  answer: ⇥ tries again" (2026-10-28: one Jev call took 15.3 s). Measured on volume:
   `remote clipmeaning` (also in `decide`) runs the 40 labeled requests of
   `ClipboardMeaningCorpus` (a kind of copy, which one, what it was about;
-  tune and held-out halves, as `AskRouteCorpus`) among 91 copies. Only on ⇥ and with Settings
+  tune and held-out halves, as `AskRouteCorpus`) among 91 copies, then
+  times 20 requests among 240 copies (median under 1.5 s, at most one past
+  5 s). Only on ⇥ and with Settings
   → Clipboard → Search by meaning on (default); typing never sends
   anything, and the trace logs the request and picked ids, not the copies. Kept in
   `~/Library/Application Support/skil.li/Clipboard` (0700): `history.sqlite`
