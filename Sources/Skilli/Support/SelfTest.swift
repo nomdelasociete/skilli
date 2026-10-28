@@ -28126,7 +28126,7 @@ final class SelfTest {
     /// first, naming what it records, and esc leaves it off; a screen
     /// named that is not there says so without asking.
     private func recorderWholeScreenFromToolsAndLinks() async {
-        let name = "Recorder: the whole screen from skillies: set_recording_source display=main turns it on, a missing screen and display for the webcam refused; skilli://record/source asks first (off allowed, the whole screen declined with esc), a missing screen said"
+        let name = "Recorder: the whole screen from skillies: picked while the meeting's window is looked for, it stays; set_recording_source display=main turns it on, a missing screen and display for the webcam refused; skilli://record/source asks first (off allowed, the whole screen declined with esc), a missing screen said"
         guard let center = context.recorder(), let links = context.links, let main = ScreenDisplays.list().first(where: { $0.id == CGMainDisplayID() }) else {
             record(name, false, "no recorder", nil)
             return
@@ -28136,16 +28136,38 @@ final class SelfTest {
         let settings = context.tools.settings
         let mode = settings.mode
         center.standInMicrophone(MicrophoneHolders.none)
+        let late = NSWindow(contentRect: NSRect(x: 80, y: 80, width: 320, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
+        late.isReleasedWhenClosed = false
         defer {
             (preferences.recorderWebcam, preferences.recorderScreen) = saved
             settings.mode = mode
             center.standInMicrophone(nil)
+            center.standInMeetingWindow = nil
+            late.orderOut(nil)
         }
         preferences.recorderWebcam = false
-        preferences.recorderScreen = false
         let silence = recorderScratch.appendingPathComponent("silence.wav")
         _ = Self.clip(nil, seconds: 120, beeps: [], to: silence)
         center.recorder.standIn(microphone: silence, alsoLeaveOut: [])
+        // A lookup answering after a pick never takes it back: the card
+        // opened with the screen on, its meeting's window found 2 s later,
+        // the whole screen picked meanwhile.
+        late.orderFrontRegardless()
+        center.standInMeetingWindow = (ScreenWindow(id: CGWindowID(late.windowNumber), pid: getpid(), app: "skil.li", title: "Late"), .seconds(2))
+        preferences.recorderScreen = true
+        center.showCard(title: "Late lookup")
+        let lateCard = await waitUntil(timeout: 3) { center.isCardVisible && center.recorder.phase == .listening } != nil
+        settings.mode = .always
+        let (lateStatus, _) = await skilliCall("set_recording_source", #"{"source":"screen","on":"true","display":"main"}"#)
+        settings.mode = mode
+        await pause(2600)
+        let pickStands = center.recorder.pictures.screen.target?.isSame(as: .display(main)) == true
+        let lateLine = center.cardView.screenLine
+        center.standInMeetingWindow = nil
+        center.closeCardWithoutKeys()
+        _ = await waitUntil(timeout: 2) { center.recorder.phase == .idle }
+        late.orderOut(nil)
+        preferences.recorderScreen = false
         center.recordForTest(screen: nil)
         guard await waitUntil(timeout: 4, { center.recorder.isRecording }) != nil else {
             record(name, false, "no recording (\(center.recorder.phase))", nil)
@@ -28182,11 +28204,11 @@ final class SelfTest {
         _ = await waitUntil(timeout: 8) { !popover.isVisible }
         _ = await momentStop(center)
         center.openWindows.forEach { $0.close() }
-        let passed = onStatus == 0 && onSaid.contains("The screen on: \(main.title).") && wholeOn && missingStatus != 0 && missingSaid.contains("No screen “Nowhere”")
+        let passed = lateCard && lateStatus == 0 && pickStands && onStatus == 0 && onSaid.contains("The screen on: \(main.title).") && wholeOn && missingStatus != 0 && missingSaid.contains("No screen “Nowhere”")
             && webcamStatus != 0 && webcamSaid.contains("display goes with source=screen") && stillWhole && offAsks && turnedOff && wholeAsks && namesIt
             && declined && missingLink
         record(name, passed,
-               "tool: exit \(onStatus) “\(onSaid)”, on \(wholeOn); a missing screen exit \(missingStatus) “\(missingSaid.prefix(120))”; the webcam exit \(webcamStatus) “\(webcamSaid.prefix(80))”, still whole \(stillWhole); link off asks \(offAsks), off \(turnedOff); link whole asks \(wholeAsks) (\(wholeCard)), names it \(namesIt), declined \(declined); a missing screen \(missingLink) (log \(links.log.suffix(1)))",
+               "a late meeting's window: card \(lateCard), picked exit \(lateStatus), the whole screen kept \(pickStands) (“\(lateLine)”); tool: exit \(onStatus) “\(onSaid)”, on \(wholeOn); a missing screen exit \(missingStatus) “\(missingSaid.prefix(120))”; the webcam exit \(webcamStatus) “\(webcamSaid.prefix(80))”, still whole \(stillWhole); link off asks \(offAsks), off \(turnedOff); link whole asks \(wholeAsks) (\(wholeCard)), names it \(namesIt), declined \(declined); a missing screen \(missingLink) (log \(links.log.suffix(1)))",
                nil)
     }
 

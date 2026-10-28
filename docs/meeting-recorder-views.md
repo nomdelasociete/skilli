@@ -1697,6 +1697,9 @@ window's (Phase 3, "The files").
       Built-in Retina Display
   ```
 
+- **A pick stands**: the meeting's window found late (a browser slow to
+  answer, Automation's question) is still listed first, but never takes
+  the place of a screen picked, or turned off, meanwhile.
 - **↩** records it from that moment, as any pick. Screen Recording as
   for a window: macOS's question as it is picked, the card stepped down
   under it meanwhile and back up after; refused, "Not allowed · ⌘↩
