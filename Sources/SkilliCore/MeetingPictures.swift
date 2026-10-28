@@ -209,6 +209,94 @@ public struct PictureWatch: Sendable {
         case .closed: "the window closed: pick another"
         }
     }
+
+    /// The menu's words for the whole screen: it never minimizes or
+    /// hides, it can only go.
+    public static let disconnectedLine = "the screen was disconnected: pick another"
+}
+
+/// The whole screen (docs/meeting-recorder-views.md, "The whole screen"):
+/// which of the Mac's screens the lists offer first, how each is named,
+/// and the one a tool or a link names. Code, from the window list and the
+/// displays: nothing leaves the Mac.
+public enum WholeScreen {
+    public struct Display: Equatable, Sendable {
+        public let id: UInt32
+        public let name: String
+        /// Its frame in the window list's coordinates.
+        public let frame: CGRect
+
+        public init(id: UInt32, name: String, frame: CGRect) {
+            self.id = id
+            self.name = name
+            self.frame = frame
+        }
+    }
+
+    /// The pick's words: "Whole Screen" when the Mac has one screen,
+    /// "Whole Screen · LG UltraFine" when it has several.
+    public static func title(_ name: String, several: Bool) -> String {
+        several && !name.isEmpty ? "Whole Screen · \(name)" : "Whole Screen"
+    }
+
+    /// The screens as the lists show them: the one holding most of
+    /// `window` (the meeting's) first, none: the `main` one (the menu
+    /// bar's); the others after, as macOS lists them.
+    public static func ordered(_ displays: [Display], main: UInt32, window: CGRect?) -> [Display] {
+        let first = holding(window, in: displays) ?? displays.first { $0.id == main } ?? displays.first
+        guard let first else { return [] }
+        return [first] + displays.filter { $0.id != first.id }
+    }
+
+    /// The screen holding most of `window`; nil when none holds any.
+    static func holding(_ window: CGRect?, in displays: [Display]) -> Display? {
+        guard let window, !window.isEmpty else { return nil }
+        let shares = displays.map { display -> (Display, Double) in
+            let part = display.frame.intersection(window)
+            return (display, part.isNull ? 0 : Double(part.width * part.height))
+        }
+        guard let best = shares.max(by: { $0.1 < $1.1 }), best.1 > 0 else { return nil }
+        return best.0
+    }
+
+    /// The screen a tool's or a link's `display` names: `main` (the menu
+    /// bar's), `meeting` (the one the meeting's window is on, else the
+    /// main one: the lists' first), or a screen's name, case and accents
+    /// aside (else the only one whose name starts so). Nil: none.
+    public static func named(_ text: String, in displays: [Display], main: UInt32, window: CGRect?) -> Display? {
+        let wanted = folded(text)
+        switch wanted {
+        case "main": return displays.first { $0.id == main } ?? displays.first
+        case "meeting": return ordered(displays, main: main, window: window).first
+        case "": return nil
+        default:
+            if let exact = displays.first(where: { folded($0.name) == wanted }) { return exact }
+            let starting = displays.filter { folded($0.name).hasPrefix(wanted) }
+            return starting.count == 1 ? starting[0] : nil
+        }
+    }
+
+    /// The names macOS gives, told apart as `named` reads them (case and
+    /// accents aside): a second "DELL U2720Q" is "DELL U2720Q (2)"; a
+    /// screen with none is "Screen 2"; one called as a word `named` takes
+    /// for itself ("Main") is "Main (2)".
+    public static func distinctNames(_ names: [String]) -> [String] {
+        var taken: Set<String> = ["main", "meeting"]
+        return names.enumerated().map { index, name in
+            let base = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Screen \(index + 1)" : name
+            var candidate = base, count = 1
+            while taken.contains(folded(candidate)) {
+                count += 1
+                candidate = "\(base) (\(count))"
+            }
+            taken.insert(folded(candidate))
+            return candidate
+        }
+    }
+
+    private static func folded(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+    }
 }
 
 extension PictureChange {

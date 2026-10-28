@@ -21,13 +21,17 @@ with a Bluetooth headset lost one side and sped up the other (Measured,
 "A headset's call mode"): the Mac's sound now follows its output's rate,
 the microphone gets a new engine at each change, and a track that
 records nothing is said while recording (A track that records nothing).
+2026-10-28: the whole screen (a display) as the screen's source, beside
+a window and the meeting's window (Before, "The whole screen"; its
+views in `docs/meeting-recorder-views.md`, "The whole screen").
 
 Asked for: a meeting recorder like omarchy-meeting-recorder (an
 open-source recorder for Omarchy Linux): your microphone and the
 Mac's sound as two tracks, transcribed on this Mac, nothing sent anywhere,
 no bot joining the call. Then (2026-10-23): at least what it does, plus the
 webcam and the screen (a window, or the browser window of a Chrome, Arc or
-Chromium meeting).
+Chromium meeting). 2026-10-28, after the first real calls: the whole
+screen too.
 
 ## Target
 
@@ -51,8 +55,8 @@ transcribed again in another language.
    say about the budget?" with the user's AI, on their action.
 4. Follow-ups in one key: action items become reminders, a recap mail goes
    to the attendees, each on the user's action.
-5. The screen too: a window, or the meeting's browser window, recorded with
-   the call; the text of shared slides read on this Mac (Vision) and kept
+5. The screen too: a window, the meeting's browser window or the whole
+   screen, recorded with the call; the text of shared slides read on this Mac (Vision) and kept
    with the transcript at the time it appeared, for chapters and search.
 6. No 1.6 GB download to start: macOS's own speech engine first (see
    Transcription).
@@ -157,8 +161,8 @@ skillie):
   editable all along.
 - Sources, each a row with its live meter or picture: the microphone, the
   Mac's sound, the webcam (off by default), the screen (off by default:
-  a window to pick, or the meeting's browser window, found from the event's
-  call link).
+  a window to pick, the meeting's browser window, found from the event's
+  call link, or the whole screen).
 - The language: Ask's, else the keyboard's.
 - ↩ starts. Never automatic.
 
@@ -177,6 +181,64 @@ given, no tab on the meeting's address, a script that fails), the card
 says so and asks the user to bring the meeting's tab forward; ↩ then
 records the window as it is. Recording one tab whatever is in front would
 need a browser extension: not planned.
+
+**The whole screen** (2026-10-28: asked for after the first real calls,
+"the screen or a window or a browser tab"; its views in
+`docs/meeting-recorder-views.md`, "The whole screen"). Its moment:
+
+1. **When**: what matters is in more than one window. The user shows
+   their screen in the call and moves between apps (the slides, then a
+   browser, then a terminal), presents from the Mac to a room, or walks
+   someone through something on screen for those who will watch it
+   later. One window would lose everything outside it. It is never the
+   screen's pick by itself: in a call the meeting's window stays the one
+   turned on, and the whole screen is picked by the user for that
+   recording, each time. It is not a default in Settings → Recorder
+   either: a whole screen holds what nobody meant to share (a
+   notification, a message, another app brought forward). In person the
+   screen stays off by default, as before; a click on its row offers the
+   whole screen (presenting to the room).
+2. **The path**: where the screen is already picked, no key of its own.
+   In the Record card, the Screen row's list (⌃⌄, or the row clicked with
+   no meeting's window known): "Whole Screen", right after the meeting's
+   window. During the call, the red dot's menu, Screen ▸, the same list.
+   From a skillie or an agent, `set_recording_source source=screen
+   on=true display=…` and the link `skilli://record/source?source=screen&display=…`
+   (asked first).
+3. **Hint or push**: neither, but what the whole screen shows is not
+   what a window shows: each time it is the pick, the card's note line
+   says it, "The whole screen is recorded: notifications and other apps
+   on it too. skil.li's own windows are left out." A fact of that
+   recording, as the meeting tab's line is, not a lesson taught once.
+   The text read on screen is read from the whole screen by the same
+   rules (`slides.json`): a notification's words too, kept on this Mac,
+   found by search, and sent only where the slides' text already goes,
+   the follow-ups the user asks of their SI (Privacy and consent).
+4. **Deterministic**: which screen, with several. The one the meeting's
+   window is on (the one holding most of it), else the main one (the
+   menu bar's), first; the others after, as macOS lists them. Each by
+   its name ("Built-in Retina Display", "LG UltraFine"): "Whole Screen"
+   alone when the Mac has one screen, "Whole Screen · LG UltraFine" when
+   it has several. Code, from the window list and the displays: no
+   model, and nothing leaves the Mac. **What is left out**: skil.li's
+   own windows, whatever they are and whenever they show: the Record
+   card, the cards during the call (the call's end, a track that
+   records nothing), the launcher, a recording's window, Settings.
+   Every other app on that screen is in it, the menu bar and the Dock
+   too, and the pointer (a demo is followed by it; a window's recording
+   leaves the pointer out, as before).
+5. **Wrong**: the whole screen picked when the meeting's window was
+   meant records everything on that screen until it is changed: the red
+   dot's menu picks the meeting's window, another screen or Off from
+   then on, nothing asked. What was recorded before stays in
+   `screen.mp4` and its text in `slides.json`: a wrong pick costs more
+   than a wrong window, since what was seen cannot be cut out of the
+   file afterwards; deleting the recording does (⌘⌫ in its window, ⌘Z
+   for 10 s). The wrong screen of several: the row and the menu name
+   the one recorded, and the same list picks another. A screen
+   disconnected while recorded is said as a closed window is (the menu
+   bar's orange mark, "the screen was disconnected: pick another" in
+   its menu).
 
 ## During
 
@@ -402,7 +464,8 @@ The recording's window (a window, not a card: it is read and edited):
 ## Where it lives
 
 `~/Library/Application Support/skil.li/Recordings/2026-10-22 14.00 Weekly sync/`:
-`me.m4a`, `them.m4a`, `webcam.mp4`, `screen.mp4` (when on), `meeting.json`
+`me.m4a`, `them.m4a`, `webcam.mp4`, `screen.mp4` (when on: a window or
+the whole screen), `meeting.json`
 (title, attendees and their addresses, speakers, language, engine,
 chapters, the skillies run on it), `transcript.md` (times, speakers,
 chapters), `transcript.json` (words with times), `slides.json` (text read
@@ -477,6 +540,9 @@ on screen, with times), `summary.md` when asked.
   microphone nor the Mac's sound allowed, there is nothing to record and
   the card says so. A missing camera or screen permission never blocks a
   recording with those sources off.
+- The whole screen records every app on it, notifications included
+  (skil.li's own windows left out), and its text is read as a window's:
+  the card says so each time it is picked (Before, "The whole screen").
 
 ## Phases
 
@@ -486,7 +552,8 @@ on screen, with times), `summary.md` when asked.
    row and the menu bar's meeting menu, the five cases (link, in an app,
    in person, no event, nothing); the event's title and attendees, stop
    offered at the call's end, launcher search, Settings pane, retention.
-3. Webcam and screen (window, meeting browser window), slides read.
+3. Webcam and screen (window, meeting browser window), slides read;
+   2026-10-28, the whole screen.
 4. Speakers told apart (SpeakerKit), import, edit lines, rename
    speakers, transcribe again; the "Better transcription" download
    (whisper).
@@ -519,6 +586,10 @@ Measured below. Still open:
 - No headphones with real speakers and a real microphone (the test Mac
   has neither): macOS's own echo cancellation (`AVAudioEngine`'s voice
   processing) against the word-level drop measured below.
+- Whether macOS hides notifications from the whole screen's capture as
+  it does from a shared screen (System Settings → Notifications, "When
+  mirroring or sharing the display"): not measured, so the card says
+  they are recorded.
 - Whether whisper's drop (15 % of the other side left with its times on
   the recording's clock, Measured) gains from whisper.cpp's DTW word
   times, or whether macOS's engine should make the microphone's track
@@ -731,6 +802,25 @@ brought forward without bringing Chrome forward (the tab shows within a
 second, the user's app keeps the keyboard), and the recording watches its
 pictures: a window minimized or hidden gives none, and Chrome's, fully
 covered, gives the same picture again and again.
+
+### The whole screen
+
+2026-10-28, on the test Mac (macOS 27.0.1, one 1920 × 1080 screen
+macOS gives no name, listed "Screen 1"), `remote recorder`: the whole
+screen picked in the Record card's list, 9.5 s recorded with the
+stand-in microphone beeping six times and a window of skil.li's own let
+in for the test flashing its corner at each beep; another of its own,
+magenta, shown half a second in.
+
+| | Measured |
+|---|---|
+| `screen.mp4` | 1920 × 1080, 117 and 125 pictures in 9.5 s in two runs (the longest gap 0.17 s), as long as `me.m4a` |
+| The flashes against the beeps | all six each time, 33 to 51 ms after (spread 17 ms) |
+| skil.li's window shown after the start | in none of the pictures: its app is left out, not its windows of the moment |
+
+**Pick: `SCContentFilter(display:excludingApplications:exceptingWindows:)`
+with skil.li's app**, from every window known (`onScreenWindowsOnly`
+false), so a card that shows during the call is left out too.
 
 ### In step over an hour
 

@@ -11,6 +11,7 @@ import Foundation
 ///     skilli://do?app=TextEdit&goal=…         "do it here" toward a goal, in that app (else the one in front)
 ///     skilli://record?title=Weekly%20sync     the Record card, that name in it (nothing recorded before ↩)
 ///     skilli://record/stop                    the recording on now: pause, resume or stop (asked first)
+///     skilli://record/source?source=screen&display=main  a source on or off, the whole screen (asked first)
 ///     skilli://record/import?file=/Users/me/Call.m4a  Import Recording's panel, on that file (imported on ↩)
 ///     skilli://record/open?recording=2026-10-22%2014.00%20Weekly%20sync&at=724  a recording's window, playing from there
 ///     skilli://record/summary?recording=Weekly%20sync  its summary, chapters, actions, recap, ask?question=… (asked first)
@@ -36,6 +37,11 @@ public enum SkilliLink: Equatable, Sendable {
     case record(title: String?)
     /// The recording on now, paused, resumed or stopped.
     case recording(RecordingControl)
+    /// A source of the recording on now (or of the Record card open)
+    /// turned on or off, as `set_recording_source` does; `display` (the
+    /// screen only): the whole screen it names (`main`, `meeting`, a
+    /// screen's name). Asked in the card every time.
+    case recordingSource(RecordingSource, on: Bool, display: String?)
     /// Import Recording's open panel (docs/meeting-recorder-views.md, phase
     /// 4), on the file named when one is: nothing is imported before the
     /// user's ↩ there.
@@ -61,6 +67,23 @@ public enum SkilliLink: Equatable, Sendable {
             case .pause: "Pause the recording"
             case .resume: "Resume the recording"
             case .stop: "Stop the recording"
+            }
+        }
+    }
+
+    /// A recording's sources, by the names `set_recording_source` takes.
+    public enum RecordingSource: String, CaseIterable, Sendable {
+        case microphone
+        case macSound = "mac_sound"
+        case webcam, screen
+
+        /// "the Mac's sound", as the card says it.
+        public var title: String {
+            switch self {
+            case .microphone: "the microphone"
+            case .macSound: "the Mac's sound"
+            case .webcam: "the webcam"
+            case .screen: "the screen"
             }
         }
     }
@@ -103,6 +126,12 @@ public enum SkilliLink: Equatable, Sendable {
         case .recording(let control):
             components.host = "record"
             components.percentEncodedPath = "/" + control.rawValue
+        case .recordingSource(let source, let on, let display):
+            components.host = "record"
+            components.percentEncodedPath = "/source"
+            items.append(URLQueryItem(name: "source", value: source.rawValue))
+            if !on { items.append(URLQueryItem(name: "on", value: "false")) }
+            if let display, !display.isEmpty { items.append(URLQueryItem(name: "display", value: display)) }
         case .importRecording(let file):
             components.host = "record"
             components.percentEncodedPath = "/import"
@@ -159,6 +188,20 @@ public enum SkilliLink: Equatable, Sendable {
                 // A time no recording reaches is no time.
                 let at = items.first { $0.name == "at" }?.value.flatMap(Double.init).flatMap { $0.isFinite && $0 >= 0 && $0 <= Self.longestRecording ? $0 : nil }
                 return .openRecording(recording, at: at)
+            }
+            if target.lowercased() == "source" {
+                func value(_ name: String) -> String { items.first { $0.name == name }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+                guard let source = RecordingSource(rawValue: value("source").lowercased()) else { return nil }
+                let on: Bool
+                switch value("on").lowercased() {
+                case "", "true", "1", "yes": on = true
+                case "false", "0", "no": on = false
+                default: return nil
+                }
+                // A screen to name: only the screen's, and only to turn it on.
+                let display = value("display")
+                if !display.isEmpty, source != .screen || !on { return nil }
+                return .recordingSource(source, on: on, display: display.isEmpty ? nil : String(display.prefix(80)))
             }
             if target.lowercased() == "rename" {
                 func value(_ name: String) -> String { items.first { $0.name == name }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }

@@ -51,12 +51,13 @@ final class RecordCard {
     var onOpenPrivacy: ((Permission) -> Void)?
     /// The webcam's or the screen's row clicked: on or off (phase 3).
     var onTogglePicture: ((PictureSource) -> Void)?
-    /// A window picked for the screen (its ⌃⌄ list).
-    var onPickWindow: ((ScreenWindow) -> Void)?
+    /// A window or a whole screen picked for the screen (its ⌃⌄ list).
+    var onPickScreen: ((ScreenTarget) -> Void)?
     /// The webcam and the screen, once the recorder has them.
     var pictures: RecorderPictures?
-    /// The windows the screen can record: the meeting's, then the others.
-    var windows: () -> (meeting: ScreenWindow?, all: [ScreenWindow]) = { (nil, ScreenWindows.list()) }
+    /// What the screen can record: the meeting's window, the whole
+    /// screen, then the other windows.
+    var choices: () -> ScreenChoices = { ScreenChoices.now(meeting: nil) }
 
     private let recorder: MeetingRecorder
     private(set) var content: Content?
@@ -250,48 +251,27 @@ final class RecordCard {
     /// The meeting the card records now (nil: no card for a recording).
     var meetingReading: MeetingMoment.Reading? { content == .record ? meeting?.reading : nil }
 
-    /// The screen's ⌃⌄: the windows it can record, the meeting's first,
-    /// the one recorded checked.
+    /// The screen's ⌃⌄: the meeting's window first, the whole screen,
+    /// the other windows; the one recorded checked.
     private func showWindows(under row: NSView) {
-        let (meeting, all) = windows()
-        let recorded = pictures?.screen.window?.id
         let menu = NSMenu()
-        var listed: [ScreenWindow] = []
-        if let meeting {
-            let item = NSMenuItem(title: "The Meeting's Window", action: nil, keyEquivalent: "")
-            item.isEnabled = false
-            menu.addItem(item)
-            listed.append(meeting)
-            menu.addItem(windowItem(meeting, index: 0, checked: meeting.id == recorded))
-            menu.addItem(.separator())
-        }
-        for window in all where window.id != meeting?.id {
-            listed.append(window)
-            menu.addItem(windowItem(window, index: listed.count - 1, checked: window.id == recorded))
-        }
-        if listed.isEmpty {
+        let (items, targets) = choices().items(recorded: pictures?.screen.target, action: #selector(WindowPicker.picked(_:)), target: picker)
+        items.forEach(menu.addItem)
+        if targets.isEmpty {
             let none = NSMenuItem(title: "No window to record", action: nil, keyEquivalent: "")
             none.isEnabled = false
             menu.addItem(none)
         }
-        pickable = listed
+        pickable = targets
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: row.bounds.height + 2), in: row)
     }
 
-    /// The windows the open list offers, in its order.
-    private var pickable: [ScreenWindow] = []
-
-    private func windowItem(_ window: ScreenWindow, index: Int, checked: Bool) -> NSMenuItem {
-        let item = NSMenuItem(title: window.name, action: #selector(WindowPicker.picked(_:)), keyEquivalent: "")
-        item.target = picker
-        item.tag = index
-        item.state = checked ? .on : .off
-        return item
-    }
+    /// What the open list offers, in its order.
+    private var pickable: [ScreenTarget] = []
 
     private lazy var picker = WindowPicker { [weak self] index in
         guard let self, self.pickable.indices.contains(index) else { return }
-        self.onPickWindow?(self.pickable[index])
+        self.onPickScreen?(self.pickable[index])
     }
 
     /// Which app plays, read once a second at most (Core Audio's process
@@ -900,15 +880,22 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         if before != (webcamRow.line, pictureMissing) { needsRelayout = true }
     }
 
-    /// The screen's row: the window recorded, its picture, ⌃⌄ to pick
-    /// another; nil: off.
+    /// The screen's row: the window or the whole screen recorded, its
+    /// picture, ⌃⌄ to pick another; nil: off.
     func setScreen(_ state: ScreenTrack.State?, picture: CVPixelBuffer?) {
         let before = (screenRow.line, pictureMissing, screenRow.menuShown)
+        let whole = if case .on(.display)? = state { true } else { false }
+        if whole != screenIsWhole {
+            screenIsWhole = whole
+            screenRow.setSymbol(whole ? "display" : "macwindow")
+            updateNote()
+            needsRelayout = true
+        }
         switch state {
         case nil, .off?:
             screenRow.setState("Off", level: nil)
-        case .on(let window)?:
-            screenRow.setState(window.name, level: nil, picture: picture, menu: true)
+        case .on(let target)?:
+            screenRow.setState(target.name, level: nil, picture: picture, menu: true)
         case .denied?:
             screenRow.setState("Not allowed · ⌘↩ opens Privacy", level: nil, warns: true)
         case .failed(let why)?:
@@ -920,6 +907,8 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
 
     private var cameraDenied = false
     private var screenDenied = false
+    /// The screen records a whole screen: its row's symbol and its note's.
+    private var screenIsWhole = false
 
     private func updatePictureMissing(webcam: Bool? = nil, screen: Bool? = nil) {
         if let webcam { cameraDenied = webcam }
@@ -958,7 +947,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         note.isHidden = lines.isEmpty || !isRecordCard
         note.text = lines.joined(separator: "\n")
         note.symbol = permissionNoteBlocking != nil || permissionNote != nil || missingAutomation ? "exclamationmark.triangle"
-            : screenNote != nil ? "macwindow" : languageNote != nil ? "character.bubble" : "person.2"
+            : screenNote != nil ? screenIsWhole ? "display" : "macwindow" : languageNote != nil ? "character.bubble" : "person.2"
     }
 
     private func setEyebrow(_ text: String, dot color: NSColor, hollow: Bool) {
@@ -1178,6 +1167,12 @@ private final class SourceRow: NSView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
+
+    /// Another symbol before the title (the screen: a window, or a whole
+    /// screen).
+    func setSymbol(_ symbol: String) {
+        icon.image = Theme.symbol(symbol, pointSize: 13, weight: .medium)
+    }
 
     override var isFlipped: Bool { true }
 

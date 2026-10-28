@@ -53,9 +53,9 @@ final class RecorderPictures {
 
     /// The sources on as the card opens, or ⌘R records: their pictures
     /// run (the card shows them), nothing written.
-    func listen(webcam on: Bool, screen window: ScreenWindow?) async {
+    func listen(webcam on: Bool, screen target: ScreenTarget?) async {
         if on { await webcam.start() }
-        if let window { await screen.start(window) }
+        if let target { await screen.start(target) }
     }
 
     /// The webcam on or off, in the card or the red dot's menu. While
@@ -75,11 +75,11 @@ final class RecorderPictures {
         }
     }
 
-    /// The screen's window (nil: off), in the card or the red dot's menu.
-    /// While recording, another window goes on in the same file, scaled
-    /// to its size; off writes black from that moment.
-    func setScreen(_ window: ScreenWindow?) async {
-        guard let window else {
+    /// The screen's window or whole screen (nil: off), in the card or the
+    /// red dot's menu. While recording, another pick goes on in the same
+    /// file, scaled to its size; off writes black from that moment.
+    func setScreen(_ target: ScreenTarget?) async {
+        guard let target else {
             session += 1
             // Detached first: no picture after the black one.
             screen.sink.record(into: nil, reading: nil)
@@ -87,8 +87,8 @@ final class RecorderPictures {
             screen.stop()
             return
         }
-        await screen.start(window)
-        guard isRecording, screen.window != nil else { return }
+        await screen.start(target)
+        guard isRecording, screen.target != nil else { return }
         // Joining a recording on: its first picture where it joins.
         await recordScreen(held: nil, from: HostClock.now)
     }
@@ -106,7 +106,7 @@ final class RecorderPictures {
             webcamWriter = makeWriter(Self.webcamFile, size: webcam.size, perSecond: WebcamTrack.perSecond, held: webcam.sink.latestPicture)
             webcam.record(into: webcamWriter)
         }
-        if screenOn, screen.window != nil {
+        if screenOn, screen.target != nil {
             let held = screen.sink.latestPicture
             Task { await self.recordScreen(held: held, from: start) }
         }
@@ -248,7 +248,7 @@ final class RecorderPictures {
         webcam.record(into: nil)
     }
 
-    /// Every picture stops, the camera and the window let go.
+    /// Every picture stops, the camera and the window or screen let go.
     func stopAll() {
         webcam.stop()
         screen.stop()

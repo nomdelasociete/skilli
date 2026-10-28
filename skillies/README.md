@@ -224,6 +224,9 @@ Later, while it records (another skillie, or a later step of this one):
 "$SKILLI_CLI" call recording_status      # Recording “Weekly sync” · 12:04, and its folder
 "$SKILLI_CLI" call pause_recording       # nothing written until resume_recording
 "$SKILLI_CLI" call set_recording_source source=screen on=true   # the meeting's window; webcam, microphone, mac_sound too
+"$SKILLI_CLI" call set_recording_source source=screen on=true display=main   # the whole main screen instead
+"$SKILLI_CLI" call set_recording_source source=screen on=true display="LG UltraFine"   # that screen, by its name
+open "skilli://record/source?source=screen&display=main"   # the same from a link: asked in the card every time
 "$SKILLI_CLI" call stop_recording        # stops; the transcript is made on this Mac, its window opens
 open "skilli://record/stop"              # pause, resume, stop: asked in the card every time
 ```
@@ -238,7 +241,12 @@ open "skilli://record/import?file=%2FUsers%2Fme%2FCall.m4a"       # Import Recor
 ```
 
 `record_meeting` exits 0 once the user pressed ↩ ("Recording “Weekly
-sync” started."), 1 when the card was closed. Pausing and stopping ask
+sync” started."), 1 when the card was closed. The whole screen records
+every app on it, notifications included (skil.li's own windows are left
+out): turn it on only when the user asked for it. `display=meeting` is
+the screen the meeting's window is on (else the main one); a name no
+screen has exits 1 with the screens' names. The link takes the tool's
+parameters (`on=false` turns a source off). Pausing and stopping ask
 in the skillie's card unless the user's tool rights allow them. While a
 meeting is on, the card is that meeting's (its title unless one is
 given, its attendees, in person the microphone only).

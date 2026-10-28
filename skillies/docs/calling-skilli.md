@@ -209,7 +209,7 @@ page: add a line here when you add a tool. -->
 | `pause_recording` | Pauses it. | |
 | `resume_recording` | Resumes it. | |
 | `stop_recording` | Stops it; the transcript is made on the Mac. | |
-| `set_recording_source` | Turns the microphone, the Mac's sound, the webcam or the screen on or off from now on (Record card open or recording). | `source`, `on` |
+| `set_recording_source` | Turns the microphone, the Mac's sound, the webcam or the screen on or off from now on (Record card open or recording); the screen is the meeting's window, or with `display` the whole screen (`main`, `meeting`, or a screen's name): every app on it, notifications included, skil.li's own windows left out. | `source`, `on`, `display?` |
 | `list_recordings` | The recordings, newest first: id (the folder's name), title, date, length, state, summary and chapters. No words. reads | |
 | `get_transcript` | A recording's transcript, as `transcript.md` has it; asked every time, the recording named. reads | `recording?` (an id or a title; empty: the newest) |
 | `recording_followup` | What its window's ⌘K does with your SI: `summary`, `chapters`, `action_items` (to Reminders), `recap_mail` (a mail opens, you send it), `ask` (with `question`); asked every time. | `action`, `recording?`, `question?` |
@@ -272,6 +272,7 @@ Each change asks in the card, every time.
 | `skilli://do?app=<app>&goal=<goal>` | "Do it here" toward a goal (percent-encoded). Several run one after the other, in order. |
 | `skilli://record?title=…` | The Record card (nothing records before ↩). |
 | `skilli://record/pause`, `…/resume`, `…/stop` | Pauses, resumes or stops the recording on now; asked every time, no Always. |
+| `skilli://record/source?source=screen&display=main` | A source on or off, as `set_recording_source` (`source`, `on`, `display`): the whole screen here; asked every time, what it turns on named. |
 | `skilli://record/import?file=…` | The Import panel, at that file (nothing imported before ↩). |
 | `skilli://record/open?recording=…&at=…` | A recording's window (by its id or title), playing from `at` seconds. |
 | `skilli://record/summary?recording=…`, `…/chapters`, `…/actions`, `…/recap`, `…/ask?question=…` | What its window's ⌘K does with your SI; asked every time, the recording named, no Always. |

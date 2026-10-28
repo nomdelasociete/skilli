@@ -613,6 +613,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return recorder.title
         }
         runner.controlRecording = { [weak self] control in self?.madeRecorderCenter?.control(control) }
+        runner.recordingSourceTarget = { [weak self] in
+            guard let center = self?.madeRecorderCenter, let moment = center.sourceMoment else { return nil }
+            return (moment, center.recorder.isRecording ? "“\(center.recorder.title)”" : "The Record card")
+        }
+        runner.screenNamed = { [weak self] name in
+            ScreenDisplays.named(name, meeting: self?.madeRecorderCenter?.meetingWindow?.id).map { ($0.id, $0.title) }
+        }
+        runner.setRecordingSource = { [weak self] source, on, screen in
+            guard let center = self?.madeRecorderCenter else { throw MeetingRecorder.Failure(message: "No recording is on, and the Record card is not open.") }
+            return try await center.setSource(source.rawValue, on: on, screen: screen)
+        }
         if case .selftest = mode { runner.handsFocusBack = false }
         return runner
     }()

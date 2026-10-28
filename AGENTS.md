@@ -2413,7 +2413,16 @@ re-investigating.
   found by its room, `MeetingTab`, and selected without a reload or the
   browser brought forward, `MeetingTabSelect`; Arc, Firefox, no tab,
   Automation refused: the card says what to do) or one picked from the
-  window list (`ScreenWindows`, skil.li's own left out). Once a second
+  window list (`ScreenWindows`, skil.li's own left out), or the whole
+  screen (2026-10-28, docs/meeting-recorder-views.md "The whole
+  screen": `ScreenTarget.display`, `SCContentFilter(display:
+  excludingApplications:)` with skil.li's app, so its windows are left out
+  whenever they show; the pointer in it; `ScreenChoices` builds the card's
+  and the red dot's list, the meeting's window, then "Whole Screen", each
+  screen by name when several, the meeting's first, `WholeScreen` in
+  SkilliCore; the card's note says what it records each time it is the
+  pick; `set_recording_source display=main|meeting|<name>`,
+  `skilli://record/source?…`, asked every time). Once a second
   the window list says whether it still gives pictures (`PictureWatch`:
   minimized, hidden, off screen, closed, covered whole with no new
   picture for 5 s, `WindowCover`): an orange mark in the menu bar and
@@ -2429,7 +2438,11 @@ re-investigating.
   only when turned on (the card steps down meanwhile); no camera, no
   question. `remote pictures` (Mac mini): a stand-in camera
   (`StandInCamera`, the mini has none) and a slides window, a scratch
-  Chrome's window covered; `recorder-pictures-*.png`.
+  Chrome's window covered; `recorder-pictures-*.png`. `remote recorder`
+  also records 9 s of the whole screen picked in the card's list (a
+  slides window of skil.li's own let in for it, `ScreenTrack.alsoRecorded`;
+  another, magenta, left out), and turns it on and off from the tool and
+  the link; `recorder-whole-screen-*.png`.
 - Meeting recorder, phase 4 (docs/meeting-recorder-views.md, "Phase 4"):
   the track that holds several people (the Mac's sound in a call, the
   microphone in person, an import's one track) is told apart by

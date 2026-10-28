@@ -131,6 +131,69 @@ final class PictureWatchTests: XCTestCase {
     }
 }
 
+final class WholeScreenTests: XCTestCase {
+    // The window list's coordinates: the main screen at the origin, a
+    // second one to its right, a third above it.
+    private let builtIn = WholeScreen.Display(id: 1, name: "Built-in Retina Display", frame: CGRect(x: 0, y: 0, width: 1512, height: 982))
+    private let ultraFine = WholeScreen.Display(id: 7, name: "LG UltraFine", frame: CGRect(x: 1512, y: -300, width: 2560, height: 1440))
+    private let above = WholeScreen.Display(id: 9, name: "Écran Sidecar", frame: CGRect(x: 0, y: -1080, width: 1920, height: 1080))
+    private var all: [WholeScreen.Display] { [builtIn, ultraFine, above] }
+
+    func testTheMeetingsScreenComesFirst() {
+        let call = CGRect(x: 1800, y: 100, width: 1200, height: 800)
+        XCTAssertEqual(WholeScreen.ordered(all, main: 1, window: call).map(\.id), [7, 1, 9], "the meeting's window is on the LG")
+        // Across two screens: the one holding most of it.
+        let across = CGRect(x: 1300, y: 100, width: 600, height: 400)
+        XCTAssertEqual(WholeScreen.ordered(all, main: 1, window: across).first?.id, 7, "212 pt on the built-in, 388 on the LG")
+    }
+
+    func testNoMeetingsWindowTheMainOneFirst() {
+        XCTAssertEqual(WholeScreen.ordered(all, main: 1, window: nil).map(\.id), [1, 7, 9])
+        XCTAssertEqual(WholeScreen.ordered(all, main: 7, window: nil).map(\.id), [7, 1, 9], "the menu bar on the LG")
+        let offEveryScreen = CGRect(x: -5000, y: -5000, width: 300, height: 200)
+        XCTAssertEqual(WholeScreen.ordered(all, main: 1, window: offEveryScreen).first?.id, 1, "a window on no screen: the main one")
+        XCTAssertEqual(WholeScreen.ordered([], main: 1, window: nil), [])
+    }
+
+    func testOneScreenIsTheWholeScreenAlone() {
+        XCTAssertEqual(WholeScreen.title("Built-in Retina Display", several: false), "Whole Screen")
+        XCTAssertEqual(WholeScreen.title("LG UltraFine", several: true), "Whole Screen · LG UltraFine")
+    }
+
+    func testAToolNamesAScreen() {
+        let call = CGRect(x: 1800, y: 100, width: 1200, height: 800)
+        XCTAssertEqual(WholeScreen.named("main", in: all, main: 1, window: call)?.id, 1)
+        XCTAssertEqual(WholeScreen.named(" Main ", in: all, main: 1, window: call)?.id, 1)
+        XCTAssertEqual(WholeScreen.named("meeting", in: all, main: 1, window: call)?.id, 7)
+        XCTAssertEqual(WholeScreen.named("meeting", in: all, main: 1, window: nil)?.id, 1, "no meeting's window: the main one")
+        XCTAssertEqual(WholeScreen.named("lg ultrafine", in: all, main: 1, window: nil)?.id, 7, "case aside")
+        XCTAssertEqual(WholeScreen.named("ecran sidecar", in: all, main: 1, window: nil)?.id, 9, "accents aside")
+        XCTAssertEqual(WholeScreen.named("LG", in: all, main: 1, window: nil)?.id, 7, "the only one starting so")
+        XCTAssertNil(WholeScreen.named("Dell", in: all, main: 1, window: nil))
+        XCTAssertNil(WholeScreen.named("", in: all, main: 1, window: nil))
+        let twins = [WholeScreen.Display(id: 2, name: "DELL U2720Q", frame: .zero), WholeScreen.Display(id: 3, name: "DELL U2720Q (2)", frame: .zero)]
+        XCTAssertEqual(WholeScreen.named("DELL U2720Q", in: twins, main: 2, window: nil)?.id, 2, "an exact name before a start")
+        XCTAssertNil(WholeScreen.named("DELL", in: twins, main: 2, window: nil), "two start so: neither")
+    }
+
+    func testTwinScreensAreToldApart() {
+        XCTAssertEqual(WholeScreen.distinctNames(["DELL U2720Q", "Built-in Retina Display", "DELL U2720Q", " "]),
+                       ["DELL U2720Q", "Built-in Retina Display", "DELL U2720Q (2)", "Screen 4"])
+        XCTAssertEqual(WholeScreen.distinctNames(["LG UltraFine", "lg ultrafine", "Écran", "ecran"]), ["LG UltraFine", "lg ultrafine (2)", "Écran", "ecran (2)"],
+                       "the same name, case and accents aside: told apart as a tool reads it")
+        XCTAssertEqual(WholeScreen.distinctNames(["Main", "Meeting"]), ["Main (2)", "Meeting (2)"], "never the words that name the main screen or the meeting's")
+        XCTAssertEqual(WholeScreen.distinctNames(["DELL (2)", "DELL", "DELL"]), ["DELL (2)", "DELL", "DELL (3)"], "a number never one already taken")
+        let names = WholeScreen.distinctNames(["Main", "LG", "lg"])
+        let displays = names.enumerated().map { WholeScreen.Display(id: UInt32($0.offset + 1), name: $0.element, frame: .zero) }
+        XCTAssertEqual(WholeScreen.named("main (2)", in: displays, main: 2, window: nil)?.id, 1, "a screen called Main is still reached by its name")
+        XCTAssertEqual(WholeScreen.named("lg (2)", in: displays, main: 2, window: nil)?.id, 3)
+    }
+
+    func testADisconnectedScreenIsSaid() {
+        XCTAssertEqual(PictureWatch.disconnectedLine, "the screen was disconnected: pick another")
+    }
+}
+
 final class SlideScheduleTests: XCTestCase {
     private func grid(_ value: UInt8, changing share: Double = 1, from base: UInt8 = 0) -> [UInt8] {
         let count = SlideSchedule.columns * SlideSchedule.rows

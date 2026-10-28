@@ -652,9 +652,10 @@ Phase 3 changes none of the Moment's answers, checked one by one:
   windows opens under the row and the one picked is recorded; none
   picked, it stays off.
   - **⌃⌄** after the name lists the windows on screen: "The meeting's
-    window" first when one is known, then each app's normal windows,
-    front to back, "App · title" (skil.li's own left out); the one
-    recorded checked. The same list as the red dot's menu.
+    window" first when one is known, then the whole screen (2026-10-28,
+    "The whole screen" below), then each app's normal windows, front to
+    back, "App · title" (skil.li's own left out); the one recorded
+    checked. The same list as the red dot's menu.
   - Screen Recording never given: macOS's question as it is turned on;
     refused: "Not allowed · ⌘↩ opens Privacy" in orange. macOS applies
     it once skil.li reopens (`Relaunch`, as for "do it here").
@@ -842,8 +843,9 @@ among what they turn on.
 ## Not in phase 3
 
 A browser's tab recorded whatever is in front (an extension: not
-planned), the whole display, the webcam's own sound (the microphone is
-the user's side), slides as chapters (phase 5).
+planned), the whole display (built 2026-10-28: "The whole screen"), the
+webcam's own sound (the microphone is the user's side), slides as
+chapters (phase 5).
 
 # Phase 4: voices, import, editing, Better transcription
 
@@ -1630,3 +1632,153 @@ The call's end card's place, frame and type, once for a stretch:
   started (muted, nobody talking), a source turned off, a paused
   recording (the mark goes at the pause, each track is read again at
   Resume), the Record card's meters (the card says it there already).
+
+# The whole screen
+
+Spec, 2026-10-28, from `docs/meeting-recorder.md` ("Before", "The whole
+screen": its moment). A third pick for the screen, beside the meeting's
+window and a window from the list: a display, every app on it, skil.li's
+own windows left out. The same file, clock and picture rules as a
+window's (Phase 3, "The files").
+
+## The Record card
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ● RECORD A MEETING                             English ⌃⌄ │
+│                                                          │
+│ Weekly design review▌                                    │
+│ With Paul, Anna and 4 others                             │
+│                                                          │
+│ 🎙  Microphone      MacBook Pro Microphone      ▮▮▮▮▯▯   │
+│ 🔊  The Mac's sound  Every app                  ▮▮▯▯▯▯   │
+│ 📷  Webcam           Off                                 │
+│ 🖥  Screen           Whole Screen · LG UltraFine ⌃⌄ ▕▓▓▓▏ │  live, the screen
+│                                                          │
+│ 🖥  The whole screen is recorded: notifications and other │
+│    apps on it too. skil.li's own windows are left out.   │
+│ ──────────────────────────────────────────────────────── │
+│ Cancel esc                                  ( Record ↩ ) │
+└──────────────────────────────────────────────────────────┘
+```
+
+- **The row**: "Whole Screen" when the Mac has one screen, "Whole
+  Screen · LG UltraFine" (its name, as macOS gives it) when it has
+  several; the row's symbol a display instead of a window, its picture
+  the screen live (46 × 26 pt, as a window's). ⌃⌄ opens the same list.
+- **The note**, one line in the card's note style with the display
+  symbol, every time the whole screen is the pick (never for a window):
+  "The whole screen is recorded: notifications and other apps on it
+  too. skil.li's own windows are left out." It goes when another pick
+  or Off is chosen. A meeting tab's line, when there was one, gives way
+  to it: the meeting's tab is not brought forward for the whole screen
+  (it is in it as it is).
+- **The list** (⌃⌄, or a click on the row with no meeting's window
+  known): the whole screen right after the meeting's window, before the
+  other windows.
+
+  ```
+    The Meeting's Window
+    ✓ Google Chrome · Meet
+    ──────
+    Whole Screen                     ← one screen: one item, picked as is
+    ──────
+    Keynote · Q3 review
+    Notes · Agenda
+  ```
+
+  With several screens, a header and each screen by its name, the one
+  the meeting's window is on first (none known: the main one, the menu
+  bar's), the others as macOS lists them; the one recorded checked:
+
+  ```
+    Whole Screen
+      LG UltraFine                   ← the meeting's window is on it
+      Built-in Retina Display
+  ```
+
+- **A pick stands**: the meeting's window found late (a browser slow to
+  answer, Automation's question) is still listed first, but never takes
+  the place of a screen picked, or turned off, meanwhile.
+- **↩** records it from that moment, as any pick. Screen Recording as
+  for a window: macOS's question as it is picked, the card stepped down
+  under it meanwhile and back up after; refused, "Not allowed · ⌘↩
+  opens Privacy" in orange (no window can be recorded either). macOS's
+  second question, to "bypass the private window picker", is what lets
+  an app record whole screens: without it the row says "Not recorded:
+  macOS doesn't let skil.li record the whole screen" in orange, ⌃⌄
+  still there to pick a window instead. The card's note says what the
+  whole screen records only while it does: not for a screen that failed
+  or was refused.
+
+## The menu bar while recording
+
+The red dot's menu, Screen ▸, has the same list, then Off:
+
+```
+✓ Screen · Whole Screen · LG UltraFine   ▸   The Meeting's Window
+                                               Google Chrome · Meet
+                                               ──────
+                                               Whole Screen
+                                               ✓ LG UltraFine
+                                                 Built-in Retina Display
+                                               ──────
+                                               Keynote · Q3 review
+                                               ──────
+                                               Off
+```
+
+- Another pick goes on in the same `screen.mp4` from then on, scaled
+  into the file's size (its shape kept, black around); Off writes black
+  from then on.
+- **No picture**: a screen never minimizes or hides. One disconnected
+  while recorded (a display unplugged, the lid closed on a laptop with a
+  display) is said as a closed window: the label's orange mark, and
+  "Screen · the screen was disconnected: pick another ▸" in the menu.
+
+## The files
+
+- `screen.mp4`: as a window's (H.264, 1920 wide at most, 15 a second,
+  in fragments of a second, each picture at its host time, cut at the
+  same host moments as the sound): a 3024 × 1964 Retina screen is
+  written 1920 × 1246. The file's size is set by the first pick of the
+  recording, a later one scaled into it.
+- The pointer is in the pictures (a demo is followed by it); a window's
+  leave it out, as in phase 3.
+- `slides.json`: read from the whole screen's pictures by phase 3's
+  rules (Reading the slides). Lines seen in most readings (the menu
+  bar's, the Dock's) are taken out at Stop as a call's buttons are.
+
+## For skillies, agents and links
+
+- `set_recording_source source=screen on=true display=…`: the whole
+  screen instead of the meeting's window, whether the screen was off or
+  on a window. `display=main`: the main screen (the menu bar's);
+  `display=meeting`: the one the meeting's window is on, else the main
+  one (the list's first); `display=<name>`: that screen, by its name as
+  the list says it (case and accents aside). Without `display`, as
+  before: the meeting's window. It answers "The screen on: Whole Screen
+  · LG UltraFine."; a name no screen has is refused with the screens'
+  names.
+- `skilli://record/source?source=screen&display=main` takes the tool's
+  parameters (`source`, `on`, `display`; `on` true when left out), for
+  every source: asked in the card every time, the recording or the
+  Record card named with what turns on or off (a page could turn the
+  whole screen on unseen), never trusted. Allowed, it does what was
+  asked and only that: the screen the question named (`meeting` is not
+  looked for again), on the recording or card it named; another one
+  since (the recording stopped, the card closed and opened again) is
+  left as it is, and the card says so.
+
+## Said, and not said
+
+- Said: in the card, what the whole screen records, each time it is the
+  pick; in the menu bar, a screen disconnected.
+- Not said: the whole screen picked, or another screen (seen in the row
+  and the menu).
+
+## Not built
+
+The whole screen as Settings → Recorder's default (picked each time, for
+what it shows); part of a screen (an area); several screens at once;
+other apps left out (only skil.li's are).

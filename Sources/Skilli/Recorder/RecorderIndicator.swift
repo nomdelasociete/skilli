@@ -25,12 +25,13 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     var calls: () -> (apps: [MicrophoneApp], picked: MicrophoneApp?) = { ([], nil) }
     /// The webcam's item chosen, the screen's Off.
     var onTogglePicture: ((PictureSource) -> Void)?
-    /// A window picked for the screen.
-    var onPickWindow: ((ScreenWindow) -> Void)?
+    /// A window or a whole screen picked for the screen.
+    var onPickScreen: ((ScreenTarget) -> Void)?
     /// The webcam and the screen, once the recorder has them.
     var pictures: RecorderPictures?
-    /// The windows the screen can record: the meeting's, then the others.
-    var windows: () -> (meeting: ScreenWindow?, all: [ScreenWindow]) = { (nil, ScreenWindows.list()) }
+    /// What the screen can record: the meeting's window, the whole
+    /// screen, then the other windows.
+    var choices: () -> ScreenChoices = { ScreenChoices.now(meeting: nil) }
 
     private let recorder: MeetingRecorder
     private var item: NSStatusItem?
@@ -202,60 +203,46 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
 
     /// The apps the call's submenu offers, in its order.
     private var pickable: [MicrophoneApp] = []
-    /// The windows the screen's submenu offers, in its order.
-    private var pickableWindows: [ScreenWindow] = []
+    /// What the screen's submenu offers, in its order.
+    private var pickableScreens: [ScreenTarget] = []
 
     /// "Webcam · FaceTime HD Camera" (a click turns it off or on), then
-    /// "Screen · Google Chrome · Meet ▸": the windows to pick, Off; a
-    /// window giving no picture says why in its place.
+    /// "Screen · Google Chrome · Meet ▸": the windows and the whole
+    /// screen to pick, Off; a window giving no picture, or a screen
+    /// disconnected, says why in its place.
     private func addPictures(_ pictures: RecorderPictures, to menu: NSMenu) {
         let webcamOn = recorder.sources.webcam
         let device: String = if case .on(let name) = pictures.webcam.state { name } else { "Off" }
         let webcam = entry("Webcam · \(webcamOn ? device : "Off")", #selector(toggleWebcam))
         webcam.state = webcamOn && pictures.webcam.isOn ? .on : .off
         menu.addItem(webcam)
-        let window = recorder.sources.screen ? pictures.screen.window : nil
+        let target = recorder.sources.screen ? pictures.screen.target : nil
         let said: String
-        if let window, let problem = pictures.screen.problem {
+        if case .display? = target, pictures.screen.problem != nil {
+            said = PictureWatch.disconnectedLine
+        } else if case .window(let window)? = target, let problem = pictures.screen.problem {
             said = PictureWatch.line(problem, app: window.app)
-        } else if let window {
-            said = window.name
+        } else if let target {
+            said = target.name
         } else if case .denied = pictures.screen.state, recorder.sources.screen {
             said = "not allowed in Screen Recording"
+        } else if case .failed(let why) = pictures.screen.state, recorder.sources.screen {
+            said = "not recorded: \(why)"
         } else {
             said = "Off"
         }
         let screen = NSMenuItem(title: "Screen · \(said)", action: nil, keyEquivalent: "")
-        screen.state = window != nil ? .on : .off
+        screen.state = target != nil ? .on : .off
         let choices = NSMenu()
-        let (meeting, all) = windows()
-        var listed: [ScreenWindow] = []
-        if let meeting {
-            let header = NSMenuItem(title: "The Meeting's Window", action: nil, keyEquivalent: "")
-            header.isEnabled = false
-            choices.addItem(header)
-            listed.append(meeting)
-            choices.addItem(windowItem(meeting, index: 0, checked: meeting.id == window?.id))
-            choices.addItem(.separator())
-        }
-        for other in all where other.id != meeting?.id {
-            listed.append(other)
-            choices.addItem(windowItem(other, index: listed.count - 1, checked: other.id == window?.id))
-        }
-        if !listed.isEmpty { choices.addItem(.separator()) }
+        let (items, targets) = self.choices().items(recorded: target, action: #selector(pickScreen(_:)), target: self)
+        items.forEach(choices.addItem)
+        if !targets.isEmpty { choices.addItem(.separator()) }
         let off = entry("Off", #selector(screenOff))
-        off.state = window == nil ? .on : .off
+        off.state = target == nil ? .on : .off
         choices.addItem(off)
-        pickableWindows = listed
+        pickableScreens = targets
         screen.submenu = choices
         menu.addItem(screen)
-    }
-
-    private func windowItem(_ window: ScreenWindow, index: Int, checked: Bool) -> NSMenuItem {
-        let item = entry(window.name, #selector(pickWindow(_:)))
-        item.tag = index
-        item.state = checked ? .on : .off
-        return item
     }
 
     @objc private func toggleWebcam() { onTogglePicture?(.webcam) }
@@ -264,8 +251,8 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
         if recorder.sources.screen { onTogglePicture?(.screen) }
     }
 
-    @objc private func pickWindow(_ item: NSMenuItem) {
-        if pickableWindows.indices.contains(item.tag) { onPickWindow?(pickableWindows[item.tag]) }
+    @objc private func pickScreen(_ item: NSMenuItem) {
+        if pickableScreens.indices.contains(item.tag) { onPickScreen?(pickableScreens[item.tag]) }
     }
 
     /// "Microphone · NDI Audio", checked while on, its level after it as

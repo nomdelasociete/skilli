@@ -15,6 +15,143 @@ struct ScreenWindow: Equatable, Sendable {
     var name: String { title.isEmpty ? app : "\(app) · \(title)" }
 }
 
+/// One of the Mac's screens, for the whole screen
+/// (docs/meeting-recorder-views.md, "The whole screen"): its display and
+/// its name as macOS gives it, told apart from a twin's.
+struct ScreenDisplay: Equatable, Sendable {
+    let id: CGDirectDisplayID
+    let name: String
+    /// The Mac had other screens when it was listed: its name is said.
+    let several: Bool
+
+    /// "Whole Screen", or "Whole Screen · LG UltraFine".
+    var title: String { WholeScreen.title(name, several: several) }
+}
+
+/// What the screen records: one window, or a whole screen.
+enum ScreenTarget: Equatable, Sendable {
+    case window(ScreenWindow)
+    case display(ScreenDisplay)
+
+    /// As the row and the menus name it.
+    var name: String {
+        switch self {
+        case .window(let window): window.name
+        case .display(let display): display.title
+        }
+    }
+
+    /// The same window or screen, whatever its title says now.
+    func isSame(as other: ScreenTarget?) -> Bool {
+        switch (self, other) {
+        case (.window(let a), .window(let b)?): a.id == b.id
+        case (.display(let a), .display(let b)?): a.id == b.id
+        default: false
+        }
+    }
+}
+
+/// The Mac's screens, in the order the lists show them: the one the
+/// meeting's window is on first, else the main one (`WholeScreen`).
+@MainActor
+enum ScreenDisplays {
+    static func list(meeting window: CGWindowID? = nil) -> [ScreenDisplay] {
+        let screens = NSScreen.screens.compactMap { screen -> (CGDirectDisplayID, String)? in
+            guard let id = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value else { return nil }
+            return (id, screen.localizedName)
+        }
+        let names = WholeScreen.distinctNames(screens.map(\.1))
+        let displays = zip(screens, names).map { WholeScreen.Display(id: $0.0, name: $1, frame: CGDisplayBounds($0.0)) }
+        let ordered = WholeScreen.ordered(displays, main: CGMainDisplayID(), window: window.flatMap(ScreenWindows.bounds))
+        return ordered.map { ScreenDisplay(id: $0.id, name: $0.name, several: ordered.count > 1) }
+    }
+
+    /// The screen a tool's or a link's `display` names (`main`,
+    /// `meeting`, a name); nil: none.
+    static func named(_ text: String, meeting window: CGWindowID?) -> ScreenDisplay? {
+        let all = list(meeting: window)
+        let displays = all.map { WholeScreen.Display(id: $0.id, name: $0.name, frame: CGDisplayBounds($0.id)) }
+        guard let found = WholeScreen.named(text, in: displays, main: CGMainDisplayID(), window: window.flatMap(ScreenWindows.bounds)) else { return nil }
+        return all.first { $0.id == found.id }
+    }
+
+    static func isConnected(_ id: CGDirectDisplayID) -> Bool {
+        NSScreen.screens.contains { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id }
+    }
+}
+
+/// What the screen's lists offer (the Record card's ⌃⌄, the red dot's
+/// Screen ▸; docs/meeting-recorder-views.md, "The whole screen"): the
+/// meeting's window, the whole screen (each screen by its name when the
+/// Mac has several), then the other windows.
+struct ScreenChoices {
+    enum Entry {
+        case header(String)
+        /// Indented: under a header.
+        case pick(ScreenTarget, title: String, indented: Bool)
+        case separator
+    }
+
+    var meeting: ScreenWindow?
+    var displays: [ScreenDisplay]
+    var windows: [ScreenWindow]
+
+    #if SKILLI_SELFTEST
+    /// Self-test: the guides' invented windows and screens, in place of
+    /// the Mac's.
+    @MainActor static var standIn: ScreenChoices?
+    #endif
+
+    @MainActor static func now(meeting: ScreenWindow?) -> ScreenChoices {
+        #if SKILLI_SELFTEST
+        if let standIn { return standIn }
+        #endif
+        return ScreenChoices(meeting: meeting, displays: ScreenDisplays.list(meeting: meeting?.id), windows: ScreenWindows.list())
+    }
+
+    var entries: [Entry] {
+        var entries: [Entry] = []
+        if let meeting {
+            entries += [.header("The Meeting's Window"), .pick(.window(meeting), title: meeting.name, indented: true), .separator]
+        }
+        if displays.count == 1 {
+            entries.append(.pick(.display(displays[0]), title: displays[0].title, indented: false))
+        } else if !displays.isEmpty {
+            entries.append(.header("Whole Screen"))
+            entries += displays.map { .pick(.display($0), title: $0.name, indented: true) }
+        }
+        let others = windows.filter { $0.id != meeting?.id }
+        if !displays.isEmpty, !others.isEmpty { entries.append(.separator) }
+        entries += others.map { .pick(.window($0), title: $0.name, indented: false) }
+        return entries
+    }
+
+    /// The menu's items, the one recorded checked; each pick's `tag` its
+    /// place in the targets returned, its action `action` on `target`.
+    func items(recorded: ScreenTarget?, action: Selector, target: AnyObject) -> (items: [NSMenuItem], targets: [ScreenTarget]) {
+        var targets: [ScreenTarget] = []
+        let items = entries.map { entry -> NSMenuItem in
+            switch entry {
+            case .header(let title):
+                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                return item
+            case .pick(let pick, let title, let indented):
+                let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+                item.target = target
+                item.tag = targets.count
+                item.indentationLevel = indented ? 1 : 0
+                item.state = pick.isSame(as: recorded) ? .on : .off
+                targets.append(pick)
+                return item
+            case .separator:
+                return .separator()
+            }
+        }
+        return (items, targets)
+    }
+}
+
 /// The windows the screen can record, from the window list (front to
 /// back, no picture taken): each app's normal windows, skil.li's own left
 /// out, none too small to be a call's.
@@ -34,6 +171,12 @@ enum ScreenWindows {
 
     static func window(_ id: CGWindowID) -> ScreenWindow? {
         (CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]])?.first.flatMap(window(from:))
+    }
+
+    /// Where window `id` is, in the window list's coordinates.
+    static func bounds(_ id: CGWindowID) -> CGRect? {
+        ((CGWindowListCopyWindowInfo([.optionIncludingWindow], id) as? [[String: Any]])?.first?[kCGWindowBounds as String] as? NSDictionary)
+            .flatMap { CGRect(dictionaryRepresentation: $0 as CFDictionary) }
     }
 
     private static func window(from info: [String: Any]) -> ScreenWindow? {
@@ -161,11 +304,13 @@ final class ScreenSink: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked S
     }
 }
 
-/// The screen, the call's window (docs/meeting-recorder-views.md, phase 3):
-/// ScreenCaptureKit on one window, small while the card shows it, at the
-/// file's size once recording. Another window picked during the call is
-/// recorded in the same file from then on. Once a second while it runs,
-/// the window list says whether the window still gives pictures
+/// The screen, the call's window (docs/meeting-recorder-views.md, phase 3)
+/// or a whole screen ("The whole screen"): ScreenCaptureKit on one window,
+/// or on a display with skil.li's own windows left out, small while the
+/// card shows it, at the file's size once recording. Another pick during
+/// the call is recorded in the same file from then on. Once a second
+/// while it runs, the window list says whether the window still gives
+/// pictures, the displays whether the screen is still there
 /// (`PictureWatch`).
 @MainActor
 final class ScreenTrack {
@@ -174,7 +319,7 @@ final class ScreenTrack {
         /// Screen Recording not given (or not applied yet: macOS applies
         /// it once skil.li reopens).
         case denied
-        case on(ScreenWindow)
+        case on(ScreenTarget)
         /// The stream could not start, and why.
         case failed(String)
     }
@@ -188,14 +333,17 @@ final class ScreenTrack {
     private(set) var state: State = .off
     let sink = ScreenSink()
     private var stream: SCStream?
-    /// The window's filter, as the stream started: a picture of it at the
-    /// file's size on demand.
+    /// The window's or the screen's filter, as the stream started: a
+    /// picture of it at the file's size on demand.
     private var filter: SCContentFilter?
     /// The file's size, set by the first window recorded.
     private(set) var fileSize: (width: Int, height: Int)?
-    /// The window's own size in pixels, as the stream started.
+    /// The window's or the screen's own size in pixels, as the stream
+    /// started.
     private var windowPixels: (width: Int, height: Int)?
     private var recording = false
+    /// The pictures show the pointer: the whole screen's.
+    private var pointer = false
     private var watch = PictureWatch()
     private var watchTimer: Timer?
     /// Each start and stop: a start overtaken while it awaited gives up.
@@ -205,40 +353,84 @@ final class ScreenTrack {
     /// The state or the problem changed: the card, the menu bar.
     var onChange: (() -> Void)?
 
-    var window: ScreenWindow? {
-        if case .on(let window) = state { return window }
+    /// The window or the screen recorded; nil: off, or not recorded.
+    var target: ScreenTarget? {
+        if case .on(let target) = state { return target }
         return nil
     }
 
-    /// Why the window gives no picture now; nil while it does.
-    var problem: PictureWatch.Problem? { window == nil ? nil : watch.problem }
+    var window: ScreenWindow? {
+        if case .window(let window)? = target { return window }
+        return nil
+    }
+
+    /// Why the window or the screen gives no picture now; nil while it does.
+    var problem: PictureWatch.Problem? { target == nil ? nil : watch.problem }
 
     static var isAllowed: Bool { CGPreflightScreenCaptureAccess() }
 
-    /// Starts `window`'s pictures (another one before: stopped). Screen
+    #if SKILLI_SELFTEST
+    /// Self-test: skil.li's own windows recorded with the whole screen
+    /// all the same (its known picture), every other one of its own left
+    /// out as for anyone.
+    static var alsoRecorded: Set<CGWindowID> = []
+    #endif
+
+    /// The card's line each time the whole screen is the pick.
+    static let wholeScreenNote = "The whole screen is recorded: notifications and other apps on it too. skil.li's own windows are left out."
+
+    /// The whole screen when macOS gives skil.li no display: Screen
+    /// Recording given, macOS's second question ("bypass the private
+    /// window picker") not.
+    static let noDisplays = "macOS doesn't let skil.li record the whole screen"
+
+    /// Starts `target`'s pictures (another one before: stopped). Screen
     /// Recording never asked: macOS asks now.
-    func start(_ window: ScreenWindow) async {
+    func start(_ target: ScreenTarget) async {
         generation += 1
         let mine = generation
         stopStream()
         // skil.li's own window needs no Screen Recording (the self-test's).
-        let own = Self.ownWindow(window)
+        let own = if case .window(let window) = target { Self.ownWindow(window) } else { false }
         guard own || Self.isAllowed || CGRequestScreenCaptureAccess() else {
             state = .denied
             onChange?()
             return
         }
         do {
-            let content = own ? try await SCShareableContent.currentProcess
-                : try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
-            guard mine == generation else { return }
-            guard let target = content.windows.first(where: { $0.windowID == window.id }) else {
-                state = .failed("the window closed")
-                onChange?()
-                return
+            let filter: SCContentFilter
+            switch target {
+            case .window(let window):
+                let content = own ? try await SCShareableContent.currentProcess
+                    : try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
+                guard mine == generation else { return }
+                guard let found = content.windows.first(where: { $0.windowID == window.id }) else {
+                    state = .failed("the window closed")
+                    onChange?()
+                    return
+                }
+                filter = SCContentFilter(desktopIndependentWindow: found)
+            case .display(let display):
+                // Every window known, off screen too: skil.li's own are left
+                // out by its app, whenever they show.
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                guard mine == generation else { return }
+                guard let found = content.displays.first(where: { $0.displayID == display.id }) else {
+                    state = .failed(content.displays.isEmpty ? Self.noDisplays : "the screen was disconnected")
+                    onChange?()
+                    return
+                }
+                let skilli = content.applications.filter { $0.processID == getpid() }
+                if skilli.isEmpty { Log.actions.error("Recorder: skil.li is not among the apps to leave out of the whole screen") }
+                #if SKILLI_SELFTEST
+                let kept = content.windows.filter { Self.alsoRecorded.contains($0.windowID) }
+                #else
+                let kept: [SCWindow] = []
+                #endif
+                filter = SCContentFilter(display: found, excludingApplications: skilli, exceptingWindows: kept)
             }
-            let filter = SCContentFilter(desktopIndependentWindow: target)
             self.filter = filter
+            self.pointer = if case .display = target { true } else { false }
             let scale = CGFloat(filter.pointPixelScale)
             let width = Int(filter.contentRect.width * scale), height = Int(filter.contentRect.height * scale)
             windowPixels = (width, height)
@@ -256,11 +448,14 @@ final class ScreenTrack {
                 return
             }
             self.stream = stream
-            state = .on(window)
+            state = .on(target)
             watch = PictureWatch()
             lastSeen = nil
             startWatching()
-            Log.trace("Recorder: the screen records a window of \(window.app)")
+            switch target {
+            case .window(let window): Log.trace("Recorder: the screen records a window of \(window.app)")
+            case .display(let display): Log.trace("Recorder: the screen records the whole screen \(display.id) (\(width) × \(height) px)")
+            }
         } catch {
             guard mine == generation else { return }
             state = Self.isAllowed ? .failed(error.localizedDescription) : .denied
@@ -296,11 +491,11 @@ final class ScreenTrack {
         return (Int(Double(width) * scale) / 2 * 2, Int(Double(height) * scale) / 2 * 2)
     }
 
-    /// The window now at the file's size, at once (a still window gives
-    /// the stream no new picture after its size changes: the file's first
-    /// one would be the card's small one, blurred).
+    /// The window or the screen now at the file's size, at once (a still
+    /// window gives the stream no new picture after its size changes: the
+    /// file's first one would be the card's small one, blurred).
     func fullPicture() async -> CVPixelBuffer? {
-        guard let filter, window != nil else { return nil }
+        guard let filter, target != nil else { return nil }
         let size = plannedSize
         let configuration = configuration(width: size.width, height: size.height)
         configuration.width = size.width
@@ -337,7 +532,9 @@ final class ScreenTrack {
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
         configuration.scalesToFit = true
         configuration.preservesAspectRatio = true
-        configuration.showsCursor = false
+        // The whole screen with the pointer (a demo is followed by it), a
+        // window without.
+        configuration.showsCursor = pointer
         configuration.capturesAudio = false
         configuration.queueDepth = 6
         configuration.backgroundColor = .black
@@ -358,11 +555,12 @@ final class ScreenTrack {
     private func stopped(_ error: Error) {
         guard stream != nil else { return }
         stream = nil
-        // The window gone: the watch says so; anything else, as a failure.
-        if let window, ScreenWindows.window(window.id) == nil {
-            watch.closed()
-        } else {
-            state = .failed(error.localizedDescription)
+        // The window or the screen gone: the watch says so; anything else,
+        // as a failure.
+        switch target {
+        case .window(let window)? where ScreenWindows.window(window.id) == nil: watch.closed()
+        case .display(let display)? where !ScreenDisplays.isConnected(display.id): watch.closed()
+        default: state = .failed(error.localizedDescription)
         }
         onChange?()
     }
@@ -379,18 +577,26 @@ final class ScreenTrack {
     }
 
     private func tickWatch() {
-        guard let window else { return }
+        guard let target else { return }
         let before = watch.problem
         let seen = sink.lastPictureTime
         if let seen, seen != lastSeen {
             lastSeen = seen
             watch.pictured()
         }
-        let look = ScreenWindows.look(window.id, pid: window.pid)
-        if look != lastLook {
-            Log.trace("Recorder: the screen's window: \(look.exists ? look.onScreen ? look.coveredWhole ? "covered whole" : "in sight" : "not on screen" : "gone")")
-            lastLook = look
+        let look: PictureWatch.Look
+        switch target {
+        case .window(let window):
+            look = ScreenWindows.look(window.id, pid: window.pid)
+            if look != lastLook {
+                Log.trace("Recorder: the screen's window: \(look.exists ? look.onScreen ? look.coveredWhole ? "covered whole" : "in sight" : "not on screen" : "gone")")
+            }
+        case .display(let display):
+            // A screen never minimizes, hides or is covered: it is there or gone.
+            look = PictureWatch.Look(exists: ScreenDisplays.isConnected(display.id))
+            if look != lastLook { Log.trace("Recorder: the whole screen \(look.exists ? "is there" : "was disconnected")") }
         }
+        lastLook = look
         watch.update(look, lastPicture: seen, now: HostClock.now)
         if watch.problem != before {
             Log.trace("Recorder: the screen \(watch.problem.map { "gives no picture (\($0.rawValue))" } ?? "gives pictures again")")
