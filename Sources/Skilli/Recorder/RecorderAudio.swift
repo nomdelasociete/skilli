@@ -326,7 +326,7 @@ final class MacSoundTap: @unchecked Sendable {
     }
 
     private func makeAggregate() throws {
-        // The tap's format follows the output it is on.
+        // The tap's channels; its rate only until the aggregate says its own.
         var format = AudioStreamBasicDescription()
         if Self.read(tap, kAudioTapPropertyFormat, &format) {
             channels = max(1, Int(format.mChannelsPerFrame))
@@ -352,7 +352,9 @@ final class MacSoundTap: @unchecked Sendable {
         var status = AudioHardwareCreateAggregateDevice(settings as CFDictionary, &device)
         guard status == noErr else { throw Failure(call: "AudioHardwareCreateAggregateDevice", status: status) }
         aggregate = device
-        // Its buffers come at the aggregate's rate: the one they are called.
+        // Its buffers come at the aggregate's rate, the output's: the one they
+        // are called (the tap's format said 48 kHz with the output at 44.1 kHz,
+        // on the test Mac).
         var nominal = 0.0
         if Self.read(device, kAudioDevicePropertyNominalSampleRate, &nominal), nominal > 0 { rate = nominal }
         for object in [device, output] where object != kAudioObjectUnknown {

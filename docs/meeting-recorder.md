@@ -893,8 +893,12 @@ same engine started again: its tap asked for 48 kHz, the input gave
 44.1 kHz, the same two lines in the log and no buffer until the rate
 came back; a new engine: its tap at 44.1 kHz, buffers on. The Mac's
 sound, its buffers still called 48 kHz: the other side's 2 kHz beeps
-came out 2.18 kHz and 8 % early, the beep search found none. `remote
-recorder` checks both, and a microphone that gives nothing. Rules it set (During): the Mac's sound made again when
+came out 2.18 kHz and 8 % early, the beep search found none. And the
+tap's format kept saying 48 kHz while the aggregate ran at the output's
+44.1 kHz: a recording started with the output at another rate than
+48 kHz (a headset already in its call mode) was called wrong from its
+start; its buffers are now called by the aggregate's rate. `remote
+recorder` checks each, and a microphone that gives nothing. Rules it set (During): the Mac's sound made again when
 its output changes its rate, a new engine for the microphone at each
 change and when one gives nothing, a track that records nothing said.
 

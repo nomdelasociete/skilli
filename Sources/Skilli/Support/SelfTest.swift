@@ -26083,6 +26083,7 @@ final class SelfTest {
         if !aborted { await recorderResamplesAMicrophoneStartedAgain() }
         if !aborted { await recorderMicrophoneFollowsItsDeviceRate() }
         if !aborted { await recorderMacSoundFollowsItsOutputRate() }
+        if !aborted { await recorderMacSoundAtTheOutputsRate() }
         if !aborted { await recorderSaysATrackRecordsNothing() }
         if !aborted { await recorderImportWaitsForTheRecording() }
         if !aborted { await recorderOffersOneNeverStopped() }
@@ -26882,6 +26883,56 @@ final class SelfTest {
                nil)
     }
 
+    /// A recording started while the output runs at another rate than
+    /// 48 kHz (44.1 kHz here; a headset already in its call mode, 24 kHz):
+    /// the tap's format still says 48 kHz while the aggregate runs at the
+    /// output's rate (measured on the test Mac). Its buffers called by the
+    /// aggregate's rate: the other side's beeps 0.5 s apart, in step with
+    /// the microphone's.
+    private func recorderMacSoundAtTheOutputsRate() async {
+        let name = "Recorder: a recording started with the output at 44.1 kHz (a headset already in its call mode): the Mac's sound called by the aggregate's rate, its beeps 0.5 s apart, both tracks in step"
+        let output = Self.defaultAudioDevice(input: false)
+        let rate = Self.nominalRate(of: output)
+        let offered = Self.rates(of: output)
+        guard output != kAudioObjectUnknown, let other = offered.contains(44100) && rate != 44100 ? 44100 : offered.first(where: { $0 != rate }) else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "an output with a single rate", latencyMs: nil))
+            return
+        }
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let train = recorderScratch.appendingPathComponent("output-at-rate-train.wav")
+        _ = Self.clip(nil, seconds: 20, beeps: stride(from: 0.5, to: 20, by: 0.5).map { $0 }, to: train)
+        center.recorder.standIn(microphone: train, alsoLeaveOut: [])
+        defer { _ = Self.setNominalRateNow(rate, of: output) }
+        let changed = await setNominalRate(other, of: output)
+        // The audio setup settles before the card starts the sources.
+        await pause(1000)
+        var play: Process?
+        var called = 0.0
+        var formats: (tap: Double, aggregate: Double, output: Double) = (0, 0, 0)
+        let made = await recordForRates(center, name, title: "Output at another rate", seconds: 9, at: 2, started: {
+            try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
+            play = playElsewhere(train)
+        }, during: {
+            (called, formats) = (center.recorder.macSound.calledRate, center.recorder.macSound.formats)
+        })
+        play?.terminate()
+        _ = await setNominalRate(rate, of: output)
+        guard let (folder, _) = made else { return }
+        let them = await Task.detached { Self.beeps(in: folder.appendingPathComponent(Speaker.them.file)) }.value
+        let gaps = zip(them.dropFirst(), them).map { $0 - $1 }.filter { $0 < 0.75 }.sorted()
+        let gap = gaps.isEmpty ? .nan : gaps[gaps.count / 2]
+        let pairs = await Self.beepPairs(in: folder)
+        let passed = changed && called == other && abs(gap - 0.5) < 0.003 && pairs.paired.count >= 14
+        record(name, passed,
+               String(format: "the output at %.0f Hz %@ before the recording; the tap's format said %.0f Hz, the aggregate %.0f Hz, the buffers called %.0f Hz; %d of the other side's beeps found at 2 kHz, %.3f s apart (median), %d of the microphone's %d beeps in step with them, offset %.1f ms",
+                      other, changed ? "set" : "not set", formats.tap, formats.aggregate, called, them.count, gap, pairs.paired.count, pairs.mine.count,
+                      BeepPairs.mean(pairs.paired.map(\.offset)) * 1000),
+               nil)
+    }
+
     nonisolated private static func setNominalRateNow(_ rate: Double, of device: AudioObjectID) -> Bool {
         var wanted = rate
         var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate, mScope: kAudioObjectPropertyScopeGlobal,
@@ -26927,6 +26978,8 @@ final class SelfTest {
         let after = Double((ContinuousClock.now - began).milliseconds) / 1000
         let view = center.cardView
         let said = (eyebrow: view.eyebrowText, line: view.detailText, button: view.buttonTitle)
+        // The menu bar draws eight times a second.
+        _ = await waitUntil(timeout: 1) { center.menuBar.button?.accessibilityLabel()?.contains("records nothing") == true }
         let label = center.menuBar.button?.accessibilityLabel() ?? ""
         let menu = center.menuBar.menuTitles
         let macSilent = center.recorder.silent[.them]
@@ -26971,7 +27024,7 @@ final class SelfTest {
         let conditions: [(String, Bool)] = [
             ("offered", offered), ("within 5 s", after <= 5), ("eyebrow", said.eyebrow == "NOTHING RECORDED"), ("line", said.line == line),
             ("Start Again", said.button == "Start Again"), ("label", label.contains("the microphone records nothing")),
-            ("menu line", menu.contains("Microphone · nothing comes from MacBook Pro Microphone")), ("the Mac's sound fine", macSilent == nil),
+            ("menu line", menu.contains { $0.hasPrefix("Microphone · nothing comes from MacBook Pro Microphone") }), ("the Mac's sound fine", macSilent == nil),
             ("card keys", keys), ("Keep Recording", kept), ("not again", notAgain), ("mark stays", markStays),
             ("open menu says it", openMenu.contains { $0.hasPrefix("Microphone · nothing comes") }), ("sound clears it", cleared),
             ("offered again", again), ("started again", startedAgain), ("back", back), ("label back", !labelBack.contains("records nothing"))

@@ -2307,7 +2307,8 @@ re-investigating.
   and a wake (macOS's notifications posted: the test Mac cannot be woken
   without a person), links and tools; a 24 kHz and a 16 kHz microphone
   started again mid-way, the test Mac's input and output changing their
-  rates mid-recording (put back after), a microphone that gives nothing
+  rates mid-recording and the output at 44.1 kHz from the start (put
+  back after), a microphone that gives nothing
   (`MeetingRecorder.watchesSilence`: the stand-ins give nothing until
   played, so only that check watches); `recorder-*.png`.
 - The recorder's moment (phase 2, 2026-10-24; docs/meeting-recorder.md's
