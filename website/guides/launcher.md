@@ -49,7 +49,7 @@ chip shows the mode; esc leaves it.
 | `snip` | Your snippets |
 | `:` | Emoji and symbols (also ⌃⌘Space) |
 | `gif` | GIFs, from Klipy and your Mac |
-| `f` | Files, with Spotlight |
+| `f` | Your files, cloud drives included (not your projects' dependencies) |
 | `tab` | Tabs open in Safari, Chrome, Arc, Brave, Edge… |
 | `hist` | Your browser history |
 | `@` | Contacts |

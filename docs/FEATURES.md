@@ -171,7 +171,10 @@ The search panel you open from anywhere. ✦Space.
   `cb`, Snippets `snip`, Emoji `:`, GIFs `gif`, Calendar `cal`, Reminders `todo`,
   GitHub `pr`, the Catalog `?`).
 - **Search Files** (`f`): by name with Spotlight, or by what it was about
-  with ⇥. ↩ opens, ⌘↩ shows in Finder; with CleanShot X, ⌘K on an image
+  with ⇥. Your files first: dependency folders (`node_modules`, `Pods`…),
+  app and library insides and build output left out, cloned projects'
+  code behind; Google Drive, Dropbox, OneDrive and iCloud Drive
+  included; a word can name a folder above ("martin invoice"). ↩ opens, ⌘↩ shows in Finder; with CleanShot X, ⌘K on an image
   or an MP4 sends it there (annotate, pin, Quick Access).
 - **Search Tabs** (`tab`): any tab open in Safari, Chrome, Arc, Brave,
   Edge…; ↩ shows it.

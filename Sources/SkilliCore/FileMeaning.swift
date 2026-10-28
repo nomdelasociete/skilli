@@ -27,11 +27,32 @@ public enum FileMeaning {
     }
 
     /// "~/Documents/Admin/x.pdf" → "Documents/Admin": the folders a person
-    /// names, without the home.
+    /// names, without the home. Cloud drives by their name: "Google
+    /// Drive/My Drive", "iCloud Drive/Admin".
     public static func folder(of path: String, home: String = NSHomeDirectory()) -> String {
         var folder = (path as NSString).deletingLastPathComponent
         if folder.hasPrefix(home) { folder = String(folder.dropFirst(home.count)) }
-        return folder.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return cloudReadable(folder.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+    }
+
+    /// "Library/CloudStorage/GoogleDrive-me@example.com/My Drive" →
+    /// "Google Drive/My Drive"; "Library/Mobile Documents/com~apple~CloudDocs/Admin"
+    /// → "iCloud Drive/Admin", an app's own iCloud folder by the app.
+    static func cloudReadable(_ folder: String) -> String {
+        var parts = folder.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+        guard parts.count >= 3, parts[0] == "Library" else { return folder }
+        let container = parts[2]
+        if parts[1] == "CloudStorage" {
+            let provider = container.split(separator: "-", maxSplits: 1).first.map(String.init) ?? container
+            let names = ["GoogleDrive": "Google Drive", "OneDrive": "OneDrive", "Dropbox": "Dropbox", "Box": "Box"]
+            parts.replaceSubrange(0...2, with: [names[provider] ?? provider])
+        } else if parts[1] == "Mobile Documents" {
+            let app = container == "com~apple~CloudDocs" ? [] : [container.split(separator: "~").last.map(String.init) ?? container]
+            parts.replaceSubrange(0...2, with: ["iCloud Drive"] + app)
+        } else {
+            return folder
+        }
+        return parts.joined(separator: "/")
     }
 
     public static func input(_ request: String, now: Date = .now, calendar: Calendar = .current) -> String {
