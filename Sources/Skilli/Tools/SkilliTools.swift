@@ -1883,7 +1883,13 @@ final class SkilliTools {
             guard github.notificationsRead else { return stale(notifications: true) + "Notifications not read yet." }
             let shown = github.unreadNotifications.filter { fits([$0.title, $0.repository, $0.reasonTitle]) }
             guard !shown.isEmpty else { return "No unread notification to mark." }
-            try await github.markRead(shown)
+            do {
+                try await github.markRead(shown)
+            } catch {
+                // Some may be read already: say how many are left.
+                let left = github.unreadNotifications.filter { note in shown.contains { $0.id == note.id } }.count
+                throw Failure(message: "\(left) of \(shown.count) still unread: GitHub did not answer. Try again in a moment.")
+            }
             return "Marked \(shown.count) read."
         default:
             let id = try text("id")

@@ -768,21 +768,25 @@ final class GitHubBook {
 
     /// One PATCH per thread, one after the other (GitHub has no "mark
     /// these read"; `PUT /notifications` would read every one, those
-    /// skil.li does not show too). Those read are shown read even when a
-    /// later one fails, then the relay is told once.
+    /// skil.li does not show too). One that fails does not stop the
+    /// others: those read are shown read, then the relay is told once, then
+    /// the first failure is thrown. A sign-out or another account on the
+    /// way stops it, nothing shown.
     func markRead(_ notifications: [GitHubNotification]) async throws {
         guard let token else { throw GitHubError(message: "Sign in to GitHub in skil.li's Settings first.") }
+        let generation = accountGeneration
         var read: Set<String> = []
         var failure: Error?
         for notification in notifications {
+            guard accountGeneration == generation else { return }
             do {
                 try await client.markRead(notification.id, token: token)
                 read.insert(notification.id)
             } catch {
-                failure = error
-                break
+                failure = failure ?? error
             }
         }
+        guard accountGeneration == generation else { return }
         if !read.isEmpty {
             if serverSync {
                 server.markedRead(read)
