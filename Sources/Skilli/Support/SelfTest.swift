@@ -27061,7 +27061,9 @@ final class SelfTest {
             play = playElsewhere(train)
         }, during: {
             changed = await setNominalRate(other, of: output)
-            await pause(2000)
+            // Made again at the new rate (a rebuild retried a second later
+            // counts), 5 s at most.
+            _ = await waitUntil(timeout: 5) { center.recorder.macSound.calledRate == other }
             (called, rebuilds, formats) = (center.recorder.macSound.calledRate, center.recorder.macSound.rebuilds - rebuildsBefore,
                                            center.recorder.macSound.formats)
         })
@@ -27096,8 +27098,10 @@ final class SelfTest {
         let output = Self.defaultAudioDevice(input: false)
         let rate = Self.nominalRate(of: output)
         let offered = Self.rates(of: output)
-        guard output != kAudioObjectUnknown, let other = offered.contains(44100) && rate != 44100 ? 44100 : offered.first(where: { $0 != rate }) else {
-            checks.append(Check(name: name, passed: true, skipped: true, detail: "an output with a single rate", latencyMs: nil))
+        // Another rate than the 48 kHz the tap's format says, even when the
+        // output is at it already.
+        guard output != kAudioObjectUnknown, let other = offered.contains(44100) ? 44100 : offered.first(where: { $0 != 48000 }) else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "an output with no rate but 48 kHz", latencyMs: nil))
             return
         }
         guard let center = context.recorder() else {
