@@ -83,19 +83,27 @@ open_app() {
 
 # Before building for the other Mac: it must answer SSH and show a
 # logged-in, unlocked session, or the self-test waits or aborts there.
-# NSWorkspace's frontmost app is loginwindow when locked or at the login
-# window (System Events' "frontmost process" names the app behind the lock).
-# Asked after waking the display: a sleeping display can show loginwindow
-# too. No answer at all counts as the login window: nobody's session to ask.
+# The session's own state, as CoreGraphics keeps it, not the frontmost
+# app: with no app active (one quit while in front, skil.li an accessory
+# again), NSWorkspace names loginwindow in an unlocked session too.
+# Asked after waking the display: a sleeping display can lock it too.
+# No session (no answer) counts as the login window: nobody's to ask.
 # SKILLI_REMOTE_CHECK=0 skips it, for a host that cannot be asked this way.
 check_remote() {
-  local host="$1" front status=0
+  local host="$1" state status=0
   [[ "${SKILLI_REMOTE_CHECK:-}" == 0 ]] && return 0
+  # One word: none (at the login window), away (another user's session on
+  # the screen), locked or unlocked. CGSSessionScreenIsLocked is there
+  # only while locked.
+  local session_script='ObjC.import("CoreGraphics");
+var d = $.CGSessionCopyCurrentDictionary();
+var s = d ? ObjC.deepUnwrap(ObjC.castRefToObject(d)) : null;
+!s || !s.kCGSessionLoginDoneKey ? "none" : !s.kCGSSessionOnConsoleKey ? "away" : s.CGSSessionScreenIsLocked ? "locked" : "unlocked"'
   # ssh exits 255 for its own errors, else with osascript's status; 143
   # when stopped after 20 s (ConnectTimeout covers only the connection).
   # BatchMode: never a prompt, whatever SKILLI_REMOTE's own SSH settings.
-  front="$(
-    ssh -o BatchMode=yes -o ConnectTimeout=10 "$host" "caffeinate -u -t 1; osascript -l JavaScript -e 'ObjC.import(\"AppKit\"); \$.NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier.js' 2>/dev/null" &
+  state="$(
+    ssh -o BatchMode=yes -o ConnectTimeout=10 "$host" "caffeinate -u -t 1; osascript -l JavaScript 2>/dev/null" <<<"$session_script" &
     ssh_pid=$!
     { sleep 20; kill "$ssh_pid"; } >/dev/null 2>&1 &
     wait "$ssh_pid"
@@ -104,7 +112,7 @@ check_remote() {
     exit "$ssh_status"
   )" || status=$?
   # The answer is the last line: a remote shell's startup output comes first.
-  front="${front##*$'\n'}"
+  state="${state##*$'\n'}"
   if [[ "$status" == 255 ]]; then
     echo "$host does not answer SSH (asleep, off or off the network): wake it, then run again." >&2
     exit 2
@@ -113,10 +121,21 @@ check_remote() {
     echo "$host answers SSH but not within 20 s: look at that Mac, then run again." >&2
     exit 2
   fi
-  if [[ "$status" != 0 || -z "$front" || "$front" == com.apple.loginwindow ]]; then
-    echo "$host is at the login window or locked: log in on that Mac, then run again." >&2
-    exit 2
-  fi
+  case "$status:$state" in
+    0:unlocked) ;;
+    0:locked)
+      echo "$host's screen is locked: unlock it, then run again." >&2
+      exit 2
+      ;;
+    0:away)
+      echo "$host shows another user's session: switch back to yours there, then run again." >&2
+      exit 2
+      ;;
+    *)
+      echo "$host is at the login window: log in on that Mac, then run again." >&2
+      exit 2
+      ;;
+  esac
 }
 
 case "$MODE" in
