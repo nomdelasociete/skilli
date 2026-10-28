@@ -3230,8 +3230,11 @@ re-investigating.
   (a green chip). Typing searches names (every word, case and accents
   ignored) once typing pauses 100 ms: words' starts first (`"x*"cdw`,
   Spotlight's word index, ~3× faster than a substring), then words in
-  the folders above ("martin invoice"), then any part of the name, each
-  only while fewer than 15 fit (`FileSearch.search`). In the home and
+  the folders above ("martin invoice"), then any word anywhere in the
+  name, each only while fewer than 15 fit (`FileSearch.search`). A query
+  that reaches its 6 000 cap (Spotlight's, before anything is left out)
+  is followed by the same on files the user opened, which dependency
+  folders never fit. In the home and
   the cloud drives (`~/Library/CloudStorage`, `~/Library/Mobile
   Documents`, shown "Google Drive/…", "iCloud Drive/…"); left out
   (`FileRanking.exclusion`): the rest of Library, hidden folders,

@@ -60,7 +60,11 @@ no longer receive `node_modules` names, and see cloud files.
    else's is a fact of the path, not a judgment, and every keystroke has
    to answer in a few hundred milliseconds. (c) is a judgment: Jev or
    Decisions on ⇥, the user's action, as the setting and Settings →
-   Privacy say ("Search files by meaning with ⇥"). Running it on its own
+   Privacy say ("Search files by meaning with ⇥"). What ⇥ sends: the
+   request, and for up to 240 candidates (the cleaned name matches, then
+   files opened in 90 days, then documents changed this week, cloud
+   drives' included) each one's name, kind, folder and modified date;
+   never a file's content. Running it on its own
    when no name fits would send file names without a key pressed: not
    done; to be decided with the setting's wording if wanted.
 5. **Wrong**: a file left out that was wanted (a README in a dependency

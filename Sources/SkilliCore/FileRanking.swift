@@ -151,14 +151,21 @@ public enum FileRanking {
     /// "invoice" at a word's start in "aws-invoices" or "AwsInvoices".
     static func startsWord(_ word: String, in name: String) -> Bool {
         let characters = Array(name)
-        let folded = characters.map { fold(String($0)) }
-        for start in characters.indices {
-            let boundary = start == 0 || !(characters[start - 1].isLetter || characters[start - 1].isNumber)
-                || (characters[start - 1].isLowercase && characters[start].isUppercase)
-                || (characters[start - 1].isLetter != characters[start].isLetter)
-            guard boundary else { continue }
-            if folded[start...].joined().hasPrefix(word) { return true }
+        func isStart(_ index: Int) -> Bool {
+            index == 0 || !(characters[index - 1].isLetter || characters[index - 1].isNumber)
+                || (characters[index - 1].isLowercase && characters[index].isUppercase)
+                || (characters[index - 1].isLetter != characters[index].isLetter)
         }
-        return false
+        // Folded once, compared in place: one character per character
+        // almost always.
+        let folded = Array(fold(name)), target = Array(word)
+        if folded.count == characters.count {
+            guard target.count <= folded.count else { return false }
+            return (0...(folded.count - target.count)).contains { isStart($0) && folded[$0..<$0 + target.count].elementsEqual(target) }
+        }
+        // A character folding into another count of them ("ß", a
+        // ligature): each folded alone, so indices stay the name's.
+        let each = characters.map { fold(String($0)) }
+        return characters.indices.contains { isStart($0) && each[$0...].joined().hasPrefix(word) }
     }
 }

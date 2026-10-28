@@ -29,8 +29,8 @@ enum FileSearch {
     /// what was typed, files opened lately, projects' own files behind.
     /// Words' starts first ("contrat" in Contrat-location.pdf: Spotlight's
     /// word index, about 3× faster), then words in the folders above
-    /// ("martin invoice"), then any part of the name, each only while
-    /// fewer than 15 files fit.
+    /// ("martin invoice"), then a word anywhere in the name, each only
+    /// while fewer than 15 files fit.
     static func search(_ text: String, limit: Int = 40) async -> [File] {
         let typed = text.split(whereSeparator: \.isWhitespace).map(String.init).filter { !$0.isEmpty }
         guard !typed.isEmpty else { return [] }
@@ -46,14 +46,25 @@ enum FileSearch {
                 scored.append((file, score))
             }
         }
-        add(await run(typed.map { "kMDItemFSName == \"\(escaped($0))*\"cdw" }.joined(separator: " && "), max: 6_000))
-        // One letter alone would match every name.
-        let named = typed.filter { $0.count > 1 }
-        if typed.count > 1, scored.count < 15, !named.isEmpty, !Task.isCancelled {
-            add(await run(named.map { "kMDItemFSName == \"\(escaped($0))*\"cdw" }.joined(separator: " || "), max: 6_000))
+        /// Spotlight stops at `max` before anything is left out: for
+        /// "index", 6 000 of 88 608 names, with 12 of the 17 files the user
+        /// opened. Those come back from a query of their own, which
+        /// dependency folders never fit (nobody opens them).
+        func gather(_ query: String) async {
+            let found = await run(query, max: 6_000)
+            add(found.files)
+            if found.full, !Task.isCancelled { add(await run("(\(query)) && kMDItemLastUsedDate == *", max: 2_000).files) }
         }
-        if scored.count < 15, !Task.isCancelled {
-            add(await run(typed.map { "kMDItemFSName == \"*\(escaped($0))*\"cd" }.joined(separator: " && "), max: 6_000))
+        await gather(typed.map { "kMDItemFSName == \"\(escaped($0))*\"cdw" }.joined(separator: " && "))
+        // One letter alone would match every name.
+        let named = typed.count > 1 ? typed.filter { $0.count > 1 } : typed
+        if typed.count > 1, scored.count < 15, !named.isEmpty, !Task.isCancelled {
+            await gather(named.map { "kMDItemFSName == \"\(escaped($0))*\"cdw" }.joined(separator: " || "))
+        }
+        // Any word inside a name: "preinvoice.pdf" in Margot Martin's
+        // folder for "martin invoice".
+        if scored.count < 15, !named.isEmpty, !Task.isCancelled {
+            await gather(named.map { "kMDItemFSName == \"*\(escaped($0))*\"cd" }.joined(separator: " || "))
         }
         return scored.sorted { left, right in
             left.score != right.score ? left.score > right.score
@@ -68,14 +79,14 @@ enum FileSearch {
         guard !words.isEmpty else { return [] }
         let query = (["kMDItemContentType == \"com.compuserve.gif\""] + words.map { "kMDItemFSName == \"*\(escaped($0))*\"cd" })
             .joined(separator: " && ")
-        let files = await run(query, max: 200, scope: folder?.path ?? NSHomeDirectory())
+        let files = await run(query, max: 200, scope: folder?.path ?? NSHomeDirectory()).files
         return files.sorted { ($0.used ?? $0.modified ?? .distantPast) > ($1.used ?? $1.modified ?? .distantPast) }.prefix(limit).map(\.url)
     }
 
     /// Files opened in the last 90 days, most recent first.
     static func recentlyUsed(limit: Int) async -> [File] {
         let query = "kMDItemLastUsedDate >= $time.now(-7776000) && kMDItemContentType != \"public.folder\""
-        let files = await run(query, max: 2_000)
+        let files = await run(query, max: 2_000).files
         return Array(files.sorted { ($0.used ?? .distantPast) > ($1.used ?? .distantPast) }.prefix(limit))
     }
 
@@ -89,7 +100,7 @@ enum FileSearch {
         let query = "kMDItemFSContentChangeDate >= $time.now(-604800) && ("
             + kinds.map { "kMDItemContentTypeTree == \"\($0)\"" }.joined(separator: " || ") + " || kMDItemIsScreenCapture == 1)"
         // A project's PDFs and test videos are not the user's documents.
-        let files = await run(query, max: 2_000).filter { !$0.inProject || $0.used != nil }
+        let files = await run(query, max: 2_000).files.filter { !$0.inProject || $0.used != nil }
         return Array(files.sorted { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }.prefix(limit))
     }
 
@@ -149,7 +160,8 @@ enum FileSearch {
         }
     }
 
-    private static func run(_ text: String, max: Int, timeout: Double = 3, scope: String = NSHomeDirectory()) async -> [File] {
+    /// `full`: Spotlight had `max` or more, so some were never seen.
+    private static func run(_ text: String, max: Int, timeout: Double = 3, scope: String = NSHomeDirectory()) async -> (files: [File], full: Bool) {
         let running = Running()
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
@@ -160,18 +172,18 @@ enum FileSearch {
         }
     }
 
-    private static func execute(_ text: String, max: Int, timeout: Double, scope: String, _ running: Running) -> [File] {
+    private static func execute(_ text: String, max: Int, timeout: Double, scope: String, _ running: Running) -> (files: [File], full: Bool) {
         // Fetched with the results: read one by one through MDItem, dates
         // cost seconds for a common word's thousands of files. The path
         // cannot be (always nil).
         let attributes = [kMDItemLastUsedDate, kMDItemFSContentChangeDate, kMDItemContentType] as CFArray
-        guard let query = MDQueryCreate(kCFAllocatorDefault, text as CFString, attributes, nil) else { return [] }
+        guard let query = MDQueryCreate(kCFAllocatorDefault, text as CFString, attributes, nil) else { return ([], false) }
         MDQuerySetSearchScope(query, [scope] as CFArray, 0)
         MDQuerySetMaxCount(query, max)
-        guard running.start(query) else { return [] }
+        guard running.start(query) else { return ([], false) }
         defer { running.finish() }
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { [running] in running.stop() }
-        guard MDQueryExecute(query, CFOptionFlags(kMDQuerySynchronous.rawValue)) else { return [] }
+        guard MDQueryExecute(query, CFOptionFlags(kMDQuerySynchronous.rawValue)) else { return ([], false) }
         let home = NSHomeDirectory()
         var files: [File] = []
         var kinds: [String: String] = [:]
@@ -193,7 +205,7 @@ enum FileSearch {
             files.append(File(url: url, name: url.lastPathComponent, kind: kinds[type] ?? "",
                               modified: date(kMDItemFSContentChangeDate), used: used, inProject: root != nil))
         }
-        return files
+        return (files, MDQueryGetResultCount(query) >= max)
     }
 
     /// Each folder's project root (or none), looked up once while skil.li

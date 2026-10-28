@@ -62,6 +62,16 @@ final class FileRankingTests: XCTestCase {
         XCTAssertEqual(FileRanking.matchScore(name: "aws-invoices-2026", words: FileRanking.words("2026 invoice")), 30)
     }
 
+    func testWordStarts() {
+        XCTAssertTrue(FileRanking.startsWord("invoice", in: "aws-invoices-2026"))
+        XCTAssertTrue(FileRanking.startsWord("invoice", in: "AwsInvoices"))
+        XCTAssertTrue(FileRanking.startsWord("electricite", in: "Facture-Électricité.pdf"), "accents folded")
+        XCTAssertFalse(FileRanking.startsWord("invoice", in: "preinvoice.pdf"))
+        XCTAssertFalse(FileRanking.startsWord("longer than the name", in: "a.pdf"))
+        XCTAssertTrue(FileRanking.startsWord("plan", in: "Straße-Plan.pdf"))
+        XCTAssertTrue(FileRanking.startsWord("report", in: "\u{FB01}le-report.pdf"), "a ligature, however it folds")
+    }
+
     /// Files the user opened first; in a project, its code and what nobody
     /// changed for a month behind; an extension typed wants code.
     func testUsersFilesFirst() {
