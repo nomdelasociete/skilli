@@ -26777,21 +26777,23 @@ final class SelfTest {
         record(name, passed, lines.joined(separator: "; "), nil)
     }
 
-    /// The microphone's own device changes its rate while recording, as a
-    /// Bluetooth headset does once a call uses its microphone: the engine
-    /// stops; one started again on the same engine kept the input's format
-    /// from before, AVAudioEngine refused its tap ("Failed to create tap,
-    /// config change pending!") and nothing came for the rest of the call.
-    /// Here the test Mac's own input, from one rate it offers to another
-    /// and back: buffers keep coming after each. Skipped without a
-    /// microphone allowed, or one with a single rate.
+    /// The audio setup changes its rate while recording, as a Bluetooth
+    /// headset does once a call uses its microphone: AVAudioEngine stops;
+    /// started again, the same engine kept its input's format from before,
+    /// refused its tap ("Format mismatch", "Failed to create tap, config
+    /// change pending!") and nothing came for the rest of the call. Here
+    /// the test Mac's output, from its rate to another it offers (the
+    /// engine runs at the output's rate; its input's own rate changing is
+    /// resampled, nothing stops): the microphone's buffers keep coming.
+    /// Skipped without a microphone allowed, or an output with one rate.
     private func recorderMicrophoneFollowsItsDeviceRate() async {
-        let name = "Recorder: the microphone's device changes its rate while recording (a headset's call mode): a new engine, its buffers keep coming"
-        let input = Self.defaultAudioDevice(input: true)
-        let rate = Self.nominalRate(of: input)
-        guard input != kAudioObjectUnknown, AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
-              let other = Self.rates(of: input).first(where: { $0 != rate }) else {
-            checks.append(Check(name: name, passed: true, skipped: true, detail: "no microphone allowed with another rate on this Mac", latencyMs: nil))
+        let name = "Recorder: the audio setup changes its rate while recording (a headset's call mode): the microphone gets a new engine, its buffers keep coming"
+        let output = Self.defaultAudioDevice(input: false)
+        let rate = Self.nominalRate(of: output)
+        let offered = Self.rates(of: output)
+        guard Self.defaultAudioDevice(input: true) != kAudioObjectUnknown, AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+              let other = offered.contains(44100) && rate != 44100 ? 44100 : offered.first(where: { $0 != rate }) else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "no microphone allowed, or an output with one rate, on this Mac", latencyMs: nil))
             return
         }
         guard let center = context.recorder() else {
@@ -26799,12 +26801,12 @@ final class SelfTest {
             return
         }
         center.recorder.standIn(microphone: nil, alsoLeaveOut: [])
-        defer { _ = Self.setNominalRateNow(rate, of: input) }
+        defer { _ = Self.setNominalRateNow(rate, of: output) }
         var changed = false
         var after: (buffer: Double?, restarts: Int, at: Double) = (nil, 0, 0)
         let restartsBefore = center.recorder.microphone.restarts
         let made = await recordForRates(center, name, title: "Microphone rate", seconds: 9, at: 3, during: {
-            changed = await setNominalRate(other, of: input)
+            changed = await setNominalRate(other, of: output)
             after.at = HostClock.now
             await pause(5000)
             after.buffer = center.recorder.trackTimes(.me).buffer
@@ -26814,8 +26816,9 @@ final class SelfTest {
         let lastBuffer = after.buffer.map { after.at + 5 - $0 } ?? .infinity
         let passed = changed && after.restarts >= 1 && lastBuffer < 0.5
         record(name, passed,
-               String(format: "the input from %.0f Hz to %.0f Hz %@; the microphone started again %d times; its last buffer %@ before the end of the 5 s after the change (under 0.5 s: they kept coming)",
-                      rate, other, changed ? "took" : "did not take", after.restarts, lastBuffer.isFinite ? String(format: "%.2f s", lastBuffer) : "never came"),
+               String(format: "the output from %.0f Hz to %.0f Hz %@; the microphone started again %d times; its last buffer %@ before the end of the 5 s after the change (under 0.5 s: they kept coming)",
+                      rate, other, changed ? "took" : "did not take", after.restarts,
+                      lastBuffer.isFinite ? String(format: "%.2f s", lastBuffer) : "never came"),
                nil)
     }
 
@@ -26846,20 +26849,22 @@ final class SelfTest {
         var play: Process?
         var changed = false
         let rebuildsBefore = center.recorder.macSound.rebuilds
-        let made = await recordForRates(center, name, title: "Output rate", seconds: 14, at: 5, started: {
+        var called = 0.0, rebuilds = 0
+        var formats: (tap: Double, aggregate: Double, output: Double) = (0, 0, 0)
+        let made = await recordForRates(center, name, title: "Output rate", seconds: 12, at: 5, started: {
             try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
             play = playElsewhere(train)
         }, during: {
             changed = await setNominalRate(other, of: output)
+            await pause(2000)
+            (called, rebuilds, formats) = (center.recorder.macSound.calledRate, center.recorder.macSound.rebuilds - rebuildsBefore,
+                                           center.recorder.macSound.formats)
         })
-        let called = center.recorder.macSound.calledRate
-        let rebuilds = center.recorder.macSound.rebuilds - rebuildsBefore
-        let formats = center.recorder.macSound.formats
         play?.terminate()
         guard let (folder, changeAt) = made else { return }
-        // The other side's beeps after the change: half a second apart
-        // when called by their rate (at 48 kHz called, 44.1 kHz ones come
-        // 0.459 s apart).
+        // The other side's beeps after the change: 2 kHz and half a second
+        // apart when called by their rate (44.1 kHz ones called 48 kHz come
+        // 0.459 s apart and 2.18 kHz high: the 2 kHz search misses them).
         let them = await Task.detached { Self.beeps(in: folder.appendingPathComponent(Speaker.them.file)) }.value
         let later = them.filter { $0 > changeAt + 1 }
         let gaps = zip(later.dropFirst(), later).map { $0 - $1 }.filter { $0 < 0.75 }.sorted()
@@ -26868,8 +26873,8 @@ final class SelfTest {
         let after = pairs.paired.filter { $0.at > changeAt + 1 && $0.at < changeAt + 8 }
         let passed = changed && rebuilds >= 1 && called == other && abs(gap - 0.5) < 0.003 && after.count >= 10
         record(name, passed,
-               String(format: "the output from %.0f Hz to %.0f Hz %@; the Mac's sound made again %d times, its buffers called %.0f Hz; after the change the other side's beeps %.3f s apart (median of %d), %d of the microphone's beeps in step with them (of ~14), offset %.1f ms; at the end the tap's format %.0f Hz, the aggregate %.0f Hz, the output %.0f Hz",
-                      rate, other, changed ? "took" : "did not take", rebuilds, called, gap, gaps.count, after.count, BeepPairs.mean(after.map(\.offset)) * 1000,
+               String(format: "the output from %.0f Hz to %.0f Hz %@; the Mac's sound made again %d times, its buffers called %.0f Hz; after the change %d of the other side's beeps found at 2 kHz, %.3f s apart (median), %d of the microphone's beeps in step with them (of ~14), offset %.1f ms; 2 s after the change the tap's format %.0f Hz, the aggregate %.0f Hz, the output %.0f Hz",
+                      rate, other, changed ? "took" : "did not take", rebuilds, called, later.count, gap, after.count, BeepPairs.mean(after.map(\.offset)) * 1000,
                       formats.tap, formats.aggregate, formats.output),
                nil)
     }

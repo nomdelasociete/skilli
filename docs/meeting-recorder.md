@@ -884,7 +884,17 @@ The other suspicion, a sample time on another clock than the buffer's
 frames making every buffer a gap and a converter afresh for each: a
 converter made afresh for every buffer, 24 or 16 kHz to 48 kHz, buffers
 of 240 to 2,400 frames, gives back all of each but 32 to 48 frames;
-never silence. Rules it set (During): the Mac's sound made again when
+never silence.
+
+The same on the test Mac (no headset: its output's rate changed under a
+recording instead, 48 to 44.1 kHz). `AVAudioEngine` runs at the output's
+rate (its input's own rate changing is resampled, nothing stops). The
+same engine started again: its tap asked for 48 kHz, the input gave
+44.1 kHz, the same two lines in the log and no buffer until the rate
+came back; a new engine: its tap at 44.1 kHz, buffers on. The Mac's
+sound, its buffers still called 48 kHz: the other side's 2 kHz beeps
+came out 2.18 kHz and 8 % early, the beep search found none. `remote
+recorder` checks both, and a microphone that gives nothing. Rules it set (During): the Mac's sound made again when
 its output changes its rate, a new engine for the microphone at each
 change and when one gives nothing, a track that records nothing said.
 
