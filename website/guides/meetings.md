@@ -60,7 +60,12 @@ the menu bar within seconds, and a card offers **Start Again**.
 
 **Webcam and screen** are off until you turn them on, from the card or
 the red dot's menu: the meeting's window is recorded with the sound, and
-the text on the slides is read and kept with its time.
+the text on the slides is read and kept with its time. To show more than
+one window, pick **Whole Screen** in the Screen row's list: everything on
+that screen is recorded, notifications and other apps too (skil.li's own
+windows are left out), and the card says so.
+
+![The Record card's Screen list: the meeting's window, the whole screen of each screen by its name, then the other windows](images/recorder-screen.png "With several screens, the one the meeting is on comes first.")
 
 ## After the meeting
 

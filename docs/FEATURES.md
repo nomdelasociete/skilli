@@ -454,8 +454,11 @@ Your meetings recorded on this Mac, both sides, then written out.
 - **The webcam and the screen**, off until you turn them on (a click in
   the card, the red dot's menu, or on by default in Settings): the
   webcam, and the meeting's window (in a browser, the window holding its
-  tab, which comes forward without a reload) or one you pick, recorded
-  in step with the sound. The menu bar says when that window gives no
+  tab, which comes forward without a reload), one you pick, or the whole
+  screen (Whole Screen in the Screen row's list: every app on it,
+  notifications too, skil.li's own windows left out, said in the card;
+  with several screens, the meeting's first), recorded in step with the
+  sound. The menu bar says when that window gives no
   picture (minimized, hidden, covered whole and still). The text the
   screen shows is read on this Mac and kept with its time
   (`slides.json`): the window plays both small beside the transcript,

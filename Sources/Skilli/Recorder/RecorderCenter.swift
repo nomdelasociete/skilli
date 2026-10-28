@@ -117,8 +117,8 @@ final class RecorderCenter {
         card.onOpenPrivacy = { [weak self] permission in self?.openPrivacy(permission) }
         card.pictures = recorder.pictures
         card.onTogglePicture = { [weak self] source in self?.togglePicture(source) }
-        card.onPickWindow = { [weak self] window in self?.pickWindow(window) }
-        card.windows = { [weak self] in (self?.meetingWindow, ScreenWindows.list()) }
+        card.onPickScreen = { [weak self] target in self?.pickScreen(target) }
+        card.choices = { [weak self] in ScreenChoices.now(meeting: self?.meetingWindow) }
         return card
     }()
     private lazy var indicator: RecorderIndicator = {
@@ -135,8 +135,8 @@ final class RecorderCenter {
         }
         indicator.pictures = recorder.pictures
         indicator.onTogglePicture = { [weak self] source in self?.togglePicture(source) }
-        indicator.onPickWindow = { [weak self] window in self?.pickWindow(window) }
-        indicator.windows = { [weak self] in (self?.meetingWindow, ScreenWindows.list()) }
+        indicator.onPickScreen = { [weak self] target in self?.pickScreen(target) }
+        indicator.choices = { [weak self] in ScreenChoices.now(meeting: self?.meetingWindow) }
         return indicator
     }()
     /// The meeting's window for the screen (phase 3), once found: the
@@ -145,6 +145,9 @@ final class RecorderCenter {
     /// The meeting's tab, when it can be brought forward as recording
     /// starts (a browser that skil.li scripts).
     private var meetingTab: (tab: Quicklink.OpenTab, bundleID: String)?
+    /// What the meeting's window lookup found: its line and its tab again
+    /// when it is picked back after another pick.
+    private var meetingFound: FoundWindow?
     /// Each Record card shown: a window lookup answering for an earlier
     /// card (or another recording) gives up.
     private var cardSession = 0
@@ -170,6 +173,7 @@ final class RecorderCenter {
     private func use(_ found: FoundWindow) {
         meetingWindow = found.window
         meetingTab = found.tab
+        meetingFound = found
     }
     /// Open windows by their folder's path, however the URL was written
     /// (`/var/…` or `/private/var/…`, a trailing slash or not).
@@ -295,6 +299,7 @@ final class RecorderCenter {
         let name = title ?? reading.title ?? (reading.kind == .callWithoutEvent ? reading.app.map { MeetingMoment.callTitle($0, at: .now) } : nil)
         meetingWindow = nil
         meetingTab = nil
+        meetingFound = nil
         cardSession += 1
         card.showRecord(title: name, askedLanguage: askedLanguage, consent: !preferences.recorderConsentShown, fromOutside: fromOutside, meeting: meeting)
         startScreenForCard(reading)
@@ -379,7 +384,7 @@ final class RecorderCenter {
                 guard still(asked) else { return }
                 use(found)
                 if let window = found.window {
-                    await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(window) }
+                    await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(.window(window)) }
                     card.setScreenNote(found.note, automation: found.automation)
                 } else if card.isVisible, card.content == .record {
                     card.showWindows()
@@ -388,11 +393,15 @@ final class RecorderCenter {
         }
     }
 
-    /// `set_recording_source` (a tool, a skillie): a source on or off while
-    /// the card is open or a recording is on; the screen on records the
-    /// meeting's window, said when none is known.
-    func setSource(_ source: String, on: Bool) async throws -> String {
+    /// `set_recording_source` (a tool, a skillie, a link): a source on or
+    /// off while the card is open or a recording is on; the screen on
+    /// records the meeting's window, said when none is known, or with
+    /// `display` the whole screen it names (`main`, `meeting`, a screen's
+    /// name: docs/meeting-recorder-views.md, "The whole screen").
+    func setSource(_ source: String, on: Bool, display: String? = nil) async throws -> String {
         guard recorder.isRecording || recorder.phase == .listening else { throw MeetingRecorder.Failure(message: "No recording is on, and the Record card is not open.") }
+        let display = display.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+        if display != nil, source != "screen" { throw MeetingRecorder.Failure(message: "display goes with source=screen: the whole screen.") }
         let sources = recorder.sources
         switch source {
         case "microphone":
@@ -407,15 +416,28 @@ final class RecorderCenter {
         case "screen":
             if !on {
                 await recorder.setScreen(nil)
+                card.setScreenNote(nil, automation: false)
+            } else if let display {
+                guard let screen = ScreenDisplays.named(display, meeting: meetingWindow?.id) else {
+                    let names = ScreenDisplays.list().map { "“\($0.name)”" }
+                    throw MeetingRecorder.Failure(message: "No screen “\(display)”: main, meeting, or \(names.formatted(.list(type: .or))).")
+                }
+                await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(.display(screen)) }
+                sayScreen(.display(screen))
+                switch recorder.pictures.screen.state {
+                case .failed(let why): throw MeetingRecorder.Failure(message: "The whole screen is not recorded: \(why).")
+                case .denied: throw MeetingRecorder.Failure(message: "The whole screen is not recorded: Screen Recording is not allowed for skil.li (System Settings → Privacy & Security).")
+                default: return "The screen on: \(screen.title)."
+                }
             } else if !sources.screen {
                 let asked = lookupMoment
                 let found = await findMeetingWindow(card.meetingReading ?? reading ?? moment(for: nil))
                 guard still(asked) else { throw MeetingRecorder.Failure(message: "The recording changed while its window was looked for: nothing turned on.") }
                 use(found)
                 guard let window = found.window else {
-                    throw MeetingRecorder.Failure(message: "No meeting's window is known: pick one in the Record card or the red dot's menu (Screen).")
+                    throw MeetingRecorder.Failure(message: "No meeting's window is known: pick one in the Record card or the red dot's menu (Screen), or the whole screen (display=main).")
                 }
-                await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(window) }
+                await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(.window(window)) }
                 card.setScreenNote(found.note, automation: found.automation)
             }
         default:
@@ -431,16 +453,29 @@ final class RecorderCenter {
         return "\(named) \(state ? "on" : "off")."
     }
 
-    /// A window picked for the screen (the card's list, the red dot's
-    /// menu): recorded from now on.
-    private func pickWindow(_ window: ScreenWindow) {
+    /// A window or a whole screen picked for the screen (the card's list,
+    /// the red dot's menu): recorded from now on.
+    private func pickScreen(_ target: ScreenTarget) {
         Task {
-            await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(window) }
+            await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(target) }
+            sayScreen(target)
+        }
+    }
+
+    /// The card's line for the screen picked: what the whole screen
+    /// records, each time it is the pick; the meeting's window's own line
+    /// (and its tab) when it is picked back; none for another window.
+    private func sayScreen(_ target: ScreenTarget) {
+        switch target {
+        case .display:
+            card.setScreenNote(ScreenTrack.wholeScreenNote, automation: false)
+        case .window(let window) where window.id == meetingWindow?.id:
+            meetingTab = meetingFound?.tab
+            card.setScreenNote(meetingFound?.note, automation: meetingFound?.automation ?? false)
+        case .window:
             // Another window than the meeting's: its tab is not this one's.
-            if window.id != meetingWindow?.id {
-                meetingTab = nil
-                card.setScreenNote(nil, automation: false)
-            }
+            meetingTab = nil
+            card.setScreenNote(nil, automation: false)
         }
     }
 
@@ -457,7 +492,7 @@ final class RecorderCenter {
             guard still(asked) else { return }
             use(found)
             guard let window = found.window, recorder.phase == .listening, card.content == .record else { return }
-            await card.whileMacOSAsks(!ScreenTrack.isAllowed) { await recorder.setScreen(window) }
+            await card.whileMacOSAsks(!ScreenTrack.isAllowed) { await recorder.setScreen(.window(window)) }
             card.setScreenNote(found.note, automation: found.automation)
         }
     }
@@ -553,7 +588,7 @@ final class RecorderCenter {
         guard asked.folder != nil, still(asked) else { return }
         use(found)
         guard let window = found.window, recorder.isRecording, !recorder.sources.screen else { return }
-        await recorder.setScreen(window)
+        await recorder.setScreen(.window(window))
         bringMeetingTabForward()
     }
 
@@ -1206,8 +1241,8 @@ final class RecorderCenter {
     var standInMeetingWindow: (window: ScreenWindow, after: Duration)?
 
     /// Self-test: recorded at once as ⌘R records (the sources as Settings
-    /// sets them), `screen` the window recorded.
-    func recordForTest(screen: ScreenWindow?) {
+    /// sets them), `screen` the window or the screen recorded.
+    func recordForTest(screen: ScreenTarget?) {
         guard recorder.phase == .idle, !starting else { return }
         let reading = moment(for: nil)
         starting = true

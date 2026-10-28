@@ -774,6 +774,7 @@ final class SelfTest {
                 guideAskAnswer,
                 guideAskApproval,
                 guideMeetingCard,
+                guideRecordScreen,
                 guideRecordingWindow,
                 guideWindowsAndSettings
             ])
@@ -26220,7 +26221,8 @@ final class SelfTest {
                              recorderPausesBothTracksTogether, recorderResamplesAMicrophoneStartedAgain, recorderMicrophoneFollowsItsDeviceRate,
                              recorderMacSoundFollowsItsOutputRate, recorderMacSoundAtTheOutputsRate, recorderSaysATrackRecordsNothing,
                              recorderImportWaitsForTheRecording, recorderOffersOneNeverStopped,
-                             recorderQuitClosesItWhole, recorderStopStuckOffersIt, recorderSleepPausesUntilResumed, recorderFromLinksAndTools]
+                             recorderQuitClosesItWhole, recorderStopStuckOffersIt, recorderSleepPausesUntilResumed, recorderFromLinksAndTools,
+                             recorderRecordsTheWholeScreen, recorderWholeScreenFromToolsAndLinks]
         for step in steps {
             await takeFocus()
             if aborted { return }
@@ -27934,6 +27936,252 @@ final class SelfTest {
                nil)
     }
 
+    // MARK: - The whole screen
+
+    /// The screen recorded whole (docs/meeting-recorder-views.md, "The
+    /// whole screen"): the Record card's Screen row opens its list (no
+    /// meeting's window), "Whole Screen" picked there, its row and its
+    /// note; the list captured light and dark. ↩ records 9 s of the main
+    /// screen: a slides window of skil.li's own let in (the known
+    /// picture: its corner flashes with the stand-in microphone's beeps),
+    /// another of its own shown once recording, magenta, left out as every
+    /// one of skil.li's is. `screen.mp4` is the screen's shape at the
+    /// file's size, its pictures keep coming, the flashes land at the
+    /// beeps' times, the magenta never shows, its length the sound's.
+    private func recorderRecordsTheWholeScreen() async {
+        let name = "Recorder: the whole screen picked in the Record card's list (its row, its note), 9 s recorded in step with the sound, skil.li's own windows left out"
+        guard let center = context.recorder(), let main = ScreenDisplays.list().first(where: { $0.id == CGMainDisplayID() }),
+              let screen = NSScreen.screens.first(where: { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == main.id })
+        else {
+            record(name, false, "no recorder, or no main screen", nil)
+            return
+        }
+        let preferences = context.preferences
+        let saved = (preferences.recorderConsentShown, preferences.recorderWebcam, preferences.recorderScreen)
+        let visible = screen.visibleFrame
+        // The known picture: skil.li's own, let in for the test; above other
+        // apps' windows so its corner is in sight.
+        let slides = SlidesWindow(frame: NSRect(x: visible.minX + 20, y: visible.minY + 20, width: min(640, visible.width * 0.4), height: 400))
+        slides.window.level = .floating
+        slides.show(["Whole screen check", "Lumière · weekly review"])
+        slides.window.orderFrontRegardless()
+        // Left out: one of skil.li's own, shown once recording.
+        let hidden = NSWindow(contentRect: NSRect(x: visible.maxX - 260, y: visible.minY + 40, width: 220, height: 160), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        hidden.backgroundColor = NSColor(srgbRed: 1, green: 0, blue: 1, alpha: 1)
+        hidden.isOpaque = true
+        hidden.level = .floating
+        hidden.isReleasedWhenClosed = false
+        ScreenTrack.alsoRecorded = [CGWindowID(slides.window.windowNumber)]
+        center.standInMicrophone(MicrophoneHolders.none)
+        defer {
+            (preferences.recorderConsentShown, preferences.recorderWebcam, preferences.recorderScreen) = saved
+            ScreenTrack.alsoRecorded = []
+            slides.window.orderOut(nil)
+            hidden.orderOut(nil)
+            center.standInMicrophone(nil)
+            if center.isCardVisible { center.closeCardWithoutKeys() }
+        }
+        preferences.recorderConsentShown = true
+        preferences.recorderWebcam = false
+        preferences.recorderScreen = false
+        let beeps: [Double] = [1, 2.5, 4, 5.5, 7, 8.5]
+        let end = 9.5
+        let mic = recorderScratch.appendingPathComponent("whole-screen-me.wav")
+        guard Self.clip(nil, seconds: end + 1, beeps: beeps, to: mic) else {
+            record(name, false, "the microphone's stand-in could not be made", nil)
+            return
+        }
+        center.recorder.standIn(microphone: mic, alsoLeaveOut: [])
+        guard await typeInLauncher("rec whole screen") else {
+            record(name, false, "the launcher did not take “rec whole screen”", nil)
+            return
+        }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let view = center.cardView
+        guard await waitUntil(timeout: 3, { center.isCardVisible && view.microphoneLine != "Starting…" }) != nil,
+              await recordCardHasKeys(center, name), let panel = center.cardWindow else {
+            if !aborted { record(name, false, "no Record card", nil) }
+            return
+        }
+        // The list, light then dark: opened by the row (screen off, no
+        // meeting's window), then by its name (⌃⌄) once on.
+        let several = ScreenDisplays.list().count > 1
+        let pickTitle = several ? main.name : "Whole Screen"
+        let appearances = (panel.appearance, window.appearance)
+        var listed: [String] = []
+        var picked = false
+        for (index, (suffix, appearance)) in GlassCheck.appearances.enumerated() {
+            panel.appearance = appearance
+            window.appearance = appearance
+            await pause(500)
+            let escape = DispatchWorkItem {
+                let source = CGEventSource(stateID: .hidSystemState)
+                for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap) }
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 8, execute: escape)
+            if index == 0 {
+                _ = await clickCardRow(center, .screen)
+            } else {
+                _ = await clickCardRow(center, .screen, at: 130)
+            }
+            await pause(800)
+            if let directory = context.snapshotDirectory, let png = await WindowCapture.png(of: [window, panel], withMenu: true) {
+                try? png.write(to: directory.appendingPathComponent("recorder-whole-screen-picker-\(suffix).png"))
+            }
+            if index == 0 {
+                let (done, titles) = await pickInOpenMenu(pickTitle)
+                picked = done
+                // Only skil.li's own words: other apps' windows are counted.
+                listed = titles.filter { $0 == "Whole Screen" || $0 == "The Meeting's Window" || ScreenDisplays.list().map(\.name).contains($0) }
+            } else {
+                // Seen checked; closed as it was.
+                let source = CGEventSource(stateID: .hidSystemState)
+                for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap) }
+                await pause(300)
+            }
+            escape.cancel()
+            if index == 0 {
+                _ = await waitUntil(timeout: 4) { view.screenLine == main.title && center.recorder.pictures.screen.sink.latestPicture != nil }
+            }
+        }
+        (panel.appearance, window.appearance) = appearances
+        let rowRight = view.screenLine == main.title && center.recorder.pictures.screen.target?.isSame(as: .display(main)) == true
+        let noteRight = view.noteText.contains(ScreenTrack.wholeScreenNote)
+        await capturePicturesCard(center, as: "recorder-whole-screen-card")
+        guard picked, rowRight, await recordCardHasKeys(center, name) else {
+            record(name, false, "picked “\(pickTitle)” \(picked) (skil.li's items \(listed)); the row “\(view.screenLine)” (\(center.recorder.pictures.screen.state)), note “\(view.noteText)”", nil)
+            center.closeCardWithoutKeys()
+            return
+        }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 3, { center.recorder.phase == .recording }) != nil, let folder = center.recorder.folder else {
+            record(name, false, "↩ did not record (\(center.recorder.phase))", nil)
+            return
+        }
+        let start = mach_absolute_time()
+        let zero = HostClock.seconds(start)
+        try? center.recorder.microphone.playStandIn(at: start)
+        var events: [(at: Double, run: () -> Void)] = beeps.map { beep in (beep, { slides.flash() }) }
+        events.append((0.5, { hidden.orderFrontRegardless() }))
+        // New pictures between the flashes, as a call's video gives them.
+        events += stride(from: 0.125, to: end, by: 0.25).enumerated().map { index, at in (at, { slides.tick(index) }) }
+        for event in events.sorted(by: { $0.at < $1.at }) {
+            let wait = zero + event.at - HostClock.now
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+            event.run()
+        }
+        let menu = center.menuBar.menuTitles.first { $0.hasPrefix("Screen ·") } ?? ""
+        let hiddenShown = (CGWindowListCopyWindowInfo([.optionIncludingWindow], CGWindowID(hidden.windowNumber)) as? [[String: Any]])?.first?[kCGWindowIsOnscreen as String] as? Bool ?? false
+        let rest = zero + end - HostClock.now
+        if rest > 0 { try? await Task.sleep(for: .seconds(rest)) }
+        _ = await momentStop(center)
+        center.openWindows.forEach { $0.close() }
+        let urls = (me: folder.appendingPathComponent("me.m4a"), screen: folder.appendingPathComponent(RecorderPictures.screenFile))
+        let found = await Task.detached { Self.beeps(in: urls.me) }.value
+        let flashRegion = PictureCheck.region(of: slides.flashFrame, in: screen.frame)
+        let hiddenRegion = PictureCheck.region(of: hidden.frame, in: screen.frame)
+        // Each picture: its time, its corner white, the left-out window's place magenta.
+        let (size, read) = await PictureCheck.pictures(in: urls.screen) { pixels, time in
+            let left = PictureCheck.color(pixels, in: hiddenRegion)
+            return (time, PictureCheck.color(pixels, in: flashRegion).green > 85, left.red > 180 && left.green < 90 && left.blue > 180)
+        }
+        let times = read.map(\.0)
+        let flashes = zip(read, [false] + read.map(\.1)).filter { $0.0.1 && !$0.1 }.map(\.0.0)
+        let magenta = read.filter { $0.0 > 1 && $0.2 }.count
+        let offsets = PictureCheck.offsets(found, flashes)
+        func spread(_ values: [Double]) -> Double { (values.max() ?? 0) - (values.min() ?? 0) }
+        func mean(_ values: [Double]) -> Double { values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count) }
+        let lengths = (me: trackLength(urls.me), screen: await PictureCheck.length(urls.screen))
+        // The screen's shape at the file's size: its pixels, 1920 wide at most.
+        let pixels = CGDisplayCopyDisplayMode(main.id).map { (width: $0.pixelWidth, height: $0.pixelHeight) } ?? (width: 0, height: 0)
+        let expected = ScreenTrack.fileSize(width: pixels.width, height: pixels.height)
+        let sizeRight = size.map { abs(Int($0.width) - expected.width) <= 2 && abs(Int($0.height) - expected.height) <= 2 } ?? false
+        let gaps = zip(times.dropFirst(), times).map { $0 - $1 }
+        let rising = gaps.allSatisfy { $0 > 0 }
+        let inStep = found.count == beeps.count && offsets.count == beeps.count && spread(offsets) <= 0.09 && abs(mean(offsets)) <= 0.15
+        let passed = rowRight && noteRight && listed.contains("Whole Screen") && inStep && magenta == 0 && hiddenShown && sizeRight && rising
+            && times.count >= Int(lengths.me * 3) && (gaps.max() ?? 9) <= 0.6 && abs(lengths.screen - lengths.me) <= 0.15 && menu.hasPrefix("Screen · \(main.title)")
+        record(name, passed,
+               String(format: "listed %@; the row “%@”, note %@; the menu “%@”; screen.mp4 %@ (expected %d × %d from %d × %d px), %d pictures, the longest gap %.2f s, rising %@; beeps %d of %d, flashes %d, offsets %@ (spread %.0f ms, mean %.0f ms); the magenta window shown %@, seen in %d pictures; lengths me %.2f s, screen %.2f s",
+                      "\(listed)", view.screenLine, noteRight ? "said" : "missing", menu, size.map { "\(Int($0.width)) × \(Int($0.height))" } ?? "unread",
+                      expected.width, expected.height, pixels.width, pixels.height, times.count, gaps.max() ?? 0, rising ? "yes" : "no", found.count, beeps.count,
+                      flashes.count, offsets.map { String(format: "%.0f", $0 * 1000) }.joined(separator: ","), spread(offsets) * 1000, mean(offsets) * 1000,
+                      hiddenShown ? "yes" : "no", magenta, lengths.me, lengths.screen),
+               nil)
+    }
+
+    /// The whole screen from a skillie: `set_recording_source source=screen
+    /// display=main` turns it on (said with its name), a screen no Mac has
+    /// and `display` for the webcam are refused; a link turning the screen
+    /// off asks first and does it; one turning the whole screen on asks
+    /// first, naming what it records, and esc leaves it off; a screen
+    /// named that is not there says so without asking.
+    private func recorderWholeScreenFromToolsAndLinks() async {
+        let name = "Recorder: the whole screen from skillies: set_recording_source display=main turns it on, a missing screen and display for the webcam refused; skilli://record/source asks first (off allowed, the whole screen declined with esc), a missing screen said"
+        guard let center = context.recorder(), let links = context.links, let main = ScreenDisplays.list().first(where: { $0.id == CGMainDisplayID() }) else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let preferences = context.preferences
+        let saved = (preferences.recorderWebcam, preferences.recorderScreen)
+        let settings = context.tools.settings
+        let mode = settings.mode
+        center.standInMicrophone(MicrophoneHolders.none)
+        defer {
+            (preferences.recorderWebcam, preferences.recorderScreen) = saved
+            settings.mode = mode
+            center.standInMicrophone(nil)
+        }
+        preferences.recorderWebcam = false
+        preferences.recorderScreen = false
+        let silence = recorderScratch.appendingPathComponent("silence.wav")
+        _ = Self.clip(nil, seconds: 120, beeps: [], to: silence)
+        center.recorder.standIn(microphone: silence, alsoLeaveOut: [])
+        center.recordForTest(screen: nil)
+        guard await waitUntil(timeout: 4, { center.recorder.isRecording }) != nil else {
+            record(name, false, "no recording (\(center.recorder.phase))", nil)
+            return
+        }
+        // The tool: every change runs (the card's question is the link's here).
+        settings.mode = .always
+        let (onStatus, onSaid) = await skilliCall("set_recording_source", #"{"source":"screen","on":"true","display":"main"}"#)
+        let wholeOn = await waitUntil(timeout: 4) { center.recorder.pictures.screen.target?.isSame(as: .display(main)) == true } != nil
+        let (missingStatus, missingSaid) = await skilliCall("set_recording_source", #"{"source":"screen","on":"true","display":"Nowhere"}"#)
+        let (webcamStatus, webcamSaid) = await skilliCall("set_recording_source", #"{"source":"webcam","on":"true","display":"main"}"#)
+        let stillWhole = center.recorder.pictures.screen.target?.isSame(as: .display(main)) == true && !center.recorder.sources.webcam
+        settings.mode = mode
+        let popover = context.aiActions.popover
+        // A link turning it off: asked, ↩ allows.
+        let off = Task { await links.openNow(SkilliLink.recordingSource(.screen, on: false, display: nil).url) }
+        let offAsks = await waitUntil(timeout: 10) { popover.isVisible && (popover.shownTitle + " " + popover.shownText).contains("Turn off the screen") } != nil
+        if offAsks { await pressKey(nil, code: CGKeyCode(kVK_Return)) }
+        if offAsks { await off.value } else { off.cancel() }
+        let turnedOff = await waitUntil(timeout: 4) { !center.recorder.sources.screen && center.recorder.pictures.screen.target == nil } != nil
+        _ = await waitUntil(timeout: 8) { !popover.isVisible }
+        // A link turning the whole screen on: asked, naming what it records; esc.
+        let whole = Task { await links.openNow(SkilliLink.recordingSource(.screen, on: true, display: "main").url) }
+        let wholeAsks = await waitUntil(timeout: 10) { popover.isVisible && (popover.shownTitle + " " + popover.shownText).contains("Record the whole screen") } != nil
+        let wholeCard = "“\(popover.shownTitle)”: \(popover.shownText.prefix(160))"
+        let namesIt = popover.shownText.contains(main.title) && popover.shownText.contains("Notifications")
+        if wholeAsks { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        if wholeAsks { await whole.value } else { whole.cancel() }
+        let declined = links.log.last == "declined record source screen" && !center.recorder.sources.screen
+        _ = await waitUntil(timeout: 8) { !popover.isVisible }
+        await links.openNow(SkilliLink.recordingSource(.screen, on: true, display: "Nowhere").url)
+        let missingLink = links.log.last == "missing screen Nowhere"
+        if await waitUntil(timeout: 1, { popover.isVisible }) != nil { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        _ = await waitUntil(timeout: 8) { !popover.isVisible }
+        _ = await momentStop(center)
+        center.openWindows.forEach { $0.close() }
+        let passed = onStatus == 0 && onSaid.contains("The screen on: \(main.title).") && wholeOn && missingStatus != 0 && missingSaid.contains("No screen “Nowhere”")
+            && webcamStatus != 0 && webcamSaid.contains("display goes with source=screen") && stillWhole && offAsks && turnedOff && wholeAsks && namesIt
+            && declined && missingLink
+        record(name, passed,
+               "tool: exit \(onStatus) “\(onSaid)”, on \(wholeOn); a missing screen exit \(missingStatus) “\(missingSaid.prefix(120))”; the webcam exit \(webcamStatus) “\(webcamSaid.prefix(80))”, still whole \(stillWhole); link off asks \(offAsks), off \(turnedOff); link whole asks \(wholeAsks) (\(wholeCard)), names it \(namesIt), declined \(declined); a missing screen \(missingLink) (log \(links.log.suffix(1)))",
+               nil)
+    }
+
     // MARK: - The recorder's moment (phase 2)
 
     // MARK: - The recorder's pictures (phase 3)
@@ -28036,12 +28284,13 @@ final class SelfTest {
         }
     }
 
-    /// A real click on a row of the Record card.
-    private func clickCardRow(_ center: RecorderCenter, _ source: PictureSource) async -> Bool {
+    /// A real click on a row of the Record card: on its title (`at` 40 pt
+    /// in), or further in on its device's name (its ⌃⌄ list).
+    private func clickCardRow(_ center: RecorderCenter, _ source: PictureSource, at offset: CGFloat = 40) async -> Bool {
         guard let frame = center.cardView.screenFrame(of: source) else { return false }
         let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
         // On the row's title, left of its picture and of the ⌃⌄.
-        let point = CGPoint(x: frame.minX + 40, y: screenHeight - frame.midY)
+        let point = CGPoint(x: frame.minX + offset, y: screenHeight - frame.midY)
         let source = CGEventSource(stateID: .hidSystemState)
         // The pointer there first, as a hand gets there before it clicks.
         CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
@@ -28254,7 +28503,7 @@ final class SelfTest {
             return
         }
         // ⌘R's way: the sources from Settings, the screen's window given.
-        center.recordForTest(screen: window)
+        center.recordForTest(screen: .window(window))
         guard await waitUntil(timeout: 4, { center.recorder.isRecording && center.recorder.pictures.screen.window != nil }) != nil,
               let folder = center.recorder.folder else {
             record(name, false, "no recording with the screen (\(center.recorder.phase))", nil)
@@ -28466,7 +28715,7 @@ final class SelfTest {
         center.recorder.standIn(microphone: silence, alsoLeaveOut: [])
         context.preferences.recorderWebcam = false
         context.preferences.recorderScreen = true
-        center.recordForTest(screen: window)
+        center.recordForTest(screen: .window(window))
         guard await waitUntil(timeout: 4, { center.recorder.isRecording && center.recorder.pictures.screen.window?.id == id }) != nil else {
             record(name, false, "Chrome's window not recorded (\(center.recorder.phase))", nil)
             await momentStop(center)
@@ -29765,6 +30014,74 @@ final class SelfTest {
         }
         await pause(500)
         await captureGuide("meeting-card", [window], inset: Theme.glassMargin)
+    }
+
+    /// The Record card's Screen list (docs/meeting-recorder-views.md, "The
+    /// whole screen"), open under its row: the meeting's window, the whole
+    /// screen of each of two screens by its name, the other windows; all
+    /// invented (`ScreenChoices.standIn`), never the test Mac's.
+    private func guideRecordScreen() async {
+        let name = "recorder-screen"
+        guard let center = context.recorder() else { return guideMissing(name, "no recorder") }
+        let preferences = context.preferences
+        let saved = (preferences.recorderConsentShown, preferences.recorderWebcam, preferences.recorderScreen)
+        let main = CGMainDisplayID()
+        ScreenChoices.standIn = ScreenChoices(
+            meeting: ScreenWindow(id: 1, pid: 0, app: "Google Chrome", title: "Meet – Onboarding launch review"),
+            displays: [ScreenDisplay(id: main, name: "Studio Display", several: true),
+                       ScreenDisplay(id: main &+ 1000, name: "Built-in Retina Display", several: true)],
+            windows: [ScreenWindow(id: 2, pid: 0, app: "Keynote", title: "Launch plan"), ScreenWindow(id: 3, pid: 0, app: "Notes", title: "Onboarding checklist"),
+                      ScreenWindow(id: 4, pid: 0, app: "Mail", title: "Inbox")])
+        center.standInMicrophone(MicrophoneHolders.none)
+        let speech = recorderScratch.appendingPathComponent("guide-me.wav")
+        _ = Self.clip(nil, seconds: 60, beeps: stride(from: 0.5, to: 60, by: 0.4).map { $0 }, to: speech)
+        center.recorder.standIn(microphone: speech, alsoLeaveOut: [])
+        defer {
+            ScreenChoices.standIn = nil
+            center.standInMicrophone(nil)
+            (preferences.recorderConsentShown, preferences.recorderWebcam, preferences.recorderScreen) = saved
+            if center.isCardVisible { center.closeCardWithoutKeys() }
+        }
+        preferences.recorderConsentShown = true
+        preferences.recorderWebcam = false
+        preferences.recorderScreen = false
+        center.showCard(title: "Onboarding launch review")
+        guard await waitUntil(timeout: 3, { center.isCardVisible && center.cardView.microphoneLine != "Starting…" }) != nil, let panel = center.cardWindow,
+              let directory = guidesDirectory else {
+            return guideMissing(name, "no Record card")
+        }
+        var written: [String] = []
+        for (suffix, look) in GlassCheck.appearances {
+            panel.appearance = look
+            // The card, and room under it for the list.
+            let card = panel.frame.insetBy(dx: Theme.glassMargin, dy: Theme.glassMargin)
+            let area = NSRect(x: card.minX, y: card.minY - 170, width: card.width, height: card.height + 170).insetBy(dx: -Self.guideMargin, dy: -Self.guideMargin)
+            let backdrop = Self.guideBackdrop(covering: area, dark: suffix == "dark")
+            backdrop.level = panel.level
+            backdrop.order(.below, relativeTo: panel.windowNumber)
+            await pause(900)
+            let escape = DispatchWorkItem {
+                let source = CGEventSource(stateID: .hidSystemState)
+                for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap) }
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 8, execute: escape)
+            // The screen off, no meeting's window found: its row opens the list.
+            _ = await clickCardRow(center, .screen)
+            await pause(900)
+            let png = await WindowCapture.png(of: [backdrop, panel], withMenu: true, cropped: backdrop)
+            escape.cancel()
+            let source = CGEventSource(stateID: .hidSystemState)
+            for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap) }
+            await pause(400)
+            backdrop.orderOut(nil)
+            guard let png, let image = NSBitmapImageRep(data: png) else { continue }
+            let file = suffix == "light" ? "\(name).png" : "\(name)-\(suffix).png"
+            try? png.write(to: directory.appendingPathComponent(file))
+            written.append("\(file) \(image.pixelsWide)×\(image.pixelsHigh) px")
+        }
+        panel.appearance = nil
+        record("Guide picture: \(name)", written.count == GlassCheck.appearances.count && !center.recorder.sources.screen,
+               written.joined(separator: ", ") + "; the screen still off \(!center.recorder.sources.screen)", nil)
     }
 
     /// A call's recording in its window: both waveforms, the transcript's

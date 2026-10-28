@@ -68,6 +68,10 @@ final class SlidesWindow {
     /// Where the flashing corner is in a picture of the window: its share
     /// from the left, and from the top down to the bottom.
     static let flashRegion = (right: 0.025, top: 0.96)
+
+    /// Where the flashing corner is on screen (AppKit's coordinates): its
+    /// place in a picture of the whole screen.
+    var flashFrame: NSRect { window.convertToScreen(corner.convert(corner.bounds, to: nil)) }
 }
 
 enum PictureCheck {
@@ -130,6 +134,54 @@ enum PictureCheck {
         guard let track = try? await asset.loadTracks(withMediaType: .video).first,
               let segments = try? await track.load(.segments) else { return nil }
         return segments.first { !$0.isEmpty }?.timeMapping.target.start.seconds
+    }
+
+    /// Where `frame` (AppKit's coordinates) is in a picture of the screen
+    /// `display` (its frame): shares of the picture's width and height
+    /// from its top left, a quarter of its size in from each edge.
+    static func region(of frame: NSRect, in display: NSRect) -> CGRect {
+        let inner = frame.insetBy(dx: frame.width / 4, dy: frame.height / 4)
+        return CGRect(x: (inner.minX - display.minX) / display.width, y: (display.maxY - inner.maxY) / display.height,
+                      width: inner.width / display.width, height: inner.height / display.height)
+    }
+
+    /// What `each` reads of every picture of a file (with its time), in
+    /// order; the pictures' size (nil: none read).
+    static func pictures<T: Sendable>(in url: URL, _ each: @Sendable (CVPixelBuffer, Double) -> T) async -> (size: CGSize?, read: [T]) {
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first, let reader = try? AVAssetReader(asset: asset) else { return (nil, []) }
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+        reader.add(output)
+        guard reader.startReading() else { return (nil, []) }
+        var size: CGSize?
+        var read: [T] = []
+        while let buffer = output.copyNextSampleBuffer() {
+            guard let pixels = CMSampleBufferGetImageBuffer(buffer) else { continue }
+            size = CGSize(width: CVPixelBufferGetWidth(pixels), height: CVPixelBufferGetHeight(pixels))
+            read.append(each(pixels, CMSampleBufferGetPresentationTimeStamp(buffer).seconds))
+        }
+        return (size, read)
+    }
+
+    /// The mean color of `region` (shares from the top left) in a
+    /// picture: red, green, blue, 0…255.
+    static func color(_ pixels: CVPixelBuffer, in region: CGRect) -> (red: Int, green: Int, blue: Int) {
+        CVPixelBufferLockBaseAddress(pixels, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixels, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(pixels)?.assumingMemoryBound(to: UInt8.self) else { return (0, 0, 0) }
+        let row = CVPixelBufferGetBytesPerRow(pixels), height = CVPixelBufferGetHeight(pixels), width = CVPixelBufferGetWidth(pixels)
+        let xs = max(0, Int(Double(width) * region.minX))..<min(width, max(Int(Double(width) * region.minX) + 1, Int(Double(width) * region.maxX)))
+        let ys = max(0, Int(Double(height) * region.minY))..<min(height, max(Int(Double(height) * region.minY) + 1, Int(Double(height) * region.maxY)))
+        var sum = (0, 0, 0), count = 0
+        for y in ys {
+            for x in xs {
+                let pixel = base + y * row + x * 4
+                sum = (sum.0 + Int(pixel[2]), sum.1 + Int(pixel[1]), sum.2 + Int(pixel[0]))
+                count += 1
+            }
+        }
+        let n = max(1, count)
+        return (sum.0 / n, sum.1 / n, sum.2 / n)
     }
 
     /// A length in seconds, a file of any kind.

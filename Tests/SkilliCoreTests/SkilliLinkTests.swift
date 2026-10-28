@@ -96,6 +96,28 @@ final class SkilliLinkTests: XCTestCase {
         XCTAssertEqual(SkilliLink.parse(SkilliLink.renameRecording("x", title: long).url), .renameRecording("x", title: String(long.prefix(120))))
     }
 
+    /// A recording's source on or off, as `set_recording_source` takes
+    /// it; the whole screen by the screen it names.
+    func testRecordingSourceLinks() throws {
+        let whole = SkilliLink.recordingSource(.screen, on: true, display: "main")
+        XCTAssertEqual(whole.url.absoluteString, "skilli://record/source?source=screen&display=main")
+        let named = SkilliLink.recordingSource(.screen, on: true, display: "LG UltraFine")
+        XCTAssertEqual(named.url.absoluteString, "skilli://record/source?source=screen&display=LG%20UltraFine")
+        XCTAssertEqual(SkilliLink.recordingSource(.macSound, on: false, display: nil).url.absoluteString, "skilli://record/source?source=mac_sound&on=false")
+        for link in [whole, named, .recordingSource(.screen, on: true, display: nil), .recordingSource(.screen, on: false, display: nil),
+                     .recordingSource(.webcam, on: true, display: nil), .recordingSource(.microphone, on: false, display: nil)] {
+            XCTAssertEqual(SkilliLink.parse(link.url), link, link.url.absoluteString)
+        }
+        XCTAssertEqual(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/SOURCE?source=Screen&on=1&display=%20meeting%20"))),
+                       .recordingSource(.screen, on: true, display: "meeting"), "trimmed, any case")
+        XCTAssertNil(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/source"))), "which source")
+        XCTAssertNil(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/source?source=keyboard"))))
+        XCTAssertNil(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/source?source=screen&on=maybe"))))
+        XCTAssertNil(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/source?source=webcam&display=main"))), "a screen named for the webcam")
+        XCTAssertNil(SkilliLink.parse(try XCTUnwrap(URL(string: "skilli://record/source?source=screen&on=false&display=main"))),
+                     "a screen named to turn it off")
+    }
+
     func testWhatIsNotALink() throws {
         for text in ["skilli://run", "skilli://run/", "skilli://nothing/here", "https://run/cmd:emoji", "skilli://commands/import?command=x",
                      "skilli://layout"] {
@@ -135,7 +157,7 @@ final class SkilliLinkTests: XCTestCase {
                 XCTAssertEqual(SkilliLink.skillie(at: path, among: [skillie.path], folders: folders), skillie.path)
             case .doHere:
                 XCTFail("no Catalog entry is a “do it here”: \(entry.id)")
-            case .record, .recording, .importRecording, .openRecording, .recordingFollowUp, .renameRecording:
+            case .record, .recording, .recordingSource, .importRecording, .openRecording, .recordingFollowUp, .renameRecording:
                 XCTFail("Record Meeting's and Import Recording's links are their entries': \(entry.id)")
             }
         }

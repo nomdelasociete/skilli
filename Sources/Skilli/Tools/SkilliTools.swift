@@ -421,10 +421,11 @@ final class SkilliTools {
                        description: "Stops the recording on now; its transcript is then made on this Mac and its window opens. Says its folder (me.m4a, them.m4a, webcam.mp4 and screen.mp4 when on, slides.json, then transcript.md).",
                        group: .recorder, risk: .changes, parameters: []),
         ToolDefinition(name: "set_recording_source", title: "Turn a recording's source on or off",
-                       description: "While the Record card is open or a meeting is recorded: turns the microphone, the Mac's sound, the webcam or the screen (the meeting's window) on or off from now on. Turned off, a track keeps its time (silence, a black picture).",
+                       description: "While the Record card is open or a meeting is recorded: turns the microphone, the Mac's sound, the webcam or the screen (the meeting's window, or with display the whole screen) on or off from now on. Turned off, a track keeps its time (silence, a black picture). The whole screen records every app on it, notifications included (skil.li's own windows left out): only when the user asked for it.",
                        group: .recorder, risk: .changes,
                        parameters: [.init(name: "source", description: "Which one.", options: ["microphone", "mac_sound", "webcam", "screen"]),
-                                    .init(name: "on", description: "true to turn it on, false off.", options: ["true", "false"])]),
+                                    .init(name: "on", description: "true to turn it on, false off.", options: ["true", "false"]),
+                                    .init(name: "display", description: "With source screen: the whole screen instead of the meeting's window. main (the menu bar's), meeting (the one the meeting's window is on, else the main one), or a screen's name as the Record card lists it (“LG UltraFine”).", isRequired: false)]),
         ToolDefinition(name: "list_recordings", title: "List the recordings",
                        description: "The meetings recorded or imported in skil.li, newest first: each its id (the folder's name), title, date, length, state, and whether it has a summary and chapters. No words: get_transcript gives a transcript, asked to the user each time.",
                        group: .recorder, risk: .read, parameters: []),
@@ -1045,7 +1046,7 @@ final class SkilliTools {
 
         case "set_recording_source":
             guard let center = recorder?() else { throw Failure(message: "The recorder is not available.") }
-            return try await center.setSource(try text("source"), on: try text("on") == "true")
+            return try await center.setSource(try text("source"), on: try text("on") == "true", display: arguments["display"] as? String)
 
         case "pause_recording", "resume_recording", "stop_recording":
             guard let center = recorder?(), center.recorder.isRecording else { throw Failure(message: "No recording is on.") }

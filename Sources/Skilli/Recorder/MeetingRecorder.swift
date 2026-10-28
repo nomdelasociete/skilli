@@ -36,7 +36,7 @@ final class MeetingRecorder {
         var app: String?
         var place: String?
         /// The screen's window, when the screen is on (the meeting's).
-        var screen: ScreenWindow?
+        var screen: ScreenTarget?
     }
 
     /// A transcript being made, for the menu bar.
@@ -246,8 +246,8 @@ final class MeetingRecorder {
     /// meters live (the webcam's and the screen's pictures), nothing kept.
     /// The microphone is asked for when macOS never asked. A source off is
     /// not started (in person, the Mac's sound: no tap, no question); the
-    /// screen is on only with a window to record.
-    func listen(sources: MeetingMoment.Sources = .both, screen window: ScreenWindow? = nil) async {
+    /// screen is on only with a window or a screen to record.
+    func listen(sources: MeetingMoment.Sources = .both, screen window: ScreenTarget? = nil) async {
         guard phase == .idle else { return }
         phase = .listening
         sourcesStarted = false
@@ -264,7 +264,7 @@ final class MeetingRecorder {
         if sources.macSound { startMacSound() }
         // As they are now: one turned off meanwhile stays off, a window
         // picked meanwhile stays picked.
-        let screen = self.sources.screen && madePictures?.screen.window == nil ? window : nil
+        let screen = self.sources.screen && madePictures?.screen.target == nil ? window : nil
         if self.sources.webcam || screen != nil {
             await pictures.listen(webcam: self.sources.webcam, screen: screen)
         }
@@ -327,13 +327,13 @@ final class MeetingRecorder {
         onChange?()
     }
 
-    /// The screen's window (nil: off), in the card or the red dot's menu:
-    /// another one goes on in the same file.
-    func setScreen(_ window: ScreenWindow?) async {
+    /// The screen's window or whole screen (nil: off), in the card or the
+    /// red dot's menu: another pick goes on in the same file.
+    func setScreen(_ target: ScreenTarget?) async {
         guard phase == .listening || isRecording else { return }
-        guard window != nil || sources.screen else { return }
-        sources.screen = window != nil
-        await pictures.setScreen(window)
+        guard target != nil || sources.screen else { return }
+        sources.screen = target != nil
+        await pictures.setScreen(target)
         onChange?()
     }
 

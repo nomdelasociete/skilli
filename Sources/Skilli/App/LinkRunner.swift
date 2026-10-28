@@ -57,6 +57,15 @@ final class LinkRunner {
     /// The recording on now, by its name (nil: none).
     var recordingTitle: () -> String? = { nil }
     var controlRecording: (SkilliLink.RecordingControl) -> Void = { _ in }
+    /// What a source link changes, as the card names it (“Weekly sync”,
+    /// the Record card); nil: no recording and no card.
+    var recordingSourceTarget: () -> String? = { nil }
+    /// The whole screen a link names, as the card says it ("Whole Screen
+    /// · LG UltraFine"); nil: no such screen.
+    var screenNamed: (String) -> String? = { _ in nil }
+    /// A source turned on or off, once allowed: what `set_recording_source`
+    /// answers, or why not.
+    var setRecordingSource: @MainActor (SkilliLink.RecordingSource, Bool, String?) async throws -> String = { _, _, _ in "" }
     /// A recording's window, by its folder's name or its title, from a time
     /// in it; false when there is no such recording.
     var openRecording: (String, Double?) -> Bool = { _, _ in false }
@@ -148,6 +157,8 @@ final class LinkRunner {
             if !dryRun { openRecordCard(title) }
         case .recording(let control):
             await askThenControl(control)
+        case .recordingSource(let source, let on, let display):
+            await askThenSetSource(source, on: on, display: display)
         case .importRecording(let file):
             // The panel only: the user's ↩ there imports.
             log.append("import \(file ?? "")")
@@ -196,6 +207,41 @@ final class LinkRunner {
         }
         log.append("did record \(control.rawValue)")
         if !dryRun { controlRecording(control) }
+    }
+
+    /// A link turning a source of the recording (or of the Record card) on
+    /// or off, the whole screen by its name: asked every time, what it
+    /// changes named (a page could turn the whole screen on unseen), never
+    /// trusted.
+    private func askThenSetSource(_ source: SkilliLink.RecordingSource, on: Bool, display: String?) async {
+        guard let target = recordingSourceTarget() else {
+            say("no recording", "No recording is on, and the Record card is not open: no source to turn \(on ? "on" : "off").")
+            return
+        }
+        let title: String, detail: String
+        if let display {
+            guard let screen = screenNamed(display) else {
+                say("missing screen \(display)", "No screen “\(display)” on this Mac: main, meeting, or a screen's name as the Record card lists it.")
+                return
+            }
+            title = "Record the whole screen"
+            detail = "\(target): \(screen), from now on. Notifications and other apps on it are recorded too."
+        } else {
+            title = "Turn \(on ? "on" : "off") \(source.title)"
+            detail = "\(target): \(source == .screen && on ? "the meeting's window, " : "")from now on."
+        }
+        log.append("asked record source \(source.rawValue)")
+        guard await approve(title, "\(detail) \(Self.fromALink)", false) != .deny else {
+            log.append("declined record source \(source.rawValue)")
+            return
+        }
+        log.append("did record source \(source.rawValue)\(display.map { " \($0)" } ?? "")")
+        guard !dryRun else { return }
+        do {
+            _ = try await setRecordingSource(source, on, display)
+        } catch {
+            say("record source failed", error.localizedDescription)
+        }
     }
 
     /// A link sending a recording's words to the user's writer: asked every
