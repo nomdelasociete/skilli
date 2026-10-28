@@ -616,6 +616,38 @@ final class RelayDeviceSessionTests: XCTestCase {
         client.suspend()
     }
 
+    func testARestoredPairingChecksItsIdentityUntilVerified() async throws {
+        let server = RelayReplies([])
+        let client = session(RelayVault(try existing()), server)
+        client.githubToken = { "alice" }
+        XCTAssertTrue(client.checksIdentity, "Not verified yet, not failed: checking")
+        client.activate(origin: origin)
+        for _ in 0..<500 {
+            if client.configuration(origin: origin) != nil { break }
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertNotNil(client.configuration(origin: origin))
+        XCTAssertFalse(client.checksIdentity)
+        client.suspend()
+        XCTAssertTrue(client.checksIdentity, "Each activation checks again")
+    }
+
+    func testAFailedIdentityCheckIsNoLongerChecking() async throws {
+        let server = RelayReplies([])
+        await server.setIdentity(status: 503)
+        let client = session(RelayVault(try existing()), server)
+        client.githubToken = { "alice" }
+        client.activate(origin: origin)
+        for _ in 0..<500 {
+            if !client.checksIdentity { break }
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertFalse(client.checksIdentity)
+        XCTAssertNil(client.configuration(origin: origin))
+        XCTAssertTrue(client.message?.contains("Could not verify") == true)
+        client.suspend()
+    }
+
     func testUnavailableIdentityEndpointFailsClosed() async throws {
         let vault = RelayVault()
         let server = RelayReplies([response(201, grant), response(200, tokens)])

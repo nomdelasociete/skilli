@@ -110,6 +110,9 @@ public final class RelayDeviceSession: ObservableObject {
     public private(set) var verifiedSubject: String?
     private var identityGeneration = 0
     private var identityTask: Task<Void, Never>?
+    /// The last identity check ended without a verified account (GitHub or
+    /// the relay unreachable, another account): `message` says why.
+    private var identityCheckFailed = false
     private var identityTarget: String?
     private var identityNative: String?
     private var active = false
@@ -182,6 +185,14 @@ public final class RelayDeviceSession: ObservableObject {
     public var needsEnrollment: Bool { hasSavedEnrollment && (credentials == nil || credentials?.requiresEnrollment == true) }
     public var installationCount: Int { credentials?.pair.installations?.count ?? 0 }
     public var canRevoke: Bool { credentials != nil && credentials?.requiresEnrollment == false }
+    /// A saved pairing not verified yet, its check not failed: what each
+    /// activation does first (GitHub, then the relay), about 2 s, longer on
+    /// a slow network. Nothing is wrong yet: "Checking this Mac…".
+    public var checksIdentity: Bool {
+        guard let current = credentials, !current.requiresEnrollment, current.pendingRevocation != true,
+              current.expiresAt > Date() else { return false }
+        return verifiedSubject == nil && !identityCheckFailed
+    }
 
     public func configuration(origin: String) -> RelayDeviceConfiguration? {
         guard let url = Self.origin(origin), let native = githubToken(),
@@ -228,6 +239,7 @@ public final class RelayDeviceSession: ObservableObject {
         verifiedNativeToken = nil
         verifiedAccessToken = nil
         verifiedSubject = nil
+        identityCheckFailed = false
         timer?.cancel()
         timer = nil
         // Do not cancel a rotation that may already have consumed its token.
@@ -395,12 +407,14 @@ public final class RelayDeviceSession: ObservableObject {
         let generation = identityGeneration
         identityTarget = current.pair.access_token
         identityNative = native
+        identityCheckFailed = false
         identityTask = Task { [weak self] in
             guard let self else { return }
             defer {
                 if self.identityGeneration == generation { self.identityTask = nil }
             }
-            if let verified = await self.verifyIdentity(pair: current.pair, authority: authority),
+            let checked = await self.verifyIdentity(pair: current.pair, authority: authority)
+            if let verified = checked,
                !Task.isCancelled, self.active, self.githubToken() == verified.native,
                self.identityGeneration == generation,
                self.credentials?.pair.access_token == current.pair.access_token,
@@ -410,6 +424,9 @@ public final class RelayDeviceSession: ObservableObject {
                 self.verifiedSubject = verified.subject
                 self.message = current.pair.installations?.isEmpty != false
                     ? "GitHub account verified. No account for live updates." : "GitHub account verified for live updates."
+                self.onChange?()
+            } else if checked == nil, !Task.isCancelled, self.identityGeneration == generation {
+                self.identityCheckFailed = true
                 self.onChange?()
             }
         }

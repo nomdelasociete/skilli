@@ -221,6 +221,10 @@ final class GitHubBook {
     private(set) var hasRelayToken = false
     /// Server sync's state while it is on: what holds it back.
     private(set) var serverHold: GitHubServerHold?
+    /// Server sync waits for this Mac's identity check (each activation,
+    /// `RelayDeviceSession.checksIdentity`): "Checking this Mac…", in grey,
+    /// not the hold's message.
+    private(set) var checkingThisMac = false
     /// False when GitHub had more unread notifications than the relay keeps.
     private(set) var notificationsComplete = true
     /// False until notifications were read (since sign-in, or since the
@@ -469,7 +473,8 @@ final class GitHubBook {
         notificationsRead = server.notifications != nil
         if let login = server.login { self.login = login }
         serverHold = server.hold
-        problem = server.hold?.message
+        checkingThisMac = server.hold == .macNotReady && relayDevice.checksIdentity
+        problem = checkingThisMac ? nil : server.hold?.message
         lastRefresh = server.lastInboxRead
         // What is shown, and what holds each read back: an empty list says why.
         let held = [server.inboxHold.map { "pull requests held: \($0)" }, server.notificationsHold.map { "notifications held: \($0)" }]
@@ -918,6 +923,7 @@ final class GitHubBook {
         lastRefresh = nil
         problem = nil
         serverHold = nil
+        checkingThisMac = false
         server.reset()
     }
 

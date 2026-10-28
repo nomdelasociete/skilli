@@ -1638,7 +1638,7 @@ final class LauncherController: NSObject {
             sectionHeader.stringValue = github?.isSignedIn != true ? "GitHub"
                 : githubGroup.map { "\($0.title) · \(shown)" } ?? (text.isEmpty ? "Pull requests and notifications" : "GitHub with “\(text)”")
             emptyState.stringValue = github?.isSignedIn != true ? "Sign in with GitHub in Settings → GitHub"
-                : github?.lastRefresh == nil ? (github?.problem ?? "Reading GitHub…")
+                : github?.lastRefresh == nil ? (github?.problem ?? (github?.checkingThisMac == true ? "Checking this Mac…" : "Reading GitHub…"))
                 : text.isEmpty ? githubGroup.map { "Nothing \($0.title.lowercased())" }
                     ?? (github?.notificationsRead == true && github?.notificationsComplete == true
                         ? "No open pull request, no unread notification" : "No open pull request")
@@ -3984,7 +3984,7 @@ final class LauncherController: NSObject {
     func updateGitHubStrip() {
         guard let github else { return }
         githubStrip.show(pullRequests: github.pullRequests, unread: github.unreadNotifications.count, unreadComplete: github.notificationsComplete,
-                         problem: github.problem, reading: github.lastRefresh == nil && github.problem == nil)
+                         problem: github.problem, reading: github.lastRefresh == nil && github.problem == nil, checking: github.checkingThisMac)
         if isVisible, mode == .github { updateResults(query: searchField.stringValue) }
     }
 
