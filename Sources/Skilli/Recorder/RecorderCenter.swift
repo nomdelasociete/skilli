@@ -393,15 +393,23 @@ final class RecorderCenter {
         }
     }
 
+    /// Which recording, or which Record card, is on now (nil: neither): a
+    /// link asked about one never changes another.
+    var sourceMoment: String? {
+        if recorder.isRecording, let folder = recorder.folder { return "recording \(Self.key(folder))" }
+        return recorder.phase == .listening && card.content == .record ? "card \(cardSession)" : nil
+    }
+
     /// `set_recording_source` (a tool, a skillie, a link): a source on or
     /// off while the card is open or a recording is on; the screen on
     /// records the meeting's window, said when none is known, or with
     /// `display` the whole screen it names (`main`, `meeting`, a screen's
-    /// name: docs/meeting-recorder-views.md, "The whole screen").
-    func setSource(_ source: String, on: Bool, display: String? = nil) async throws -> String {
+    /// name: docs/meeting-recorder-views.md, "The whole screen"), or with
+    /// `screen` that display (a link's, named when it was asked).
+    func setSource(_ source: String, on: Bool, display: String? = nil, screen id: CGDirectDisplayID? = nil) async throws -> String {
         guard recorder.isRecording || recorder.phase == .listening else { throw MeetingRecorder.Failure(message: "No recording is on, and the Record card is not open.") }
         let display = display.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
-        if display != nil, source != "screen" { throw MeetingRecorder.Failure(message: "display goes with source=screen: the whole screen.") }
+        if display != nil || id != nil, source != "screen" { throw MeetingRecorder.Failure(message: "display goes with source=screen: the whole screen.") }
         let sources = recorder.sources
         switch source {
         case "microphone":
@@ -417,10 +425,13 @@ final class RecorderCenter {
             if !on {
                 await recorder.setScreen(nil)
                 card.setScreenNote(nil, automation: false)
-            } else if let display {
-                guard let screen = ScreenDisplays.named(display, meeting: meetingWindow?.id) else {
+            } else if display != nil || id != nil {
+                let found = if let id { ScreenDisplays.list(meeting: meetingWindow?.id).first { $0.id == id } }
+                    else { ScreenDisplays.named(display ?? "", meeting: meetingWindow?.id) }
+                guard let screen = found else {
+                    if id != nil { throw MeetingRecorder.Failure(message: "The screen asked for is not connected any more: nothing turned on.") }
                     let names = ScreenDisplays.list().map { "“\($0.name)”" }
-                    throw MeetingRecorder.Failure(message: "No screen “\(display)”: main, meeting, or \(names.formatted(.list(type: .or))).")
+                    throw MeetingRecorder.Failure(message: "No screen “\(display ?? "")”: main, meeting, or \(names.formatted(.list(type: .or))).")
                 }
                 await card.whileMacOSAsks(!ScreenTrack.isAllowed && card.isVisible) { await recorder.setScreen(.display(screen)) }
                 sayScreen(.display(screen))

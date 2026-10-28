@@ -1761,7 +1761,11 @@ The red dot's menu, Screen ▸, has the same list, then Off:
   parameters (`source`, `on`, `display`; `on` true when left out), for
   every source: asked in the card every time, the recording or the
   Record card named with what turns on or off (a page could turn the
-  whole screen on unseen), never trusted.
+  whole screen on unseen), never trusted. Allowed, it does what was
+  asked and only that: the screen the question named (`meeting` is not
+  looked for again), on the recording or card it named; another one
+  since (the recording stopped, the card closed and opened again) is
+  left as it is, and the card says so.
 
 ## Said, and not said
 

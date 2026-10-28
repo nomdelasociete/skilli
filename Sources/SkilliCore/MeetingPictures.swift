@@ -276,15 +276,21 @@ public enum WholeScreen {
         }
     }
 
-    /// The names macOS gives, told apart: a second "DELL U2720Q" is
-    /// "DELL U2720Q (2)"; a screen with none is "Screen 2".
+    /// The names macOS gives, told apart as `named` reads them (case and
+    /// accents aside): a second "DELL U2720Q" is "DELL U2720Q (2)"; a
+    /// screen with none is "Screen 2"; one called as a word `named` takes
+    /// for itself ("Main") is "Main (2)".
     public static func distinctNames(_ names: [String]) -> [String] {
-        var seen: [String: Int] = [:]
+        var taken: Set<String> = ["main", "meeting"]
         return names.enumerated().map { index, name in
             let base = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Screen \(index + 1)" : name
-            let count = (seen[base] ?? 0) + 1
-            seen[base] = count
-            return count == 1 ? base : "\(base) (\(count))"
+            var candidate = base, count = 1
+            while taken.contains(folded(candidate)) {
+                count += 1
+                candidate = "\(base) (\(count))"
+            }
+            taken.insert(folded(candidate))
+            return candidate
         }
     }
 

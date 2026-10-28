@@ -179,6 +179,14 @@ final class WholeScreenTests: XCTestCase {
     func testTwinScreensAreToldApart() {
         XCTAssertEqual(WholeScreen.distinctNames(["DELL U2720Q", "Built-in Retina Display", "DELL U2720Q", " "]),
                        ["DELL U2720Q", "Built-in Retina Display", "DELL U2720Q (2)", "Screen 4"])
+        XCTAssertEqual(WholeScreen.distinctNames(["LG UltraFine", "lg ultrafine", "Écran", "ecran"]), ["LG UltraFine", "lg ultrafine (2)", "Écran", "ecran (2)"],
+                       "the same name, case and accents aside: told apart as a tool reads it")
+        XCTAssertEqual(WholeScreen.distinctNames(["Main", "Meeting"]), ["Main (2)", "Meeting (2)"], "never the words that name the main screen or the meeting's")
+        XCTAssertEqual(WholeScreen.distinctNames(["DELL (2)", "DELL", "DELL"]), ["DELL (2)", "DELL", "DELL (3)"], "a number never one already taken")
+        let names = WholeScreen.distinctNames(["Main", "LG", "lg"])
+        let displays = names.enumerated().map { WholeScreen.Display(id: UInt32($0.offset + 1), name: $0.element, frame: .zero) }
+        XCTAssertEqual(WholeScreen.named("main (2)", in: displays, main: 2, window: nil)?.id, 1, "a screen called Main is still reached by its name")
+        XCTAssertEqual(WholeScreen.named("lg (2)", in: displays, main: 2, window: nil)?.id, 3)
     }
 
     func testADisconnectedScreenIsSaid() {

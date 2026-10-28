@@ -28027,6 +28027,8 @@ final class SelfTest {
                 _ = await clickCardRow(center, .screen, at: 130)
             }
             guard await screenListOpen() else {
+                // Whatever menu of its own opened instead, closed first.
+                Self.closeOwnMenu()
                 escape.cancel()
                 record(name, false, "the Screen row's list did not open (\(suffix): the row “\(view.screenLine)”)", nil)
                 center.closeCardWithoutKeys()
@@ -30101,6 +30103,8 @@ final class SelfTest {
             // The screen off, no meeting's window found: its row opens the list.
             _ = await clickCardRow(center, .screen)
             guard await screenListOpen() else {
+                // Whatever menu of its own opened instead, closed first.
+                Self.closeOwnMenu()
                 escape.cancel()
                 backdrop.orderOut(nil)
                 return guideMissing(name, "the Screen row's list did not open (\(suffix))")
