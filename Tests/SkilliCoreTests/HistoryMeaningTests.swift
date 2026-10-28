@@ -36,6 +36,10 @@ final class HistoryMeaningTests: XCTestCase {
         let linkTitle = HistoryVisit(url: "https://banque.example.com/", title: "Ouvrir https://banque.example.com/?rib=12345678901234567890104",
                                      browser: "Safari", bundleID: "com.apple.Safari", visited: nil, visits: 1)
         XCTAssertEqual(HistoryMeaning.describe(linkTitle), "“Ouvrir https://banque.example.com/?…” on banque.example.com", "a link in a title too")
+        let bare = HistoryVisit(url: "https://banque.example.com/", title: "banque.example.com/reset?rib=12345678901234567890104 Quoi? e.g.?",
+                                browser: "Safari", bundleID: "com.apple.Safari", visited: nil, visits: 1)
+        XCTAssertEqual(HistoryMeaning.describe(bare), "“banque.example.com/reset?… Quoi? e.g.?” on banque.example.com", "without a scheme too")
+        XCTAssertEqual(ToolCallSummary.withoutQuery("https://exemple.fr/é?rib=12345678901234567890104"), "https://exemple.fr/%C3%A9?…")
         XCTAssertEqual(HistoryMeaning.shortWhen(visit.visited!, now: now, calendar: calendar), "yesterday")
         XCTAssertEqual(HistoryMeaning.shortWhen(now.addingTimeInterval(-3_600), now: now, calendar: calendar), "08:00")
         XCTAssertEqual(HistoryMeaning.shortWhen(now.addingTimeInterval(-3 * 86_400), now: now, calendar: calendar), "Fri")

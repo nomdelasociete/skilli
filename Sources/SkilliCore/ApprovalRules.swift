@@ -517,13 +517,22 @@ public enum ToolCallSummary {
     }
 
     /// A link without its query and fragment: they often carry tokens.
+    /// Without a scheme ("bank.example/reset?rib=…"), or when it does not
+    /// parse, an address whose host has a dot is cut at its first ? or #.
     static func withoutQuery(_ text: String) -> String {
-        guard text.contains("://"), !text.contains(" "), let components = URLComponents(string: text),
-              components.query != nil || components.fragment != nil
-        else { return text }
-        var trimmed = components
-        trimmed.query = nil
-        trimmed.fragment = nil
-        return (trimmed.string ?? text) + "?…"
+        guard !text.contains(" ") else { return text }
+        if text.contains("://"), let components = URLComponents(string: text) {
+            guard components.query != nil || components.fragment != nil else { return text }
+            var trimmed = components
+            trimmed.query = nil
+            trimmed.fragment = nil
+            return (trimmed.string ?? text) + "?…"
+        }
+        guard let cut = text.firstIndex(where: { $0 == "?" || $0 == "#" }), text.index(after: cut) != text.endIndex else { return text }
+        let address = text[..<cut]
+        let host = (address.range(of: "://").map { address[$0.upperBound...] } ?? address).prefix { $0 != "/" }
+        guard host.contains("."), host.first?.isLetter == true || host.first?.isNumber == true,
+              host.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" }) else { return text }
+        return address + "?…"
     }
 }
