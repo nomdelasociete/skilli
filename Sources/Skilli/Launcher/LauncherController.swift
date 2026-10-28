@@ -2332,7 +2332,12 @@ final class LauncherController: NSObject {
             guard let self else { return }
             // ⇥ before the name search came back: that search first.
             let named = self.fileResults?.query == text ? self.fileResults?.files ?? [] : await FileSearch.search(text)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, self.mode == .files, self.searchField.stringValue == text else { return }
+            // Its rows shown at once, and kept if no answer comes.
+            if self.fileResults?.query != text {
+                self.fileResults = (text, named)
+                self.updateResults(query: text)
+            }
             let found = await FileSearch.searchByMeaning(text, keys: keys, named: named)
             guard !Task.isCancelled, self.mode == .files, self.searchField.stringValue == text else { return }
             self.fileMeaningPending = nil
