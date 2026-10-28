@@ -482,10 +482,13 @@ final class GitHubBook {
         notificationsRead = server.notifications != nil
         if let login = server.login { self.login = login }
         serverHold = server.hold
-        // No relay access, or the relay said it expired (401): a renewal
-        // under way or retried by itself is no problem of the user's.
-        serverWait = server.hold == .macNotReady || server.hold == .deviceExpired
-            ? resolvedRelayOrigin.flatMap { serverWait(origin: $0.absoluteString) } : nil
+        // No relay access, or the relay said it expired (401), for either
+        // read: a renewal under way or retried by itself is no problem of
+        // the user's, unless a hold is theirs to act on.
+        let holds = [server.inboxHold, server.notificationsHold]
+        let renewing = holds.contains { $0 == .macNotReady || $0 == .deviceExpired }
+        let needsUser = holds.contains { $0 == .authorizationRequired || $0 == .wrongAccount }
+        serverWait = renewing && !needsUser ? resolvedRelayOrigin.flatMap { serverWait(origin: $0.absoluteString) } : nil
         problem = serverWait == nil ? server.hold?.message : nil
         lastRefresh = server.lastInboxRead
         // What is shown, and what holds each read back: an empty list says why.

@@ -686,6 +686,18 @@ final class RelayDeviceSessionTests: XCTestCase {
         XCTAssertFalse(client.needsEnrollment)
     }
 
+    func testAccessTheRelayRefusedSaysCheckingWhileItsRenewalRuns() async throws {
+        let server = RelayReplies([response(503)])
+        let client = session(RelayVault(try existing()), server)
+        var checking: [Bool] = []
+        client.onChange = { checking.append(client.checksIdentity(origin: self.origin)) }
+        client.accessExpired()
+        try await finish(client)
+        XCTAssertTrue(checking.contains(true), "Said once the renewal's marker is saved, before the relay answers")
+        XCTAssertNotNil(client.renewalRetry(origin: origin))
+        client.onChange = nil
+    }
+
     func testARestartResumingARenewalChecksThisMac() async throws {
         let pair = try JSONDecoder().decode(RelayTokenPair.self, from: Data(tokens.utf8))
         let credentials = RelayDeviceCredentials(origin: origin, pair: pair, expiresAt: Date().addingTimeInterval(-60),

@@ -584,6 +584,10 @@ public final class RelayDeviceSession: ObservableObject {
                 // Persist the idempotency key before sending. A restart retries
                 // the exact same rotation instead of replaying it as a new one.
                 try persist(old)
+                // Access the relay refused (401) is already gone: "Checking
+                // this Mac…" now, not the expired hold until the answer. A
+                // routine renewal says nothing (its reads still work).
+                if rejectedAccess { onChange?() }
             }
             let result = try await RelayDeviceAPI(origin: url, send: send).post("tokens/refresh",
                 body: ["refresh_token": old.pair.refresh_token, "request_id": old.pendingRefreshID!])
