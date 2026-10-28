@@ -13,6 +13,7 @@
 		025B7FDFEC88ABACA6A3BD9C /* ContactSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C94220F3C2BB1277F396866 /* ContactSearch.swift */; };
 		029B04FDB1708CBC6725F040 /* KeyOwners.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83302F567140F731B2545E4C /* KeyOwners.swift */; };
 		03BA8E30516F94CD3738CF89 /* BackupCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40FDDE5B057817139A8ECCE /* BackupCenter.swift */; };
+		055E5A011D870F08C8589245 /* RecorderIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = DE40B86CBBB0FCA685A080D9 /* RecorderIcon.icns */; };
 		06E4DD22B30B15B6D45835BF /* WindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B027C956EBA7D0BC36224F02 /* WindowManager.swift */; };
 		079F72F739507947C167C6BA /* RecorderPictures.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEC0859C6CF39E1EC9EEB7C9 /* RecorderPictures.swift */; };
 		095D4C24B369E1BF5F8D3451 /* SkilliCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 512A4230C03E002AF05528B1 /* SkilliCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -144,6 +145,7 @@
 		5B0A7FABC0E1A8723323A595 /* KeyboardLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56DD19CABB02002377A1F9F6 /* KeyboardLayout.swift */; };
 		5D06FD9C1F27287F39E7EB50 /* SyntheticKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE4B232E47286DC23172B2A /* SyntheticKeys.swift */; };
 		5DB8CBF5CA0615CDB4935387 /* OpenAIEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7091322050252F14C5DAA86 /* OpenAIEngine.swift */; };
+		5DF5618A34705F49FCED3BF8 /* DockPresence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8576F6AC9549D35180ED0D /* DockPresence.swift */; };
 		5E7C0B52DEB3AACED8023821 /* RecentSearchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 137FCEB6B269DC65B055F5DF /* RecentSearchStore.swift */; };
 		5F31E5D07B976B7F9F93153B /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0747531F6CC8943897E515A1 /* Preferences.swift */; };
 		600A8D6FAC2692E9604222E7 /* AutoQuit.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FA8B8C1C0D91083CB431DD /* AutoQuit.swift */; };
@@ -616,6 +618,7 @@
 		7A15004F1495188F0F4861D6 /* BetterTranscription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetterTranscription.swift; sourceTree = "<group>"; };
 		7A64CB3911A51390BA9A47F4 /* SILabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SILabel.swift; sourceTree = "<group>"; };
 		7A6D55308FEC6AE23E9689ED /* AppUninstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUninstaller.swift; sourceTree = "<group>"; };
+		7A8576F6AC9549D35180ED0D /* DockPresence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockPresence.swift; sourceTree = "<group>"; };
 		7A9F4B3473B98B178934766C /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		7C2BE8AC7ABCBB95696CCC88 /* PasteCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteCheck.swift; sourceTree = "<group>"; };
 		7C63616FE52016FF3EAFB83E /* CanvasGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasGrid.swift; sourceTree = "<group>"; };
@@ -755,6 +758,7 @@
 		DB6B86EAC75137B31D827E48 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		DD3FFF919066544B9CB6E429 /* Benchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Benchmark.swift; sourceTree = "<group>"; };
 		DD73B1BA771D2563DA968926 /* SpotlightKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightKey.swift; sourceTree = "<group>"; };
+		DE40B86CBBB0FCA685A080D9 /* RecorderIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = RecorderIcon.icns; sourceTree = "<group>"; };
 		DFD907BC9FD0A9478E050918 /* BrewPackage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrewPackage.swift; sourceTree = "<group>"; };
 		DFFAE2DCDD4BBDEC7BFAD584 /* AppleShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleShortcuts.swift; sourceTree = "<group>"; };
 		E09DD4F64D0B4785BC7D1478 /* TargetHighlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetHighlight.swift; sourceTree = "<group>"; };
@@ -1375,6 +1379,7 @@
 				C08915CAA93AD4BF62806FE1 /* AppIcon.icon */,
 				35F16A6E47DF5357C2EF1C64 /* Apps */,
 				EF76F7F3AC8409A4383BE1D8 /* Assets.xcassets */,
+				DE40B86CBBB0FCA685A080D9 /* RecorderIcon.icns */,
 				253E60CFEB852A046AFDE841 /* InfoPlist.strings */,
 			);
 			path = Resources;
@@ -1384,6 +1389,7 @@
 			isa = PBXGroup;
 			children = (
 				DB6B86EAC75137B31D827E48 /* AppDelegate.swift */,
+				7A8576F6AC9549D35180ED0D /* DockPresence.swift */,
 				A03FCCCF37A8AD8117EFD3C6 /* LinkRunner.swift */,
 				681B1DF90B710853EBD7142C /* MainMenu.swift */,
 				2C9BEE68B3DD7260D2FCFAD0 /* Relaunch.swift */,
@@ -1550,6 +1556,7 @@
 				C44D6688D1105495303F9C15 /* Apps in Resources */,
 				EB9E662103C00F099B86527C /* Assets.xcassets in Resources */,
 				4DFF3BDD49825AF2DDA64EFC /* InfoPlist.strings in Resources */,
+				055E5A011D870F08C8589245 /* RecorderIcon.icns in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1812,6 +1819,7 @@
 				69114E6ADCD9F59D46CF1920 /* DisplayPrompt.swift in Sources */,
 				A80BE3EFBEFF9D74C0454307 /* DisplayWatch.swift in Sources */,
 				828352DACC4AC36F4BCA8814 /* Displays.swift in Sources */,
+				5DF5618A34705F49FCED3BF8 /* DockPresence.swift in Sources */,
 				C9188E1EC4BC7989AEF91FE7 /* EditorProjects.swift in Sources */,
 				8451A3DD7ACEE075D4328920 /* EmojiGridView.swift in Sources */,
 				CB8E934CCA72FAEE048459E1 /* EmojiLibrary.swift in Sources */,

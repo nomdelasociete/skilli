@@ -6452,7 +6452,7 @@ final class SelfTest {
     /// (Return opens), ⇥ → merge asked twice, ⌘⌫ marks read, the agents'
     /// tools.
     private func githubInbox() async {
-        let name = "GitHub: sign in with a code; pull requests by group, notifications (304 after); the strip; pr; ⇥ merge asks twice; ⌘⌫ read; tools"
+        let name = "GitHub: sign in with a code; pull requests by group, notifications (304 after); the strip; pr; ⇥ merge asks twice; ⌘⌫ read; ⇥ read all; tools"
         let stand = GitHubStandIn()
         guard let server = LoopbackServer(handler: { stand.answer($0) }), let port = await server.port() else {
             record(name, false, "no stand-in server", nil)
@@ -6472,10 +6472,10 @@ final class SelfTest {
         let page = await waitUntil(timeout: 1) { opened.first == base.absoluteString + "/login/device" } != nil
         let signedIn = await waitUntil(timeout: 10) { book.isSignedIn && book.lastRefresh != nil } != nil
         let grouped = book.pullRequests.map { "#\($0.number) \($0.group.rawValue)" }
-        let read = grouped == ["#1 ready", "#3 blocked", "#2 testing"] && book.unreadNotifications.map(\.id) == ["22", "21"]
+        let read = grouped == ["#1 ready", "#3 blocked", "#2 testing"] && book.unreadNotifications.map(\.id) == ["22", "21", "24", "25"]
         // Read again: the notifications come back 304, kept.
         book.refresh(force: true)
-        let notModified = await waitUntil(timeout: 3) { stand.notModified == 1 } != nil && book.unreadNotifications.count == 2
+        let notModified = await waitUntil(timeout: 3) { stand.notModified == 1 } != nil && book.unreadNotifications.count == 4
 
         // The launcher with this GitHub.
         let launcher = context.launcher
@@ -6508,7 +6508,7 @@ final class SelfTest {
         }
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
-        let strip = await waitUntil(timeout: 2) { launcher.gitHubStripText == "1 Ready · 1 Blocked · 1 Testing — 2 unread" } != nil
+        let strip = await waitUntil(timeout: 2) { launcher.gitHubStripText == "1 Ready · 1 Blocked · 1 Testing — 4 unread" } != nil
         let stripText = launcher.gitHubStripText ?? "hidden"
         if let directory = context.snapshotDirectory, let png = launcher.snapshotPNG() {
             try? png.write(to: directory.appendingPathComponent("launcher-github-strip.png"))
@@ -6518,7 +6518,7 @@ final class SelfTest {
             }
         }
         for character in "pr " { await pressKey(character) }
-        let titles = ["Add the GitHub strip", "Fix the build", "Faster history", "Review the new API", "Fix the flaky test on main"]
+        let titles = ["Add the GitHub strip", "Fix the build", "Faster history", "Review the new API", "Fix the flaky test on main", "Crash on wake", "Update the docs"]
         let listed = await waitUntil(timeout: 2) { launcher.resultTitles == titles } != nil
         let shown = launcher.resultTitles
         if let directory = context.snapshotDirectory, let png = launcher.snapshotPNG() {
@@ -6555,6 +6555,27 @@ final class SelfTest {
 
         let blocked = (try? await tools.call("list_pull_requests", arguments: ["group": "blocked"], run: nil)) ?? ""
         let notes = (try? await tools.call("list_github_notifications", arguments: [:], run: nil)) ?? ""
+
+        // ⇥ on a notification: Mark All as Read reads every one listed,
+        // not the one the search left out ("Update the docs").
+        guard await focusTestWindow() else { return }
+        _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+        for character in "pr nimbus" { await pressKey(character) }
+        _ = await waitUntil(timeout: 2) { launcher.resultTitles == ["Review the new API", "Crash on wake"] }
+        await pressKey(nil, code: CGKeyCode(kVK_Tab))
+        let allOffered = await waitUntil(timeout: 2) {
+            launcher.shownActions.map(\.title) == ["Open", "Mark as Read", "Mark All as Read", "Copy Link"]
+        } != nil
+        let allOptions = launcher.shownActions.map(\.title)
+        for character in "all" { await pressKey(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let allRead = await waitUntil(timeout: 3) {
+            stand.read == ["21", "22", "24"] && launcher.resultTitles.isEmpty && book.unreadNotifications.map(\.id) == ["25"]
+        } != nil
+        await closeLauncher()
+        // The tool reads what is left, then says none is.
+        let lastRead = (try? await tools.call("mark_all_github_notifications_read", arguments: [:], run: nil)) ?? ""
+        let noneLeft = (try? await tools.call("mark_all_github_notifications_read", arguments: [:], run: nil)) ?? ""
         // Settings → GitHub as it stands (the app's own GitHub: signed out).
         context.settings.show(pane: .github)
         await pause(500)
@@ -6566,11 +6587,12 @@ final class SelfTest {
         let toolsOK = blocked.hasPrefix("blocked — nomdelasociete/skilli#3 “Fix the build” — lint failed")
             && notes.hasPrefix("22 — Review requested — nimbus-hq/nimbus “Review the new API”") && !notes.contains("Fix the flaky test on main") && !notes.contains("CI failed on main")
         record(name, code && page && signedIn && read && notModified && noStripSignedOut && toSettings && strip && listed && openedPR && offered && askedAgain
-                   && notYet && merged && markedRead && toolsOK,
+                   && notYet && merged && markedRead && toolsOK && allOffered && allRead && lastRead == "Marked 1 read." && stand.read.last == "25"
+                   && noneLeft == "No unread notification to mark.",
                "code \(code), page \(page), signed in \(signedIn); read \(read) (\(grouped)); 304 kept \(notModified); "
                    + "signed out: no strip \(noStripSignedOut), Return → Settings \(toSettings); strip \(strip) (“\(stripText)”); "
                    + "pr \(listed) (\(shown)); Return opens \(openedPR); ⇥ \(offered) (\(options)), asked again \(askedAgain), not before \(notYet), merged \(merged); "
-                   + "⌘⌫ read \(markedRead); tools \(toolsOK) (“\(blocked.prefix(80))”, “\(notes.prefix(60))”)",
+                   + "⌘⌫ read \(markedRead); all read \(allOffered) \(allRead) (\(allOptions), \(stand.read), “\(lastRead)”, “\(noneLeft)”); tools \(toolsOK) (“\(blocked.prefix(80))”, “\(notes.prefix(60))”)",
                nil)
     }
 
@@ -25307,11 +25329,19 @@ final class SelfTest {
     /// every later check is skipped (no key may land in another app).
     private func recordingWindowHasKeys(_ controller: RecordingWindowController, _ name: String) async -> Bool {
         controller.present()
-        if await waitUntil(timeout: 2, { controller.nsWindow.isKeyWindow && NSApp.isActive }) != nil { return true }
+        if await waitUntil(timeout: 2, { self.recordingWindowInFront(controller) }) != nil { return true }
         aborted = true
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
         record(name, false, "the recording's window did not take the keyboard (front: \(front)): stopped so no key lands elsewhere", nil)
         return false
+    }
+
+    /// The recording's window has the keys and the clicks: key, skil.li
+    /// active, and in front for the window server too (just brought
+    /// forward from another app, AppKit says active a moment before; a
+    /// click then only activates).
+    private func recordingWindowInFront(_ controller: RecordingWindowController) -> Bool {
+        controller.nsWindow.isKeyWindow && NSApp.isActive && NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid()
     }
 
     /// A real click at the middle of `frame` (AppKit's coordinates).
@@ -26077,20 +26107,192 @@ final class SelfTest {
         // The calls are English; the test Mac types French: Ask's language
         // says English, as a user would set it.
         context.preferences.voiceLanguage = "en-US"
-        await recorderCardShowsBothSourcesLive()
-        if !aborted { await recorderRecordsAPlayedBackCall() }
-        if !aborted { await recorderPausesBothTracksTogether() }
-        if !aborted { await recorderResamplesAMicrophoneStartedAgain() }
-        if !aborted { await recorderMicrophoneFollowsItsDeviceRate() }
-        if !aborted { await recorderMacSoundFollowsItsOutputRate() }
-        if !aborted { await recorderMacSoundAtTheOutputsRate() }
-        if !aborted { await recorderSaysATrackRecordsNothing() }
-        if !aborted { await recorderImportWaitsForTheRecording() }
-        if !aborted { await recorderOffersOneNeverStopped() }
-        if !aborted { await recorderQuitClosesItWhole() }
-        if !aborted { await recorderStopStuckOffersIt() }
-        if !aborted { await recorderSleepPausesUntilResumed() }
-        if !aborted { await recorderFromLinksAndTools() }
+        // Each from the test window in front: a recording's window closed
+        // makes skil.li an accessory again, and macOS puts another app in
+        // front.
+        let steps: [Step] = [recordingWindowKeepsTheDock, recorderCardShowsBothSourcesLive, recorderRecordsAPlayedBackCall,
+                             recorderPausesBothTracksTogether, recorderResamplesAMicrophoneStartedAgain, recorderMicrophoneFollowsItsDeviceRate,
+                             recorderMacSoundFollowsItsOutputRate, recorderMacSoundAtTheOutputsRate, recorderSaysATrackRecordsNothing,
+                             recorderImportWaitsForTheRecording, recorderOffersOneNeverStopped,
+                             recorderQuitClosesItWhole, recorderStopStuckOffersIt, recorderSleepPausesUntilResumed, recorderFromLinksAndTools]
+        for step in steps {
+            await takeFocus()
+            if aborted { return }
+            await step()
+        }
+    }
+
+    /// A recording's window puts skil.li in the Dock with the recorder's
+    /// icon (docs/meeting-recorder-views.md, "In the Dock"); the Dock's icon
+    /// brings the window forward from another app, and out of the Dock
+    /// once minimized; Settings opened and closed meanwhile
+    /// leaves both; the window closed, skil.li is an accessory again with
+    /// its own icon. The other way round too: Settings keeps the Dock, with
+    /// skil.li's own icon, once the recording's window closes.
+    private func recordingWindowKeepsTheDock() async {
+        let name = "Recorder: a recording's window puts skil.li in the Dock with the recorder's icon, the Dock's icon brings it forward from another app and minimized, Settings opened and closed meanwhile keeps both; closed, an accessory with its own icon again (and Settings keeps the Dock with its own icon)"
+        guard let center = context.recorder(), let folder = seedMeeting(center, title: "Dock check", script: Self.launchReview) else {
+            record(name, false, "the stand-in meeting could not be written", nil)
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let settings = context.settings
+        func regular() -> Bool { NSRunningApplication.current.activationPolicy == .regular }
+        func state() -> String {
+            "policy \(regular() ? "regular" : NSRunningApplication.current.activationPolicy == .accessory ? "accessory" : "prohibited"), icon \(Self.showsRecorderIcon() ? "recorder" : "app")"
+        }
+        let before = state()
+        let startedAccessory = NSRunningApplication.current.activationPolicy == .accessory && !Self.showsRecorderIcon()
+
+        center.open(folder)
+        guard let controller = await waitForWindow(center, folder) else {
+            record(name, false, "no window for the stand-in meeting (before: \(before))", nil)
+            return
+        }
+        let opened = await waitUntil(timeout: 2) { regular() && Self.showsRecorderIcon() } != nil
+        let openedState = state()
+        // Its tile, once the Dock has added it.
+        let tile = await waitUntil(timeout: 3) { Self.ownDockTile() != nil } != nil ? Self.ownDockTile() : nil
+        if tile != nil { await captureDock(as: "recorder-dock") }
+        // The Dock's icon with another app in front (TextEdit, a scratch
+        // file): skil.li comes in front with the recording's window, not
+        // Settings. Minimized, the Dock's icon brings it back out.
+        let bundleID = "com.apple.TextEdit"
+        let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-dock-\(getpid()).txt")
+        try? "dock".write(to: file, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        var otherInFront = false, dockBrings = false, fromMinimized = false
+        if let tile, let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
+           let textEdit = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration),
+           await waitUntil(timeout: 5, { textEdit.isFinishedLaunching }) != nil {
+            let textEditPID = textEdit.processIdentifier
+            Self.makeFrontmost(pid: textEditPID)
+            otherInFront = await waitUntil(timeout: 4) { NSWorkspace.shared.frontmostApplication?.processIdentifier == textEditPID } != nil
+            if otherInFront {
+                AXUIElementPerformAction(tile.item, kAXPressAction as CFString)
+                dockBrings = await waitUntil(timeout: 3) { self.recordingWindowInFront(controller) } != nil
+            }
+            controller.nsWindow.miniaturize(nil)
+            if await waitUntil(timeout: 3, { controller.nsWindow.isMiniaturized }) != nil {
+                AXUIElementPerformAction(tile.item, kAXPressAction as CFString)
+                fromMinimized = await waitUntil(timeout: 3) { !controller.nsWindow.isMiniaturized && self.recordingWindowInFront(controller) } != nil
+            }
+            // The scratch file closed in TextEdit, TextEdit quit if it was not open.
+            Self.makeFrontmost(pid: textEditPID)
+            _ = await waitUntil(timeout: 2) { NSWorkspace.shared.frontmostApplication?.processIdentifier == textEditPID }
+            await cleanUp(bundleID: bundleID, wasRunning: wasRunning)
+        }
+        let settingsAfterDock = settings.isVisible
+        // Settings opened and closed: the recording's window keeps both.
+        settings.show()
+        let withSettings = await waitUntil(timeout: 2) { settings.isVisible } != nil && regular() && Self.showsRecorderIcon()
+        await closeSettings()
+        let afterSettings = await waitUntil(timeout: 1) { !regular() || !Self.showsRecorderIcon() } == nil
+        let afterSettingsState = state()
+        controller.close()
+        let closed = await waitUntil(timeout: 2) { !regular() && !Self.showsRecorderIcon() } != nil
+        let closedState = state()
+
+        // Settings first, then a recording's window, closed first: Settings
+        // keeps the Dock, with skil.li's own icon.
+        settings.show()
+        _ = await waitUntil(timeout: 2) { settings.isVisible }
+        center.open(folder)
+        let second = await waitForWindow(center, folder)
+        let bothRecorder = await waitUntil(timeout: 2) { regular() && Self.showsRecorderIcon() } != nil
+        second?.close()
+        let settingsKeeps = await waitUntil(timeout: 2) { regular() && !Self.showsRecorderIcon() } != nil
+        let settingsKeepsState = state()
+        await closeSettings()
+        let allClosed = await waitUntil(timeout: 2) { NSRunningApplication.current.activationPolicy == .accessory } != nil
+        record(name, startedAccessory && opened && tile != nil && otherInFront && dockBrings && fromMinimized && !settingsAfterDock && withSettings
+               && afterSettings && closed && bothRecorder && settingsKeeps && allClosed,
+               "before: \(before); window open: \(openedState) \(opened), Dock tile \(tile != nil), TextEdit in front \(otherInFront), the Dock's icon brought skil.li and the window in front \(dockBrings), brought it back minimized \(fromMinimized) (Settings shown \(settingsAfterDock)); Settings opened too \(withSettings), closed: \(afterSettingsState) \(afterSettings); window closed: \(closedState) \(closed); Settings then a window: recorder icon \(bothRecorder), window closed: \(settingsKeepsState) \(settingsKeeps); all closed, accessory \(allClosed)",
+               nil)
+    }
+
+    /// Whether the icon AppKit gives skil.li now is the recorder's: drawn at
+    /// 64 pt, its record light (red) is where skil.li's own icon has its
+    /// mint dot.
+    private static func showsRecorderIcon() -> Bool {
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64, bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return false }
+        // In points before the context, or it draws 1:1 in pixels.
+        rep.size = NSSize(width: 64, height: 64)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSApp.applicationIconImage?.draw(in: NSRect(x: 0, y: 0, width: 64, height: 64))
+        NSGraphicsContext.restoreGraphicsState()
+        // From the top left.
+        var pixel = [Int](repeating: 0, count: 4)
+        rep.getPixel(&pixel, atX: 42, y: 42)
+        return pixel[0] > 200 && pixel[1] < 110 && pixel[2] < 110
+    }
+
+    /// skil.li's tile in the Dock (the item whose application is this one),
+    /// its frame and the Dock's list's, in screen coordinates from the top
+    /// left, through the Dock's Accessibility.
+    private static func ownDockTile() -> (item: AXUIElement, frame: CGRect?, dock: CGRect?)? {
+        guard let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first else { return nil }
+        let own = Bundle.main.bundleURL.resolvingSymlinksInPath().path
+        func children(_ element: AXUIElement) -> [AXUIElement] {
+            var value: CFTypeRef?
+            AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value)
+            return value as? [AXUIElement] ?? []
+        }
+        for list in children(AXUIElementCreateApplication(dock.processIdentifier)) {
+            for item in children(list) {
+                var url: CFTypeRef?
+                AXUIElementCopyAttributeValue(item, kAXURLAttribute as CFString, &url)
+                if let url = url as? URL, url.resolvingSymlinksInPath().path == own { return (item, axFrame(item), axFrame(list)) }
+            }
+        }
+        return nil
+    }
+
+    /// skil.li's tile as the Dock shows it (Screen Recording): `name`, the
+    /// tile and its running dot with the Dock's glass around them (no other
+    /// app's tile), and `name-whole`, the whole Dock, to judge it among the
+    /// others.
+    private func captureDock(as name: String) async {
+        guard let directory = context.snapshotDirectory, let screen = NSScreen.screens.first?.frame else { return }
+        /// The tile's and the Dock's frames once the Dock is on screen.
+        func shown() -> (tile: CGRect, dock: CGRect)? {
+            guard let found = Self.ownDockTile(), let tile = found.frame, let dock = found.dock,
+                  dock.minY >= screen.minY, dock.maxY <= screen.maxY + 1 else { return nil }
+            return (tile, dock)
+        }
+        let source = CGEventSource(stateID: .hidSystemState)
+        func movePointer(to point: CGPoint) {
+            CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+        }
+        // A Dock that hides itself shows with the pointer on the screen's
+        // bottom edge (where it is unless moved).
+        let revealed = shown() == nil
+        if revealed { movePointer(to: CGPoint(x: screen.midX, y: screen.maxY - 1)) }
+        defer { if revealed { movePointer(to: CGPoint(x: screen.midX, y: screen.midY)) } }
+        // Still: its tile grown in, the Dock slid up (the same frames twice
+        // 100 ms apart).
+        var last: (tile: CGRect, dock: CGRect)?
+        var still: (tile: CGRect, dock: CGRect)?
+        for _ in 0..<40 where still == nil {
+            let now = shown()
+            if let now, let last, now.tile == last.tile, now.dock == last.dock { still = now }
+            last = now
+            await pause(100)
+        }
+        guard let still else { return }
+        func appKit(_ rect: CGRect) -> NSRect { NSRect(x: rect.minX, y: screen.maxY - rect.maxY, width: rect.width, height: rect.height) }
+        for (file, rect) in [(name, appKit(still.tile).insetBy(dx: 0, dy: -still.tile.height * 0.25)),
+                             ("\(name)-whole", appKit(still.dock).insetBy(dx: -12, dy: -12))] {
+            if let image = await GlassCheck.screenshot(of: rect), let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+                try? png.write(to: directory.appendingPathComponent("\(file).png"))
+            }
+        }
     }
 
     /// The played-back calls (`script/recorder-measure`: `push.sh` puts them
@@ -26524,7 +26726,7 @@ final class SelfTest {
         if controller.shownLines.count > 3, let frame = controller.screenFrame(ofLine: 2) {
             // A real click on the third line, its window in front.
             controller.present()
-            guard await waitUntil(timeout: 2, { controller.nsWindow.isKeyWindow && NSApp.isActive }) != nil else {
+            guard await waitUntil(timeout: 2, { self.recordingWindowInFront(controller) }) != nil else {
                 aborted = true
                 controller.close()
                 let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
@@ -30240,7 +30442,13 @@ private final class GitHubStandIn: @unchecked Sendable {
           "subject":{"title":"CI failed on main","url":null,"type":"CheckSuite"},"repository":{"full_name":"nomdelasociete/skilli"}},
          {"id":"22","reason":"review_requested","unread":true,"updated_at":"2026-10-12T10:00:00Z",
           "subject":{"title":"Review the new API","url":"https://api.github.com/repos/nimbus-hq/nimbus/pulls/7","type":"PullRequest"},
-          "repository":{"full_name":"nimbus-hq/nimbus"}}]
+          "repository":{"full_name":"nimbus-hq/nimbus"}},
+         {"id":"24","reason":"mention","unread":true,"updated_at":"2026-10-12T07:00:00Z",
+          "subject":{"title":"Crash on wake","url":"https://api.github.com/repos/nimbus-hq/nimbus/issues/5","type":"Issue"},
+          "repository":{"full_name":"nimbus-hq/nimbus"}},
+         {"id":"25","reason":"assign","unread":true,"updated_at":"2026-10-12T06:00:00Z",
+          "subject":{"title":"Update the docs","url":"https://api.github.com/repos/nomdelasociete/skilli/issues/11","type":"Issue"},
+          "repository":{"full_name":"nomdelasociete/skilli"}}]
         """#
 }
 

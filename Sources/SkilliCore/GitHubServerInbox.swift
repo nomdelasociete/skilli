@@ -208,7 +208,12 @@ public final class GitHubServerInbox {
     /// A native write changed a notification: shown at once, then the
     /// relay is told so its copy (and the user's other Macs) follow.
     public func markedRead(_ id: String) {
-        notifications = notifications?.map { $0.id == id ? GitHubNotification(
+        markedRead([id])
+    }
+
+    /// Several at once (Mark All as Read): one reread.
+    public func markedRead(_ ids: Set<String>) {
+        notifications = notifications?.map { ids.contains($0.id) ? GitHubNotification(
             id: $0.id, reason: $0.reason, type: $0.type, title: $0.title, repository: $0.repository,
             updatedAt: $0.updatedAt, unread: false, url: $0.url) : $0 }
         onChange()

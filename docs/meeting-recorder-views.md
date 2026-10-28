@@ -6,8 +6,10 @@ with three rounds of captures on the test Mac (light and dark). Phase 2
 Moment section of `docs/meeting-recorder.md`. Quit and sleep: 2026-10-25,
 from that file's "Quit and sleep". Phase 3 (the webcam and the screen):
 spec, 2026-10-25, written before building. Phases 4 and 5 (last): each
-written before building, dated in its own section. That file says what
-is recorded, kept and measured; this says what each phase shows. Each
+written before building, dated in its own section. In the Dock (a
+recording's window as a tile with its own icon): 2026-10-28. That file
+says what is recorded, kept and measured; this says what each phase
+shows. Each
 view is drawn by the code that runs it (`remote recorder` saves
 `recorder-*.png`).
 
@@ -1475,6 +1477,78 @@ Names put on voices by the user's AI (the user names them, phase 4),
 a chapter renamed by hand, a summary edited in the window (edit
 `summary.md`, the window reads it again when opened), several skillies
 after every transcript (one).
+
+# In the Dock
+
+Spec, 2026-10-28, written before building, after the first real
+recording: its window had no tile in the Dock and no place in ⌘⇥, so
+once another app's window covered it, it was easy to lose.
+
+## The moment
+
+1. **When**: a recording's window is open (opened by itself once the
+   transcript is made, from `recs`, a reminder's link, an import) and the
+   user goes to another app: to write the follow-up mail, to join the
+   next call, to look something up. Then back to the window, the way back
+   to any Mac window.
+2. **The path**: skil.li's tile in the Dock, with the recorder's icon,
+   and its place in ⌘⇥. A click on the tile, or ⌘⇥ to skil.li, brings the
+   recording's window forward (minimized, it comes back out of the Dock).
+   Nothing new to learn: the ways every app's window comes back.
+3. **Hint or push**: neither taught nor pushed. The tile comes as the
+   window opens and goes as it closes, where the user looks for open
+   windows already. No badge, no bounce, no sound.
+4. **Deterministic**: the windows open decide it, in code
+   (`DockPresence`); no AI, nothing leaves the Mac.
+5. **Wrong**: a tile that never comes leaves the window as easy to lose
+   as before (the menu bar's recorder and `recs` still reach it). A tile
+   left after the last window closed is a stray app in the Dock and ⌘⇥
+   (a click on it shows Settings, as opening skil.li again does). The
+   recorder's icon left after the windows closed shows on skil.li's own
+   alerts and in the Dock next time Settings opens. Two windows undoing
+   each other: before, closing Settings took skil.li out of the Dock
+   while a recording's window was open; one place now decides for every
+   window. `remote recorder` checks each of these.
+
+## The tile
+
+- skil.li is in the Dock and ⌘⇥ (`.regular`) while at least one window
+  that needs it is open: Settings, or a recording's window (any number,
+  minimized ones included). It is an accessory again, in the menu bar
+  only, once the last of them closes. While it is in front, its own menus
+  are in the menu bar, as with Settings.
+- **The icon**: the recorder's while any recording's window is open,
+  Settings in front or not; skil.li's own while only Settings is.
+  Decided: the tile says a recording is open; an icon that changed as the
+  focus moved between skil.li's own windows would flicker in the Dock and
+  in ⌘⇥ for nothing, and the recording's window is the one the tile is
+  there for (Settings is a menu bar click away).
+- **A click on the tile** brings skil.li's window last in front, a
+  recording's or Settings, out of the Dock when minimized. With none
+  open (skil.li opened again from Finder, Spotlight, `open -a`),
+  Settings, as before. **⌘⇥** to skil.li brings all its windows forward,
+  the one last in front on top, as for any app.
+
+## The recorder's icon
+
+skil.li's icon, its glass S as it is on the petrol squircle; its dot
+becomes the recording light: a red disc (the menu bar's red dot while
+recording) in a thin white glass ring, a little larger than the dot so it
+reads in the Dock and ⌘⇥.
+
+- Made in Icon Composer: `assets/brand/recorder-icon/RecorderIcon.icon`
+  (the S's path from `AppIcon.icon`; the light and its ring in a group of
+  their own, not translucent, so the red stays red).
+- Shipped as `Sources/Skilli/Resources/RecorderIcon.icns`, 16 to 1024 px,
+  made by `assets/brand/recorder-icon/make-icns.swift`. A picture set
+  with `NSApp.applicationIconImage` is drawn by the Dock as given, so
+  each size carries the macOS icon grid's margins and the shadow of
+  Xcode's own icns for the app icon; read when a recording's window first
+  shows, let go once the last closes (`applicationIconImage = nil` puts
+  skil.li's own icon back).
+- The Default look only: the Dock draws skil.li's own icon in its Default
+  look in dark mode too. One picture is set, so the Dark, Clear and
+  Tinted icon styles are not followed.
 
 # A track that records nothing
 
