@@ -1821,7 +1821,9 @@ final class LauncherController: NSObject {
         let size: CGFloat = 16, gap: CGFloat = 8
         let words = ceil(emptyState.attributedStringValue.size().width)
         let line = emptyState.frame
-        emptyState.frame = NSRect(x: line.minX + (size + gap) / 2, y: line.minY, width: line.width - (size + gap) / 2, height: line.height)
+        // The words move right by half the spinner and its gap: centred, the
+        // pair is.
+        emptyState.frame = line.offsetBy(dx: (size + gap) / 2, dy: 0)
         let x = (line.midX - (words + size + gap) / 2).rounded()
         meaningSpinner.frame = NSRect(x: x, y: (line.midY - size / 2).rounded(), width: size, height: size)
         meaningSpinner.isHidden = false
@@ -3720,8 +3722,10 @@ final class LauncherController: NSObject {
         case .kill:
             if unfolded == nil, case .process(let group, nil)? = item, group.entries.count > 1 { return "Processes" }
             return nil
-        // Not answered: ⇥ asks again.
-        case .clipboard: return meaningAvailable && typed && (!isShowingMeaning || meaning?.result.unanswered != nil) ? "By Meaning" : nil
+        // Not while it searches; not answered: ⇥ asks again.
+        case .clipboard:
+            return meaningAvailable && typed && !isSearchingClipboardMeaning
+                && (!isShowingMeaning || meaning?.result.unanswered != nil) ? "By Meaning" : nil
         case .files: return fileMeaningOn && typed && !isShowingFileMeaning ? "By Meaning" : nil
         case .history: return historyMeaningOn && typed && !isShowingHistoryMeaning ? "By Meaning" : nil
         case .snippets: return snippetMeaningOn && typed && !isShowingSnippetMeaning && !snippetList.isEmpty ? "By Meaning" : nil

@@ -15606,6 +15606,8 @@ final class SelfTest {
         let waiting = await waitUntil(timeout: 1) {
             launcher.isShowingMeaningSpinner && launcher.resultTitles.isEmpty && launcher.emptyStateText == "Searching by meaning…"
         } != nil
+        let searchingFooter = launcher.shownFooter
+        let noTabWhileSearching = !searchingFooter.contains { $0.hasPrefix("By Meaning") }
         await captureLauncherBothWays(as: "launcher-clipboard-searching")
         await pressKey("s")
         let typedOn = await waitUntil(timeout: 1) { stopped == 1 && !launcher.isShowingMeaningSpinner } != nil
@@ -15621,8 +15623,8 @@ final class SelfTest {
         await pressKey(nil, code: CGKeyCode(kVK_Tab))
         let askedAgain = await waitUntil(timeout: 1) { asks == 3 } != nil
         await closeLauncher()
-        record(name, byWords && waiting && typedOn && wordsBack && unanswered && offersAgain && askedAgain,
-               "found by words: \(byWords), searching line with spinner: \(waiting), typing on stopped it: \(typedOn), words back: \(wordsBack), "
+        record(name, byWords && waiting && noTabWhileSearching && typedOn && wordsBack && unanswered && offersAgain && askedAgain,
+               "found by words: \(byWords), searching line with spinner: \(waiting), footer while searching \(searchingFooter), typing on stopped it: \(typedOn), words back: \(wordsBack), "
                    + "no answer said: \(unanswered), footer \(footer), ⇥ asked again: \(askedAgain)", nil)
     }
 
