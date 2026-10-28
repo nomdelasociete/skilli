@@ -19,6 +19,8 @@ public enum Calculator {
         public var isWaiting = false
         /// A currency conversion's parts.
         public var conversion: Conversion?
+        /// The currency the answer is in ("EUR"): an amount of money.
+        public var currency: String?
     }
 
     /// Nil when the text is not a calculation (a word, a lone number).
@@ -33,6 +35,9 @@ public enum Calculator {
         if let zone = timeIn(trimmed, now: now, locale: locale) { return [zone] }
         if let converted = conversion(trimmed, locale: locale) { return [converted] }
         if let currency {
+            // "120 € + 30 $" before "800 TRY": a calculation with money in it.
+            let sum = sums(trimmed, locale: locale, now: now, context: currency)
+            if !sum.isEmpty { return sum }
             let money = currencies(trimmed, locale: locale, now: now, context: currency)
             if !money.isEmpty { return money }
         }
@@ -69,6 +74,9 @@ public enum Calculator {
         var index = 0
         /// A lone number is not a calculation.
         var sawOperation = false
+        /// Reads amounts of money ("120 € + 30 $") when set; nil, a currency
+        /// is not a number.
+        var money: MoneyTerms?
 
         init(text: String, decimalComma: Bool) {
             characters = Array(text.lowercased()
@@ -81,15 +89,21 @@ public enum Calculator {
         }
 
         mutating func parse() -> Double? {
+            parseValue()?.number
+        }
+
+        mutating func parseValue() -> Value? {
             guard let value = expression() else { return nil }
             skipSpaces()
-            return index == characters.count ? value.number : nil
+            return index == characters.count ? value : nil
         }
 
         /// A value, and whether it was written as a percentage ("20%").
         struct Value {
             var number: Double
             var isPercent = false
+            /// An amount of money, in `money`'s first currency.
+            var currency: String?
         }
 
         private mutating func expression() -> Value? {
@@ -102,7 +116,7 @@ public enum Calculator {
                 sawOperation = true
                 // "85 + 20%" is 85 and its 20 %.
                 let amount = right.isPercent ? left.number * right.number : right.number
-                left = Value(number: op == "+" ? left.number + amount : left.number - amount)
+                left = Value(number: op == "+" ? left.number + amount : left.number - amount, currency: left.currency ?? right.currency)
             }
         }
 
@@ -114,12 +128,22 @@ public enum Calculator {
                     index += 1
                     guard let right = power() else { return nil }
                     sawOperation = true
-                    left = Value(number: op == "/" ? left.number / right.number : left.number * right.number)
+                    // "49 $ * 12" and "120 € / 3" are money, "120 € / 30 €" a
+                    // ratio; "3 € * 2 €" and "3 / 30 €" are nothing.
+                    let currency: String?
+                    if op == "/" {
+                        guard right.currency == nil || left.currency != nil else { return nil }
+                        currency = right.currency == nil ? left.currency : nil
+                    } else {
+                        guard left.currency == nil || right.currency == nil else { return nil }
+                        currency = left.currency ?? right.currency
+                    }
+                    left = Value(number: op == "/" ? left.number / right.number : left.number * right.number, currency: currency)
                 } else if matchWord(["of", "de", "du", "des", "sur"]) {
                     // "20 % de 85": a percentage of something.
                     guard left.isPercent, let right = power() else { return nil }
                     sawOperation = true
-                    left = Value(number: left.number * right.number)
+                    left = Value(number: left.number * right.number, currency: right.currency)
                 } else {
                     return left
                 }
@@ -131,7 +155,7 @@ public enum Calculator {
             skipSpaces()
             guard peek() == "^" else { return base }
             index += 1
-            guard let exponent = power() else { return nil }
+            guard let exponent = power(), base.currency == nil, exponent.currency == nil else { return nil }
             sawOperation = true
             return Value(number: Foundation.pow(base.number, exponent.number))
         }
@@ -140,7 +164,7 @@ public enum Calculator {
             skipSpaces()
             if peek() == "-" {
                 index += 1
-                return unary().map { Value(number: -$0.number, isPercent: $0.isPercent) }
+                return unary().map { Value(number: -$0.number, isPercent: $0.isPercent, currency: $0.currency) }
             }
             if peek() == "+" {
                 index += 1
@@ -166,7 +190,12 @@ public enum Calculator {
                 index += 1
                 return inner
             }
-            if character.isNumber || character == "." || character == "," { return number() }
+            if character.isNumber || character == "." || character == "," { return number().flatMap { currencyAfter($0) } }
+            if money != nil, let code = currencyBefore() {
+                // "€49", "$1,299".
+                guard let amount = number() else { return nil }
+                return money!.value(amount.number, in: code)
+            }
             if character == "π" {
                 index += 1
                 return Value(number: .pi)
@@ -198,7 +227,8 @@ public enum Calculator {
             if peek() == "√" {
                 index += 1
                 sawOperation = true
-                return unary().map { Value(number: $0.number.squareRoot()) }
+                guard let value = unary(), value.currency == nil else { return nil }
+                return Value(number: value.number.squareRoot())
             }
             var name = ""
             while let character = peek(), character.isLetter { name.append(character); index += 1 }
@@ -216,9 +246,60 @@ public enum Calculator {
             guard let function = functions[name] else { return nil }
             skipSpaces()
             guard peek() == "(" else { return nil }
-            guard let argument = primary() else { return nil }
+            guard let argument = primary(), argument.currency == nil else { return nil }
             sawOperation = true
             return Value(number: function(argument.number))
+        }
+
+        // MARK: Money
+
+        /// "30 $", "120 eur", "2,5k €", "30 dollars canadiens": the currency
+        /// after an amount, when reading money.
+        private mutating func currencyAfter(_ value: Value) -> Value? {
+            guard money != nil else { return value }
+            let start = index
+            // "2,5k €", "3m usd": thousands and millions, written against the number.
+            if let letter = peek(), letter == "k" || letter == "m" {
+                index += 1
+                if let code = currencyName() { return money!.value(value.number * (letter == "k" ? 1_000 : 1_000_000), in: code) }
+                index = start
+            }
+            if let code = currencyName() { return money!.value(value.number, in: code) }
+            index = start
+            return value
+        }
+
+        /// The longest currency name from here, up to three words, before
+        /// the next operator or number; moves past it.
+        private mutating func currencyName() -> String? {
+            skipSpaces()
+            let rest = characters[index...].prefix { !$0.isNumber && !"+-*/^()%=".contains($0) }
+            let words = String(rest).split(separator: " ", omittingEmptySubsequences: true)
+            for count in stride(from: min(words.count, 3), through: 1, by: -1) {
+                let name = words.prefix(count).joined(separator: " ")
+                guard let code = Calculator.Money.code(name, home: money!.home) else { continue }
+                // Past the words read, and the spaces between them.
+                let limit = index + rest.count
+                for _ in 0..<count {
+                    while index < limit, characters[index] == " " { index += 1 }
+                    while index < limit, characters[index] != " " { index += 1 }
+                }
+                return code
+            }
+            return nil
+        }
+
+        /// "€", "$", "us$" right before a number.
+        private mutating func currencyBefore() -> String? {
+            for symbol in Calculator.Money.prefixSymbols {
+                let end = index + symbol.count
+                guard end <= characters.count, String(characters[index..<end]) == symbol,
+                      let next = characters[end...].first(where: { $0 != " " }), next.isNumber || next == "." else { continue }
+                index = end
+                skipSpaces()
+                return Calculator.Money.code(symbol, home: money!.home)
+            }
+            return nil
         }
 
         /// "x" multiplies between numbers ("3 x 4"), not inside a word.

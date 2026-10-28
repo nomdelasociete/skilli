@@ -853,8 +853,8 @@ final class LauncherController: NSObject {
         guard let selected = shownSelection, selected.count <= 40, !selected.contains(where: \.isNewline),
               FeatureCatalog.shows(row: "calculation", off: off), !off.contains("catalog.currency"), let context = currency()
         else { return nil }
-        // A conversion, or its row while the day's rates load.
-        return Calculator.answers(selected, currency: context).first { $0.conversion != nil || $0.isWaiting }
+        // An amount of money, or its row while the day's rates load.
+        return Calculator.answers(selected, currency: context).first { $0.currency != nil || $0.isWaiting }
     }
 
     /// What a quicklink searches: what was typed for it, else the text

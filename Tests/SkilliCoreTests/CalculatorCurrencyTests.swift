@@ -193,6 +193,71 @@ final class CalculatorCurrencyTests: XCTestCase {
         XCTAssertNil(answer("800 TRY in xyz", english))
     }
 
+    // MARK: - Calculations with money
+
+    private func rows(_ text: String, _ locale: Locale, rates: CurrencyRates? = nil, waiting: Bool = false) -> [String] {
+        let context = CurrencyContext(rates: waiting ? nil : (rates ?? self.rates))
+        return Calculator.answers(text, locale: locale, now: now, currency: context).map { "\($0.copy) \($0.currency ?? "-")" }
+    }
+
+    func testMoneyAddsUpInTheFirstCurrency() {
+        // 30 USD at 1.1186 USD a euro is 26.82 EUR.
+        XCTAssertEqual(rows("120 € + 30 $", french), ["146,82 EUR"])
+        XCTAssertEqual(rows("120€+30$", french), ["146,82 EUR"])
+        // Then in the user's own currency, when it is another.
+        XCTAssertEqual(rows("120 € + 30 $", english), ["146.82 EUR", "164.23 USD"])
+        XCTAssertEqual(rows("$10 + €5", english), ["15.59 USD"])
+        XCTAssertEqual(rows("120 eur - 30 usd", english), ["93.18 EUR", "104.23 USD"])
+        let result = answer("120 € + 30 $", english)
+        XCTAssertEqual(result?.detail, "120 € + 30 $ → EUR · 1 USD = 0.894 EUR · Oct 27")
+        XCTAssertEqual(result?.conversion?.rate, "1 USD = 0.894 EUR")
+    }
+
+    func testMoneyTimesANumber() {
+        XCTAssertEqual(rows("49 $ * 12", english), ["588.00 USD"])
+        XCTAssertEqual(answer("49 $ * 12", english)?.detail, "49 $ * 12 → USD")
+        XCTAssertEqual(rows("49 $ * 12", french), ["588,00 USD", "525,66 EUR"])
+        XCTAssertEqual(rows("2 * 49 €", french), ["98,00 EUR"])
+        XCTAssertEqual(rows("120 € / 3", french), ["40,00 EUR"])
+        XCTAssertEqual(rows("85 € + 20 %", french), ["102,00 EUR"])
+        XCTAssertEqual(rows("20 % de 85 €", french), ["17,00 EUR"])
+        XCTAssertEqual(rows("(10 € + 5 €) * 2", french), ["30,00 EUR"])
+        XCTAssertEqual(rows("1 000 ¥ x 3", english), ["3000 JPY", "19.07 USD"])
+    }
+
+    func testASumGoesToTheTargetsTyped() {
+        // 1 000 EUR + 200 GBP (239.07 EUR), in dollars.
+        XCTAssertEqual(rows("1k € + 200 £ en dollars", english), ["1386.02 USD"])
+        XCTAssertEqual(answer("1k € + 200 £ en dollars", english)?.detail,
+                       "1k € + 200 £ → USD · 1 GBP = 1.3371 USD, 1 EUR = 1.1186 USD · Oct 27")
+        // Two currencies converted: no one rate to copy.
+        XCTAssertNil(answer("1k € + 200 £ en dollars", english)?.conversion)
+        XCTAssertEqual(rows("49 $ * 12 in eur, gbp", english), ["525.66 EUR", "439.75 GBP"])
+        // A target being spelled: the rows it had.
+        XCTAssertEqual(rows("120 € + 30 $ in g", english), ["146.82 EUR", "164.23 USD"])
+        XCTAssertEqual(rows("120 € + 30 $ i", english), ["146.82 EUR", "164.23 USD"])
+        XCTAssertEqual(rows("120 € + 30 $ in xyz", english), [])
+    }
+
+    func testMoneyThatIsNotACalculation() {
+        // Money times money, a power of money, a function of it: nothing.
+        XCTAssertEqual(rows("3 € * 2 €", french), [])
+        XCTAssertEqual(rows("3 € ^ 2", french), [])
+        XCTAssertEqual(rows("sqrt(9 €)", french), [])
+        // A currency the day's table lacks: no guess.
+        XCTAssertEqual(rows("100 € + 50 xof", french), [])
+        // An amount alone is still a conversion.
+        XCTAssertEqual(pair("800 TRY", english), "TRY→USD")
+        // "3 x 4" and "5 mars" are no money.
+        XCTAssertEqual(rows("3 x 4", english), ["12 -"])
+    }
+
+    func testASumWaitsForTheFirstTableOnlyWhenItConverts() {
+        XCTAssertEqual(Calculator.evaluate("120 € + 30 $", locale: french, now: now, currency: CurrencyContext(rates: nil))?.isWaiting, true)
+        // One currency, the user's: no rate needed.
+        XCTAssertEqual(rows("49 $ * 12", english, waiting: true), ["588.00 USD"])
+    }
+
     // MARK: - Not a currency
 
     func testWhatIsNotAConversionStaysAsItWas() {

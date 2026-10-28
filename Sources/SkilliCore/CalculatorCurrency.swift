@@ -40,6 +40,8 @@ extension Calculator {
 
     // MARK: - Currencies
 
+    static let separators = [" in ", " to ", " en ", " into ", " → ", " -> ", " = "]
+
     /// "800 TRY", "800 TRY in €", "€49 en dollars", "100 usd in eur, gbp":
     /// one row per target. Read as it is typed: while the target is half
     /// typed ("800 TRY in e") the row stays on the user's own currency.
@@ -48,41 +50,154 @@ extension Calculator {
         guard text.contains(where: \.isNumber) else { return [] }
         let home = context.home ?? locale.currency?.identifier ?? "USD"
         let known: (String) -> Bool = { code in context.rates.map { $0.rates[code] != nil } ?? true }
-        for separator in [" in ", " to ", " en ", " into ", " → ", " -> ", " = "] {
+        for separator in separators {
             guard let range = text.range(of: separator, options: [.backwards, .caseInsensitive]) else { continue }
             guard let source = Money.source(String(text[..<range.lowerBound]), locale: locale, home: home), known(source.code) else { continue }
-            let parts = text[range.upperBound...].lowercased().split(whereSeparator: { $0 == "," || $0 == "+" }).flatMap { $0.components(separatedBy: " and ") }
-                .flatMap { $0.components(separatedBy: " et ") }
-                .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-            var targets: [String] = []
-            var partial = parts.isEmpty
-            for part in parts {
-                if let code = Money.code(part, home: home) {
-                    // A currency the day's table lacks: no guess.
-                    guard known(code) else { return [] }
-                    if code != source.code, !targets.contains(code) { targets.append(code) }
-                } else if Money.couldStart(part) {
-                    partial = true
-                } else {
-                    return []
-                }
-            }
+            guard let read = targets(text[range.upperBound...], home: home, known: known) else { return [] }
+            var targets = read.codes.filter { $0 != source.code }
             if targets.isEmpty {
                 // "800 TRY in e": the answer it had, in the user's currency.
-                guard partial, let fallback = defaultTarget(for: source.code, home: home, context: context) else { return [] }
+                guard read.partial, let fallback = defaultTarget(for: source.code, home: home, context: context) else { return [] }
                 targets = [fallback]
             }
             return targets.compactMap { answer(source, to: $0, locale: locale, now: now, context: context) }
         }
-        // "800 TRY i", "800 TRY in": the separator on its way.
-        var stem = text
-        if let space = text.lastIndex(of: " "), Money.separatorStarts.contains(text[text.index(after: space)...].lowercased()) {
-            stem = String(text[..<space])
-        }
-        guard let source = Money.source(stem, locale: locale, home: home), known(source.code),
+        guard let source = Money.source(stem(text), locale: locale, home: home), known(source.code),
               let target = defaultTarget(for: source.code, home: home, context: context)
         else { return [] }
         return answer(source, to: target, locale: locale, now: now, context: context).map { [$0] } ?? []
+    }
+
+    /// "800 TRY i", "800 TRY in": the text before a separator on its way.
+    static func stem(_ text: String) -> String {
+        guard let space = text.lastIndex(of: " "), Money.separatorStarts.contains(text[text.index(after: space)...].lowercased()) else { return text }
+        return String(text[..<space])
+    }
+
+    /// The currencies after " in ": "€", "eur, gbp", "yen et livres", and
+    /// whether one is still being typed ("e"); nil when one is no currency
+    /// or one the day's table lacks (no guess).
+    static func targets(_ typed: Substring, home: String, known: (String) -> Bool) -> (codes: [String], partial: Bool)? {
+        let parts = typed.lowercased().split(whereSeparator: { $0 == "," || $0 == "+" }).flatMap { $0.components(separatedBy: " and ") }
+            .flatMap { $0.components(separatedBy: " et ") }
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        var codes: [String] = []
+        var partial = parts.isEmpty
+        for part in parts {
+            if let code = Money.code(part, home: home) {
+                guard known(code) else { return nil }
+                if !codes.contains(code) { codes.append(code) }
+            } else if Money.couldStart(part) {
+                partial = true
+            } else {
+                return nil
+            }
+        }
+        return (codes, partial)
+    }
+
+    // MARK: - Calculations with money
+
+    /// Amounts of money inside a calculation ("120 € + 30 $"): each one in
+    /// the first currency read, converted at the day's rates as it is read.
+    struct MoneyTerms {
+        let home: String
+        let rates: CurrencyRates?
+        /// The first currency read.
+        var base: String?
+        /// The others, converted into `base`.
+        var others: [String] = []
+        /// A second currency before the day's table: no number yet.
+        var waiting = false
+
+        mutating func value(_ number: Double, in code: String) -> Parser.Value? {
+            // A currency the day's table lacks: no guess.
+            if let rates, rates.rates[code] == nil { return nil }
+            guard let base, code != base else {
+                base = base ?? code
+                return Parser.Value(number: number, currency: code)
+            }
+            if !others.contains(code) { others.append(code) }
+            guard let rates else {
+                waiting = true
+                return Parser.Value(number: number, currency: base)
+            }
+            guard let rate = rates.rate(from: code, to: base) else { return nil }
+            return Parser.Value(number: number * NSDecimalNumber(decimal: rate).doubleValue, currency: base)
+        }
+    }
+
+    /// "120 € + 30 $", "49 $ * 12", "1k € + 200 £ en dollars": in the first
+    /// currency read and the user's own, or in the targets typed.
+    static func sums(_ text: String, locale: Locale, now: Date, context: CurrencyContext) -> [Result] {
+        guard text.contains(where: \.isNumber) else { return [] }
+        let home = context.home ?? locale.currency?.identifier ?? "USD"
+        let known: (String) -> Bool = { code in context.rates.map { $0.rates[code] != nil } ?? true }
+        var splits: [(source: String, after: Substring?)] = separators.compactMap { separator in
+            text.range(of: separator, options: [.backwards, .caseInsensitive]).map { (String(text[..<$0.lowerBound]), text[$0.upperBound...]) }
+        }
+        splits.append((stem(text), nil))
+        for (source, after) in splits {
+            var parser = Parser(text: source, decimalComma: usesDecimalComma(source, locale: locale))
+            parser.money = MoneyTerms(home: home, rates: context.rates)
+            guard let value = parser.parseValue(), parser.sawOperation, value.number.isFinite, let base = value.currency,
+                  let money = parser.money else { continue }
+            var codes: [String] = []
+            if let after {
+                guard let read = targets(after, home: home, known: known) else { return [] }
+                codes = read.codes
+                if codes.isEmpty, !read.partial { return [] }
+            }
+            if codes.isEmpty {
+                codes = [base] + (home != base && known(home) ? [home] : [])
+            }
+            let typed = source.trimmingCharacters(in: .whitespaces)
+            return codes.compactMap { total(value.number, money: money, base: base, typed: typed, to: $0, locale: locale, now: now, context: context) }
+        }
+        return []
+    }
+
+    /// One row of a calculation with money: its total in `target`.
+    static func total(_ number: Double, money: MoneyTerms, base: String, typed: String, to target: String,
+                      locale: Locale, now: Date, context: CurrencyContext) -> Result? {
+        let what = "\(typed) → \(target)"
+        let converted = (money.others + [base]).filter { $0 != target }
+        guard let amount = CurrencyRates.decimal(number) else { return nil }
+        guard !converted.isEmpty else {
+            let shown = formatted(amount, in: target, locale: locale)
+            return Result(display: shown.display, copy: shown.copy, detail: what, currency: target)
+        }
+        guard let rates = context.rates, !money.waiting else {
+            return Result(display: context.waiting, copy: "", detail: what, isWaiting: true)
+        }
+        guard let toTarget = rates.rate(from: base, to: target) else { return nil }
+        let shown = formatted(amount * toTarget, in: target, locale: locale)
+        var said: [String] = []
+        var days: [String] = []
+        for code in converted {
+            guard let rate = rates.rate(from: code, to: target), let day = rates.day(from: code, to: target) else { return nil }
+            said.append("1 \(code) = \(Money.rate(rate, locale: locale)) \(target)")
+            days.append(day)
+        }
+        let rateText = said.joined(separator: ", ")
+        return Result(display: shown.display, copy: shown.copy,
+                      detail: "\(what) · \(rateText) · \(Money.day(days.min()!, locale: locale, now: now))",
+                      conversion: converted.count == 1 ? Conversion(from: converted[0], to: target, rate: rateText) : nil, currency: target)
+    }
+
+    /// The amount in its currency's decimals ("89,40 €", what is pasted
+    /// "89,40"); under a cent, three significant digits rather than "0,00 €".
+    static func formatted(_ value: Decimal, in code: String, locale: Locale) -> (display: String, copy: String) {
+        let digits = Money.fractionDigits(code)
+        var rounded = Decimal()
+        var exact = value
+        NSDecimalRound(&rounded, &exact, digits, .plain)
+        guard rounded == 0, value != 0 else {
+            return (rounded.formatted(.currency(code: code).precision(.fractionLength(digits)).locale(locale)),
+                    rounded.formatted(.number.precision(.fractionLength(digits)).grouping(.never).locale(locale)))
+        }
+        return (value.formatted(.currency(code: code).precision(.significantDigits(1...3)).locale(locale)),
+                value.formatted(.number.precision(.significantDigits(1...3)).grouping(.never).locale(locale)))
     }
 
     /// The user's own currency; from it, the one last picked, else the
@@ -99,22 +214,10 @@ extension Calculator {
             return Result(display: context.waiting, copy: "", detail: what, isWaiting: true)
         }
         guard let rate = rates.rate(from: source.code, to: target), let day = rates.day(from: source.code, to: target) else { return nil }
-        let value = source.amount * rate
-        let digits = Money.fractionDigits(target)
-        var rounded = Decimal()
-        var exact = value
-        NSDecimalRound(&rounded, &exact, digits, .plain)
-        // Less than a cent: three significant digits rather than "0,00 €".
-        let tiny = rounded == 0 && value != 0
-        let display = tiny
-            ? value.formatted(.currency(code: target).precision(.significantDigits(1...3)).locale(locale))
-            : rounded.formatted(.currency(code: target).precision(.fractionLength(digits)).locale(locale))
-        let copy = tiny
-            ? value.formatted(.number.precision(.significantDigits(1...3)).grouping(.never).locale(locale))
-            : rounded.formatted(.number.precision(.fractionLength(digits)).grouping(.never).locale(locale))
+        let shown = formatted(source.amount * rate, in: target, locale: locale)
         let rateText = "1 \(source.code) = \(Money.rate(rate, locale: locale)) \(target)"
-        return Result(display: display, copy: copy, detail: "\(what) · \(rateText) · \(Money.day(day, locale: locale, now: now))",
-                      conversion: Conversion(from: source.code, to: target, rate: rateText))
+        return Result(display: shown.display, copy: shown.copy, detail: "\(what) · \(rateText) · \(Money.day(day, locale: locale, now: now))",
+                      conversion: Conversion(from: source.code, to: target, rate: rateText), currency: target)
     }
 
     /// Reading amounts and currencies as people type them.
@@ -207,6 +310,10 @@ extension Calculator {
             default: found
             }
         }
+
+        /// The symbols that may come before a number ("€49", "us$5"), longest
+        /// first: not "kr" nor "fr", words in a calculation.
+        static let prefixSymbols: [String] = symbols.keys.filter { !$0.allSatisfy(\.isLetter) }.sorted { $0.count > $1.count }
 
         /// ISO 4217 codes, as Foundation knows them.
         static let codes: Set<String> = Set(Locale.commonISOCurrencyCodes)

@@ -340,9 +340,8 @@ extension LauncherController {
             if result.isWaiting { return [] }
             // ↩ pastes like a clip, a snippet or an emoji (D4); ⌘↩ and ⌘C copy.
             var list = [first, key("Copy Result", "doc.on.doc", .openSecond, group: .copy)]
-            if let conversion = result.conversion {
-                list += [copy("Copy with Currency", result.display, .copySecond), copy("Copy Rate", conversion.rate)]
-            }
+            if result.currency != nil { list.append(copy("Copy with Currency", result.display, .copySecond)) }
+            if let conversion = result.conversion { list.append(copy("Copy Rate", conversion.rate)) }
             return list
         case .browserTab(let tab):
             return [first, copy("Copy Title", tab.title, .copy)]
