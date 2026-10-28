@@ -446,8 +446,10 @@ final class MacSoundTap: @unchecked Sendable {
             failedRebuilds += 1
             Log.actions.error("Recorder: the Mac's sound lost (\(error.localizedDescription, privacy: .public))")
             guard failedRebuilds < 3 else { return }
+            // For this tap only: one made since (Start Again) has its own.
+            let forTap = tapID
             queue.asyncAfter(deadline: .now() + 1) { [weak self] in
-                guard let self, self.tap != kAudioObjectUnknown, self.aggregate == kAudioObjectUnknown else { return }
+                guard let self, self.tap != kAudioObjectUnknown, self.tapID == forTap, self.aggregate == kAudioObjectUnknown else { return }
                 self.rebuild()
             }
         }
