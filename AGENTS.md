@@ -1024,8 +1024,22 @@ starts from it.
 - Typed then a space (`LauncherAliases.split`): a command that turns the
   launcher into a mode opens it with the rest as its filter ("e smile",
   `LauncherController.mode(for:)`); a skillie with arguments asks its first
-  one; a quicklink takes the rest as its query. Typed alone, or for what
-  opens no mode: the item comes first, its alias as a keycap on the row.
+  one; a quicklink takes the rest as its query; a row that reads a value
+  takes it ("a 2h" with `a` on Keep Awake, "r Weekly sync" on Record
+  Meeting; `LauncherShorthand.aliased`), its read row first. Typed alone,
+  or for what opens no mode: the item comes first, its alias as a keycap
+  on the row.
+- A word cut short then a space and a value (asked 2026-10-28: "awa" in a
+  hurry, ⇥ asks, ↩ toggles; spec `docs/launcher-shorthand.md`): "awa 2h",
+  "tim 10 tea", "vo 30" are read as "awake 2h", "timer 10 tea", "volume
+  30" by the same parsers (`LauncherShorthand.expand`). Two letters or
+  more, the start of one taught word whose value is strict (a duration, a
+  time, a level); free-text values ("event", "remind me", "rec") only
+  after the whole word or an alias, so a search like "visual st" never
+  becomes a command. Nothing read: the launcher as before. No new key, ⇥
+  stays Ask. A new value word: add it to `LauncherShorthand.shortened`
+  only if its parser rejects plain words (a test keeps the two-letter
+  starts apart).
 
 ### Root search ("our way": fewer knobs than Raycast)
 
@@ -1152,7 +1166,8 @@ starts from it.
   read (`LauncherController.controlTextDidChange`, `ProcessListing.query`,
   the `modeFilter`s): the first of each is the Catalog's keycap. The words
   Return types ("timer ", "awake ", "event ", "remind me ") are the
-  parsers' own constants; a test parses them with words after.
+  parsers' own constants; a test parses them with words after. "timer",
+  "awake" and "volume" also work cut short ("aw 2h", `LauncherShorthand`).
 - An entry's id is its launcher row's `learningID` ("cmd:emoji"), so the
   alias is the row's; "catalog.…" when it has none (no alias then).
   `selftest catalog` checks they match.
@@ -2669,7 +2684,8 @@ re-investigating.
 - Keep Awake for a while (`AwakeRequest` in SkilliCore,
   `SystemCommands.keepAwake`): "awake 1 hour", "do not sleep 1", "garde le
   mac éveillé 2h", "caffeinate until 6pm", "pas de veille jusqu'à 18h30",
-  "turn off awake" typed in the launcher (whole words, accents ignored; a
+  "turn off awake" typed in the launcher, "awa 2h" too (the word cut
+  short or an alias, `LauncherShorthand`; whole words, accents ignored; a
   bare number is hours up to 24, minutes above; "until/jusqu'à" a time,
   today or tomorrow) show "Keep Awake · 1 h (until 14:05)" first. The
   same power assertion as Keep

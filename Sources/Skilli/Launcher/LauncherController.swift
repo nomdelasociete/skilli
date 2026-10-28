@@ -1205,6 +1205,9 @@ final class LauncherController: NSObject {
         let query = FuzzyMatcher.Query(text)
         if mode == nil { rootQuery = text }
         updateAwakeChip(empty: text.isEmpty)
+        // A value read after a word cut short or an alias ("awa 2h", "a 2h"):
+        // its row stays first, the alias's plain row does not go above it.
+        var shorthandRead = false
         if mode == .catalog {
             // Filtered in memory: the entries were read as it opened.
             results = Self.catalogRows(FeatureCatalog.filter(catalogEntries, text))
@@ -1485,18 +1488,27 @@ final class LauncherController: NSObject {
                 let running = (runningTimers?() ?? []).map(LauncherItem.runningTimer)
                 results.insert(contentsOf: running, at: min(1, results.count))
             }
-            if catalog.shows("catalog.timer"), let request = TimerRequest.parse(text), onStartTimer != nil {
+            // "awa 2h", "tim 10", "vo 30", an alias then its value: read by
+            // the same parsers as the word typed whole (`LauncherShorthand`).
+            let shorthand = LauncherShorthand.expand(text, aliases: aliases())
+            let valued = shorthand ?? text
+            var read = false
+            if catalog.shows("catalog.timer"), let request = TimerRequest.parse(valued), onStartTimer != nil {
                 results.insert(.startTimer(request), at: 0)
+                read = true
             }
-            let awakeRequest = catalog.shows("catalog.awake") && onKeepAwake != nil ? AwakeRequest.parse(text) : nil
-            if let awakeRequest { results.insert(.keepAwake(awakeRequest), at: 0) }
+            let awakeRequest = catalog.shows("catalog.awake") && onKeepAwake != nil ? AwakeRequest.parse(valued) : nil
+            if let awakeRequest {
+                results.insert(.keepAwake(awakeRequest), at: 0)
+                read = true
+            }
             // Kept awake now: the words about it ("awake", "keep awake")
             // show it running, ↩ lets it sleep; after a length typed, the
             // new one first. It stands for Keep Awake's own row, "Turn Off
             // Keep Awake" while awake; "turn off awake" typed is that row
             // already.
             let awake = awakeState()
-            if awake.awake, catalog.shows("catalog.awake"), onKeepAwake != nil, AwakeRequest.mentions(text) {
+            if awake.awake, catalog.shows("catalog.awake"), onKeepAwake != nil, AwakeRequest.mentions(valued) {
                 // One "Turn Off Keep Awake" row, never two alike.
                 results.removeAll { if case .system(.system(.keepAwake), _) = $0 { true } else { false } }
                 if awakeRequest != .allowSleep { results.insert(.keptAwake(until: awake.until), at: awakeRequest == nil ? 0 : 1) }
@@ -1505,17 +1517,21 @@ final class LauncherController: NSObject {
             // one records, the words about it show it, ↩ stops it; it stands
             // for Record Meeting's own row (no second recording at once).
             if catalog.shows("cmd:recordMeeting"), onRecord != nil {
-                if let live = recordingState(), RecordRequest.mentions(text) {
+                if let live = recordingState(), RecordRequest.mentions(valued) {
                     results.removeAll { if case .command(let command) = $0 { command.id == .recordMeeting } else { false } }
                     results.insert(.recording(live), at: 0)
-                } else if let name = RecordRequest.name(text) {
+                    read = true
+                } else if let name = RecordRequest.name(valued) {
                     results.insert(.recordNamed(name), at: 0)
+                    read = true
                 }
             }
             // "volume 30", "mets le son à 30 %": the level, first.
-            if catalog.shows("catalog.volume"), let level = VolumeRequest.parse(text), onSystemCommand != nil {
+            if catalog.shows("catalog.volume"), let level = VolumeRequest.parse(valued), onSystemCommand != nil {
                 results.insert(.system(.volume(level), title: VolumeRequest.title(level)), at: 0)
+                read = true
             }
+            shorthandRead = shorthand != nil && read
             // "connecte mes AirPods" before Bluetooth is allowed: the one
             // thing to do first is to allow it; "réglages bluetooth" asks
             // for the pane: it stays first, the offer next.
@@ -1562,7 +1578,7 @@ final class LauncherController: NSObject {
         laps.lap("found")
         // The item an alias names comes first ("e", "e " or "ql query").
         aliasByID = Dictionary(aliases().map { ($0.id, $0.alias) }, uniquingKeysWith: { first, _ in first })
-        if mode == nil, let aliased = aliasedItem(text) {
+        if mode == nil, !shorthandRead, let aliased = aliasedItem(text) {
             results.removeAll { $0.learningID == aliased.learningID }
             results.insert(aliased, at: 0)
         }
