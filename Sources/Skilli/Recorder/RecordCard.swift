@@ -1004,8 +1004,16 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         y = nameField.frame.maxY + 8
 
         if !detail.isHidden {
-            detail.frame = NSRect(x: inset, y: y, width: inner, height: 20)
-            y += isRecordCard ? 22 : 28
+            // The Record card's attendees on one line; what the other cards
+            // say (a track that records nothing and what to allow) wraps.
+            detail.maximumNumberOfLines = isRecordCard ? 1 : 0
+            detail.cell?.wraps = !isRecordCard
+            detail.lineBreakMode = isRecordCard ? .byTruncatingTail : .byWordWrapping
+            let height = isRecordCard ? 20 : max(20, ceil((detail.stringValue as NSString).boundingRect(
+                with: NSSize(width: inner, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: [.font: detail.font ?? .systemFont(ofSize: 14)]).height))
+            detail.frame = NSRect(x: inset, y: y, width: inner, height: height)
+            y += isRecordCard ? 22 : height + 8
         }
 
         if !microphoneRow.isHidden {

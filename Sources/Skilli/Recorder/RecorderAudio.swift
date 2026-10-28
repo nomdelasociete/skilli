@@ -275,6 +275,8 @@ final class MacSoundTap: @unchecked Sendable {
 
     func stop() {
         queue.sync {
+            // Started again, it may try its three rebuilds afresh.
+            failedRebuilds = 0
             destroyAggregate()
             if tap != kAudioObjectUnknown {
                 Self.listen(tap, kAudioTapPropertyFormat, formatListener, on: queue, add: false)

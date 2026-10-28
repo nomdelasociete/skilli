@@ -1540,9 +1540,13 @@ The call's end card's place, frame and type, once for a stretch:
   track gives sound, the mark staying meanwhile.
 - The track records something again: the card goes by itself.
 - Never over another card (the call's end, the wake card, the Record
-  card): it comes once that one has gone. Never while paused. It never
-  takes the keys from the app the user types in; a click does, or a
-  second without a key.
+  card): it comes once that one has gone; the call's end offered while
+  it shows comes once it has gone too. Never while paused: a pause
+  closes it, offered again at Resume if the track still records
+  nothing. It never takes the keys from the app the user types in; a
+  click does, or a second without a key.
+- The line wraps: the card grows to hold all of it (what to allow
+  included).
 
 ## Said, and not said
 

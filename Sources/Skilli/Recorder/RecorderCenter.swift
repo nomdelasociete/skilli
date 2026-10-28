@@ -651,8 +651,9 @@ final class RecorderCenter {
     /// The call ended: a card offers Stop (never taking the keys from the
     /// app the user types in).
     private func offerStop(_ reason: CallEndWatch.Reason) {
-        // The wake card up: offered once it is answered, still pending.
-        if case .slept? = card.content {
+        // Another card up (the wake card, a track that records nothing):
+        // offered once it is answered, if still true.
+        if card.content != nil {
             watch.offerAgain()
             return
         }
@@ -769,6 +770,11 @@ final class RecorderCenter {
         }
         // Resumed or stopped from the menu bar: the card at wake goes.
         if card.content == .slept, recorder.phase != .paused { card.dismiss() }
+        // Paused: a track's card goes, offered again once it records again.
+        if case .silent(let speaker, _)? = card.content, recorder.phase == .paused {
+            card.dismiss()
+            recorder.offerAgain(speaker)
+        }
         // Closed: what was asked meanwhile, in order.
         if recorder.phase == .idle, !afterClosing.isEmpty {
             let asked = afterClosing
