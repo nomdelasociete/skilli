@@ -34,6 +34,9 @@ public struct GitHubNotification: Identifiable, Hashable, Sendable {
     /// Someone asks the user for something: a review, a mention, an
     /// assignment. Not the activity on their own threads or what they watch
     /// (2026-10-28: 35 of 334 unread), which skil.li neither counts nor lists.
+    /// GitHub's reason for the thread, as its inbox's own filters
+    /// (`reason:mention`…): a thread the user was mentioned in can keep
+    /// "mention" for a later comment.
     public var isForYou: Bool { GitHubNotifications.forYou.contains(reason) }
 }
 

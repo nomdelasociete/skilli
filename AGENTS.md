@@ -2536,9 +2536,12 @@ re-investigating.
   again (`GitHubNotifications.read`, 10 pages of 50 at most, a cut said).
   Only notifications that ask the user for something count and are listed
   (`isForYou`: review or approval requested, mention, team mention,
-  assignment, invitation); the activity on their own threads, state
-  changes, comments and what they watch stay on github.com (2026-10-28: 35
-  of 334 unread asked for something).
+  assignment, invitation: GitHub's reason for the thread, as its inbox's
+  own filters, so a mention thread can keep it for a later comment); the
+  activity on their own threads, state changes, comments and what they
+  watch stay on github.com (2026-10-28: 35 of 334 unread asked for
+  something). A cut read (more than 500 unread) says "+" in the strip, and
+  the GitHub mode no longer says "no unread notification".
   Signing in: GitHub's device flow (a code, copied, typed on
   github.com/login/device; the token in the Keychain as `github-token`,
   `selftest-` for the self-test) with the OAuth app "skil.li" (owned by nomdelasociete, device flow on,

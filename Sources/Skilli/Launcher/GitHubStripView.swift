@@ -11,6 +11,8 @@ final class GitHubStripView: NSView {
     var onOpen: ((PullRequestGroup?) -> Void)?
     private var groups: [(group: PullRequestGroup, count: Int)] = []
     private var unread = 0
+    /// False when GitHub had more unread notifications than were read: "+".
+    private var unreadComplete = true
     private var problem: String?
     private var reading = false
     /// Where each group was drawn, for clicks.
@@ -22,17 +24,24 @@ final class GitHubStripView: NSView {
     /// Self-test hook: what the strip says.
     private(set) var shownText = ""
 
-    func show(pullRequests: [PullRequest], unread: Int, problem: String?, reading: Bool) {
+    func show(pullRequests: [PullRequest], unread: Int, unreadComplete: Bool = true, problem: String?, reading: Bool) {
         let counts = GitHubInbox.counts(pullRequests)
         groups = PullRequestGroup.allCases.compactMap { group in counts[group].map { (group, $0) } }
         self.unread = unread
+        self.unreadComplete = unreadComplete
         self.problem = problem
         self.reading = reading
         let left = groups.isEmpty ? (reading ? "" : "No open pull request") : groups.map { "\($0.count) \($0.group.title)" }.joined(separator: " · ")
-        let right = problem.map { "GitHub: \($0)" } ?? (reading ? "Reading GitHub…" : unread > 0 ? "\(unread) unread" : "")
+        let right = problem.map { "GitHub: \($0)" } ?? (reading ? "Reading GitHub…" : unreadText ?? "")
         shownText = [left, right].filter { !$0.isEmpty }.joined(separator: " — ")
         setAccessibilityLabel("GitHub: " + shownText)
         needsDisplay = true
+    }
+
+    /// "3 unread", "3+ unread" when the read was cut (even "0+": some may
+    /// ask the user, past what was read); nil for none.
+    private var unreadText: String? {
+        unread > 0 || !unreadComplete ? "\(unread)\(unreadComplete ? "" : "+") unread" : nil
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -61,8 +70,8 @@ final class GitHubStripView: NSView {
             ("GitHub: \(problem)", .systemOrange, nil)
         } else if reading {
             ("Reading GitHub…", .secondaryLabelColor, nil)
-        } else if unread > 0 {
-            ("\(unread) unread", .secondaryLabelColor, "bell")
+        } else if let unreadText {
+            (unreadText, .secondaryLabelColor, "bell")
         } else {
             nil
         }
