@@ -330,7 +330,8 @@ public final class RelayDeviceSession: ObservableObject {
                         return
                     }
                     let pair = try JSONDecoder().decode(RelayTokenPair.self, from: result.data)
-                    guard pair.isValid, let installations = pair.installations, !installations.isEmpty,
+                    // None: paired without the GitHub App (no live updates).
+                    guard pair.isValid, let installations = pair.installations,
                           installations.allSatisfy(Self.numericID) else { throw URLError(.badServerResponse) }
                     try Task.checkCancellation()
                     if codeInTab { codeHandled = true } else { codeElsewhere() }
@@ -364,7 +365,9 @@ public final class RelayDeviceSession: ObservableObject {
                     verifiedSubject = verified.subject
                     rejectedAccess = false
                     retryNotBefore = nil
-                    message = "This Mac is authorized for \(installations.count) GitHub account(s). Live access renews automatically."
+                    message = installations.isEmpty
+                        ? "This Mac is paired without live updates. Install the GitHub App, then Add Accounts…, for instant updates."
+                        : "This Mac is authorized for \(installations.count) GitHub account(s). Live access renews automatically."
                     onChange?()
                     paired?(inbox)
                     return
@@ -405,7 +408,8 @@ public final class RelayDeviceSession: ObservableObject {
                 self.verifiedNativeToken = verified.native
                 self.verifiedAccessToken = current.pair.access_token
                 self.verifiedSubject = verified.subject
-                self.message = "GitHub account verified for live updates."
+                self.message = current.pair.installations?.isEmpty != false
+                    ? "GitHub account verified. No account for live updates." : "GitHub account verified for live updates."
                 self.onChange?()
             }
         }

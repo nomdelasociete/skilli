@@ -1586,7 +1586,8 @@ final class LauncherController: NSObject {
                 : githubGroup.map { "\($0.title) · \(shown)" } ?? (text.isEmpty ? "Pull requests and notifications" : "GitHub with “\(text)”")
             emptyState.stringValue = github?.isSignedIn != true ? "Sign in with GitHub in Settings → GitHub"
                 : github?.lastRefresh == nil ? (github?.problem ?? "Reading GitHub…")
-                : text.isEmpty ? githubGroup.map { "Nothing \($0.title.lowercased())" } ?? "No open pull request, no unread notification"
+                : text.isEmpty ? githubGroup.map { "Nothing \($0.title.lowercased())" }
+                    ?? (github?.notificationsRead == true ? "No open pull request, no unread notification" : "No open pull request")
                 : "Nothing with “\(text)”"
         case .agenda:
             sectionHeader.stringValue = agendaEvents == nil ? "Calendar" : text.isEmpty ? "Coming up" : "Events with “\(text)”"

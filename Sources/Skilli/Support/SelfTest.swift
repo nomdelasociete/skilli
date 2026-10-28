@@ -142,6 +142,10 @@ final class SelfTest {
         /// Only Ask's routes on volume (`AskRouteCorpus`, both halves) on
         /// the user's decision keys: no keys typed, nothing opened.
         case routes
+        /// Only the clipboard searched by meaning on volume
+        /// (`ClipboardMeaningCorpus`, both halves) on the user's decision
+        /// keys: a scratch store, no keys typed, nothing opened.
+        case clipmeaning
         /// Only the clipboard history on a scratch store and a private
         /// pasteboard (OCR included): no keys, safe while the Mac is in use.
         case clipboard
@@ -807,12 +811,16 @@ final class SelfTest {
         if scope == .routes {
             return await finish(after: [askRoutesOnVolume])
         }
+        if scope == .clipmeaning {
+            return await finish(after: [clipboardMeaningOnVolume])
+        }
         if scope == .decide {
             return await finish(after: [
                 askRoutesOnVolume,
                 filesPickedByMeaning,
                 emojiByFeelingLive,
                 clipboardFindsByMeaning,
+                clipboardMeaningOnVolume,
                 askRoutesLive,
                 approvalRulesJudgedLive,
                 askFindsFinderMenus,
@@ -15287,6 +15295,61 @@ final class SelfTest {
         }
     }
 
+    /// The clipboard searched by meaning on volume: every request of
+    /// `ClipboardMeaningCorpus` on each decision key, among its ~110
+    /// copies. Right when the first result is a copy asked for (or one
+    /// that answers too); how many of the copies asked for are shown, and
+    /// how often nothing is. Only the tuned half's misses are listed.
+    private func clipboardMeaningOnVolume() async {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-clipboard-volume-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        guard let store = try? ClipboardStore(folder: folder) else {
+            record("Clipboard by meaning on volume", false, "no scratch store", nil)
+            return
+        }
+        let history = ClipboardHistory(preferences: context.preferences, store: store,
+                                       pasteboard: NSPasteboard(name: NSPasteboard.Name("skilli-selftest-\(UUID().uuidString)")))
+        let now = Date.now
+        var keys: [Int64: String] = [:]
+        for copy in ClipboardMeaningCorpus.copies {
+            guard let item = try? store.add(.init(kind: copy.kind, text: copy.text, app: nil, appName: copy.app, hash: "volume-\(copy.key)"),
+                                            at: now.addingTimeInterval(-copy.hours * 3_600)).item else { continue }
+            if let ocr = copy.ocr { try? store.setOCR(ocr, for: item.id) }
+            keys[item.id] = copy.key
+        }
+        for provider in DecisionProvider.allCases {
+            for (half, cases, listsMisses) in [("tuned on", ClipboardMeaningCorpus.tune, true), ("never tuned on", ClipboardMeaningCorpus.holdout, false)] {
+                let name = "Clipboard by meaning on volume with \(provider.title), the half \(half): \(cases.count) requests among \(keys.count) copies, 85 % right or more"
+                guard let key = userDecisionKeys[provider] else {
+                    checks.append(Check(name: name, passed: true, skipped: true, detail: "no \(provider.title) key saved in Settings", latencyMs: nil))
+                    continue
+                }
+                var right = 0, empty = 0, shown = 0, asked = 0
+                var misses: [String] = []
+                var slowest: Duration = .zero
+                for request in cases {
+                    let start = ContinuousClock.now
+                    let found = await history.searchByMeaning(request.request, keys: [provider: key], now: now)
+                    slowest = max(slowest, .now - start)
+                    let picked = found?.items.compactMap { keys[$0.id] } ?? []
+                    if picked.isEmpty { empty += 1 }
+                    shown += request.wanted.filter(picked.contains).count
+                    asked += request.wanted.count
+                    if let first = picked.first, request.wanted.contains(first) || request.fits.contains(first) {
+                        right += 1
+                    } else {
+                        misses.append("“\(request.request)” → \(picked.isEmpty ? "nothing" : picked.prefix(3).joined(separator: ", "))")
+                    }
+                }
+                record(name, Double(right) >= 0.85 * Double(cases.count),
+                       "\(right)/\(cases.count) right, nothing shown \(empty) times, \(shown)/\(asked) copies asked for shown"
+                           + (listsMisses && !misses.isEmpty ? "; missed: " + misses.joined(separator: "; ") : "")
+                           + "; slowest \(Int(slowest.milliseconds)) ms",
+                       slowest.milliseconds)
+            }
+        }
+    }
+
     /// Keep screenshots too: a new image in the watched folder joins the
     /// history and its words are found, read on this Mac; with Jev's
     /// folder switch off, nothing asks for the key (nothing sent).
@@ -24020,6 +24083,7 @@ final class SelfTest {
             record("Recorder phase 5", false, "no recorder", nil)
             return
         }
+        await aRecordingOpenedAtATimePlaysOnceReady(center)
         guard let folder = seedMeeting(center, title: "Onboarding launch review", script: Self.launchReview) else {
             record("Recorder phase 5", false, "the stand-in meeting could not be written", nil)
             return
@@ -24160,6 +24224,74 @@ final class SelfTest {
             guard (try? file.write(from: buffer)) != nil else { return false }
         }
         return true
+    }
+
+    /// A recording's window opened at a time, as a reminder's link opens it,
+    /// plays from there once its player is ready, and skil.li goes on: it
+    /// played at once, AVPlayer raised (not ready yet), and the next actor
+    /// check crashed, here as another window opened under the pointer.
+    private func aRecordingOpenedAtATimePlaysOnceReady(_ center: RecorderCenter) async {
+        let name = "Recorder: a recording's window opened at a time (a reminder's link) plays from there once ready, and skil.li goes on, another window opened under the pointer"
+        guard let first = seedMeeting(center, title: "Closed under the pointer", script: Self.launchReview),
+              var record = center.recordings.read(first) else {
+            record(name, false, "no meeting", nil)
+            return
+        }
+        record.chapters = [MeetingRecord.Chapter(title: "Launch", start: 0.5), MeetingRecord.Chapter(title: "Pricing", start: 135)]
+        try? center.recordings.write(record, to: first)
+        center.open(first)
+        let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        let source = CGEventSource(stateID: .hidSystemState)
+        func move(to x: CGFloat, _ y: CGFloat) async {
+            CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: CGPoint(x: x, y: screenHeight - y),
+                    mouseButton: .left)?.post(tap: .cghidEventTap)
+            await pause(80)
+        }
+        let frame: NSRect
+        // Its window held here only in this block: closed, nothing else keeps it.
+        do {
+            guard let window = await waitForWindow(center, first),
+                  await waitUntil(timeout: 20, { window.showsWaveform }) != nil else {
+                self.record(name, false, "no window with its waveform", nil)
+                return
+            }
+            frame = window.nsWindow.frame
+            // The pointer over it, across the chapter marks; played, its ⌘K
+            // opened, as the reminder link check leaves it.
+            for step in 0..<10 { await move(to: frame.minX + frame.width * (0.2 + 0.06 * CGFloat(step)), frame.maxY - 210) }
+            window.togglePlay()
+            await pause(600)
+            window.togglePlay()
+            window.showActions()
+            await pause(300)
+            window.closeActions()
+        }
+        // Closed, and opened again on the same folder playing from a time.
+        center.window(for: first)?.close()
+        center.open(first, at: 290)
+        let played = await waitUntil(timeout: 5) { center.window(for: first)?.playing == true } != nil
+        // From 4:50, as asked: the rate goes up at once, the position at the
+        // host time asked a moment later (setRate(_:time:atHostTime:)).
+        let fromThere = await waitUntil(timeout: 2) {
+            let at = center.window(for: first)?.playedTime ?? 0
+            return at >= 289 && at < 296
+        } != nil
+        let at = center.window(for: first)?.playedTime ?? 0
+        center.window(for: first).map { if $0.playing { $0.togglePlay() } }
+        for step in 0..<6 { await move(to: frame.minX + frame.width * (0.3 + 0.08 * CGFloat(step)), frame.maxY - 260) }
+        await pause(200)
+        guard let second = seedMeeting(center, title: "Opened under the pointer", script: Array(Self.launchReview.prefix(3))) else {
+            self.record(name, false, "no second meeting", nil)
+            return
+        }
+        center.open(second)
+        let opened = await waitForWindow(center, second) != nil
+        for step in 0..<10 { await move(to: frame.minX + frame.width * (0.8 - 0.06 * CGFloat(step)), frame.maxY - 200) }
+        await pause(1500)
+        center.openWindows.forEach { $0.close() }
+        await pause(300)
+        self.record(name, played && fromThere && opened,
+                    "opened at 4:50, played \(played) from \(MeetingTranscript.clock(at)) \(fromThere); the next window opened \(opened), still running after the pointer moved over it", nil)
     }
 
     private func waitForWindow(_ center: RecorderCenter, _ folder: URL) async -> RecordingWindowController? {

@@ -119,7 +119,7 @@ Mac mini, driven from here:
 |---|---|---|
 | This Mac, any time | Unit tests, builds | `./script/build_and_run.sh test` |
 | This Mac, any time (no keys, no windows; restarts skil.li ~2 s) | Clipboard store, search, OCR; setup drawn off screen; live decisions (Ask, emoji, clipboard and files by meaning, nothing written) | `./script/build_and_run.sh selftest clipboard` / `selftest setup` / `selftest decide` |
-| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote pictures` (the recorder's webcam and screen: a stand-in camera, a slides window, a scratch Chrome, ~3 min), `remote voices` (the recorder's phase 4: the played-back calls' voices told apart, an import, a line edited and undone, speakers renamed, Transcribe Again, ~10 min), `remote whisper` (Better transcription: its download from a stand-in server, whisper on the played-back calls, the echo drop with its times, ~25 min), `remote followups` (the recorder's phase 5 in a recording's window: ⌘K, the recap mail, the summary, chapters, action items to a scratch Reminders list, with the Mac's own AI provider, ~5 min), `remote guides` (the guides' pictures, light and dark, into `dist/remote/guides`; `script/guide-images.sh` then copies them to `website/guides/images`), `remote` (all) |
+| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote clipmeaning`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote pictures` (the recorder's webcam and screen: a stand-in camera, a slides window, a scratch Chrome, ~3 min), `remote voices` (the recorder's phase 4: the played-back calls' voices told apart, an import, a line edited and undone, speakers renamed, Transcribe Again, ~10 min), `remote whisper` (Better transcription: its download from a stand-in server, whisper on the played-back calls, the echo drop with its times, ~25 min), `remote followups` (the recorder's phase 5 in a recording's window: ⌘K, the recap mail, the summary, chapters, action items to a scratch Reminders list, with the Mac's own AI provider, ~5 min), `remote guides` (the guides' pictures, light and dark, into `dist/remote/guides`; `script/guide-images.sh` then copies them to `website/guides/images`), `remote` (all) |
 
 Nothing else that opens skil.li runs on the developer's Mac: `selftest` refuses other
 scopes and `benchmark` refuses outright unless `SKILLI_LOCAL_UI=1` (a Mac
@@ -2557,7 +2557,13 @@ re-investigating.
   account ends at the relay, no pairing and no grant kept; without that
   id no inbox grant is asked for. An older relay, a refusal or no pairing
   opens GitHub's page from skil.li instead (`codeNotShown`, once). Live
-  updates' Authorize this Mac… chains the inbox grant the same way. The strip under the search field
+  updates' Authorize this Mac… chains the inbox grant the same way.
+  Without the GitHub App installed, the relay's choice page offers Continue
+  without live updates: a pairing with no installation (identity, renewal,
+  server sync; no webhook). skil.li accepts it, opens no stream for it
+  (`relayIsConfigured` needs an installation) and says "No GitHub account
+  for live updates" with Add Accounts… (pairs again).
+  Spec: `docs/github-sign-in-without-app.md`. The strip under the search field
   (Settings → GitHub → Show under the search field, on by default, once
   signed in): the counts in Git Island's colors and the unread
   notifications; a click opens the GitHub mode on that group. Nothing asks
@@ -2601,7 +2607,11 @@ re-investigating.
   (`POST`). Turn Off on This Mac goes back to native reads (the user's
   choice, never a fallback); Delete for All Macs is `DELETE /inbox`.
   Agents' lists say "Not up to date: …" when their kind could not be read
-  again.
+  again. Notifications not read yet (`notificationsRead`: since sign-in,
+  or since the relay's copy was dropped) show no count, never "0 unread";
+  the `GitHub (relay):` trace names any hold. The relay itself answers
+  428 only for a grant that is gone: a read that crossed a new grant is
+  read again there.
   "pr " / "prs " or GitHub Inbox: the GitHub mode (grey chip; "gh " stays
   GitHub's search quicklink): Return opens (a notification is then read),
   ⌘Return copies the link, ⌘K (or ⇥) its actions (Open, the merge method,
@@ -3716,8 +3726,13 @@ re-investigating.
   `copies` column, added to older files on open). ⇥ searches by meaning
   (`ClipboardHistory.searchByMeaning`, `ClipboardMeaning`): the last 240
   copies, one line each (kind, app, "yesterday 18:02", 200 characters of
-  text or OCR), in one Choice to Jev or OpenAI Decisions with now's date;
-  the likely ones (≥ 4 %) best first, ~0.25 s. Only on ⇥ and with Settings
+  text or OCR; a text that is one value says which, as the preview reads
+  it with `CopiedValue`: "An email address from Front, …", "A link",
+  "Code in Swift", so "email" finds the addresses), in one Choice to Jev or OpenAI Decisions with now's date;
+  the likely ones (≥ 4 %) best first, ~0.25 s. Measured on volume:
+  `remote clipmeaning` (also in `decide`) runs the 40 labeled requests of
+  `ClipboardMeaningCorpus` (a kind of copy, which one, what it was about;
+  tune and held-out halves, as `AskRouteCorpus`) among 91 copies. Only on ⇥ and with Settings
   → Clipboard → Search by meaning on (default); typing never sends
   anything, and the trace logs the request and picked ids, not the copies. Kept in
   `~/Library/Application Support/skil.li/Clipboard` (0700): `history.sqlite`

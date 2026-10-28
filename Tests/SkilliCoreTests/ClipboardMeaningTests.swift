@@ -40,6 +40,22 @@ final class ClipboardMeaningTests: XCTestCase {
         XCTAssertEqual(files, "Files from Finder, today 00:15: Devis.pdf, Plan.png")
     }
 
+    func testTextThatIsOneValueSaysWhatItIs() {
+        func line(_ text: String) -> String {
+            ClipboardMeaning.describe(kind: .text, text: text, ocr: nil, appName: "Front", copiedAt: date(11, 18, 2), now: now, calendar: calendar)
+        }
+        XCTAssertEqual(line("camille@example.com"), "An email address from Front, yesterday 18:02: camille@example.com")
+        XCTAssertEqual(line("https://example.com/devis"), "A link from Front, yesterday 18:02: https://example.com/devis")
+        XCTAssertEqual(line("06 12 34 56 78"), "A phone number from Front, yesterday 18:02: 06 12 34 56 78")
+        XCTAssertEqual(line("#3E8E7E"), "A color from Front, yesterday 18:02: #3E8E7E")
+        XCTAssertEqual(line("1 Infinite Loop, Cupertino, CA 95014"), "A postal address from Front, yesterday 18:02: 1 Infinite Loop, Cupertino, CA 95014")
+        XCTAssertTrue(line("SELECT id FROM users WHERE id = 42;").hasPrefix("Code in SQL from Front"))
+        // A value inside a sentence is text: what it is about says more.
+        XCTAssertTrue(line("Écris à camille@example.com, elle répond vite").hasPrefix("Text from Front"))
+        // A card number is never called a phone number.
+        XCTAssertEqual(line("3782 822463 10005"), "Text from Front, yesterday 18:02: (a card number)")
+    }
+
     func testExcerptIsShort() {
         let long = String(repeating: "mot ", count: 200)
         let excerpt = ClipboardMeaning.excerpt(long)

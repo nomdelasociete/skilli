@@ -25,7 +25,7 @@ public enum ClipboardMeaning {
         let when = Self.when(copiedAt, now: now, calendar: calendar)
         switch kind {
         case .text:
-            return "Text\(source), \(when): \(excerpt(text))"
+            return "\(value(text) ?? "Text")\(source), \(when): \(excerpt(text))"
         case .image:
             let words = excerpt(ocr ?? "")
             let address = text.isEmpty ? "" : " Address: \(excerpt(text, limit: 80))."
@@ -37,6 +37,24 @@ public enum ClipboardMeaning {
         case .files:
             let names = text.split(separator: "\n").map { URL(fileURLWithPath: String($0)).lastPathComponent }
             return "File\(names.count > 1 ? "s" : "")\(source), \(when): \(excerpt(names.joined(separator: ", ")))"
+        }
+    }
+
+    /// What a text copy is when the whole of it is one value, read as the
+    /// preview reads it (`CopiedValue`): "An email address", "A link",
+    /// "Code in Swift"; nil for text. So "email" finds the addresses, which
+    /// the words alone ("camille@example.com") do not say. A bank or card
+    /// number is never named a phone number: its excerpt says what it is.
+    public static func value(_ text: String) -> String? {
+        guard ToolCallSummary.secretKind(text.trimmingCharacters(in: .whitespacesAndNewlines)) == nil else { return nil }
+        switch CopiedValue.read(text) {
+        case .text: return nil
+        case .link: return "A link"
+        case .email: return "An email address"
+        case .phone: return "A phone number"
+        case .color: return "A color"
+        case .address: return "A postal address"
+        case .code(let language): return language.map { "Code in \($0)" } ?? "Code"
         }
     }
 
@@ -84,5 +102,5 @@ public enum ClipboardMeaning {
     }
 
     /// The question asked about the candidates.
-    public static let instructions = "Which of these copies is the user looking for? They describe it as a person remembers it: what it was about, roughly when, where it came from, text or image, possibly in another language than the copy. Answer none when no copy fits."
+    public static let instructions = "Which of these copies is the user looking for? They describe it as a person remembers it: what it was about or what it is (an email address, a link, a phone number, code…), roughly when, where it came from, text or image, possibly in another language than the copy. Answer none when no copy fits."
 }
