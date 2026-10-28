@@ -453,7 +453,13 @@ Your meetings recorded on this Mac, both sides, then written out.
   click on a speaker's name renames it: the attendees first, and a name
   another speaker has makes the two one (Me is kept). ⌘Z and ⇧⌘Z undo
   and redo while the window is open; every change is written at once.
-  **Transcribe Again…** in the language and with the engine picked.
+  **Transcribe Again…** in the language and with the engine picked (one
+  asked as skil.li quits is made at the next launch). **Rename…** in its
+  ⌘K, or **Rename Recording…** on its row in the launcher: its title and
+  its folder (`rename_recording`, `skilli://record/rename`). A transcript
+  that failed says why in its window, which offers the engines and their
+  languages, then Transcribe ↩. macOS's engine transcribes the languages
+  of macOS's dictation too (Dutch, Polish, Swedish…).
 - **Better transcription**, a download in Settings → Recorder (1.6 GB,
   from huggingface.co, nothing sent): whisper large-v3-turbo on this Mac,
   40 % fewer errors than macOS's engine and two names in three right, the
@@ -478,7 +484,8 @@ Your meetings recorded on this Mac, both sides, then written out.
 - **Import Recording** (`import`): a sound or video file (a voice memo,
   a call app's own recording) made a recording, transcribed on this Mac,
   voices told apart; or drop the file on a recording's window. The file
-  stays where it is. Also `skilli://record/import` and `import_recording`.
+  stays where it is; one imported while a meeting records waits for that
+  meeting's transcript. Also `skilli://record/import` and `import_recording`.
 - **Search Recordings** (`recs`): by title, date, attendees, the words
   said and the text read on screen; the best two show in any search too.
 

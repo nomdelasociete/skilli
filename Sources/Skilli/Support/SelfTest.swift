@@ -13796,7 +13796,7 @@ final class SelfTest {
 
     /// A sentence spoken by macOS's own voice (`say`) into a file, in the
     /// first installed voice of `language`.
-    private func spokenFile(_ sentence: String, language: String) async -> URL? {
+    private func spokenFile(_ sentence: String, language: String, voiceNeeded: Bool = false) async -> URL? {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-voice-\(getpid()).aiff")
         return await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
@@ -13815,6 +13815,11 @@ final class SelfTest {
                     return parts.count > 1 ? parts[0].trimmingCharacters(in: .whitespaces) : nil
                 }
                 let voice = names.first { $0.hasPrefix("Thomas") } ?? names.first
+                // None in that language: the default voice speaks, unless one is needed.
+                if voiceNeeded, voice == nil {
+                    continuation.resume(returning: nil)
+                    return
+                }
                 let say = Process()
                 say.executableURL = URL(fileURLWithPath: "/usr/bin/say")
                 say.arguments = (voice.map { ["-v", $0] } ?? []) + ["-o", url.path, sentence]
@@ -24086,6 +24091,11 @@ final class SelfTest {
         // Every recording window closed whatever happens: the link's check
         // opens one of its own.
         defer { center.openWindows.forEach { $0.close() } }
+        // No AI in these two, each in a window of its own (all closed after
+        // the rename): before the stand-in's, whatever the provider.
+        if !aborted { await pendingSaysWhyAndOffersTheEngines(center) }
+        if !aborted { await recordingRenamedFromItsWindow(center) }
+        if aborted { return }
         center.open(folder)
         guard let controller = await waitForWindow(center, folder) else {
             record("Recorder phase 5", false, "no window for the stand-in meeting", nil)
@@ -24266,10 +24276,10 @@ final class SelfTest {
         // From 4:50, as asked: the rate goes up at once, the position at the
         // host time asked a moment later (setRate(_:time:atHostTime:)).
         let fromThere = await waitUntil(timeout: 2) {
-            let at = center.window(for: first)?.playedTime ?? 0
+            let at = center.window(for: first)?.currentTime ?? 0
             return at >= 289 && at < 296
         } != nil
-        let at = center.window(for: first)?.playedTime ?? 0
+        let at = center.window(for: first)?.currentTime ?? 0
         center.window(for: first).map { if $0.playing { $0.togglePlay() } }
         for step in 0..<6 { await move(to: frame.minX + frame.width * (0.3 + 0.08 * CGFloat(step)), frame.maxY - 260) }
         await pause(200)
@@ -24305,7 +24315,7 @@ final class SelfTest {
         let provider = context.ai.defaultModel.provider.title
         let titles = controller.shownActions.map(\.title)
         let expected = ["Summary by \(provider)", "Chapters by \(provider)", "Action Items to Reminders by \(provider)",
-                        "Recap Mail to the Attendees by \(provider)", "Ask \(provider) About This Meeting…", "Transcribe Again…", "Show in Finder",
+                        "Recap Mail to the Attendees by \(provider)", "Ask \(provider) About This Meeting…", "Transcribe Again…", "Rename…", "Show in Finder",
                         "Copy Transcript", "Delete Recording"]
         await captureRecordingWindow(controller, as: "recorder-actions")
         // The captures switch its appearance: the keys made sure again.
@@ -24673,6 +24683,89 @@ final class SelfTest {
                nil)
     }
 
+    /// A recording whose first transcript failed (docs/meeting-recorder-views.md,
+    /// "Said, and not said"): its window says why, as it failed, and offers
+    /// the engines (Better transcription dimmed until downloaded) and the
+    /// languages of the one picked, then Transcribe.
+    private func pendingSaysWhyAndOffersTheEngines(_ center: RecorderCenter) async {
+        let name = "Recorder: a recording whose transcript failed says why in its window, with the engines (one not downloaded dimmed) and the picked one's languages"
+        guard let folder = seedMeeting(center, title: "Supplier call", script: Array(Self.launchReview.prefix(3))),
+              var meeting = center.recordings.read(folder) else {
+            record(name, false, "no meeting", nil)
+            return
+        }
+        let why = "The speech model could not be read."
+        meeting.state = .pending
+        meeting.engine = nil
+        meeting.failed = why
+        try? center.recordings.write(meeting, to: folder)
+        for file in ["transcript.json", "transcript.md"] { try? FileManager.default.removeItem(at: folder.appendingPathComponent(file)) }
+        center.open(folder)
+        guard let controller = await waitUntil(timeout: 5, { center.window(for: folder) != nil }).flatMap({ _ in center.window(for: folder) }) else {
+            record(name, false, "no window", nil)
+            return
+        }
+        defer { controller.close() }
+        let said = await waitUntil(timeout: 2) { controller.shownState == "Not transcribed yet: \(why)" } != nil
+        let engines = controller.shownPendingEngines
+        let whisperReady = BetterTranscription.isReady()
+        let offered = engines.map(\.title) == ["macOS", "Better transcription"] && engines.first?.enabled == true
+            && engines.last?.enabled == whisperReady
+        // macOS's languages, then Transcribe (never before they are in).
+        let languages = await waitUntil(timeout: 5) { controller.canTranscribe } != nil && !controller.shownPendingLanguages.isEmpty
+        await captureRecordingWindow(controller, as: "recorder-pending")
+        record(name, said && offered && languages,
+               "“\(controller.shownState)” \(said); engines \(engines.map { "\($0.title) \($0.enabled ? "on" : "dimmed")" }.joined(separator: ", ")), Better transcription \(whisperReady ? "downloaded" : "not downloaded") \(offered); \(controller.shownPendingLanguages.count) languages, Transcribe \(controller.canTranscribe ? "on" : "off")",
+               nil)
+    }
+
+    /// Rename… in a recording's ⌘K (docs/meeting-recorder.md, "Where it
+    /// lives"): the list becomes a field with its title, selected; typed
+    /// and ↩, the recording and its folder are renamed, `transcript.md`'s
+    /// heading too, and its window stays, on the folder it is in now.
+    private func recordingRenamedFromItsWindow(_ center: RecorderCenter) async {
+        let name = "Recorder: Rename… in a recording's ⌘K renames it and its folder by the same rules, transcript.md's heading too, its window on the folder it is in now"
+        guard let folder = seedMeeting(center, title: "Kickoff", script: Array(Self.launchReview.prefix(3))) else {
+            record(name, false, "no meeting", nil)
+            return
+        }
+        center.open(folder)
+        guard let controller = await waitForWindow(center, folder) else {
+            record(name, false, "no window", nil)
+            return
+        }
+        guard await recordingWindowHasKeys(controller, name) else {
+            controller.close()
+            return
+        }
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 2) { controller.isShowingActions }
+        for character in "rename" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let prompting = await waitUntil(timeout: 2) { controller.isAskingInActions } != nil
+        // The title opens selected: typed over; ⌘A selects it again; →
+        // lets it go, typed after.
+        for character in "Board" { _ = await typeCharacter(character) }
+        await pressKey("a", flags: .maskCommand)
+        for character in "Kickoff" { _ = await typeCharacter(character) }
+        await pressKey("a", flags: .maskCommand)
+        await pressKey(nil, code: CGKeyCode(kVK_RightArrow))
+        for character in " with legal" { _ = await typeCharacter(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let renamed = await waitUntil(timeout: 3) { center.openWindows.contains { $0.record.title == "Kickoff with legal" } } != nil
+        let moved = center.openWindows.first { $0.record.title == "Kickoff with legal" }
+        let folderNamed = moved.map { $0.folder.lastPathComponent.hasSuffix(" Kickoff with legal") } ?? false
+        let oldGone = !FileManager.default.fileExists(atPath: folder.path)
+        let written = moved.flatMap { center.recordings.read($0.folder)?.title } == "Kickoff with legal"
+        let heading = moved.flatMap { try? String(contentsOf: $0.folder.appendingPathComponent("transcript.md"), encoding: .utf8) }?
+            .hasPrefix("# Kickoff with legal\n") ?? false
+        let titles = center.openWindows.map(\.record.title)
+        center.openWindows.forEach { $0.close() }
+        record(name, prompting && renamed && folderNamed && oldGone && written && heading,
+               "the field \(prompting); renamed \(renamed) \(titles), folder “\(moved?.folder.lastPathComponent ?? "?")” \(folderNamed), the one before gone \(oldGone), meeting.json \(written), transcript.md's heading \(heading)",
+               nil)
+    }
+
     /// A reminder's link back (`skilli://record/open?recording=…&at=…`):
     /// the window, the line said then selected.
     private func reminderLinkOpensTheMeeting(_ center: RecorderCenter, _ folder: URL) async {
@@ -24714,6 +24807,8 @@ final class SelfTest {
         let call = aborted ? nil : await voicesToldApartInTheCalls()
         if !aborted, let call { await speakersRenamedAndMerged(call) }
         if !aborted, let call { await transcribeAgainAsPicked(call) }
+        if !aborted, let call { await transcribeAgainLeftAtQuit(call) }
+        if !aborted { await aLanguageOnlyDictationHasIsTranscribed() }
     }
 
     /// The played-back calls (`script/recorder-measure`), their names
@@ -25304,6 +25399,83 @@ final class SelfTest {
                     nil)
     }
 
+    /// A Transcribe Again left at the quit (`madeAgain`, as `closeForQuit`
+    /// writes it): the next launch finds it and makes it as asked, quietly
+    /// (no window), the transcript before kept until then; made, it is not
+    /// found again.
+    private func transcribeAgainLeftAtQuit(_ folder: URL) async {
+        let name = "Recorder: a Transcribe Again left as skil.li quit is made at the next launch as asked, without a window, and not again after"
+        guard let center = context.recorder(), var left = center.recordings.read(folder) else {
+            record(name, false, "no recording", nil)
+            return
+        }
+        center.openWindows.forEach { $0.close() }
+        let linesBefore = center.recordings.transcript(folder)?.lines.count ?? 0
+        left.madeAgain = MeetingRecord.MadeAgain(language: "en-US", engine: TranscriptEngine.macOS.rawValue)
+        try? center.recordings.write(left, to: folder)
+        let found = await RecorderCenter.left(in: center.recordings.root)
+        let key = { (url: URL) in url.resolvingSymlinksInPath().standardizedFileURL.path }
+        let toMake = found.toMakeAgain.filter { key($0.0) == key(folder) }
+        center.pickUp(RecorderCenter.Left(toMakeAgain: toMake))
+        let started = await waitUntil(timeout: 5) { center.recorder.transcribing.map { key($0.folder) == key(folder) && $0.again } ?? false } != nil
+        let made = await waitUntil(timeout: 120) { center.recorder.transcribing == nil && center.recordings.read(folder)?.madeAgain == nil } != nil
+        await pause(800)
+        let after = center.recordings.read(folder)
+        let lines = center.recordings.transcript(folder)?.lines.count ?? 0
+        let noWindow = center.openWindows.isEmpty
+        let again = await RecorderCenter.left(in: center.recordings.root).toMakeAgain.contains { key($0.0) == key(folder) }
+        let passed = toMake.count == 1 && started && made && after?.state == .done && after?.language == "en-US" && lines > 0 && noWindow && !again
+        record(name, passed,
+               "found \(toMake.count), made again at once \(started), done \(made) (“\(after?.state.rawValue ?? "?")”, \(after?.language ?? "?"), \(linesBefore) → \(lines) lines), window \(noWindow ? "none" : "opened"), found again after \(again)",
+               nil)
+    }
+
+    /// A language `SpeechTranscriber` does not have, `DictationTranscriber`
+    /// does (Dutch; docs/meeting-recorder.md, "A language this Mac cannot
+    /// transcribe"): an import in it is transcribed by macOS's engine all
+    /// the same, its model downloaded the first time, Dutch offered among
+    /// macOS's languages.
+    private func aLanguageOnlyDictationHasIsTranscribed() async {
+        let name = "Recorder: a language only DictationTranscriber has (Dutch) is transcribed by macOS's engine, and offered among its languages"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        guard let model = await MeetingTranscriber.model(for: "nl-NL") else {
+            record(name, false, "no model for Dutch on this Mac at all", nil)
+            return
+        }
+        let offered = await MeetingTranscriber.languages(for: .macOS).contains { $0.id.hasPrefix("nl") }
+        let sentence = "Goedemorgen allemaal. Vandaag bespreken we de nieuwe planning voor het project en de begroting voor volgend jaar."
+        guard let spoken = await spokenFile(sentence, language: "nl", voiceNeeded: true) else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "no Dutch voice on this Mac", latencyMs: nil))
+            return
+        }
+        let file = recorderScratch.appendingPathComponent("Planning overleg.aiff")
+        try? FileManager.default.removeItem(at: file)
+        try? FileManager.default.moveItem(at: spoken, to: file)
+        // The recorder's language (else Ask's): Dutch, as a user would set it.
+        let language = context.preferences.recorderLanguage
+        context.preferences.recorderLanguage = "nl-NL"
+        defer { context.preferences.recorderLanguage = language }
+        center.openWindows.forEach { $0.close() }
+        center.importFiles([file])
+        let made = await waitUntil(timeout: 300) {
+            center.openWindows.contains { $0.record.imported == "Planning overleg.aiff" && ($0.record.state == .done || $0.record.state == .pending) }
+                && center.recorder.transcribing == nil
+        } != nil
+        let controller = center.openWindows.first { $0.record.imported == "Planning overleg.aiff" }
+        let meeting = controller.flatMap { center.recordings.read($0.folder) }
+        let text = controller.flatMap { center.recordings.transcript($0.folder) }?.lines.map(\.text).joined(separator: " ") ?? ""
+        let dutch = ["planning", "project", "begroting", "goedemorgen"].filter { text.lowercased().contains($0) }
+        center.openWindows.forEach { $0.close() }
+        let passed = model.dictation && offered && made && meeting?.state == .done && meeting?.engine == TranscriptEngine.macOS.rawValue
+            && meeting?.language.hasPrefix("nl") == true && dutch.count >= 2
+        record(name, passed,
+               "Dutch's model \(model.dictation ? "DictationTranscriber's" : "SpeechTranscriber's") (\(model.locale.identifier(.bcp47))), offered \(offered); made \(made), “\(meeting?.state.rawValue ?? "?")” by \(meeting?.engine ?? "?") in \(meeting?.language ?? "?")\(meeting?.failed.map { ", failed: \($0)" } ?? ""); heard \(dutch.joined(separator: ", ")): “\(text.prefix(140))”",
+               nil)
+    }
+
     // MARK: - Phase 4: Better transcription (docs/meeting-recorder-views.md)
 
     /// Better transcription's checks: the download (a stand-in server
@@ -25698,6 +25870,7 @@ final class SelfTest {
         await recorderCardShowsBothSourcesLive()
         if !aborted { await recorderRecordsAPlayedBackCall() }
         if !aborted { await recorderPausesBothTracksTogether() }
+        if !aborted { await recorderImportWaitsForTheRecording() }
         if !aborted { await recorderOffersOneNeverStopped() }
         if !aborted { await recorderQuitClosesItWhole() }
         if !aborted { await recorderStopStuckOffersIt() }
@@ -26266,6 +26439,69 @@ final class SelfTest {
                            expected, offsets.count, pairs.mine.count, BeepPairs.mean(before) * 1000, BeepPairs.mean(after) * 1000, step * 1000, spread * 1000,
                            restartStep * 1000, jumpLine),
                     nil)
+    }
+
+    /// A file imported while a meeting records (docs/meeting-recorder-views.md,
+    /// "Import"): made at once, its window waiting, nothing transcribed
+    /// meanwhile; at Stop the meeting's transcript is made first, the
+    /// import's still waiting, then the import's.
+    private func recorderImportWaitsForTheRecording() async {
+        let name = "Recorder: a file imported while a meeting records is made at once, its window waiting; its transcript comes after the meeting's"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let train = recorderScratch.appendingPathComponent("import-train.wav")
+        _ = Self.clip(nil, seconds: 20, beeps: stride(from: 0.5, to: 20, by: 1).map { $0 }, to: train)
+        center.recorder.standIn(microphone: train, alsoLeaveOut: [])
+        center.showCard(title: "Import check")
+        guard await waitUntil(timeout: 3, { center.isCardVisible && center.cardView.microphoneLine != "Starting…" }) != nil else {
+            record(name, false, "no Record card", nil)
+            return
+        }
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 2, { center.recorder.phase == .recording }) != nil, let meeting = center.recorder.folder else {
+            record(name, false, "not recording", nil)
+            return
+        }
+        try? center.recorder.microphone.playStandIn(at: mach_absolute_time(), ppm: 0)
+        let file = recorderScratch.appendingPathComponent("While recording.wav")
+        try? FileManager.default.removeItem(at: file)
+        _ = Self.clip(nil, seconds: 6, beeps: [1, 2, 3], to: file)
+        center.importFiles([file])
+        let opened = await waitUntil(timeout: 10) { center.openWindows.contains { $0.record.imported == "While recording.wav" } } != nil
+        await pause(1500)
+        guard opened, let imported = center.openWindows.first(where: { $0.record.imported == "While recording.wav" }) else {
+            center.control(.stop)
+            _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil }
+            center.openWindows.forEach { $0.close() }
+            record(name, false, "no window for the import", nil)
+            return
+        }
+        let state = imported.shownState
+        let waited = center.recorder.waits(imported.folder) && center.recorder.transcribing == nil && state == "Waiting to be transcribed…"
+        // Stopped: the first transcript made is the meeting's, the import's
+        // still waiting then.
+        center.control(.stop)
+        let key = { (url: URL) in url.resolvingSymlinksInPath().standardizedFileURL.path }
+        var firstMade: String?
+        var importWaitedThen = false
+        let deadline = ContinuousClock.now + .seconds(90)
+        while ContinuousClock.now < deadline {
+            if firstMade == nil, let now = center.recorder.transcribing {
+                firstMade = now.title
+                importWaitedThen = key(now.folder) == key(meeting) && center.recorder.waits(imported.folder)
+            }
+            if center.recorder.phase == .idle, center.recorder.transcribing == nil, !center.recorder.waits(imported.folder) { break }
+            await pause(50)
+        }
+        let importDone = center.recordings.read(imported.folder).map { $0.state == .done || $0.state == .pending } ?? false
+        center.openWindows.forEach { $0.close() }
+        let passed = waited && firstMade == "Import check" && importWaitedThen && importDone
+        record(name, passed,
+               "the import's window at once \(opened), “\(state)”, queued \(waited); after Stop the first made “\(firstMade ?? "none")”, the import waiting then \(importWaitedThen); the import's transcript after \(importDone)",
+               nil)
     }
 
     /// A recording skil.li never stopped: another skil.li records, killed

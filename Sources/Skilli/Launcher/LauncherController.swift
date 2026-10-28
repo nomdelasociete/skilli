@@ -447,6 +447,8 @@ final class LauncherController: NSObject {
     /// Ask about a meeting (phase 5): its folder's name and the question,
     /// answered in the card by `recordingProvider` ("Claude").
     var onAskAboutRecording: ((String, String) -> Void)?
+    /// A recording's row → Rename Recording…: its folder's name, the title typed.
+    var onRenameRecording: ((String, String) -> Void)?
     var recordingProvider: () -> String = { WritingProvider.claude.title }
     /// Search Recordings' words said, for the text typed.
     private var recordingWords: (query: String, found: [(folder: String, snippet: String)])?
@@ -872,6 +874,14 @@ final class LauncherController: NSObject {
     func reloadSources() {
         catalog = nil
         guard panel.isVisible, mode == nil else { return }
+        updateResults(query: searchField.stringValue)
+    }
+
+    /// The recordings read again (one renamed, deleted, made): the rows
+    /// that name them, at the root and in `recs`, redrawn.
+    func recordingsChanged() {
+        catalog = nil
+        guard panel.isVisible, mode == nil || mode == .recordings else { return }
         updateResults(query: searchField.stringValue)
     }
 
@@ -3301,6 +3311,20 @@ final class LauncherController: NSObject {
         }
     }
 
+    /// ⌘K → Rename Recording…: the list becomes a field, its title in it;
+    /// ↩ renames it (its folder too), empty or unchanged: nothing.
+    func renameRecording(_ summary: RecordingSummary) {
+        actionPanel.ask("Rename “\(summary.title)”", initial: summary.title, placeholder: "Title",
+                        line: "Type its name, ↩ renames it and its folder, esc goes back") { [weak self] typed in
+            guard let self else { return }
+            let title = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.closeActions()
+            guard !title.isEmpty, title != summary.title else { return }
+            // Its rows follow once the recordings are read again.
+            self.onRenameRecording?(summary.folder, title)
+        }
+    }
+
     /// ⌘K → Set Alias…: the list becomes a field; ↩ saves (empty removes).
     /// One not taken asks again, with what was typed.
     func askAlias(for item: LauncherItem, retry typed: String? = nil) {
@@ -3630,6 +3654,15 @@ final class LauncherController: NSObject {
         // Typing an alias in the list: ↩ saves it.
         if actionPanel.isPrompting, flags.isEmpty, code == kVK_Return || code == kVK_ANSI_KeypadEnter {
             actionPanel.submit()
+            return
+        }
+        // ⌘A selects its text again, ← or → keeps it to edit.
+        if actionPanel.isPrompting, flags == .command, event.charactersIgnoringModifiers?.lowercased() == "a" {
+            actionPanel.selectAll()
+            return
+        }
+        if actionPanel.isPrompting, code == kVK_LeftArrow || code == kVK_RightArrow {
+            actionPanel.keepText()
             return
         }
         if code == kVK_Escape || (flags == .command && event.charactersIgnoringModifiers?.lowercased() == "k") {

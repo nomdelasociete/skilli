@@ -174,6 +174,36 @@ final class MeetingMomentTests: XCTestCase {
         XCTAssertNil(watch.update(now: now.addingTimeInterval(20), app: (app, false), quiet: false, eventEnd: nil))
     }
 
+    func testAnEndOfferedBeforeASleepIsOfferedAgainAfterIt() {
+        var watch = CallEndWatch()
+        let app = "Google Chrome"
+        _ = watch.update(now: now, app: (app, true), quiet: false, eventEnd: nil)
+        _ = watch.update(now: now.addingTimeInterval(1), app: (app, false), quiet: false, eventEnd: nil)
+        XCTAssertEqual(watch.update(now: now.addingTimeInterval(6), app: (app, false), quiet: false, eventEnd: nil), .appLeft(app))
+        watch.offerAgain()
+        XCTAssertEqual(watch.update(now: now.addingTimeInterval(600), app: (app, false), quiet: false, eventEnd: nil), .appLeft(app),
+                       "the wake card answered, the call still over: offered again")
+        let end = now
+        var quiet = CallEndWatch()
+        _ = quiet.update(now: end.addingTimeInterval(1), app: nil, quiet: true, eventEnd: end)
+        XCTAssertEqual(quiet.update(now: end.addingTimeInterval(61), app: nil, quiet: true, eventEnd: end), .quietAfterEnd(end))
+        quiet.offerAgain()
+        XCTAssertEqual(quiet.update(now: end.addingTimeInterval(700), app: nil, quiet: true, eventEnd: end), .quietAfterEnd(end))
+        var kept = CallEndWatch()
+        _ = kept.update(now: now, app: (app, true), quiet: false, eventEnd: nil)
+        _ = kept.update(now: now.addingTimeInterval(1), app: (app, false), quiet: false, eventEnd: nil)
+        _ = kept.update(now: now.addingTimeInterval(6), app: (app, false), quiet: false, eventEnd: nil)
+        kept.kept(.appLeft(app))
+        kept.offerAgain()
+        XCTAssertNil(kept.update(now: now.addingTimeInterval(600), app: (app, false), quiet: false, eventEnd: nil), "Keep Recording stands")
+        var keptQuiet = CallEndWatch()
+        _ = keptQuiet.update(now: end.addingTimeInterval(1), app: nil, quiet: true, eventEnd: end)
+        XCTAssertEqual(keptQuiet.update(now: end.addingTimeInterval(61), app: nil, quiet: true, eventEnd: end), .quietAfterEnd(end))
+        keptQuiet.kept(.quietAfterEnd(end))
+        keptQuiet.offerAgain()
+        XCTAssertNil(keptQuiet.update(now: end.addingTimeInterval(700), app: nil, quiet: true, eventEnd: end), "Keep Recording stands for quiet too")
+    }
+
     func testTheMeetingEndsWhenItIsOverAndQuietForAMinute() {
         var watch = CallEndWatch()
         let end = now.addingTimeInterval(60)

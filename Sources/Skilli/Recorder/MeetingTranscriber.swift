@@ -48,7 +48,19 @@ enum MeetingTranscriber {
     /// macOS's engine's locale for a language, nil when it cannot
     /// transcribe it on this Mac.
     static func locale(for identifier: String) async -> Locale? {
-        await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: identifier))
+        await model(for: identifier)?.locale
+    }
+
+    /// macOS's model for a language: `SpeechTranscriber`'s, else
+    /// `DictationTranscriber`'s, which has languages the other does not
+    /// (Dutch, Polish, Swedish…: 23 on macOS 27; docs/meeting-recorder.md,
+    /// "A language this Mac cannot transcribe"). Not a choice of its own:
+    /// more errors, so only where `SpeechTranscriber` has none.
+    static func model(for identifier: String) async -> (locale: Locale, dictation: Bool)? {
+        let wanted = Locale(identifier: identifier)
+        if let locale = await SpeechTranscriber.supportedLocale(equivalentTo: wanted) { return (locale, false) }
+        if let locale = await DictationTranscriber.supportedLocale(equivalentTo: wanted) { return (locale, true) }
+        return nil
     }
 
     /// Every language this Mac transcribes, by name: macOS's engine's,
@@ -64,8 +76,9 @@ enum MeetingTranscriber {
     static func languages(for engine: TranscriptEngine) async -> [(id: String, name: String)] {
         switch engine {
         case .macOS:
-            let locales = await SpeechTranscriber.supportedLocales
-            return locales.map { ($0.identifier(.bcp47), name(of: $0.identifier(.bcp47))) }.sorted { $0.name < $1.name }
+            // `DictationTranscriber`'s too, for the languages only it has.
+            let ids = Set((await SpeechTranscriber.supportedLocales + DictationTranscriber.supportedLocales).map { $0.identifier(.bcp47) })
+            return ids.map { ($0, name(of: $0)) }.sorted { $0.name < $1.name }
         case .whisper:
             return WhisperTranscript.languages.map { ($0, name(of: $0)) }.sorted { $0.name < $1.name }
         }
@@ -131,14 +144,14 @@ enum MeetingTranscriber {
     static func transcribe(_ folder: URL, record: MeetingRecord, picked: TranscriptEngine? = nil, setup: Setup = Setup(),
                            step: @escaping @Sendable (Step) -> Void) async throws -> MeetingRecord {
         let engine = try await self.engine(for: record.language, picked: picked, setup: setup)
-        let locale = await locale(for: record.language)
-        if engine == .macOS, let locale { try await install(locale, step: step) }
+        let model = await model(for: record.language)
+        if engine == .macOS, let model { try await install(model.locale, dictation: model.dictation, step: step) }
         let prompt = WhisperTranscript.prompt(attendees: record.attendees, contacts: setup.contacts, language: record.language)
         let words: @Sendable (URL, @escaping @Sendable (Double) -> Void) async throws -> [[TranscriptWord]] = { url, progress in
             switch engine {
             case .macOS:
-                guard let locale else { return [] }
-                return try await phrases(of: url, locale: locale, progress: progress)
+                guard let model else { return [] }
+                return try await phrases(of: url, locale: model.locale, dictation: model.dictation, progress: progress)
             case .whisper:
                 guard let run = try await TranscriberHelper.whisper(of: url, language: WhisperTranscript.code(for: record.language) ?? "en",
                                                                      prompt: prompt, progress: progress) else {
@@ -181,6 +194,7 @@ enum MeetingTranscriber {
         let lines = MeetingTranscript.lines(voiced)
         var done = record
         done.state = .done
+        done.failed = nil
         done.engine = engine.rawValue
         done.echoDropped = dropped
         done.recorder = nil
@@ -260,36 +274,59 @@ enum MeetingTranscriber {
     }
 
     /// macOS's model for the language, downloaded the first time.
-    private static func install(_ locale: Locale, step: @Sendable (Step) -> Void) async throws {
-        let module = SpeechTranscriber(locale: locale, preset: .transcription)
+    private static func install(_ locale: Locale, dictation: Bool, step: @Sendable (Step) -> Void) async throws {
+        let module: any SpeechModule = dictation ? DictationTranscriber(locale: locale, preset: .timeIndexedLongDictation)
+            : SpeechTranscriber(locale: locale, preset: .transcription)
         guard let request = try await AssetInventory.assetInstallationRequest(supporting: [module]) else { return }
         step(.downloading(shortName(of: locale.identifier(.bcp47))))
         try await request.downloadAndInstall()
     }
 
     /// One track's phrases: each of the engine's results, its words with
-    /// their times in the track.
-    static func phrases(of url: URL, locale: Locale, progress: @escaping @Sendable (Double) -> Void) async throws -> [[TranscriptWord]] {
+    /// their times in the track (`dictation`: `DictationTranscriber`'s,
+    /// for a language `SpeechTranscriber` does not have).
+    static func phrases(of url: URL, locale: Locale, dictation: Bool = false, progress: @escaping @Sendable (Double) -> Void) async throws -> [[TranscriptWord]] {
         let file = try AVAudioFile(forReading: url)
         let seconds = Double(file.length) / file.processingFormat.sampleRate
         guard seconds > 0.2 else { return [] }
-        let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [], attributeOptions: [.audioTimeRange])
-        let analyzer = SpeechAnalyzer(modules: [transcriber], options: .init(priority: .userInitiated, modelRetention: .whileInUse))
-        let results = transcriber.results
-        let collect = Task { () throws -> [[TranscriptWord]] in
-            var phrases: [[TranscriptWord]] = []
-            for try await result in results where result.isFinal {
-                let text = result.text
-                var words: [TranscriptWord] = []
-                for run in text.runs {
-                    let piece = String(text[run.range].characters)
-                    guard let range = run.audioTimeRange, !piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
-                    words.append(TranscriptWord(piece.trimmingCharacters(in: .whitespacesAndNewlines), start: range.start.seconds, end: range.end.seconds))
-                }
-                if !words.isEmpty { phrases.append(words) }
-                progress(min(1, result.range.end.seconds / seconds))
+        /// A final result's words, with their times.
+        @Sendable func words(of text: AttributedString) -> [TranscriptWord] {
+            text.runs.compactMap { run in
+                let piece = String(text[run.range].characters).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let range = run.audioTimeRange, !piece.isEmpty else { return nil }
+                return TranscriptWord(piece, start: range.start.seconds, end: range.end.seconds)
             }
-            return phrases
+        }
+        let analyzer: SpeechAnalyzer
+        let collect: Task<[[TranscriptWord]], Error>
+        if dictation {
+            // The preset its model was installed with: punctuation, and each
+            // word's time.
+            let transcriber = DictationTranscriber(locale: locale, preset: .timeIndexedLongDictation)
+            analyzer = SpeechAnalyzer(modules: [transcriber], options: .init(priority: .userInitiated, modelRetention: .whileInUse))
+            let results = transcriber.results
+            collect = Task {
+                var phrases: [[TranscriptWord]] = []
+                for try await result in results where result.isFinal {
+                    let found = words(of: result.text)
+                    if !found.isEmpty { phrases.append(found) }
+                    progress(min(1, result.range.end.seconds / seconds))
+                }
+                return phrases
+            }
+        } else {
+            let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [], attributeOptions: [.audioTimeRange])
+            analyzer = SpeechAnalyzer(modules: [transcriber], options: .init(priority: .userInitiated, modelRetention: .whileInUse))
+            let results = transcriber.results
+            collect = Task {
+                var phrases: [[TranscriptWord]] = []
+                for try await result in results where result.isFinal {
+                    let found = words(of: result.text)
+                    if !found.isEmpty { phrases.append(found) }
+                    progress(min(1, result.range.end.seconds / seconds))
+                }
+                return phrases
+            }
         }
         do {
             try await analyzer.start(inputAudioFile: file, finishAfterFile: true)

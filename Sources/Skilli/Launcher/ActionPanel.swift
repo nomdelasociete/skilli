@@ -131,13 +131,32 @@ final class ActionPanelView: NSView {
     /// `placeholder` shows in the empty field, `line` in place of the rows.
     private var prompt: (title: String, placeholder: String, line: String, submit: (String) -> Void)?
     var isPrompting: Bool { prompt != nil }
+    /// The prompt's text all selected, as a rename's field opens: the next
+    /// letter replaces it, ⌫ clears it, ← or → keeps it to edit.
+    private(set) var selectsAll = false
 
     func ask(_ title: String, initial: String, placeholder: String = "e, cl, todo…", line: String = "Type it, ↩ saves, esc goes back",
              submit: @escaping (String) -> Void) {
         prompt = (title, placeholder, line, submit)
         header.stringValue = title
         filter = initial
+        selectsAll = !initial.isEmpty
         note = nil
+        layoutList()
+    }
+
+    /// ⌘A in a prompt: its text all selected again.
+    func selectAll() {
+        guard isPrompting, !filter.isEmpty else { return }
+        selectsAll = true
+        note = nil
+        layoutList()
+    }
+
+    /// ← or → in a prompt: the selection let go, the text kept to edit.
+    func keepText() {
+        guard selectsAll else { return }
+        selectsAll = false
         layoutList()
     }
 
@@ -160,6 +179,7 @@ final class ActionPanelView: NSView {
         self.actions = actions
         header.stringValue = title
         filter = ""
+        selectsAll = false
         note = nil
         apply()
         isHidden = false
@@ -168,6 +188,8 @@ final class ActionPanelView: NSView {
     var selectedAction: LauncherAction? { shown.indices.contains(selected) ? shown[selected] : nil }
 
     func type(_ text: String) {
+        if selectsAll { filter = "" }
+        selectsAll = false
         filter += text
         note = nil
         if isPrompting { layoutList() } else { apply() }
@@ -176,6 +198,12 @@ final class ActionPanelView: NSView {
     func deleteBackward() {
         let said = note != nil
         note = nil
+        if selectsAll {
+            selectsAll = false
+            filter = ""
+            layoutList()
+            return
+        }
         guard !filter.isEmpty else {
             if said { layoutList() }
             return
@@ -266,6 +294,12 @@ final class ActionPanelView: NSView {
         field.toolTip = nil
         field.stringValue = filter.isEmpty ? (prompt?.placeholder ?? "Search actions…") : filter
         field.textColor = filter.isEmpty ? .tertiaryLabelColor : .labelColor
+        if selectsAll {
+            field.attributedStringValue = NSAttributedString(string: filter, attributes: [
+                .font: field.font ?? .systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor,
+                .backgroundColor: NSColor.selectedTextBackgroundColor,
+            ])
+        }
     }
 
     /// How tall the list is now (a card sizes itself to it).

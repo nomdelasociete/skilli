@@ -364,8 +364,10 @@ on screen, with times), `summary.md` when asked.
   retention: pruned at launch and then hourly, never at the moment the
   setting changes, a line under it says what the next pass removes; an
   expired recording goes to the Trash, not deleted for good.
-- Agents: `list_recordings` (titles, dates, lengths), `get_transcript`
-  and `recording_followup` (and the `$SKILLI_CLI call` equivalents).
+- Agents: `list_recordings` (titles, dates, lengths), `get_transcript`,
+  `recording_followup` and `rename_recording` (and the `$SKILLI_CLI call`
+  equivalents); `skilli://record/rename?recording=…&title=…` too, asked
+  first. Rename… in a recording's window and on its row in the launcher.
 - The words said, for the launcher's search, are also in
   `recordings-index.sqlite`, in Application Support's `skil.li` folder,
   where it stays when the Recordings folder is moved (with SQLite's

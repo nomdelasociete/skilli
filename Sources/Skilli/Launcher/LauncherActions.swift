@@ -270,6 +270,9 @@ extension LauncherController {
                     LauncherAction(title: "Ask \(recordingProvider()) About This Meeting…", symbol: "questionmark.bubble", keepsOpen: true) { [weak self] in
                         self?.askAboutRecording(found.summary)
                     },
+                    LauncherAction(title: "Rename Recording…", symbol: "pencil", keepsOpen: true) { [weak self] in
+                        self?.renameRecording(found.summary)
+                    },
                     key("Show in Finder", "folder", .openSecond),
                     LauncherAction(title: "Copy Transcript", symbol: "doc.on.doc", key: .copy, group: .copy) { [weak self] in
                         self?.hide()

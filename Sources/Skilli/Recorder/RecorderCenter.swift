@@ -235,6 +235,9 @@ final class RecorderCenter {
         guard let asleep = pausedForSleep else { return }
         pausedForSleep = nil
         guard recorder.phase == .paused else { return }
+        // A call's end card it replaces: offered again once this one is
+        // answered and the recording goes on, if the call is still over.
+        watch.offerAgain()
         card.showSlept(title: recorder.title, elapsed: recorder.elapsed,
                        line: "The Mac went to sleep at \(asleep.formatted(date: .omitted, time: .shortened)).")
     }
@@ -623,6 +626,11 @@ final class RecorderCenter {
     /// The call ended: a card offers Stop (never taking the keys from the
     /// app the user types in).
     private func offerStop(_ reason: CallEndWatch.Reason) {
+        // The wake card up: offered once it is answered, still pending.
+        if case .slept? = card.content {
+            watch.offerAgain()
+            return
+        }
         guard recorder.isRecording, !card.isVisible else { return }
         Log.trace("Recorder: the call ended (\(CallEndWatch.line(reason))): Stop offered")
         card.showCallEnded(title: recorder.title, elapsed: recorder.elapsed, line: CallEndWatch.line(reason), reason: reason)
@@ -830,6 +838,73 @@ final class RecorderCenter {
         Task { await followUps.run(action, on: folder) }
     }
 
+    /// Rename… (the window's ⌘K, a recording's row in the launcher): its
+    /// title, and its folder by the same rules (docs/meeting-recorder.md,
+    /// "Where it lives"), `transcript.md`'s heading too; its window stays,
+    /// on the folder it is in now. Not while it records, its transcript is
+    /// made or an action of its ⌘K runs: said why.
+    func rename(_ folder: URL, to typed: String) {
+        do {
+            try renamed(folder, to: typed)
+        } catch {
+            notify(error.localizedDescription)
+        }
+    }
+
+    /// Rename's work, for a tool too: the folder it is in now; why not.
+    @discardableResult
+    func renamed(_ folder: URL, to typed: String) throws -> URL {
+        let title = String(typed.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120))
+        guard var record = recordings.read(folder) else { throw RecordingFollowUps.Failure(message: "The recording is gone.") }
+        guard !title.isEmpty, title != record.title else { return folder }
+        let before = record.title
+        // Not under what writes to its folder: the recorder, a transcript, an
+        // action of its ⌘K (its answer would find the folder gone).
+        let doing: String? = recorder.folder.map(Self.key) == Self.key(folder) ? "it is being recorded"
+            : isBeingMade(folder) ? "it is being transcribed"
+            : followUps.work(for: folder).map { "\($0.replacingOccurrences(of: "…", with: "")) for it" }
+        if let doing {
+            throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(doing). Rename it once it is done.")
+        }
+        let open = windows[Self.key(folder)]
+        let moved: URL
+        do {
+            moved = try recordings.rename(folder, to: title, started: record.started)
+        } catch {
+            throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(error.localizedDescription)")
+        }
+        record.title = title
+        do {
+            try recordings.write(record, to: moved)
+        } catch {
+            // Its folder back, as it was with its title.
+            try? FileManager.default.moveItem(at: moved, to: folder)
+            throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(error.localizedDescription)")
+        }
+        if let lines = recordings.transcript(moved)?.lines {
+            do {
+                try MeetingTranscriber.markdown(record, lines: lines).write(to: moved.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)
+            } catch {
+                // Its title and folder back: never a heading naming another.
+                record.title = before
+                try? recordings.write(record, to: moved)
+                try? FileManager.default.moveItem(at: moved, to: folder)
+                throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(error.localizedDescription)")
+            }
+        }
+        Log.trace("Recorder: renamed “\(title)” (\(moved.lastPathComponent))")
+        NotificationCenter.default.post(name: Recordings.changed, object: nil)
+        // Its window stays, on the folder it is in now (the sound playing
+        // goes on).
+        if let open {
+            windows[Self.key(folder)] = nil
+            open.moved(to: moved)
+            windows[Self.key(moved)] = open
+            show(open, record, moved)
+        }
+        return moved
+    }
+
     /// Ask about a meeting from the launcher's row: answered in the card.
     func ask(_ question: String, about folder: URL) {
         followUps.ask(question, about: folder)
@@ -887,13 +962,15 @@ final class RecorderCenter {
         window.onClose = { [weak self] controller in self?.windows[Self.key(controller.folder)] = nil }
         window.onShowFolder = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
         window.onDelete = { [weak self] folder, record in
-            self?.windows[Self.key(folder)]?.close()
+            // From its own ⌘K (a key there): closed once the key is handled.
+            let open = self?.windows[Self.key(folder)]
+            DispatchQueue.main.async { open?.close() }
             self?.delete(folder, title: record.title)
         }
-        window.onTranscribe = { [weak self] folder, record in
+        window.onTranscribe = { [weak self] folder, record, engine in
             guard let self else { return }
             try? self.recordings.write(record, to: folder)
-            self.recorder.transcribe(folder, record: record)
+            self.recorder.transcribe(folder, record: record, engine: engine)
         }
         window.onTranscribeAgain = { [weak self] folder, record, engine in
             self?.transcribeAgain(folder, record: record, engine: engine)
@@ -915,6 +992,7 @@ final class RecorderCenter {
         }
         window.onRemoveChapters = { [weak self] folder, _ in self?.followUps.removeChapters(in: folder) }
         window.onAsk = { [weak self] folder, question in self?.followUps.ask(question, about: folder) }
+        window.onRename = { [weak self] folder, title in self?.rename(folder, to: title) }
         window.skillies = { [weak self] in self?.followUps.recordingSkillies() ?? [] }
         window.markedSkillie = { [weak self] in self?.followUps.marked() ?? "" }
         window.onRunSkillie = { [weak self] folder, skillie in self?.followUps.run(skillie, on: folder) }
@@ -929,6 +1007,8 @@ final class RecorderCenter {
             self.preferences.recorderBetterHintShown = true
             return true
         }
+        // Pending: shown again now that its engines are known, for their menu.
+        if transcript == nil, record.state == .pending { window.show(record, transcript: nil) }
         windows[Self.key(folder)] = window
         return window
     }
@@ -1026,7 +1106,9 @@ final class RecorderCenter {
     struct Left {
         var unfinished: [(URL, MeetingRecord)] = []
         var toTranscribe: [(URL, MeetingRecord)] = []
-        var isEmpty: Bool { unfinished.isEmpty && toTranscribe.isEmpty }
+        /// Transcribe Again asked and not made as skil.li quit.
+        var toMakeAgain: [(URL, MeetingRecord)] = []
+        var isEmpty: Bool { unfinished.isEmpty && toTranscribe.isEmpty && toMakeAgain.isEmpty }
     }
 
     /// At launch, a few seconds in: what `root` holds that was left,
@@ -1036,7 +1118,8 @@ final class RecorderCenter {
         await Task.detached(priority: .utility) {
             let recordings = Recordings(root: root)
             return Left(unfinished: recordings.unfinished().map { ($0.folder, MeetingRecorder.measured($0.folder, record: $0.record)) },
-                        toTranscribe: recordings.stopped().map { ($0.folder, $0.record) })
+                        toTranscribe: recordings.stopped().map { ($0.folder, $0.record) },
+                        toMakeAgain: recordings.madeAgainLeft().map { ($0.folder, $0.record) })
         }.value
     }
 
@@ -1048,6 +1131,16 @@ final class RecorderCenter {
         for (folder, record) in left.toTranscribe.reversed() {
             madeQuietly.insert(Self.key(folder))
             recorder.transcribe(folder, record: record)
+        }
+        // Then those asked again before the quit, as asked (their transcript
+        // stays until the new one is written).
+        for (folder, record) in left.toMakeAgain {
+            guard let asked = record.madeAgain else { continue }
+            var record = record
+            record.language = asked.language
+            madeQuietly.insert(Self.key(folder))
+            madeAgain.insert(Self.key(folder))
+            recorder.transcribe(folder, record: record, again: true, engine: TranscriptEngine(stored: asked.engine) ?? .macOS)
         }
         guard !left.unfinished.isEmpty else { return }
         unfinished = left.unfinished

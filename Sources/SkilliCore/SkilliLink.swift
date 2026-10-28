@@ -48,6 +48,9 @@ public enum SkilliLink: Equatable, Sendable {
     /// the recording named (its folder's name or title; empty: the newest):
     /// asked in the card every time (its transcript leaves the Mac).
     case recordingFollowUp(MeetingFollowUp.Action, recording: String, question: String?)
+    /// A recording renamed (its folder's name or title), its folder too:
+    /// asked in the card every time.
+    case renameRecording(String, title: String)
 
     public enum RecordingControl: String, CaseIterable, Sendable {
         case pause, resume, stop
@@ -114,6 +117,11 @@ public enum SkilliLink: Equatable, Sendable {
             components.percentEncodedPath = "/" + action.linkName
             if !recording.isEmpty { items.append(URLQueryItem(name: "recording", value: recording)) }
             if let question, !question.isEmpty { items.append(URLQueryItem(name: "question", value: question)) }
+        case .renameRecording(let recording, let title):
+            components.host = "record"
+            components.percentEncodedPath = "/rename"
+            items.append(URLQueryItem(name: "recording", value: recording))
+            items.append(URLQueryItem(name: "title", value: title))
         }
         if !items.isEmpty {
             // `+`, `&`, `=` and `#` encoded too: pages read `+` as a space.
@@ -151,6 +159,12 @@ public enum SkilliLink: Equatable, Sendable {
                 // A time no recording reaches is no time.
                 let at = items.first { $0.name == "at" }?.value.flatMap(Double.init).flatMap { $0.isFinite && $0 >= 0 && $0 <= Self.longestRecording ? $0 : nil }
                 return .openRecording(recording, at: at)
+            }
+            if target.lowercased() == "rename" {
+                func value(_ name: String) -> String { items.first { $0.name == name }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+                // Which one and what to: both, never the newest by default.
+                guard !value("recording").isEmpty, !value("title").isEmpty else { return nil }
+                return .renameRecording(value("recording"), title: String(value("title").prefix(120)))
             }
             if let action = MeetingFollowUp.Action(linkName: target) {
                 func value(_ name: String) -> String { items.first { $0.name == name }?.value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }

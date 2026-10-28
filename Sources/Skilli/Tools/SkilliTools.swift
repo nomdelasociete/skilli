@@ -429,6 +429,11 @@ final class SkilliTools {
                        parameters: [.init(name: "action", description: "What to do.", options: MeetingFollowUp.Action.allCases.map(\.rawValue)),
                                     .init(name: "recording", description: "Its id from list_recordings, or its title; empty: the newest recording.", isRequired: false),
                                     .init(name: "question", description: "For ask: the question, as the user said it.", isRequired: false)]),
+        ToolDefinition(name: "rename_recording", title: "Rename a recording",
+                       description: "Renames one recording, as Rename… in its window does: its title, its folder by the same rules (its date kept), transcript.md's heading. Not while it records or its transcript is made. Returns its new id.",
+                       group: .recorder, risk: .changes,
+                       parameters: [.init(name: "recording", description: "Its id from list_recordings, or its title (the newest of that title)."),
+                                    .init(name: "title", description: "Its new title, up to 120 characters.")]),
         ToolDefinition(name: "list_tabs", title: "List browser tabs",
                        description: "The tabs open in Safari, Chrome, Arc, Brave, Edge and others: browser and title.",
                        group: .apps, risk: .read, parameters: []),
@@ -1031,6 +1036,15 @@ final class SkilliTools {
             if action == .ask, question.isEmpty { throw Failure(message: "ask needs a question.") }
             let (folder, _) = try center.recordingForTool(arguments["recording"] as? String)
             return try await center.followUps.perform(action, on: folder, question: question)
+
+        case "rename_recording":
+            guard let center = recorder?() else { throw Failure(message: "The recorder is not available.") }
+            // Which one, always: never the newest by default.
+            let recording = try text("recording").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !recording.isEmpty else { throw Failure(message: "recording is needed: its id from list_recordings, or its title.") }
+            let (folder, record) = try center.recordingForTool(recording)
+            let moved = try center.renamed(folder, to: try text("title"))
+            return "“\(record.title)” is now “\(center.recordings.read(moved)?.title ?? "")”, id \(moved.lastPathComponent)."
 
         case "list_tabs":
             let tabs = BrowserTabs.all()

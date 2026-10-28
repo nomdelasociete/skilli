@@ -198,6 +198,25 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
     /// The skillies run on it (phase 5): from ⌘K, or on their own after its
     /// transcript; the last 20.
     public var skillies: [SkillieRun]?
+    /// Why its first transcript was not made, as said (`pending`): the
+    /// window says it; nil once one is.
+    public var failed: String?
+    /// A Transcribe Again not made as skil.li quit (waiting its turn, or
+    /// being made): made at the next launch in that language, with that
+    /// engine; nil once it is made, or failed.
+    public var madeAgain: MadeAgain?
+
+    /// What Transcribe Again was asked with.
+    public struct MadeAgain: Codable, Equatable, Sendable {
+        public var language: String
+        /// A `TranscriptEngine`'s stored name.
+        public var engine: String
+
+        public init(language: String, engine: String) {
+            self.language = language
+            self.engine = engine
+        }
+    }
 
     /// A skillie run on a recording: which, when, how it went.
     public struct SkillieRun: Codable, Equatable, Sendable {

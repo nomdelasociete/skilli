@@ -240,6 +240,8 @@ time, the recording named:
 "$SKILLI_CLI" call recording_followup action=ask question="Who sends the deck?"
 open "skilli://record/summary?recording=Weekly%20sync"   # …/chapters, …/actions, …/recap, …/ask?question=…
 open "skilli://record/open?recording=Weekly%20sync&at=724"   # its window, playing from 12:04
+"$SKILLI_CLI" call rename_recording recording="Weekly sync" title="Weekly sync with legal"   # its folder too
+open "skilli://record/rename?recording=Weekly%20sync&title=Weekly%20sync%20with%20legal"   # asked first
 ```
 
 A skillie made for recordings says so in its header; a recording's ⌘K

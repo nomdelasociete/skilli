@@ -50,7 +50,12 @@ final class MeetingRecorder {
 
     let recordings: Recordings
     private(set) var phase: Phase = .idle {
-        didSet { if phase != oldValue { onChange?() } }
+        didSet {
+            guard phase != oldValue else { return }
+            onChange?()
+            // The meeting's files closed: the transcripts that waited for it.
+            if phase == .idle { startTranscribing() }
+        }
     }
     private(set) var transcribing: Transcribing? {
         didSet { if transcribing != oldValue { onChange?() } }
@@ -58,6 +63,8 @@ final class MeetingRecorder {
     /// The one being made again: its record before, put back if skil.li
     /// quits meanwhile.
     private var transcribingBefore: MeetingRecord?
+    /// And what it was asked with, made at the next launch then.
+    private var transcribingAgain: (language: String, engine: TranscriptEngine)?
     /// The phase or a transcript changed: the menu bar, the launcher's row.
     var onChange: (() -> Void)?
     /// A transcript is done (or waits for a language): its window opens.
@@ -460,9 +467,10 @@ final class MeetingRecorder {
         self.record = nil
         self.folder = nil
         pausedAt = nil
-        phase = .idle
         Log.trace("Recorder: “\(record.title)” stopped, \(Int(record.seconds)) s (me \(lengths.first ?? 0), them \(lengths.last ?? 0))")
-        transcribe(folder, record: record)
+        // Its transcript first: an import made while it recorded waits.
+        transcribe(folder, record: record, first: true)
+        phase = .idle
     }
 
     /// Stops as `stop()` does (a stop under way too), holding the main
@@ -524,13 +532,16 @@ final class MeetingRecorder {
         if isRecording || phase == .stopping { stopNow() }
         // The one being made and those waiting their turn (one finishing
         // meanwhile is written done). One to be made again keeps its
-        // transcript as it was: waiting, nothing of it was written; being
-        // made, its record before is put back.
+        // transcript as it was (waiting, nothing of it was written; being
+        // made, its record before is put back) and is made again at the
+        // next launch, as asked.
         var left = queue.filter { !$0.again }.map(\.0)
+        let again = queue.filter(\.again)
         queue = []
         if let transcribing {
             if let before = transcribingBefore {
                 try? recordings.write(before.keepingRuns(of: recordings.read(transcribing.folder)), to: transcribing.folder)
+                if let asked = transcribingAgain { leaveAgain(transcribing.folder, asked.language, asked.engine) }
             } else {
                 left.insert(transcribing.folder, at: 0)
             }
@@ -538,6 +549,18 @@ final class MeetingRecorder {
         for folder in left {
             if let record = recordings.read(folder) { leave(folder, record: record) }
         }
+        for job in again {
+            leaveAgain(job.0, job.1.language, job.engine ?? TranscriptEngine(stored: job.1.engine) ?? .macOS)
+        }
+    }
+
+    /// A Transcribe Again kept for the next launch: its transcript as it
+    /// is, what was asked noted (`madeAgain`).
+    private func leaveAgain(_ folder: URL, _ language: String, _ engine: TranscriptEngine) {
+        guard var record = recordings.read(folder) else { return }
+        record.madeAgain = MeetingRecord.MadeAgain(language: language, engine: engine.rawValue)
+        try? recordings.write(record, to: folder)
+        Log.trace("Recorder: “\(record.title)” left to be transcribed again at the next launch")
     }
 
     /// Kept for the next launch's transcript: `stopped`, nobody's.
@@ -561,13 +584,20 @@ final class MeetingRecorder {
 
     /// Makes `folder`'s transcript (one at a time), then opens it. A
     /// language this Mac cannot transcribe, or a failure: kept without one
-    /// (`pending`), its window says why.
-    func transcribe(_ folder: URL, record: MeetingRecord, again: Bool = false, engine: TranscriptEngine? = nil) {
+    /// (`pending`), its window says why. While a meeting records, it waits
+    /// for that meeting's transcript (docs/meeting-recorder-views.md,
+    /// "Import"); `first`: that meeting's, ahead of them.
+    func transcribe(_ folder: URL, record: MeetingRecord, again: Bool = false, engine: TranscriptEngine? = nil, first: Bool = false) {
         guard !quitting else { return leave(folder, record: record) }
-        queue.append((folder, record, again, engine))
-        // One worker for them all: several asked at once (the launch's) wait
-        // their turn.
-        guard worker == nil else { return }
+        let job = (folder, record, again: again, engine: engine)
+        if first { queue.insert(job, at: 0) } else { queue.append(job) }
+        startTranscribing()
+    }
+
+    /// One worker for them all: several asked at once (the launch's) wait
+    /// their turn; none while a meeting records or its files close.
+    private func startTranscribing() {
+        guard worker == nil, !queue.isEmpty, phase == .idle || phase == .listening else { return }
         worker = Task {
             await transcribeNext()
             worker = nil
@@ -589,19 +619,26 @@ final class MeetingRecorder {
     }
 
     private func transcribeNext() async {
-        while !queue.isEmpty, !quitting {
+        // A meeting starting meanwhile: the next waits for its transcript.
+        while !queue.isEmpty, !quitting, phase == .idle || phase == .listening {
             let (folder, record, again, engine) = queue.removeFirst()
             // The job is this one before anything is awaited: another asked
             // meanwhile waits in the queue.
             transcribing = Transcribing(folder: folder, title: record.title, step: .transcribing(0), again: again)
             // Made again: the record as it is before, put back if it fails.
-            let before = again ? recordings.read(folder) : nil
+            let before = again ? recordings.read(folder).map { record in
+                var before = record
+                before.madeAgain = nil
+                return before
+            } : nil
             transcribingBefore = before?.state == .done ? before : nil
+            transcribingAgain = again ? (record.language, engine ?? TranscriptEngine(stored: record.engine) ?? .macOS) : nil
             let setup = await transcriptSetup()
             // Quit meanwhile: closeForQuit left it as it should be.
             if quitting {
                 transcribing = nil
                 transcribingBefore = nil
+                transcribingAgain = nil
                 break
             }
             // Each write keeps the skillies' runs as they are on disk: one
@@ -611,6 +648,8 @@ final class MeetingRecorder {
             var working = record.keepingRuns(of: recordings.read(folder))
             if again, var now = recordings.read(folder) {
                 now.language = record.language
+                // Made now: not again at the next launch, whatever comes of it.
+                now.madeAgain = nil
                 working = now
             }
             working.state = .transcribing
@@ -636,11 +675,15 @@ final class MeetingRecorder {
                 pending.state = .pending
                 pending.engine = nil
                 pending.recorder = nil
+                pending.failed = error.localizedDescription
                 try? recordings.write(pending.keepingRuns(of: recordings.read(folder)), to: folder)
+                // Said once, in the card; its window says it too, with Transcribe.
+                onTranscriptFailed?("No transcript for “\(record.title)”: \(error.localizedDescription) Its window offers Transcribe ↩.")
                 Log.actions.error("Recorder: no transcript for “\(record.title, privacy: .private)” (\(error.localizedDescription, privacy: .public))")
             }
             transcribing = nil
             transcribingBefore = nil
+            transcribingAgain = nil
             // Quitting: its window is not opened as skil.li goes.
             if !quitting { onFinished?(folder) }
         }

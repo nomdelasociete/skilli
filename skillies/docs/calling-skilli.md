@@ -211,6 +211,7 @@ page: add a line here when you add a tool. -->
 | `list_recordings` | The recordings, newest first: id (the folder's name), title, date, length, state, summary and chapters. No words. reads | |
 | `get_transcript` | A recording's transcript, as `transcript.md` has it; asked every time, the recording named. reads | `recording?` (an id or a title; empty: the newest) |
 | `recording_followup` | What its window's ⌘K does with your SI: `summary`, `chapters`, `action_items` (to Reminders), `recap_mail` (a mail opens, you send it), `ask` (with `question`); asked every time. | `action`, `recording?`, `question?` |
+| `rename_recording` | Renames a recording as Rename… in its window does: its title, its folder by the same rules, `transcript.md`'s heading; not while it records or is transcribed. Returns its new id. | `recording`, `title` |
 
 ### Snippets and your own tools
 
@@ -272,6 +273,7 @@ Each change asks in the card, every time.
 | `skilli://record/import?file=…` | The Import panel, at that file (nothing imported before ↩). |
 | `skilli://record/open?recording=…&at=…` | A recording's window (by its id or title), playing from `at` seconds. |
 | `skilli://record/summary?recording=…`, `…/chapters`, `…/actions`, `…/recap`, `…/ask?question=…` | What its window's ⌘K does with your SI; asked every time, the recording named, no Always. |
+| `skilli://record/rename?recording=…&title=…` | Renames a recording, its folder too; asked every time, both named. |
 | `skilli://skillies/import?url=…` | Shows a skillie from the web before Add. |
 | `skilli://apps/import?url=…` | Shows an app file before Add. |
 
