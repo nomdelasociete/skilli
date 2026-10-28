@@ -433,6 +433,8 @@ public enum ToolCallSummary {
         var length = -1
         var index = 0
         while index < words.count {
+            // Each turn keeps one part, counted at the next.
+            if let last = kept.last { length += last.count + 1 }
             if let limit, length > limit { break }
             var masked = false
             // A run never ends on a word of punctuation alone ("… 04 – Banque").
@@ -479,7 +481,6 @@ public enum ToolCallSummary {
                 kept.append(String(words[index]))
                 index += 1
             }
-            length += (kept.last?.count ?? 0) + 1
         }
         return kept.joined(separator: " ")
     }

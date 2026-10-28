@@ -227,6 +227,9 @@ final class SnippetTests: XCTestCase {
         XCTAssertEqual(ToolCallSummary.maskingSecrets("IBAN=FR7630006000011234567890189"), "IBAN=(an IBAN)")
         XCTAssertEqual(ToolCallSummary.maskingSecrets("IBAN: FR76 3000 6000 0112 3456 7890 189"), "IBAN: (an IBAN)")
         XCTAssertEqual(ToolCallSummary.maskingSecrets("voir https://example.com/a?b=1"), "voir https://example.com/a?b=1")
+        // With a limit, numbers in a row count toward it: it stops past it.
+        let many = Array(repeating: "12345 67890 12345678901 04", count: 50).joined(separator: " ")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets(many, upTo: 60), Array(repeating: masked, count: 3).joined(separator: " "))
         // Words after a year are not an IBAN.
         XCTAssertEqual(ToolCallSummary.maskingSecrets("Please act on 2026 delete files"), "Please act on 2026 delete files")
         XCTAssertEqual(ToolCallSummary.maskingSecrets("RDV le 12 mars 2026 au bureau"), "RDV le 12 mars 2026 au bureau")
