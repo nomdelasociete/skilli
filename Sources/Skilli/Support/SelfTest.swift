@@ -16911,8 +16911,10 @@ final class SelfTest {
         textView.string = ""
         // Money in a calculation: "-" types without Shift, which synthetic keys can lose.
         let sum = "120 eur - 30 usd"
-        _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
-        _ = await waitUntil(timeout: 0.5) { self.context.launcher.isVisible }
+        guard await openLauncher() else {
+            record(name, false, "the launcher did not open for “\(sum)”", nil)
+            return
+        }
         for character in sum { await pressKey(character) }
         let total = Calculator.evaluate(sum, currency: store.context)
         let sumShown = await waitUntil(timeout: 1) {
