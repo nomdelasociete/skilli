@@ -26333,6 +26333,11 @@ final class SelfTest {
             clickDetail = String(format: "playing %@ at %.2f s (the line starts at %.2f s), lit %@, selected %@", "\(controller.playing)", controller.currentTime,
                                  third.start, controller.litLine.map(String.init) ?? "none", controller.selectedLine.map(String.init) ?? "none")
             await captureRecordingWindow(controller, as: "recorder-window-playing")
+            // Still its keys (the capture took a moment): else none sent.
+            guard await recordingWindowHasKeys(controller, name) else {
+                controller.close()
+                return
+            }
             // Space pauses it; esc lets the line go, the hint says Play.
             await pressKey(nil, code: CGKeyCode(kVK_Space))
             let pausedAgain = await waitUntil(timeout: 2) { !controller.playing } != nil
