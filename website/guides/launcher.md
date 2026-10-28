@@ -63,7 +63,9 @@ chip shows the mode; esc leaves it.
 
 In the clipboard, files, browser history, snippets and emoji, **⇥**
 searches by meaning instead of by name: "my train ticket from yesterday",
-"the invoice from the plumber". In Search Files it does so on its own
+"the invoice from the plumber". The clipboard, browser history and
+snippets look through everything they keep, not only the latest. In
+Search Files it does so on its own
 when no file is named like what you typed. That needs your SI's choosing
 key (see [Your SI and privacy](privacy.md)).
 

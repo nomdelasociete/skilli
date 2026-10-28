@@ -36,7 +36,10 @@ of it.
 
 Stays on your Mac:
 
-- your clipboard history and snippets;
+- your clipboard history and snippets, except short extracts sent to
+  the SI that chooses (Jev or OpenAI) when you press **⇥** to search
+  them by meaning (a bank or card number or a key goes as what it is,
+  never itself);
 - speech for Ask by Voice and Dictate;
 - meeting recordings and their transcripts (a summary, action items or
   a question send the words to your SI only when you pick them; an
