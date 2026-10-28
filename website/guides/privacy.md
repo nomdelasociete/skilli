@@ -39,9 +39,10 @@ Stays on your Mac:
 - your clipboard history and snippets, except when you press **⇥** to
   search them, or your browser history, by meaning: your words and short
   extracts (a page's title, site and date) go to Jev, or to OpenAI when
-  you have no Jev key or Jev does not answer; an IBAN, a card number or
-  a key in a known form goes as what it is, never itself, while other
-  numbers go as written;
+  you have no Jev key or Jev does not answer; an IBAN, a card number
+  whose check digit is right, or a key (a known prefix such as `sk-` or
+  `ghp_`, or one word of 40 letters and digits or more) goes as what it
+  is, never itself, while other numbers go as written;
 - speech for Ask by Voice and Dictate;
 - meeting recordings and their transcripts (a summary, action items or
   a question send the words to your SI only when you pick them; an
