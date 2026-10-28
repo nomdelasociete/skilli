@@ -179,6 +179,7 @@ page: add a line here when you add a tool. -->
 | `merge_pull_request` | Merges a pull request. | `pull_request` |
 | `update_pull_request_branch` | Updates a pull request's branch. | `pull_request` |
 | `mark_github_notification_read` | Marks a notification read. light | `id` |
+| `mark_all_github_notifications_read` | Marks read every notification `list_github_notifications` gives for the same query. light | `query?` |
 
 ### The Mac
 

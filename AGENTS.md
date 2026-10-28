@@ -2624,11 +2624,16 @@ re-investigating.
   GitHub's search quicklink): Return opens (a notification is then read),
   ⌘Return copies the link, ⌘K (or ⇥) its actions (Open, the merge method,
   Update Branch, Checks, Copy Link; merging asks again in the card: Return
-  twice), ⌘⌫ marks a notification read. Agents: `list_pull_requests`,
-  `list_github_notifications`, `merge_pull_request` and
-  `update_pull_request_branch` (changes: the card asks),
-  `mark_github_notification_read`. `selftest github` (a stand-in GitHub:
-  device flow, GraphQL, 304, merge, read).
+  twice), ⌘⌫ marks a notification read; on a notification, ⌘K's Mark All
+  as Read (two listed or more) reads every notification the list shows,
+  the search narrowing it (one PATCH per thread: `PUT /notifications`
+  would also read those skil.li does not show; one relay reread after).
+  Agents: `list_pull_requests`, `list_github_notifications`,
+  `merge_pull_request` and `update_pull_request_branch` (changes: the card
+  asks), `mark_github_notification_read`,
+  `mark_all_github_notifications_read` (same `query` as the list).
+  `selftest github` (a stand-in GitHub: device flow, GraphQL, 304, merge,
+  read, read all).
 - Keep Awake for a while (`AwakeRequest` in SkilliCore,
   `SystemCommands.keepAwake`): "awake 1 hour", "do not sleep 1", "garde le
   mac éveillé 2h", "caffeinate until 6pm", "pas de veille jusqu'à 18h30",
