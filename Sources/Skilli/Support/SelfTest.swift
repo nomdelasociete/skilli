@@ -25413,7 +25413,10 @@ final class SelfTest {
         let linesBefore = center.recordings.transcript(folder)?.lines.count ?? 0
         left.madeAgain = MeetingRecord.MadeAgain(language: "en-US", engine: TranscriptEngine.macOS.rawValue)
         try? center.recordings.write(left, to: folder)
-        let found = await RecorderCenter.left(in: center.recordings.root)
+        // Looked for where it is, as at launch in the recordings' folder
+        // (the played-back calls have one of their own).
+        let root = folder.deletingLastPathComponent()
+        let found = await RecorderCenter.left(in: root)
         let key = { (url: URL) in url.resolvingSymlinksInPath().standardizedFileURL.path }
         let toMake = found.toMakeAgain.filter { key($0.0) == key(folder) }
         center.pickUp(RecorderCenter.Left(toMakeAgain: toMake))
@@ -25423,7 +25426,7 @@ final class SelfTest {
         let after = center.recordings.read(folder)
         let lines = center.recordings.transcript(folder)?.lines.count ?? 0
         let noWindow = center.openWindows.isEmpty
-        let again = await RecorderCenter.left(in: center.recordings.root).toMakeAgain.contains { key($0.0) == key(folder) }
+        let again = await RecorderCenter.left(in: root).toMakeAgain.contains { key($0.0) == key(folder) }
         let passed = toMake.count == 1 && started && made && after?.state == .done && after?.language == "en-US" && lines > 0 && noWindow && !again
         record(name, passed,
                "found \(toMake.count), made again at once \(started), done \(made) (“\(after?.state.rawValue ?? "?")”, \(after?.language ?? "?"), \(linesBefore) → \(lines) lines), window \(noWindow ? "none" : "opened"), found again after \(again)",
