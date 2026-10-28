@@ -308,6 +308,12 @@ final class MeetingRecorder {
         default:
             return
         }
+        // Off, its watch goes with it (Keep Recording too, even while paused):
+        // turned on again, it is watched afresh.
+        if !on {
+            silence[speaker] = nil
+            silent[speaker] = nil
+        }
         if on, isRecording { everOn.insert(speaker) }
         onChange?()
     }
