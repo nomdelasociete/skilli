@@ -566,6 +566,8 @@ public final class RelayDeviceSession: ObservableObject {
         }
         isBusy = true
         timer?.cancel()
+        // A retry starts: its time has passed, "retrying…" while it runs.
+        if retryNotBefore != nil { onChange?() }
         operation = Task { [self] in
             defer { isBusy = false; operation = nil; scheduleRenewal() }
             _ = await rotate()
