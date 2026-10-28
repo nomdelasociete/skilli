@@ -432,7 +432,9 @@ Your meetings recorded on this Mac, both sides, then written out.
   meeting is over and quiet for a minute, a card offers Stop. Then its
   window: both sides' waveforms, played in step, and the transcript line
   by line, Me and Them (Room in person); a click plays from a line; ⌘C
-  copies it, ⌘⌫ deletes the recording (⌘Z brings it back). Without
+  copies it, ⌘⌫ deletes the recording (⌘Z brings it back). While it is
+  open, skil.li is in the Dock and ⌘⇥ with the recorder's icon (its dot
+  a red recording light): a click there brings the window back. Without
   headphones, the other side the microphone heard again is left out of
   your lines. Quitting skil.li (a logout too) stops it whole, its
   transcript made at the next launch without asking. The Mac asleep (the

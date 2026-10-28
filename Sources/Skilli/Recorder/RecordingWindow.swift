@@ -285,7 +285,11 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         updateHints()
     }
 
+    /// Shown, and skil.li in the Dock with the recorder's icon until it
+    /// closes (docs/meeting-recorder-views.md, "In the Dock"): ⌘⇥ and the
+    /// Dock bring it back.
     func present() {
+        DockPresence.hold(window, icon: .recorder)
         Foreground.bring(window)
     }
 
@@ -1124,6 +1128,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         if let observer { player?.removeTimeObserver(observer) }
         observer = nil
         player = nil
+        DockPresence.release(window)
         onClose?(self)
     }
 }

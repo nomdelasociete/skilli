@@ -1,0 +1,133 @@
+{
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "light.svg",
+          "name": "light",
+          "position": {
+            "scale": 2.7,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          },
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "display-p3:1.00000,0.30000,0.26000,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "glass": true,
+          "image-name": "ring.svg",
+          "name": "ring",
+          "position": {
+            "scale": 2.7,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          },
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "display-p3:0.88000,0.98000,0.94000,1.00000"
+              }
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.4
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "S.svg",
+          "name": "S",
+          "position": {
+            "scale": 2.7,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          },
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "display-p3:0.88000,0.98000,0.94000,1.00000"
+              }
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.4
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  },
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "display-p3:0.16000,0.60000,0.56000,1.00000",
+          "display-p3:0.02000,0.19000,0.22000,1.00000"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.5,
+            "y": 0.0
+          },
+          "stop": {
+            "x": 0.5,
+            "y": 0.85
+          }
+        }
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "display-p3:0.06000,0.24000,0.24000,1.00000",
+          "display-p3:0.01000,0.07000,0.08000,1.00000"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.5,
+            "y": 0.0
+          },
+          "stop": {
+            "x": 0.5,
+            "y": 0.85
+          }
+        }
+      }
+    }
+  ]
+}

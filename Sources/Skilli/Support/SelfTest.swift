@@ -25329,11 +25329,19 @@ final class SelfTest {
     /// every later check is skipped (no key may land in another app).
     private func recordingWindowHasKeys(_ controller: RecordingWindowController, _ name: String) async -> Bool {
         controller.present()
-        if await waitUntil(timeout: 2, { controller.nsWindow.isKeyWindow && NSApp.isActive }) != nil { return true }
+        if await waitUntil(timeout: 2, { self.recordingWindowInFront(controller) }) != nil { return true }
         aborted = true
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
         record(name, false, "the recording's window did not take the keyboard (front: \(front)): stopped so no key lands elsewhere", nil)
         return false
+    }
+
+    /// The recording's window has the keys and the clicks: key, skil.li
+    /// active, and in front for the window server too (just brought
+    /// forward from another app, AppKit says active a moment before; a
+    /// click then only activates).
+    private func recordingWindowInFront(_ controller: RecordingWindowController) -> Bool {
+        controller.nsWindow.isKeyWindow && NSApp.isActive && NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid()
     }
 
     /// A real click at the middle of `frame` (AppKit's coordinates).
@@ -26099,15 +26107,190 @@ final class SelfTest {
         // The calls are English; the test Mac types French: Ask's language
         // says English, as a user would set it.
         context.preferences.voiceLanguage = "en-US"
-        await recorderCardShowsBothSourcesLive()
-        if !aborted { await recorderRecordsAPlayedBackCall() }
-        if !aborted { await recorderPausesBothTracksTogether() }
-        if !aborted { await recorderImportWaitsForTheRecording() }
-        if !aborted { await recorderOffersOneNeverStopped() }
-        if !aborted { await recorderQuitClosesItWhole() }
-        if !aborted { await recorderStopStuckOffersIt() }
-        if !aborted { await recorderSleepPausesUntilResumed() }
-        if !aborted { await recorderFromLinksAndTools() }
+        // Each from the test window in front: a recording's window closed
+        // makes skil.li an accessory again, and macOS puts another app in
+        // front.
+        let steps: [Step] = [recordingWindowKeepsTheDock, recorderCardShowsBothSourcesLive, recorderRecordsAPlayedBackCall,
+                             recorderPausesBothTracksTogether, recorderImportWaitsForTheRecording, recorderOffersOneNeverStopped,
+                             recorderQuitClosesItWhole, recorderStopStuckOffersIt, recorderSleepPausesUntilResumed, recorderFromLinksAndTools]
+        for step in steps {
+            await takeFocus()
+            if aborted { return }
+            await step()
+        }
+    }
+
+    /// A recording's window puts skil.li in the Dock with the recorder's
+    /// icon (docs/meeting-recorder-views.md, "In the Dock"); the Dock's icon
+    /// brings the window forward from another app, and out of the Dock
+    /// once minimized; Settings opened and closed meanwhile
+    /// leaves both; the window closed, skil.li is an accessory again with
+    /// its own icon. The other way round too: Settings keeps the Dock, with
+    /// skil.li's own icon, once the recording's window closes.
+    private func recordingWindowKeepsTheDock() async {
+        let name = "Recorder: a recording's window puts skil.li in the Dock with the recorder's icon, the Dock's icon brings it forward from another app and minimized, Settings opened and closed meanwhile keeps both; closed, an accessory with its own icon again (and Settings keeps the Dock with its own icon)"
+        guard let center = context.recorder(), let folder = seedMeeting(center, title: "Dock check", script: Self.launchReview) else {
+            record(name, false, "the stand-in meeting could not be written", nil)
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let settings = context.settings
+        func regular() -> Bool { NSRunningApplication.current.activationPolicy == .regular }
+        func state() -> String {
+            "policy \(regular() ? "regular" : NSRunningApplication.current.activationPolicy == .accessory ? "accessory" : "prohibited"), icon \(Self.showsRecorderIcon() ? "recorder" : "app")"
+        }
+        let before = state()
+        let startedAccessory = NSRunningApplication.current.activationPolicy == .accessory && !Self.showsRecorderIcon()
+
+        center.open(folder)
+        guard let controller = await waitForWindow(center, folder) else {
+            record(name, false, "no window for the stand-in meeting (before: \(before))", nil)
+            return
+        }
+        let opened = await waitUntil(timeout: 2) { regular() && Self.showsRecorderIcon() } != nil
+        let openedState = state()
+        // Its tile, once the Dock has added it.
+        let tile = await waitUntil(timeout: 3) { Self.ownDockTile() != nil } != nil ? Self.ownDockTile() : nil
+        if tile != nil { await captureDock(as: "recorder-dock") }
+        // The Dock's icon with another app in front (TextEdit, a scratch
+        // file): skil.li comes in front with the recording's window, not
+        // Settings. Minimized, the Dock's icon brings it back out.
+        let bundleID = "com.apple.TextEdit"
+        let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-dock-\(getpid()).txt")
+        try? "dock".write(to: file, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        var otherInFront = false, dockBrings = false, fromMinimized = false
+        if let tile, let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
+           let textEdit = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration),
+           await waitUntil(timeout: 5, { textEdit.isFinishedLaunching }) != nil {
+            let textEditPID = textEdit.processIdentifier
+            Self.makeFrontmost(pid: textEditPID)
+            otherInFront = await waitUntil(timeout: 4) { NSWorkspace.shared.frontmostApplication?.processIdentifier == textEditPID } != nil
+            if otherInFront {
+                AXUIElementPerformAction(tile.item, kAXPressAction as CFString)
+                dockBrings = await waitUntil(timeout: 3) { self.recordingWindowInFront(controller) } != nil
+            }
+            controller.nsWindow.miniaturize(nil)
+            if await waitUntil(timeout: 3, { controller.nsWindow.isMiniaturized }) != nil {
+                AXUIElementPerformAction(tile.item, kAXPressAction as CFString)
+                fromMinimized = await waitUntil(timeout: 3) { !controller.nsWindow.isMiniaturized && self.recordingWindowInFront(controller) } != nil
+            }
+            // The scratch file closed in TextEdit, TextEdit quit if it was not open.
+            Self.makeFrontmost(pid: textEditPID)
+            _ = await waitUntil(timeout: 2) { NSWorkspace.shared.frontmostApplication?.processIdentifier == textEditPID }
+            await cleanUp(bundleID: bundleID, wasRunning: wasRunning)
+        }
+        let settingsAfterDock = settings.isVisible
+        // Settings opened and closed: the recording's window keeps both.
+        settings.show()
+        let withSettings = await waitUntil(timeout: 2) { settings.isVisible } != nil && regular() && Self.showsRecorderIcon()
+        await closeSettings()
+        let afterSettings = await waitUntil(timeout: 1) { !regular() || !Self.showsRecorderIcon() } == nil
+        let afterSettingsState = state()
+        controller.close()
+        let closed = await waitUntil(timeout: 2) { !regular() && !Self.showsRecorderIcon() } != nil
+        let closedState = state()
+
+        // Settings first, then a recording's window, closed first: Settings
+        // keeps the Dock, with skil.li's own icon.
+        settings.show()
+        _ = await waitUntil(timeout: 2) { settings.isVisible }
+        center.open(folder)
+        let second = await waitForWindow(center, folder)
+        let bothRecorder = await waitUntil(timeout: 2) { regular() && Self.showsRecorderIcon() } != nil
+        second?.close()
+        let settingsKeeps = await waitUntil(timeout: 2) { regular() && !Self.showsRecorderIcon() } != nil
+        let settingsKeepsState = state()
+        await closeSettings()
+        let allClosed = await waitUntil(timeout: 2) { NSRunningApplication.current.activationPolicy == .accessory } != nil
+        record(name, startedAccessory && opened && tile != nil && otherInFront && dockBrings && fromMinimized && !settingsAfterDock && withSettings
+               && afterSettings && closed && bothRecorder && settingsKeeps && allClosed,
+               "before: \(before); window open: \(openedState) \(opened), Dock tile \(tile != nil), TextEdit in front \(otherInFront), the Dock's icon brought skil.li and the window in front \(dockBrings), brought it back minimized \(fromMinimized) (Settings shown \(settingsAfterDock)); Settings opened too \(withSettings), closed: \(afterSettingsState) \(afterSettings); window closed: \(closedState) \(closed); Settings then a window: recorder icon \(bothRecorder), window closed: \(settingsKeepsState) \(settingsKeeps); all closed, accessory \(allClosed)",
+               nil)
+    }
+
+    /// Whether the icon AppKit gives skil.li now is the recorder's: drawn at
+    /// 64 pt, its record light (red) is where skil.li's own icon has its
+    /// mint dot.
+    private static func showsRecorderIcon() -> Bool {
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64, bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return false }
+        // In points before the context, or it draws 1:1 in pixels.
+        rep.size = NSSize(width: 64, height: 64)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSApp.applicationIconImage?.draw(in: NSRect(x: 0, y: 0, width: 64, height: 64))
+        NSGraphicsContext.restoreGraphicsState()
+        // From the top left.
+        var pixel = [Int](repeating: 0, count: 4)
+        rep.getPixel(&pixel, atX: 42, y: 42)
+        return pixel[0] > 200 && pixel[1] < 110 && pixel[2] < 110
+    }
+
+    /// skil.li's tile in the Dock (the item whose application is this one),
+    /// its frame and the Dock's list's, in screen coordinates from the top
+    /// left, through the Dock's Accessibility.
+    private static func ownDockTile() -> (item: AXUIElement, frame: CGRect?, dock: CGRect?)? {
+        guard let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first else { return nil }
+        let own = Bundle.main.bundleURL.resolvingSymlinksInPath().path
+        func children(_ element: AXUIElement) -> [AXUIElement] {
+            var value: CFTypeRef?
+            AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value)
+            return value as? [AXUIElement] ?? []
+        }
+        for list in children(AXUIElementCreateApplication(dock.processIdentifier)) {
+            for item in children(list) {
+                var url: CFTypeRef?
+                AXUIElementCopyAttributeValue(item, kAXURLAttribute as CFString, &url)
+                if let url = url as? URL, url.resolvingSymlinksInPath().path == own { return (item, axFrame(item), axFrame(list)) }
+            }
+        }
+        return nil
+    }
+
+    /// skil.li's tile as the Dock shows it (Screen Recording): `name`, the
+    /// tile and its running dot with the Dock's glass around them (no other
+    /// app's tile), and `name-whole`, the whole Dock, to judge it among the
+    /// others.
+    private func captureDock(as name: String) async {
+        guard let directory = context.snapshotDirectory, let screen = NSScreen.screens.first?.frame else { return }
+        /// The tile's and the Dock's frames once the Dock is on screen.
+        func shown() -> (tile: CGRect, dock: CGRect)? {
+            guard let found = Self.ownDockTile(), let tile = found.frame, let dock = found.dock,
+                  dock.minY >= screen.minY, dock.maxY <= screen.maxY + 1 else { return nil }
+            return (tile, dock)
+        }
+        let source = CGEventSource(stateID: .hidSystemState)
+        func movePointer(to point: CGPoint) {
+            CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+        }
+        // A Dock that hides itself shows with the pointer on the screen's
+        // bottom edge (where it is unless moved).
+        let revealed = shown() == nil
+        if revealed { movePointer(to: CGPoint(x: screen.midX, y: screen.maxY - 1)) }
+        defer { if revealed { movePointer(to: CGPoint(x: screen.midX, y: screen.midY)) } }
+        // Still: its tile grown in, the Dock slid up (the same frames twice
+        // 100 ms apart).
+        var last: (tile: CGRect, dock: CGRect)?
+        var still: (tile: CGRect, dock: CGRect)?
+        for _ in 0..<40 where still == nil {
+            let now = shown()
+            if let now, let last, now.tile == last.tile, now.dock == last.dock { still = now }
+            last = now
+            await pause(100)
+        }
+        guard let still else { return }
+        func appKit(_ rect: CGRect) -> NSRect { NSRect(x: rect.minX, y: screen.maxY - rect.maxY, width: rect.width, height: rect.height) }
+        for (file, rect) in [(name, appKit(still.tile).insetBy(dx: 0, dy: -still.tile.height * 0.25)),
+                             ("\(name)-whole", appKit(still.dock).insetBy(dx: -12, dy: -12))] {
+            if let image = await GlassCheck.screenshot(of: rect), let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+                try? png.write(to: directory.appendingPathComponent("\(file).png"))
+            }
+        }
     }
 
     /// The played-back calls (`script/recorder-measure`: `push.sh` puts them
@@ -26541,7 +26724,7 @@ final class SelfTest {
         if controller.shownLines.count > 3, let frame = controller.screenFrame(ofLine: 2) {
             // A real click on the third line, its window in front.
             controller.present()
-            guard await waitUntil(timeout: 2, { controller.nsWindow.isKeyWindow && NSApp.isActive }) != nil else {
+            guard await waitUntil(timeout: 2, { self.recordingWindowInFront(controller) }) != nil else {
                 aborted = true
                 controller.close()
                 let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"

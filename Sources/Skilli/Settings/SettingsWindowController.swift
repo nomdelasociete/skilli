@@ -101,8 +101,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.title = navigation.pane == .apps ? apps.title ?? SettingsPane.apps.title : (navigation.pane ?? .general).title
         if isNew { window.center() }
         // In the Dock and ⌘⇥ while Settings is open, as an app with a
-        // window is; an accessory again once it closes (`windowWillClose`).
-        if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
+        // window is; an accessory again once it closes (`windowWillClose`)
+        // and no recording's window keeps it there.
+        DockPresence.hold(window)
         Foreground.bring(window)
         if isNew {
             // SwiftUI ignores the sidebar's column width in this window;
@@ -320,10 +321,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        // Out of the Dock, unless a recording's window keeps it there:
+        // skil.li lives in the menu bar.
+        if let window { DockPresence.release(window) }
         // Drop the SwiftUI hierarchy; reopening rebuilds it in a few ms.
         window = nil
-        // Out of the Dock: skil.li lives in the menu bar.
-        NSApp.setActivationPolicy(.accessory)
         // Asked and never shown: not on the next open.
         navigation.new = nil
         waitingNew = nil

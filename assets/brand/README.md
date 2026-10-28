@@ -68,6 +68,16 @@ ictool="/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents
   --platform macOS --rendition Dark --width 512 --height 512 --scale 1
 ```
 
+## Icône de l’enregistreur
+
+`recorder-icon/RecorderIcon.icon` (Icon Composer, 2026-10-28) : l’icône de l’app, son S en verre tel quel, dont le point devient le voyant d’enregistrement, un disque rouge dans un fin anneau de verre blanc, dans un groupe à part, non translucide, pour que le rouge reste rouge. skil.li la montre dans le Dock tant qu’une fenêtre d’enregistrement est ouverte (`NSApp.applicationIconImage`). Le Dock dessine telle quelle une image posée à l’exécution : `recorder-icon/make-icns.swift` produit donc `Sources/Skilli/Resources/RecorderIcon.icns` (16 à 1024 px), chaque taille avec les marges de la grille macOS et l’ombre de l’icns que Xcode tire de `AppIcon.icon`. Depuis la racine du dépôt :
+
+```sh
+swift assets/brand/recorder-icon/make-icns.swift
+```
+
+Rendu Default seulement : le Dock montre aussi l’icône de skil.li dans son rendu Default en mode sombre. Aperçu, à côté de l’icône de l’app, en clair et en sombre, de 128 à 16 pt : `recorder-icon/preview.png`. Dans le Dock, capturée par `remote recorder` : `recorder-icon/dock.png`.
+
 ## Fenêtre du DMG
 
 `dmg/background.png` et `@2x` (640 × 360 pt), produits par `dmg/make_background.py` ; `script/release/dmg_settings.py` place l’app et Applications dessus. Finder écrit les noms sous les icônes en noir (clair) ou en blanc (sombre) : la bande où ils tombent garde une luminance relative proche de 0,18, lisible dans les deux cas.
