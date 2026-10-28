@@ -221,10 +221,12 @@ final class GitHubBook {
     private(set) var hasRelayToken = false
     /// Server sync's state while it is on: what holds it back.
     private(set) var serverHold: GitHubServerHold?
-    /// Server sync waits for this Mac's identity check (each activation,
-    /// `RelayDeviceSession.checksIdentity`): "Checking this Mac…", in grey,
-    /// not the hold's message.
-    private(set) var checkingThisMac = false
+    /// Server sync waits, with nothing for the user to do, said in grey
+    /// instead of the hold's message: this Mac's identity check (each
+    /// activation and renewal, `RelayDeviceSession.checksIdentity`),
+    /// "Checking this Mac…"; a renewal the relay did not answer, retried by
+    /// itself (`renewalRetry`), "Sync paused, retrying at 19:16".
+    private(set) var serverWait: String?
     /// False when GitHub had more unread notifications than the relay keeps.
     private(set) var notificationsComplete = true
     /// False until notifications were read (since sign-in, or since the
@@ -480,9 +482,8 @@ final class GitHubBook {
         notificationsRead = server.notifications != nil
         if let login = server.login { self.login = login }
         serverHold = server.hold
-        checkingThisMac = server.hold == .macNotReady
-            && resolvedRelayOrigin.map { relayDevice.checksIdentity(origin: $0.absoluteString) } == true
-        problem = checkingThisMac ? nil : server.hold?.message
+        serverWait = server.hold == .macNotReady ? resolvedRelayOrigin.flatMap { serverWait(origin: $0.absoluteString) } : nil
+        problem = serverWait == nil ? server.hold?.message : nil
         lastRefresh = server.lastInboxRead
         // What is shown, and what holds each read back: an empty list says why.
         let held = [server.inboxHold.map { "pull requests held: \($0)" }, server.notificationsHold.map { "notifications held: \($0)" }]
@@ -490,6 +491,14 @@ final class GitHubBook {
         Log.trace((["GitHub (relay): \(GitHubInbox.summary(pullRequests))", notes] + held.compactMap { $0 }).joined(separator: ", "))
         schedule()
         onChange?()
+    }
+
+    /// Why server sync waits while the user has nothing to do, nil when
+    /// the hold is theirs to act on (authorize again).
+    private func serverWait(origin: String) -> String? {
+        if relayDevice.checksIdentity(origin: origin) { return "Checking this Mac…" }
+        guard let retry = relayDevice.renewalRetry(origin: origin) else { return nil }
+        return retry > Date() ? "Sync paused, retrying at \(retry.formatted(date: .omitted, time: .shortened))" : "Sync paused, retrying…"
     }
 
     /// This Mac's way to the relay's inbox, once signed in and verified.
@@ -931,7 +940,7 @@ final class GitHubBook {
         lastRefresh = nil
         problem = nil
         serverHold = nil
-        checkingThisMac = false
+        serverWait = nil
         server.reset()
     }
 

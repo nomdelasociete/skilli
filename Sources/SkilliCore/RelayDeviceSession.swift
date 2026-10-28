@@ -189,13 +189,32 @@ public final class RelayDeviceSession: ObservableObject {
     /// access token, the GitHub sign-in) are not verified together yet, its
     /// check not failed: what each activation, renewal and account change
     /// does (GitHub, then the relay), about 2 s, longer on a slow network.
-    /// Nothing is wrong yet: "Checking this Mac…".
+    /// Nothing is wrong yet: "Checking this Mac…". A renewal on its way (its
+    /// first try, or the one a restart resumes) too: its new token is
+    /// checked next.
     public func checksIdentity(origin: String) -> Bool {
         guard let url = Self.origin(origin), let current = credentials, current.origin == url.absoluteString,
-              !current.requiresEnrollment, current.pendingRevocation != true, current.expiresAt > Date(),
+              !current.requiresEnrollment, current.pendingRevocation != true,
               let native = githubToken() else { return false }
+        if current.pendingRefreshID != nil {
+            guard let authority = Self.origin(current.authorityOrigin ?? "") else { return false }
+            return retryNotBefore == nil && authority == Self.origin(authorityOrigin())
+        }
+        guard current.expiresAt > Date() else { return false }
         let verified = verifiedSubject != nil && verifiedAccessToken == current.pair.access_token && verifiedNativeToken == native
         return !verified && !identityCheckFailed
+    }
+
+    /// When this Mac's relay access is renewed again, after a renewal the
+    /// relay or the network did not answer (a 503 while GitHub holds the
+    /// relay back, no connection): it retries by itself, nothing for the
+    /// user to do. nil once renewed, or once the relay refused it (401:
+    /// authorize again).
+    public func renewalRetry(origin: String) -> Date? {
+        guard let url = Self.origin(origin), let current = credentials, current.origin == url.absoluteString,
+              !current.requiresEnrollment, current.pendingRevocation != true,
+              current.pendingRefreshID != nil else { return nil }
+        return retryNotBefore
     }
 
     public func configuration(origin: String) -> RelayDeviceConfiguration? {

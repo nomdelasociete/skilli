@@ -2686,7 +2686,13 @@ re-investigating.
   `checksIdentity`, scoped to the configured relay), the
   macNotReady hold is said in grey as "Checking this Mac…" in the strip,
   the GitHub mode and Settings, not as an orange problem; a failed check
-  is orange again. The relay itself answers
+  is orange again. A renewal of this Mac's relay access on its way (its
+  first try, or the one a restart resumes) is "Checking this Mac…" too;
+  one the relay or the network did not answer (2026-10-28: 503s for 17
+  minutes while GitHub held the relay back) is "Sync paused, retrying at
+  19:16" in grey (`renewalRetry`, `GitHubBook.serverWait`), never "waits
+  for this Mac's live updates authorization": that one only once the
+  relay refused it (401, authorize again). The relay itself answers
   428 only for a grant that is gone: a read that crossed a new grant is
   read again there.
   "pr " / "prs " or GitHub Inbox: the GitHub mode (grey chip; "gh " stays
