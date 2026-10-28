@@ -213,7 +213,7 @@ struct GitHubPane: View {
     private func lastRead(_ github: GitHubBook) -> some View {
         LabeledContent {
             HStack {
-                Text(github.problem ?? (github.checkingThisMac ? "Checking this Mac…" : nil)
+                Text(github.problem ?? github.serverWait
                      ?? github.lastRefresh.map { $0.formatted(date: .omitted, time: .standard) } ?? "Not yet")
                     .foregroundStyle(github.problem == nil ? Color.secondary : Color.orange)
                 Button("Read Now") { github.readNow() }
@@ -325,7 +325,7 @@ private struct ServerSyncControls: View {
         Section {
             if preferences.githubServerSync {
                 LabeledContent {
-                    Text(status).foregroundStyle(github.serverHold == nil || github.checkingThisMac ? Color.secondary : Color.orange)
+                    Text(status).foregroundStyle(github.serverHold == nil || github.serverWait != nil ? Color.secondary : Color.orange)
                 } label: {
                     LabelDetail("Read through the relay", "This Mac does not read GitHub itself while this is on.")
                 }
@@ -381,7 +381,7 @@ private struct ServerSyncControls: View {
     }
 
     private var status: String {
-        if github.checkingThisMac { return "Checking this Mac…" }
+        if let wait = github.serverWait { return wait }
         if let hold = github.serverHold { return hold.message }
         guard let read = github.lastRefresh else { return "Reading…" }
         return "Read \(read.formatted(date: .omitted, time: .standard))"

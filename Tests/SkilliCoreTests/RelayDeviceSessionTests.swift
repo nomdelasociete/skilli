@@ -672,6 +672,51 @@ final class RelayDeviceSessionTests: XCTestCase {
         client.suspend()
     }
 
+    func testARenewalTheRelayDidNotAnswerIsARetryNotAnAuthorization() async throws {
+        let server = RelayReplies([response(503)])
+        let client = session(RelayVault(try existing()), server)
+        XCTAssertNil(client.renewalRetry(origin: origin))
+        client.renew()
+        try await finish(client)
+        XCTAssertNil(client.configuration(origin: origin))
+        let retry = try XCTUnwrap(client.renewalRetry(origin: origin), "Retried by itself: nothing to authorize")
+        XCTAssertGreaterThan(retry, Date())
+        XCTAssertFalse(client.checksIdentity(origin: origin), "A retry, not a check")
+        XCTAssertNil(client.renewalRetry(origin: "https://other-relay.example"))
+        XCTAssertFalse(client.needsEnrollment)
+    }
+
+    func testAccessTheRelayRefusedSaysCheckingWhileItsRenewalRuns() async throws {
+        let server = RelayReplies([response(503)])
+        let client = session(RelayVault(try existing()), server)
+        var checking: [Bool] = []
+        client.onChange = { checking.append(client.checksIdentity(origin: self.origin)) }
+        client.accessExpired()
+        try await finish(client)
+        XCTAssertTrue(checking.contains(true), "Said once the renewal's marker is saved, before the relay answers")
+        XCTAssertNotNil(client.renewalRetry(origin: origin))
+        client.onChange = nil
+    }
+
+    func testARestartResumingARenewalChecksThisMac() async throws {
+        let pair = try JSONDecoder().decode(RelayTokenPair.self, from: Data(tokens.utf8))
+        let credentials = RelayDeviceCredentials(origin: origin, pair: pair, expiresAt: Date().addingTimeInterval(-60),
+                                                 authorityOrigin: "https://access.example", pendingRefreshID: "rotation-1")
+        let client = session(RelayVault(String(decoding: try JSONEncoder().encode(credentials), as: UTF8.self)), RelayReplies([]))
+        XCTAssertTrue(client.checksIdentity(origin: origin), "The resumed renewal's token is checked next")
+        XCTAssertNil(client.renewalRetry(origin: origin), "Not failed yet")
+    }
+
+    func testARenewalTheRelayRefusedAsksToAuthorize() async throws {
+        let server = RelayReplies([response(401)])
+        let client = session(RelayVault(try existing()), server)
+        client.renew()
+        try await finish(client)
+        XCTAssertNil(client.renewalRetry(origin: origin))
+        XCTAssertFalse(client.checksIdentity(origin: origin))
+        XCTAssertTrue(client.needsEnrollment)
+    }
+
     func testUnavailableIdentityEndpointFailsClosed() async throws {
         let vault = RelayVault()
         let server = RelayReplies([response(201, grant), response(200, tokens)])

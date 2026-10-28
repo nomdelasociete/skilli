@@ -15,8 +15,9 @@ final class GitHubStripView: NSView {
     private var unreadComplete = true
     private var problem: String?
     private var reading = false
-    /// Server sync waits for this Mac's identity check: said in grey.
-    private var checking = false
+    /// Server sync waits with nothing for the user to do ("Checking this
+    /// Mac…", "Sync paused, retrying at 19:16"): said in grey.
+    private var wait: String?
     /// Where each group was drawn, for clicks.
     private var zones: [(rect: NSRect, group: PullRequestGroup?)] = []
 
@@ -26,16 +27,16 @@ final class GitHubStripView: NSView {
     /// Self-test hook: what the strip says.
     private(set) var shownText = ""
 
-    func show(pullRequests: [PullRequest], unread: Int, unreadComplete: Bool = true, problem: String?, reading: Bool, checking: Bool = false) {
+    func show(pullRequests: [PullRequest], unread: Int, unreadComplete: Bool = true, problem: String?, reading: Bool, wait: String? = nil) {
         let counts = GitHubInbox.counts(pullRequests)
         groups = PullRequestGroup.allCases.compactMap { group in counts[group].map { (group, $0) } }
         self.unread = unread
         self.unreadComplete = unreadComplete
         self.problem = problem
         self.reading = reading
-        self.checking = checking
-        let left = groups.isEmpty ? (reading || checking ? "" : "No open pull request") : groups.map { "\($0.count) \($0.group.title)" }.joined(separator: " · ")
-        let right = problem.map { "GitHub: \($0)" } ?? (checking ? "Checking this Mac…" : reading ? "Reading GitHub…" : unreadText ?? "")
+        self.wait = wait
+        let left = groups.isEmpty ? (reading || wait != nil ? "" : "No open pull request") : groups.map { "\($0.count) \($0.group.title)" }.joined(separator: " · ")
+        let right = problem.map { "GitHub: \($0)" } ?? wait ?? (reading ? "Reading GitHub…" : unreadText ?? "")
         shownText = [left, right].filter { !$0.isEmpty }.joined(separator: " — ")
         setAccessibilityLabel("GitHub: " + shownText)
         needsDisplay = true
@@ -55,7 +56,7 @@ final class GitHubStripView: NSView {
             mark.draw(in: NSRect(x: x, y: midY - mark.size.height / 2, width: mark.size.width, height: mark.size.height))
             x += mark.size.width + 10
         }
-        if groups.isEmpty, !reading, !checking {
+        if groups.isEmpty, !reading, wait == nil {
             x += drawText("No open pull request", at: x, color: .secondaryLabelColor)
         }
         for (group, count) in groups {
@@ -71,8 +72,8 @@ final class GitHubStripView: NSView {
         // The notifications, or what is wrong, on the right.
         let right: (text: String, color: NSColor, symbol: String?)? = if let problem {
             ("GitHub: \(problem)", .systemOrange, nil)
-        } else if checking {
-            ("Checking this Mac…", .secondaryLabelColor, nil)
+        } else if let wait {
+            (wait, .secondaryLabelColor, nil)
         } else if reading {
             ("Reading GitHub…", .secondaryLabelColor, nil)
         } else if let unreadText {
