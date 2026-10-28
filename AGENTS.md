@@ -3733,8 +3733,10 @@ re-investigating.
   one line, "Searching by meaning…" with a spinner (the copies the words
   found are not the answer); typing on cancels the request. Each model gets
   `ClipboardHistory.answerLimit` (5 s, the whole wait, not the request's
-  idle timeout), then the next key; none answering says "Jev did not
-  answer: ⇥ tries again" (2026-10-28: one Jev call took 15.3 s). Measured on volume:
+  idle timeout), then the next key; none answering names the models
+  asked ("Jev did not answer: ⇥ tries again", "Jev and Decisions did not
+  answer…"), in the header when setup rows fill the list (2026-10-28: one
+  Jev call took 15.3 s). Measured on volume:
   `remote clipmeaning` (also in `decide`) runs the 40 labeled requests of
   `ClipboardMeaningCorpus` (a kind of copy, which one, what it was about;
   tune and held-out halves, as `AskRouteCorpus`) among 91 copies, then

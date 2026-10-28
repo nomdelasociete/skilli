@@ -1676,7 +1676,11 @@ final class LauncherController: NSObject {
         selectionLabel.isHidden = mode != nil
         emptyState.isHidden = !results.isEmpty
         if results.isEmpty, beside != nil { placeEmptyState() }
-        showMeaningSpinner(isSearchingClipboardMeaning)
+        // Setup rows fill the list: the search's line goes in the header.
+        if clipboardMode, !results.isEmpty, meaningPending == text || (meaning?.query == text && meaning?.result.unanswered != nil) {
+            sectionHeader.stringValue = emptyState.stringValue
+        }
+        showMeaningSpinner(isSearchingClipboardMeaning && results.isEmpty)
         laps.lap("labels")
         showRows()
         laps.lap("rows")

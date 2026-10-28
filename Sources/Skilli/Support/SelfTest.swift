@@ -15375,25 +15375,28 @@ final class SelfTest {
         let limit = ClipboardHistory.answerLimit.milliseconds / 1_000
         for provider in DecisionProvider.allCases {
             let name = "Clipboard by meaning answers fast with \(provider.title): \(requests.count) requests among \(copies.count) copies, "
-                + "median under 1.5 s, at most one past \(Int(limit)) s"
+                + "median under 1.5 s, at most one unanswered, none answered past \(Int(limit)) s"
             guard let key = userDecisionKeys[provider] else {
                 checks.append(Check(name: name, passed: true, skipped: true, detail: "no \(provider.title) key saved in Settings", latencyMs: nil))
                 continue
             }
             var seconds: [Double] = []
-            var unanswered = 0
+            var unanswered = 0, past = 0
             for request in requests {
                 let start = ContinuousClock.now
                 let found = await history.searchByMeaning(request, keys: [provider: key], now: now)
-                seconds.append((ContinuousClock.now - start).milliseconds / 1_000)
+                let took = (ContinuousClock.now - start).milliseconds / 1_000
+                seconds.append(took)
                 if found?.unanswered != nil || found == nil { unanswered += 1 }
+                // The cap, and a second for the descriptions built before it.
+                else if took > limit + 1 { past += 1 }
             }
             let sorted = seconds.sorted()
             let median = sorted[sorted.count / 2]
             let ninetieth = sorted[min(sorted.count - 1, sorted.count * 9 / 10)]
-            record(name, median < 1.5 && unanswered <= 1,
-                   String(format: "median %.2f s, 90th %.2f s, slowest %.2f s, fastest %.2f s, no answer %d", median, ninetieth,
-                          sorted.last ?? 0, sorted.first ?? 0, unanswered)
+            record(name, median < 1.5 && unanswered <= 1 && past == 0,
+                   String(format: "median %.2f s, 90th %.2f s, slowest %.2f s, fastest %.2f s, no answer %d, answered past the cap %d", median, ninetieth,
+                          sorted.last ?? 0, sorted.first ?? 0, unanswered, past)
                        + "; each: " + seconds.map { String(format: "%.2f", $0) }.joined(separator: " "),
                    median * 1_000)
         }
