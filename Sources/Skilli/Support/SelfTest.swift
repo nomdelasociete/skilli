@@ -28016,8 +28016,9 @@ final class SelfTest {
             panel.appearance = appearance
             window.appearance = appearance
             await pause(500)
-            guard await recordCardHasKeys(center, name) else { return }
             // A list left open closes in 8 s: no key goes anywhere else.
+            // (The click makes the card key again if anything took it: only
+            // Escape into its own list and ↩ below, checked first, are keys.)
             let escape = DispatchWorkItem { Self.closeOwnMenu() }
             DispatchQueue.global().asyncAfter(deadline: .now() + 8, execute: escape)
             if index == 0 {
@@ -30083,9 +30084,9 @@ final class SelfTest {
             return guideMissing(name, "no Record card")
         }
         defer { panel.appearance = nil }
+        guard await recordCardHasKeys(center, "Guide picture: \(name)") else { return }
         var written: [String] = []
         for (suffix, look) in GlassCheck.appearances {
-            guard await recordCardHasKeys(center, "Guide picture: \(name)") else { return }
             panel.appearance = look
             // The card, and room under it for the list.
             let card = panel.frame.insetBy(dx: Theme.glassMargin, dy: Theme.glassMargin)
