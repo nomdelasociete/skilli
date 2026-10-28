@@ -1554,4 +1554,5 @@ The call's end card's place, frame and type, once for a stretch:
   (the Mac's sound: while an app has played sound for 5 s).
 - Not said: a quiet stretch after the track gave sound since its source
   started (muted, nobody talking), a source turned off, a paused
-  recording, the Record card's meters (the card says it there already).
+  recording (the mark goes at the pause, each track is read again at
+  Resume), the Record card's meters (the card says it there already).

@@ -171,13 +171,14 @@ final class MeetingRecorder {
     #endif
 
     /// Once a second while recording: each track on, whether it records
-    /// anything. The tracks the card offers Start Again for now (none while
-    /// paused: nothing is recorded then anyway).
+    /// anything. The tracks the card offers Start Again for now. Never
+    /// while paused (nothing is recorded then anyway): the marks go at the
+    /// pause, each track is read again at Resume.
     func checkTracks() -> [Speaker] {
         #if SKILLI_SELFTEST
         guard watchesSilence else { return [] }
         #endif
-        guard isRecording else { return [] }
+        guard phase == .recording else { return [] }
         let now = HostClock.now
         var offers: [Speaker] = []
         for speaker in Speaker.allCases {
@@ -197,7 +198,7 @@ final class MeetingRecorder {
                 silent[speaker] = reason
                 if let reason { Log.actions.error("Recorder: \(speaker == .me ? "the microphone" : "the Mac's sound", privacy: .public) records nothing (\(reason == .nothing ? "no buffer" : "only zeros", privacy: .public))") }
             }
-            if offer, phase == .recording { offers.append(speaker) } else if offer { silence[speaker]?.offerAgain() }
+            if offer { offers.append(speaker) }
         }
         return offers
     }
@@ -445,6 +446,8 @@ final class MeetingRecorder {
         writers.values.forEach { $0.pause(at: now) }
         madePictures?.pause(at: now)
         pausedAt = now
+        // Nothing said while paused: read again at Resume.
+        silent = [:]
         record.state = .paused
         record.pauses.append(.init(at: max(0, now - start - pausedTotal), seconds: 0))
         self.record = record
