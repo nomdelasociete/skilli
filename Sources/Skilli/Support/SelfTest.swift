@@ -24715,9 +24715,9 @@ final class SelfTest {
     }
 
     /// Rename… in a recording's ⌘K (docs/meeting-recorder.md, "Where it
-    /// lives"): the list becomes a field with its title; typed and ↩, the
-    /// recording and its folder are renamed, `transcript.md`'s heading too,
-    /// and its window stays, on the folder it is in now.
+    /// lives"): the list becomes a field with its title, selected; typed
+    /// and ↩, the recording and its folder are renamed, `transcript.md`'s
+    /// heading too, and its window stays, on the folder it is in now.
     private func recordingRenamedFromItsWindow(_ center: RecorderCenter) async {
         let name = "Recorder: Rename… in a recording's ⌘K renames it and its folder by the same rules, transcript.md's heading too, its window on the folder it is in now"
         guard let folder = seedMeeting(center, title: "Kickoff", script: Array(Self.launchReview.prefix(3))) else {
@@ -24738,8 +24738,14 @@ final class SelfTest {
         for character in "rename" { _ = await typeCharacter(character) }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         let prompting = await waitUntil(timeout: 2) { controller.isAskingInActions } != nil
+        // The title opens selected: typed over; ⌘A selects it again; →
+        // lets it go, typed after.
+        for character in "Board" { _ = await typeCharacter(character) }
         await pressKey("a", flags: .maskCommand)
-        for character in "Kickoff with legal" { _ = await typeCharacter(character) }
+        for character in "Kickoff" { _ = await typeCharacter(character) }
+        await pressKey("a", flags: .maskCommand)
+        await pressKey(nil, code: CGKeyCode(kVK_RightArrow))
+        for character in " with legal" { _ = await typeCharacter(character) }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
         let renamed = await waitUntil(timeout: 3) { center.openWindows.contains { $0.record.title == "Kickoff with legal" } } != nil
         let moved = center.openWindows.first { $0.record.title == "Kickoff with legal" }
@@ -24748,9 +24754,10 @@ final class SelfTest {
         let written = moved.flatMap { center.recordings.read($0.folder)?.title } == "Kickoff with legal"
         let heading = moved.flatMap { try? String(contentsOf: $0.folder.appendingPathComponent("transcript.md"), encoding: .utf8) }?
             .hasPrefix("# Kickoff with legal\n") ?? false
+        let titles = center.openWindows.map(\.record.title)
         center.openWindows.forEach { $0.close() }
         record(name, prompting && renamed && folderNamed && oldGone && written && heading,
-               "the field \(prompting); renamed \(renamed), folder “\(moved?.folder.lastPathComponent ?? "?")” \(folderNamed), the one before gone \(oldGone), meeting.json \(written), transcript.md's heading \(heading)",
+               "the field \(prompting); renamed \(renamed) \(titles), folder “\(moved?.folder.lastPathComponent ?? "?")” \(folderNamed), the one before gone \(oldGone), meeting.json \(written), transcript.md's heading \(heading)",
                nil)
     }
 

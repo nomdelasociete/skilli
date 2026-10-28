@@ -797,6 +797,15 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             actionPanel.submit()
             return
         }
+        // ⌘A selects its text again, ← or → keeps it to edit.
+        if actionPanel.isPrompting, flags == .command, event.charactersIgnoringModifiers?.lowercased() == "a" {
+            actionPanel.selectAll()
+            return
+        }
+        if actionPanel.isPrompting, code == kVK_LeftArrow || code == kVK_RightArrow {
+            actionPanel.keepText()
+            return
+        }
         if code == kVK_Escape || (flags == .command && event.charactersIgnoringModifiers?.lowercased() == "k") {
             closeActions()
         } else if code == kVK_UpArrow {
