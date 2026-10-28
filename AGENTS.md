@@ -106,6 +106,10 @@ xcodebuild -project Skilli.xcodeproj -scheme Skilli -destination 'platform=macOS
   first responder (an earlier check may have left the keyboard elsewhere);
   an app it opens is made frontmost through Accessibility only once
   `isFinishedLaunching` (before, `kAXErrorCannotComplete` and nothing).
+  A click on skil.li's Dock tile is handled once `AppDelegate.reopens`
+  counts it, not once skil.li is in front: the Dock makes it active first
+  and sends the click up to ~70 ms later (2026-10-28: a window about to be
+  minimized was put back in front, so minimization never started).
 - Do not launch the normal app from an agent unless asked: it installs a global
   event tap and may remap Caps Lock. The user launches from Xcode or `run`.
 

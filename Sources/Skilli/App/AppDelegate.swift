@@ -1811,11 +1811,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return nil
     }
 
+    #if SKILLI_SELFTEST
+    /// Reopens handled (the Dock's icon clicked): the Dock makes skil.li
+    /// active before it sends this, so the self-test waits on it, not on
+    /// skil.li being in front.
+    static var reopens = 0
+    #endif
+
     /// A click on skil.li's Dock icon brings the window that keeps it there
     /// (a recording's, Settings), the one last in front, minimized or not.
     /// Opening skil.li again (Finder, Spotlight, `open -a`) while none is
     /// open shows Settings: the way back when the menu bar icon is hidden.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        #if SKILLI_SELFTEST
+        Self.reopens += 1
+        #endif
         if let window = DockPresence.windows.first {
             if window.isMiniaturized { window.deminiaturize(nil) }
             Foreground.bring(window)
