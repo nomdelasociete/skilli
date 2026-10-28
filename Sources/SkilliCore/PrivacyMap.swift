@@ -158,7 +158,7 @@ public enum PrivacyMap {
         pane: "launcher", toggle: "Search files by meaning")
     public static let history = Flow(
         "history", "Browser history by meaning",
-        sends: "Your words, and the titles, sites and dates of the pages your browsers keep: every one, or, past \(MeaningRounds.questionSize), those from the days your words name; \(MeaningRounds.questionSize) to a question, the likely ones asked again together.",
+        sends: "Your words, and the titles, sites and dates of the pages your browsers keep: every one, or, past \(MeaningRounds.questionSize), those from the days your words name; \(MeaningRounds.questionSize) to a question, the likely ones asked again together. An IBAN, a French RIB, a card number whose check digit is right, or a key (a known prefix such as sk- or ghp_, or one word of 40 letters and digits or more) goes as what it is, never itself; other numbers go as written.",
         when: "Only when you press ⇥ in Browser History.",
         pane: "launcher", toggle: "Search browser history by meaning with ⇥")
     public static let clipboard = Flow(

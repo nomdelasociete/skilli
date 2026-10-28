@@ -431,7 +431,10 @@ public enum ToolCallSummary {
         var index = 0
         while index < words.count {
             var masked = false
-            let ends = Array(stride(from: min(words.count, index + 9), to: index, by: -1))
+            // A run never ends on a word of punctuation alone ("… 04 – Banque").
+            let ends = stride(from: min(words.count, index + 9), to: index, by: -1).filter { end in
+                end == index + 1 || words[end - 1].contains { $0.isLetter || $0.isNumber }
+            }
             // A label glued to it stays ("RIB:…" → "RIB:(a bank account
             // number)"); punctuation after it ("…189,", "…>") and a bracket or
             // quote before it ("(1234…") stay out of it.

@@ -18,6 +18,12 @@ final class HistoryMeaningTests: XCTestCase {
                                  bundleID: "com.google.Chrome", visited: Date(timeIntervalSince1970: unix), visits: 3)
         XCTAssertEqual(visit.domain, "impots.gouv.fr")
         XCTAssertEqual(HistoryMeaning.describe(visit, now: now, calendar: calendar), "“Impôts 2026 : déclaration” on impots.gouv.fr, yesterday 18:02")
+        let rib = HistoryVisit(url: "https://banque.example.com/rib", title: "Votre RIB : 12345 67890 12345678901 04 – Banque", browser: "Safari",
+                               bundleID: "com.apple.Safari", visited: nil, visits: 1)
+        XCTAssertEqual(HistoryMeaning.describe(rib), "“Votre RIB : (a bank account number) – Banque” on banque.example.com", "masked")
+        let long = HistoryVisit(url: "https://example.com", title: String(repeating: "a ", count: 74) + "12345 67890 12345678901 04", browser: "Safari",
+                                bundleID: "com.apple.Safari", visited: nil, visits: 1)
+        XCTAssertFalse(HistoryMeaning.describe(long).contains("12345"), "masked before the cut")
         XCTAssertEqual(HistoryMeaning.shortWhen(visit.visited!, now: now, calendar: calendar), "yesterday")
         XCTAssertEqual(HistoryMeaning.shortWhen(now.addingTimeInterval(-3_600), now: now, calendar: calendar), "08:00")
         XCTAssertEqual(HistoryMeaning.shortWhen(now.addingTimeInterval(-3 * 86_400), now: now, calendar: calendar), "Fri")
