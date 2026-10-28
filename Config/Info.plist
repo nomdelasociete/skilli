@@ -40,6 +40,12 @@
 	<true/>
 	<key>SUAllowsAutomaticUpdates</key>
 	<true/>
+	<!-- Updates download on their own and install when skil.li quits; one
+	     still waiting at the next daily check is offered (Install and
+	     Relaunch). Off when the user unticks "Automatically download and
+	     install updates" in the update window: their choice wins. -->
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
 	<!-- A skillie as a file (docs/skillie-files.md): the script itself, as
 	     text, so Quick Look shows it; opened, Settings → Skillies shows it
 	     whole before Add. Its icon: macOS's document sheet with skil.li's

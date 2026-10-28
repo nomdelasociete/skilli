@@ -2,7 +2,8 @@
 # the same scripts (script/release/publish.sh), Xcode 27, every credential
 # from the `release` environment, which waits for the maintainer's approval and takes
 # only `main`. Started by hand: Actions → Release → Run workflow, or
-# `gh workflow run release.yml`. The secrets are set once with
+# `gh workflow run release.yml`; `-f critical=true` makes it a critical
+# update (script/release/appcast.sh). The secrets are set once with
 # script/release/ci-secrets.sh.
 #
 # A pull request that changes the release itself is built here too, unsigned
@@ -11,6 +12,11 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      critical:
+        description: Critical update (shown at once, cannot be skipped)
+        type: boolean
+        default: false
   pull_request:
     paths:
       - .github/workflows/release.yml
@@ -108,6 +114,7 @@ jobs:
           SKILLI_SPARKLE_PUBLIC_ED_KEY: ${{ vars.SKILLI_SPARKLE_PUBLIC_ED_KEY }}
           SKILLI_NOTARY_KEY_ID: ${{ vars.NOTARY_KEY_ID }}
           SKILLI_NOTARY_ISSUER: ${{ vars.NOTARY_ISSUER_ID }}
+          SKILLI_CRITICAL_UPDATE: ${{ inputs.critical }}
         run: |
           export SKILLI_NOTARY_KEY_FILE="$RUNNER_TEMP/notary.p8"
           export SKILLI_SPARKLE_KEY_FILE="$RUNNER_TEMP/sparkle.key"
