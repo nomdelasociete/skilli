@@ -185,6 +185,9 @@ final class SkilliTools {
     /// Apps left out of every layout (Settings → Windows).
     var layoutIgnoredApps: () -> [String] = { [] }
     var timers: TimerCenter?
+    /// What the calculator converts currencies with; nil while Convert
+    /// Currencies is off.
+    var currency: (() -> CurrencyContext?)?
     /// The meeting recorder, made when a tool first needs it.
     var recorder: (() -> RecorderCenter?)?
     /// The editors' recent projects; the self-test records instead of opening.
@@ -384,6 +387,12 @@ final class SkilliTools {
                        group: .actions, risk: .changes,
                        parameters: [.init(name: "duration", description: "How long: 10 min, 1h30, 90s, 1:30."),
                                     .init(name: "label", description: "What it is for, or empty.")]),
+        ToolDefinition(name: "convert_currency", title: "Convert a currency",
+                       description: "Converts an amount between currencies at the day's mid-market rates (central banks, else the ECB), on this Mac: nothing typed is sent. Returns JSON: amount, from, to, result (the target currency's decimals), rate, rateDay (the day the rate is from) and source.",
+                       group: .actions, risk: .read,
+                       parameters: [.init(name: "amount", description: "The amount, digits with a dot for decimals: 100, 1299.99."),
+                                    .init(name: "from", description: "The currency it is in: an ISO code (USD, TRY) or a name (euros)."),
+                                    .init(name: "to", description: "The currency wanted; empty: the user's own (from it: the one last picked, else USD, EUR for dollar users).", isRequired: false)]),
         ToolDefinition(name: "list_timers", title: "List timers",
                        description: "The running timers and what is left.",
                        group: .actions, risk: .read, parameters: []),
@@ -796,6 +805,42 @@ final class SkilliTools {
 
     // MARK: - Running
 
+    /// `convert_currency`: the calculator's own reading, numbers in
+    /// English, the ambiguous names ("dollars", "$") for the user's own
+    /// currency; the answer as JSON.
+    private func convertCurrency(amount: String, from: String, to: String) throws -> String {
+        guard var context = currency?() else { throw Failure(message: "Convert Currencies is off (Settings → Catalog).") }
+        guard let rates = context.rates else { throw Failure(message: "No exchange rates yet: skil.li has not read the day's table.") }
+        let home = Locale.current.currency?.identifier ?? "USD"
+        context.home = home
+        let fromName = from.trimmingCharacters(in: .whitespaces)
+        let toName = to.trimmingCharacters(in: .whitespaces)
+        guard let fromCode = Calculator.currencyCode(fromName, home: home), rates.rates[fromCode] != nil else {
+            throw Failure(message: "“\(fromName)” is not a currency in the day's table (ISO codes such as USD, EUR, TRY).")
+        }
+        var toCode: String?
+        if !toName.isEmpty {
+            guard let code = Calculator.currencyCode(toName, home: home), rates.rates[code] != nil else {
+                throw Failure(message: "“\(toName)” is not a currency in the day's table (ISO codes such as USD, EUR, TRY).")
+            }
+            toCode = code
+        }
+        // No target: the launcher's default (the user's currency; from it,
+        // the last picked, else USD, EUR for dollar users).
+        let typed = "\(amount.trimmingCharacters(in: .whitespaces)) \(fromCode)" + (toCode.map { " in \($0)" } ?? "")
+        guard let result = Calculator.evaluate(typed, locale: Locale(identifier: "en_US"), currency: context), let conversion = result.conversion,
+              conversion.from == fromCode, toCode == nil || conversion.to == toCode
+        else {
+            throw Failure(message: "Cannot convert “\(typed)”: the amount must be a number, and the two currencies different.")
+        }
+        let answer: [String: String] = [
+            "amount": amount, "from": conversion.from, "to": conversion.to, "result": result.copy, "rate": conversion.rate,
+            "rateDay": rates.day(from: conversion.from, to: conversion.to) ?? "", "source": rates.source.title
+        ]
+        let data = try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
+        return String(decoding: data, as: UTF8.self)
+    }
+
     struct Failure: LocalizedError {
         let message: String
         var errorDescription: String? { message }
@@ -958,6 +1003,9 @@ final class SkilliTools {
             }
             let timer = timers.start(request)
             return "Started \(timer.title)."
+
+        case "convert_currency":
+            return try convertCurrency(amount: try text("amount"), from: try text("from"), to: (arguments["to"] as? String) ?? "")
 
         case "list_timers":
             let running = timers?.timers ?? []

@@ -277,7 +277,7 @@ final class FeatureCatalogTests: XCTestCase {
     func testOnlyEntriesWithRowsCanBeOff() throws {
         func entry(_ id: String) throws -> CatalogEntry { try XCTUnwrap(entries.first { $0.id == id }, id) }
         for id in ["cmd:emoji", "cmd:killProcess", "system:lockScreen", "system:window.center", "si:ask", "catalog.calculator",
-                   "catalog.timer", "catalog.awake", "catalog.soundOutput", "catalog.settingsPanes", "catalog.event", "catalog.remind"] {
+                   "catalog.timer", "catalog.awake", "catalog.soundOutput", "catalog.settingsPanes", "catalog.event", "catalog.remind", "catalog.currency"] {
             XCTAssertTrue(try entry(id).canBeOff, id)
         }
         for id in ["catalog.voice", "catalog.dictate", "catalog.doItHere", "catalog.text.uppercase", "catalog.snippets", "catalog.skillies",

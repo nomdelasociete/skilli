@@ -49,6 +49,8 @@ final class LauncherController: NSObject {
     }
     /// The selection as a quicklink's query (`Quicklink.query(fromSelection:)`).
     private var selectionQuery: String?
+    /// Counts the shows: a selection read for an earlier one is dropped.
+    private var selectionShow = 0
     private let emptyState = NSTextField(labelWithString: "No results")
     private let hints = HintBar()
     /// One line in the footer's place: what failed and what to do (rule 6:
@@ -177,6 +179,8 @@ final class LauncherController: NSObject {
     /// The calculator's answer: typed in the app in front (↩, like a clip,
     /// a snippet or an emoji: D4) or copied (⌘↩, ⌘C).
     var onCalculation: ((Calculator.Result, _ paste: Bool) -> Void)?
+    /// What currencies convert with; nil while Convert Currencies is off.
+    var currency: () -> CurrencyContext? = { nil }
     /// Emoji: found by name, or by feeling (the decision model); Return
     /// types one in the app in front, ⌘Return copies it.
     var emojiSearch: ((String) -> EmojiList)?
@@ -843,6 +847,16 @@ final class LauncherController: NSObject {
         index.reloadIfStale(usage: usage)
     }
 
+    /// The selection when it is an amount of money ("$1,299", "49,90 €"),
+    /// converted; nil for anything else.
+    private func selectedPrice(off: Set<String>) -> Calculator.Result? {
+        guard let selected = shownSelection, selected.count <= 40, !selected.contains(where: \.isNewline),
+              FeatureCatalog.shows(row: "calculation", off: off), !off.contains("catalog.currency"), let context = currency()
+        else { return nil }
+        // A conversion, or its row while the day's rates load.
+        return Calculator.answers(selected, currency: context).first { $0.conversion != nil || $0.isWaiting }
+    }
+
     /// What a quicklink searches: what was typed for it, else the text
     /// selected where the launcher opened (its rows say so).
     func quicklinkQuery(_ link: Quicklink, typed: String) -> String {
@@ -855,17 +869,24 @@ final class LauncherController: NSObject {
     private func showSelectionPreview(from focused: SelectionService.FocusedElement?) {
         selectionLabel.stringValue = ""
         shownSelection = nil
+        selectionShow &+= 1
         guard let focused else { return }
+        let show = selectionShow
         Task { [weak self] in
             let text = focused.isOwn
                 ? SelectionService.selectedText(in: focused)
                 : await Task.detached(priority: .userInitiated) { SelectionService.selectedText(in: focused) }.value
-            guard let self, self.panel.isVisible, let text else { return }
+            // Closed and opened again meanwhile: that selection is not this show's.
+            guard let self, self.panel.isVisible, show == self.selectionShow, let text else { return }
             let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
             self.shownSelection = text
             self.selectionLabel.stringValue = "Selected “\(line.count > 40 ? String(line.prefix(40)) + "…" : line)” · ⇥ asks about it"
             // Quicklinks shown with nothing typed search it: they say so.
             if self.results.contains(where: { if case .quicklink(_, "", _) = $0 { true } else { false } }) { self.showRows() }
+            // "$1,299" selected: its conversion comes first.
+            if self.mode == nil, self.searchField.stringValue.isEmpty, self.selectedPrice(off: self.off) != nil {
+                self.updateResults(query: "")
+            }
         }
     }
 
@@ -1312,6 +1333,8 @@ final class LauncherController: NSObject {
             results = pinned.isEmpty ? apps : Array(LauncherPins.first(pinned, then: apps, id: \.learningID).prefix(Layout.resultLimit))
             // The meeting about to start (or just started): first, ↩ joins.
             if FeatureCatalog.shows(row: "event", off: off), let meeting = calendar?.meetingNow() { results.insert(.event(meeting), at: 0) }
+            // A price selected where the launcher opened: converted, first.
+            if let selected = selectedPrice(off: off) { results.insert(.calculation(selected), at: 0) }
         } else {
             // Fuzzy score + usage + what was picked before for this text,
             // and a boost for what the user pinned.
@@ -1427,9 +1450,13 @@ final class LauncherController: NSObject {
             }
             results = ranked.prefix(Layout.resultLimit - 1).map(\.item)
             laps.lap("ranking")
-            // A calculation answers first: "12,5 × 4", "10 km en miles".
-            if catalog.shows("catalog.calculator"), let calculation = Calculator.evaluate(text) {
-                results.insert(.calculation(calculation), at: 0)
+            // A calculation answers first: "12,5 × 4", "10 km en miles",
+            // "800 TRY in €" (one row per currency asked).
+            if catalog.shows("catalog.calculator") {
+                let answers = Calculator.answers(text, currency: catalog.shows("catalog.currency") ? currency() : nil)
+                results.insert(contentsOf: answers.map(LauncherItem.calculation), at: 0)
+                // "100 usd in eur, gbp, chf": the answers push the last rows out.
+                if answers.count > 1, results.count > Layout.resultLimit { results.removeLast(results.count - Layout.resultLimit) }
             }
             if catalog.shows("cmd:newWindowLayout"), let name = WindowLayoutPlan.saveName(text), !name.isEmpty, onSaveLayout != nil {
                 results.insert(.saveLayout(name), at: 0)
@@ -2819,6 +2846,8 @@ final class LauncherController: NSObject {
             return
         }
         guard results.indices.contains(row) else { return }
+        // The day's rates not here yet: nothing runs, nothing is remembered.
+        if case .calculation(let result) = results[row], result.isWaiting { return }
         rememberSearch()
         if case .catalog(let entry) = results[row] {
             runCatalog(entry, flags: flags)
@@ -3632,7 +3661,9 @@ final class LauncherController: NSObject {
     /// The action `key` runs in `list` for `item`: ⌘C falls back to its
     /// first copy (⌘↩ where that copies), then to its title.
     private func action(_ key: LauncherAction.Key, in list: [LauncherAction], for item: LauncherItem) -> LauncherAction? {
-        LauncherAction.find(key, in: list) ?? (key == .copy ? copyTitleAction(item) : nil)
+        // The day's rates not here yet: ⌘C has nothing to copy either.
+        if case .calculation(let result) = item, result.isWaiting { return nil }
+        return LauncherAction.find(key, in: list) ?? (key == .copy ? copyTitleAction(item) : nil)
     }
 
     /// The selected row's action for `key`, run.

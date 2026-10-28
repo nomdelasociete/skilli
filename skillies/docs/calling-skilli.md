@@ -149,6 +149,7 @@ page: add a line here when you add a tool. -->
 | `run_shortcut` | Runs a shortcut; returns its text. | `name`, `input?`, `selection?` |
 | `create_app_link` | Adds an app skil.li drives through its documented URL scheme. | `app`, `scheme`, `documentation`, `commands`, `id?`, `minimum_version?`, `note?` |
 | `create_skill` | Writes a skill for Ask's agent. | `name`, `description`, `instructions` |
+| `convert_currency` | Converts an amount at the day's rates, on this Mac; JSON with the rate and its day. reads | `amount`, `from`, `to?` |
 | `start_timer` | Starts a timer in the menu bar. | `duration`, `label` |
 | `list_timers` | Running timers. reads | |
 | `cancel_timer` | Cancels a timer. | `label` |

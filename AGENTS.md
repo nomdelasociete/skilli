@@ -3394,6 +3394,39 @@ re-investigating.
   nothing said. ⌘K: Paste Result ↩, Copy Result ⌘↩. A lone number or a
   word is not a calculation. `selftest calc` (`launcherCalculates`): the
   footer, ⌘K, ↩ pasted in the test window, ⌘↩ and ⌘C copied silently.
+- Currencies (docs/currency-conversion.md; `CalculatorCurrency.swift`,
+  `CurrencyRates` in SkilliCore, `CurrencyRateStore` in the app): "800
+  TRY" to the user's currency (`Locale.currency`; from it, the target
+  last picked, else USD, EUR for dollar users), "800 TRY in €", "49 £ en
+  dollars", "100 usd in eur, gbp" (a row each), answered as typed:
+  while the target is half typed ("800 TRY in e") the row stays on the
+  default; a target no currency starts with, or one the day's table
+  lacks, gives none. Codes in any
+  case after the amount, before it only in capitals or as a symbol ("try
+  800" is not one); names from Foundation in English, French and the
+  Mac's languages, singular or plural; "$" and "dollar" follow the
+  user's dollar, "¥" is JPY unless the user's currency is CNY, "kr" and
+  "peso" only for a user of one. Units first ("2 cup in ml"). Math in
+  `Decimal`, the target's own decimals, three significant digits under
+  a cent; the detail "800 TRY → EUR · 1 TRY = 0,01796 EUR · 27 oct."
+  ("rates of …, not updated" after 4.5 days). The table: Frankfurter v2
+  (`/v2/rates?base=EUR`, central banks, each rate dated) read whole,
+  `If-None-Match`, again once its `Cache-Control: max-age` has passed
+  (10 min to a day), on wake, on network return and on each launcher
+  show when due; the ECB's daily XML when Frankfurter fails; kept in
+  `currency-rates.json` with the targets picked. No table yet: the row
+  says "Getting today's rates…" and does nothing. A key with no digit
+  skips it all (a word costs ~nothing more). A price selected where the
+  launcher opens (≤ 40 characters) is converted first. Off with the
+  Catalog's Convert Currencies (`catalog.currency`): no row, no read.
+  ⌘K: Copy with Currency ⇧⌘C, Copy Rate; a waiting row runs, copies and
+  records nothing. A failed first read is asked again after 10 min, one
+  timer, not on each show. Tool `convert_currency` (JSON; numbers in
+  English, "dollars" for the user's own currency via
+  `CurrencyContext.home`; a target not resolved as asked is an error). Privacy: `PrivacyMap.exchangeRates`. `selftest calc`
+  (`launcherConvertsCurrencies`): a seeded table, "800 try in eur"
+  typed key by key, the first row read before ↩, ⌘K, ↩ pasted, EUR
+  learned for TRY.
 - Mac controls (`SystemCommand`, run through `AIActionController.runMac`
   from the launcher, shortcuts and Ask): play/pause, next and previous
   track, volume up/down, mute — the keyboard's own media keys

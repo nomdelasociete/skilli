@@ -9,7 +9,7 @@ import Foundation
 public enum PrivacyMap {
     /// Where it goes, in the pane's order.
     public enum Destination: String, CaseIterable, Sendable {
-        case claude, chatGPT, openAI, typeSafe, github, klipy, huggingFace, websites, yours, apple
+        case claude, chatGPT, openAI, typeSafe, github, klipy, huggingFace, exchangeRates, websites, yours, apple
 
         public var title: String {
             switch self {
@@ -20,6 +20,7 @@ public enum PrivacyMap {
             case .github: "GitHub"
             case .klipy: "Klipy"
             case .huggingFace: "Hugging Face"
+            case .exchangeRates: "Frankfurter and the ECB"
             case .websites: "Websites"
             case .yours: "Your Servers and Agents"
             case .apple: "Apple"
@@ -255,6 +256,14 @@ public enum PrivacyMap {
         when: "When the GIF mode opens (Trending, Recently Used) and when typing pauses there; when you paste or copy one of Klipy's GIFs.",
         pane: "gifs", toggle: "Search GIFs")
 
+    // Frankfurter and the ECB: CurrencyRateStore (the day's table the
+    // calculator converts with, on this Mac).
+    public static let exchangeRates = Flow(
+        "exchangeRates", "Exchange rates",
+        sends: "A request for the day's table of exchange rates, nothing of yours: what you type is converted on this Mac.",
+        when: "When the source publishes new rates (about once a day), on wake and when the network comes back, while Convert Currencies is on.",
+        pane: "catalog", toggle: "Convert Currencies")
+
     // Yours: MCPClient, MCPAuth, ToolSettings, AgentRun (servers);
     // SkilliTools.callWebhook; MCPSocketServer, MCPService (agents).
     public static let servers = Flow(
@@ -298,7 +307,7 @@ public enum PrivacyMap {
 
     /// Every flow, once.
     public static let all: [Flow] = [ask, commands, followUps, mail, fieldWords, plannedSteps, meetings, agent, scheduled, continueIn, rightsHelp]
-        + deciding + [fallback, imagesCopied, imagesFolder, linkPreviews, github, githubActions, serverSync, relay, gifs, betterTranscription, servers,
+        + deciding + [fallback, imagesCopied, imagesFolder, linkPreviews, github, githubActions, serverSync, relay, gifs, betterTranscription, exchangeRates, servers,
                       webhooks, agents, places, speedTest]
 
     /// Said once, above the list: the promise, then what it means.
@@ -364,6 +373,8 @@ public enum PrivacyMap {
         public var linkPreviews = true
         /// Search GIFs on (Settings → Catalog) with a Klipy key.
         public var gifSearch = true
+        /// Convert Currencies on (Settings → Catalog).
+        public var currencyRates = true
         /// Settings → Windows → Quit apps you stopped using (off by default).
         public var autoQuit = false
         /// The folder whose new images are tagged.
@@ -469,6 +480,8 @@ public enum PrivacyMap {
             rows.append(Row(gifs, isOn: setup.gifSearch))
         case .huggingFace:
             rows.append(Row(betterTranscription))
+        case .exchangeRates:
+            rows.append(Row(exchangeRates, isOn: setup.currencyRates))
         case .websites:
             rows.append(Row(linkPreviews, isOn: setup.clipboardHistory && setup.linkPreviews))
         case .yours:
@@ -525,6 +538,7 @@ public enum PrivacyMap {
         case .typeSafe: setup.typeSafeKey
         case .github: setup.githubLogin != nil
         case .klipy: setup.gifSearch
+        case .exchangeRates: setup.currencyRates
         case .huggingFace, .websites, .yours, .apple: true
         }
     }
@@ -555,6 +569,8 @@ public enum PrivacyMap {
             setup.gifSearch ? "Klipy's GIFs, searched from the GIF mode" : "GIF search off or no Klipy key: nothing goes to Klipy"
         case .huggingFace:
             "Better transcription's download, only when you click it"
+        case .exchangeRates:
+            setup.currencyRates ? "The day's exchange rates, for Convert Currencies" : "Convert Currencies off: nothing goes there"
         case .websites:
             setup.clipboardHistory && setup.linkPreviews
                 ? "The sites of the links you look at in Clipboard History"

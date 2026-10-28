@@ -100,7 +100,8 @@ extension LauncherController {
         case .clip, .snippet, .emoji: ("Paste", "doc.on.clipboard")
         case .gif(let gif):
             GIFPaste.style(for: gif, frontApp: gifFrontApp, editors: gifEditors) == .markdown ? ("Paste Markdown", "text.badge.plus") : ("Paste", "doc.on.clipboard")
-        case .calculation: ("Paste Result", "doc.on.clipboard")
+        // The day's rates not here yet: ↩ does nothing, the footer offers nothing.
+        case .calculation(let result): result.isWaiting ? nil : ("Paste Result", "doc.on.clipboard")
         case .browserTab: ("Go to Tab", "macwindow")
         case .contact: ("Show Contact", "person.text.rectangle")
         case .event(let event): event.meeting != nil ? ("Join", "video") : ("Open in Calendar", "calendar")
@@ -334,9 +335,15 @@ extension LauncherController {
             case .file(let url):
                 return [first, reveal(url), key("Copy GIF", "doc.on.doc", .openSecond, group: .copy), copy("Copy Path", url.path, .copySecond)]
             }
-        case .calculation:
+        case .calculation(let result):
+            // The day's rates are not here yet: nothing to paste or copy.
+            if result.isWaiting { return [] }
             // ↩ pastes like a clip, a snippet or an emoji (D4); ⌘↩ and ⌘C copy.
-            return [first, key("Copy Result", "doc.on.doc", .openSecond, group: .copy)]
+            var list = [first, key("Copy Result", "doc.on.doc", .openSecond, group: .copy)]
+            if let conversion = result.conversion {
+                list += [copy("Copy with Currency", result.display, .copySecond), copy("Copy Rate", conversion.rate)]
+            }
+            return list
         case .browserTab(let tab):
             return [first, copy("Copy Title", tab.title, .copy)]
         case .file(let file):

@@ -44,7 +44,7 @@ final class PrivacyMapTests: XCTestCase {
         XCTAssertEqual(Set(PrivacyMap.all.map(\.title)).count, PrivacyMap.all.count, "titles are unique")
         // The panes rows may point to (`SettingsPane` raw values).
         let panes: Set<String> = ["ask", "commands", "tools", "aiAccounts", "clipboard", "snippets", "emoji", "gifs", "launcher", "github", "reminders", "windows",
-                                   "recorder"]
+                                   "recorder", "catalog"]
         for flow in PrivacyMap.all {
             XCTAssertFalse(flow.sends.isEmpty, flow.title)
             XCTAssertFalse(flow.when.isEmpty, flow.title)

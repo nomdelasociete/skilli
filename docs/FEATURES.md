@@ -127,8 +127,9 @@ where.
 - **Permissions**: each one with what it turns on, its state live and
   its one button; the apps skil.li sends commands to.
 - **What Leaves This Mac**: every feature that sends anything, grouped
-  by where it goes (Claude, ChatGPT, OpenAI, TypeSafe Jev, GitHub, your
-  servers, websites, Apple): what, when, and whether its switch is on.
+  by where it goes (Claude, ChatGPT, OpenAI, TypeSafe Jev, GitHub,
+  Frankfurter and the ECB, your servers, websites, Apple): what, when,
+  and whether its switch is on.
   Each pane ends with its own line of it.
 - skil.li reopens itself when System Settings quits it to apply a
   permission.
@@ -185,6 +186,12 @@ The search panel you open from anywhere. ✦Space.
   casks; Upgrade All.
 - **Calculator**: math as typed (French decimals, percentages), units,
   time in a city; ↩ pastes the result in your app, ⌘↩ or ⌘C copies it.
+- **Convert Currencies**: "800 TRY" (to your currency), "800 TRY in €",
+  "49 £ en dollars", "100 usd in eur, gbp", answered as you type at the
+  day's mid-market rates (central banks through Frankfurter, else the
+  ECB); the row says the rate and its day. A price selected where the
+  launcher opens comes first, converted. ⌘K: Copy with Currency ⇧⌘C,
+  Copy Rate. Converted on this Mac; only the day's table is downloaded.
 - **Kill a Process** (`kill`): quits an app and its helpers, or what
   listens on a port; ⇧↩ forces. A running app's row says "· running" and
   its ⌘K adds Quit and Force Quit.
