@@ -26100,12 +26100,13 @@ final class SelfTest {
 
     /// A recording's window puts skil.li in the Dock with the recorder's
     /// icon (docs/meeting-recorder-views.md, "In the Dock"); the Dock's icon
-    /// brings the window forward; Settings opened and closed meanwhile
+    /// brings the window forward from another app, and out of the Dock
+    /// once minimized; Settings opened and closed meanwhile
     /// leaves both; the window closed, skil.li is an accessory again with
     /// its own icon. The other way round too: Settings keeps the Dock, with
     /// skil.li's own icon, once the recording's window closes.
     private func recordingWindowKeepsTheDock() async {
-        let name = "Recorder: a recording's window puts skil.li in the Dock with the recorder's icon, the Dock's icon brings it forward, Settings opened and closed meanwhile keeps both; closed, an accessory with its own icon again (and Settings keeps the Dock with its own icon)"
+        let name = "Recorder: a recording's window puts skil.li in the Dock with the recorder's icon, the Dock's icon brings it forward from another app and minimized, Settings opened and closed meanwhile keeps both; closed, an accessory with its own icon again (and Settings keeps the Dock with its own icon)"
         guard let center = context.recorder(), let folder = seedMeeting(center, title: "Dock check", script: Self.launchReview) else {
             record(name, false, "the stand-in meeting could not be written", nil)
             return
@@ -26129,14 +26130,36 @@ final class SelfTest {
         // Its tile, once the Dock has added it.
         let tile = await waitUntil(timeout: 3) { Self.ownDockTile() != nil } != nil ? Self.ownDockTile() : nil
         if tile != nil { await captureDock(as: "recorder-dock") }
-        // The Dock's icon, our test window in front: the recording's window
-        // comes forward, not Settings.
-        window.makeKeyAndOrderFront(nil)
-        _ = await waitUntil(timeout: 1) { self.window.isKeyWindow }
-        var dockBrings = false
-        if let tile {
-            AXUIElementPerformAction(tile.item, kAXPressAction as CFString)
-            dockBrings = await waitUntil(timeout: 2) { controller.nsWindow.isKeyWindow } != nil
+        // The Dock's icon with another app in front (TextEdit, a scratch
+        // file): skil.li comes in front with the recording's window, not
+        // Settings. Minimized, the Dock's icon brings it back out.
+        let bundleID = "com.apple.TextEdit"
+        let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-dock-\(getpid()).txt")
+        try? "dock".write(to: file, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        var otherInFront = false, dockBrings = false, fromMinimized = false
+        if let tile, let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
+           let textEdit = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration),
+           await waitUntil(timeout: 5, { textEdit.isFinishedLaunching }) != nil {
+            let textEditPID = textEdit.processIdentifier
+            Self.makeFrontmost(pid: textEditPID)
+            otherInFront = await waitUntil(timeout: 4) { NSWorkspace.shared.frontmostApplication?.processIdentifier == textEditPID } != nil
+            if otherInFront {
+                AXUIElementPerformAction(tile.item, kAXPressAction as CFString)
+                dockBrings = await waitUntil(timeout: 3) { self.recordingWindowInFront(controller) } != nil
+            }
+            controller.nsWindow.miniaturize(nil)
+            if await waitUntil(timeout: 3, { controller.nsWindow.isMiniaturized }) != nil {
+                AXUIElementPerformAction(tile.item, kAXPressAction as CFString)
+                fromMinimized = await waitUntil(timeout: 3) { !controller.nsWindow.isMiniaturized && self.recordingWindowInFront(controller) } != nil
+            }
+            // The scratch file closed in TextEdit, TextEdit quit if it was not open.
+            Self.makeFrontmost(pid: textEditPID)
+            _ = await waitUntil(timeout: 2) { NSWorkspace.shared.frontmostApplication?.processIdentifier == textEditPID }
+            await cleanUp(bundleID: bundleID, wasRunning: wasRunning)
         }
         let settingsAfterDock = settings.isVisible
         // Settings opened and closed: the recording's window keeps both.
@@ -26161,9 +26184,9 @@ final class SelfTest {
         let settingsKeepsState = state()
         await closeSettings()
         let allClosed = await waitUntil(timeout: 2) { NSRunningApplication.current.activationPolicy == .accessory } != nil
-        record(name, startedAccessory && opened && tile != nil && dockBrings && !settingsAfterDock && withSettings && afterSettings && closed
-               && bothRecorder && settingsKeeps && allClosed,
-               "before: \(before); window open: \(openedState) \(opened), Dock tile \(tile != nil), the Dock's icon brought the window \(dockBrings) (Settings shown \(settingsAfterDock)); Settings opened too \(withSettings), closed: \(afterSettingsState) \(afterSettings); window closed: \(closedState) \(closed); Settings then a window: recorder icon \(bothRecorder), window closed: \(settingsKeepsState) \(settingsKeeps); all closed, accessory \(allClosed)",
+        record(name, startedAccessory && opened && tile != nil && otherInFront && dockBrings && fromMinimized && !settingsAfterDock && withSettings
+               && afterSettings && closed && bothRecorder && settingsKeeps && allClosed,
+               "before: \(before); window open: \(openedState) \(opened), Dock tile \(tile != nil), TextEdit in front \(otherInFront), the Dock's icon brought skil.li and the window in front \(dockBrings), brought it back minimized \(fromMinimized) (Settings shown \(settingsAfterDock)); Settings opened too \(withSettings), closed: \(afterSettingsState) \(afterSettings); window closed: \(closedState) \(closed); Settings then a window: recorder icon \(bothRecorder), window closed: \(settingsKeepsState) \(settingsKeeps); all closed, accessory \(allClosed)",
                nil)
     }
 

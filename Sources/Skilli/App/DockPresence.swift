@@ -19,9 +19,15 @@ enum DockPresence {
     private struct Holder {
         weak var window: NSWindow?
         let icon: Icon
+        /// When it was last in front (held, or made key): a minimized
+        /// window is in no on-screen order, so this is the one kept.
+        var fronted: Int
     }
 
     private static var holders: [ObjectIdentifier: Holder] = [:]
+    /// Counts each time a held window comes in front.
+    private static var fronts = 0
+    private static var keyObserver: NSObjectProtocol?
     /// The icon shown now.
     private(set) static var icon: Icon = .app
     /// Read when first shown, let go once no window shows it: not kept by
@@ -30,7 +36,15 @@ enum DockPresence {
 
     /// `window` keeps skil.li in the Dock, with `icon`, until `release`.
     static func hold(_ window: NSWindow, icon: Icon = .app) {
-        holders[ObjectIdentifier(window)] = Holder(window: window, icon: icon)
+        fronts += 1
+        holders[ObjectIdentifier(window)] = Holder(window: window, icon: icon, fronted: fronts)
+        if keyObserver == nil {
+            keyObserver = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { note in
+                guard let window = note.object as? NSWindow else { return }
+                let id = ObjectIdentifier(window)
+                MainActor.assumeIsolated { cameInFront(id) }
+            }
+        }
         update()
     }
 
@@ -39,14 +53,17 @@ enum DockPresence {
         update()
     }
 
-    /// The windows keeping skil.li in the Dock, the one in front first,
-    /// minimized ones last: the Dock's icon brings the first
+    /// The windows keeping skil.li in the Dock, the one last in front
+    /// first, minimized or not: the Dock's icon brings it
     /// (`applicationShouldHandleReopen`).
     static var windows: [NSWindow] {
-        let order = NSApp.orderedWindows
-        return holders.values.compactMap(\.window).sorted {
-            (order.firstIndex(of: $0) ?? .max) < (order.firstIndex(of: $1) ?? .max)
-        }
+        holders.values.sorted { $0.fronted > $1.fronted }.compactMap(\.window)
+    }
+
+    private static func cameInFront(_ id: ObjectIdentifier) {
+        guard holders[id] != nil else { return }
+        fronts += 1
+        holders[id]?.fronted = fronts
     }
 
     private static func update() {

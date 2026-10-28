@@ -1806,6 +1806,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// open shows Settings: the way back when the menu bar icon is hidden.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if let window = DockPresence.windows.first {
+            if window.isMiniaturized { window.deminiaturize(nil) }
             Foreground.bring(window)
         } else {
             settings.show()
