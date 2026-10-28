@@ -622,7 +622,8 @@ final class RelayDeviceSessionTests: XCTestCase {
     func testARestoredPairingChecksItsIdentityUntilVerified() async throws {
         let server = RelayReplies([])
         let client = session(RelayVault(try existing()), server)
-        client.githubToken = { "alice" }
+        var nativeToken = "alice"
+        client.githubToken = { nativeToken }
         XCTAssertTrue(client.checksIdentity(origin: origin), "Not verified yet, not failed: checking")
         XCTAssertFalse(client.checksIdentity(origin: "https://other-relay.example"), "Saved for another relay: not this one's check")
         client.activate(origin: origin)
@@ -632,6 +633,9 @@ final class RelayDeviceSessionTests: XCTestCase {
         }
         XCTAssertNotNil(client.configuration(origin: origin))
         XCTAssertFalse(client.checksIdentity(origin: origin))
+        nativeToken = "alice-again"
+        XCTAssertTrue(client.checksIdentity(origin: origin), "Another GitHub sign-in is checked again")
+        nativeToken = "alice"
         client.suspend()
         XCTAssertTrue(client.checksIdentity(origin: origin), "Each activation checks again")
     }
@@ -649,6 +653,19 @@ final class RelayDeviceSessionTests: XCTestCase {
         XCTAssertFalse(client.checksIdentity(origin: origin))
         XCTAssertNil(client.configuration(origin: origin))
         XCTAssertTrue(client.message?.contains("Could not verify") == true)
+        // Tried again (Settings shown again): checking at once, said.
+        var changes = 0
+        client.onChange = { changes += 1 }
+        await server.setIdentity()
+        client.activate(origin: origin)
+        XCTAssertTrue(client.checksIdentity(origin: origin))
+        XCTAssertGreaterThan(changes, 0)
+        for _ in 0..<500 {
+            if client.configuration(origin: origin) != nil { break }
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertNotNil(client.configuration(origin: origin))
+        XCTAssertFalse(client.checksIdentity(origin: origin))
         client.suspend()
     }
 

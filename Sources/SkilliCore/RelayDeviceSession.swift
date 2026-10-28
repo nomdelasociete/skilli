@@ -185,14 +185,17 @@ public final class RelayDeviceSession: ObservableObject {
     public var needsEnrollment: Bool { hasSavedEnrollment && (credentials == nil || credentials?.requiresEnrollment == true) }
     public var installationCount: Int { credentials?.pair.installations?.count ?? 0 }
     public var canRevoke: Bool { credentials != nil && credentials?.requiresEnrollment == false }
-    /// A pairing saved for this relay whose current access token is not
-    /// verified yet, its check not failed: what each activation and each
-    /// renewal does (GitHub, then the relay), about 2 s, longer on a slow
-    /// network. Nothing is wrong yet: "Checking this Mac…".
+    /// A pairing saved for this relay whose current tokens (the relay's
+    /// access token, the GitHub sign-in) are not verified together yet, its
+    /// check not failed: what each activation, renewal and account change
+    /// does (GitHub, then the relay), about 2 s, longer on a slow network.
+    /// Nothing is wrong yet: "Checking this Mac…".
     public func checksIdentity(origin: String) -> Bool {
         guard let url = Self.origin(origin), let current = credentials, current.origin == url.absoluteString,
-              !current.requiresEnrollment, current.pendingRevocation != true, current.expiresAt > Date() else { return false }
-        return (verifiedSubject == nil || verifiedAccessToken != current.pair.access_token) && !identityCheckFailed
+              !current.requiresEnrollment, current.pendingRevocation != true, current.expiresAt > Date(),
+              let native = githubToken() else { return false }
+        let verified = verifiedSubject != nil && verifiedAccessToken == current.pair.access_token && verifiedNativeToken == native
+        return !verified && !identityCheckFailed
     }
 
     public func configuration(origin: String) -> RelayDeviceConfiguration? {
@@ -408,6 +411,7 @@ public final class RelayDeviceSession: ObservableObject {
         let generation = identityGeneration
         identityTarget = current.pair.access_token
         identityNative = native
+        let retrying = identityCheckFailed
         identityCheckFailed = false
         identityTask = Task { [weak self] in
             guard let self else { return }
@@ -431,6 +435,9 @@ public final class RelayDeviceSession: ObservableObject {
                 self.onChange?()
             }
         }
+        // A failed check tried again: "Checking this Mac…" again, not the
+        // hold. After the task is set, so this cannot start another.
+        if retrying { onChange?() }
     }
 
     /// This GitHub token's numeric user id, asked of GitHub only.
