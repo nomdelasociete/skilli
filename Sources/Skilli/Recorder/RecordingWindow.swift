@@ -101,11 +101,6 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private let actionPanel = ActionPanelView()
     /// Keys the list took: their repeats are not new presses.
     private var heldKeys = HeldKeys()
-    /// Every key's release in this window, whoever has the keyboard: a held
-    /// key is over. A local monitor, not an override of the window's
-    /// `sendEvent`: its Swift thunk crashed in AppKit's tracking-area
-    /// routing once a window had closed and another opened under the pointer.
-    private var keyUpMonitor: Any?
     /// Whether this window says once what Better transcription does (the
     /// record's transcript made by macOS's engine, never said before);
     /// asked once per window, when it shows a transcript.
@@ -132,10 +127,6 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         window.contentView = view
         window.delegate = self
         window.controller = self
-        keyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { [weak self] event in
-            if let self, event.window === self.window { self.keyReleased(event) }
-            return event
-        }
         window.center()
         view.onPlay = { [weak self] in self?.togglePlay() }
         view.onSeek = { [weak self] seconds, plays in self?.seek(to: seconds, play: plays) }
@@ -345,11 +336,17 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     // MARK: - Playing
 
     private func loadPlayer() {
-        let urls = Speaker.allCases.map { folder.appendingPathComponent($0.file) }
         // An import still copying its sound: loaded once its file is in.
-        if record.imported != nil, !FileManager.default.fileExists(atPath: urls[0].path) { return }
+        if record.imported != nil, !FileManager.default.fileExists(atPath: folder.appendingPathComponent(Speaker.me.file).path) { return }
         loadingPlayer = true
+        loadSound()
+        loadPeaks()
+    }
+
+    /// Both sides' sound, then the pictures, from the folder it is in now.
+    private func loadSound() {
         let loadedFrom = folder
+        let urls = Speaker.allCases.map { loadedFrom.appendingPathComponent($0.file) }
         let composition = AVMutableComposition()
         Task { [weak self] in
             // Both tracks from 0, in one composition: they play in step.
@@ -362,11 +359,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             }
             guard let self else { return }
             // Renamed meanwhile (its folder moved): loaded again from there.
-            guard self.folder == loadedFrom else {
-                self.loadingPlayer = false
-                self.loadPlayer()
-                return
-            }
+            guard self.folder == loadedFrom else { return self.loadSound() }
             let player = AVPlayer(playerItem: AVPlayerItem(asset: composition))
             player.automaticallyWaitsToMinimizeStalling = false
             self.player = player
@@ -401,9 +394,20 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
                 self.seek(to: start, play: true)
             }
         }
+    }
+
+    /// Both sides' waveform, from the folder it is in now.
+    private func loadPeaks() {
+        let readFrom = folder
+        let urls = Speaker.allCases.map { readFrom.appendingPathComponent($0.file) }
         Task.detached(priority: .utility) {
             let peaks = urls.map { RecordingWindowController.peaks(of: $0) }
-            await MainActor.run { [weak self] in self?.view.setPeaks(me: peaks[0], them: peaks[1]) }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                // Renamed meanwhile (its folder moved): read again from there.
+                guard self.folder == readFrom else { return self.loadPeaks() }
+                self.view.setPeaks(me: peaks[0], them: peaks[1])
+            }
         }
     }
 
@@ -1100,12 +1104,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        // Its tool tips' areas go with it: one left past the window, freed,
-        // had AppKit route the pointer's exit to it (a crash once another
-        // window opened under the pointer).
+        // Its tool tips go with it: none left with AppKit past the window.
         view.removeToolTips()
-        if let keyUpMonitor { NSEvent.removeMonitor(keyUpMonitor) }
-        keyUpMonitor = nil
         againPanel?.close()
         player?.pause()
         pictures.forEach { $0.pause() }
@@ -1130,6 +1130,12 @@ private final class RecordingWindow: NSWindow {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.type == .keyDown, !(firstResponder is NSText), controller?.key(event) == true { return true }
         return super.performKeyEquivalent(with: event)
+    }
+
+    /// Every key's release, whoever has the keyboard: a held key is over.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyUp { controller?.keyReleased(event) }
+        super.sendEvent(event)
     }
 }
 
@@ -1521,7 +1527,6 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         }
     }
 
-    /// How the skillie marked last ran after the transcript; nil: none.
     /// The window closing: no tool tip left behind (the chapter marks',
     /// the ran line's).
     func removeToolTips() {
@@ -1530,6 +1535,7 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         removeAllToolTips()
     }
 
+    /// How the skillie marked last ran after the transcript; nil: none.
     func setRan(_ text: String?) {
         guard text != ranText else { return }
         ranLine.isHidden = text == nil
