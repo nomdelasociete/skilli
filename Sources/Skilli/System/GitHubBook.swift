@@ -763,12 +763,36 @@ final class GitHubBook {
     }
 
     func markRead(_ notification: GitHubNotification) async throws {
+        try await markRead([notification])
+    }
+
+    /// One PATCH per thread, one after the other (GitHub has no "mark
+    /// these read"; `PUT /notifications` would read every one, those
+    /// skil.li does not show too). Those read are shown read even when a
+    /// later one fails, then the relay is told once.
+    func markRead(_ notifications: [GitHubNotification]) async throws {
         guard let token else { throw GitHubError(message: "Sign in to GitHub in skil.li's Settings first.") }
-        try await client.markRead(notification.id, token: token)
-        if serverSync { return server.markedRead(notification.id) }
-        notifications = notifications.map { $0.id == notification.id ? GitHubNotification(
-            id: $0.id, reason: $0.reason, type: $0.type, title: $0.title, repository: $0.repository, updatedAt: $0.updatedAt, unread: false, url: $0.url) : $0 }
-        onChange?()
+        var read: Set<String> = []
+        var failure: Error?
+        for notification in notifications {
+            do {
+                try await client.markRead(notification.id, token: token)
+                read.insert(notification.id)
+            } catch {
+                failure = error
+                break
+            }
+        }
+        if !read.isEmpty {
+            if serverSync {
+                server.markedRead(read)
+            } else {
+                self.notifications = self.notifications.map { read.contains($0.id) ? GitHubNotification(
+                    id: $0.id, reason: $0.reason, type: $0.type, title: $0.title, repository: $0.repository, updatedAt: $0.updatedAt, unread: false, url: $0.url) : $0 }
+                onChange?()
+            }
+        }
+        if let failure { throw failure }
     }
 
     func open(_ url: URL) {

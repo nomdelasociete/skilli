@@ -418,7 +418,7 @@ extension LauncherController {
             list.append(act("Checks", "checkmark.seal") { [weak self] in self?.onPullRequestAction?(pullRequest, "Checks") })
             return list + [key("Copy Link", "doc.on.doc", .openSecond, group: .copy)]
         case .githubNotification(let notification):
-            return [
+            var list = [
                 first,
                 LauncherAction(title: "Mark as Read", symbol: "envelope.open", key: removeKey) { [weak self] in
                     guard let github = self?.github else { return }
@@ -429,9 +429,24 @@ extension LauncherController {
                             self?.say("“\(notification.title)” is still unread: GitHub did not answer. Try again in a moment.")
                         }
                     }
-                },
-                key("Copy Link", "doc.on.doc", .openSecond, group: .copy)
+                }
             ]
+            // Every notification the list shows (the search narrows it).
+            let listed = results.compactMap { if case .githubNotification(let note) = $0 { note } else { nil } }
+            if listed.count > 1 {
+                list.append(LauncherAction(title: "Mark All as Read", symbol: "envelope.open") { [weak self] in
+                    guard let github = self?.github else { return }
+                    Task { [weak self] in
+                        do {
+                            try await github.markRead(listed)
+                        } catch {
+                            let left = github.unreadNotifications.filter { note in listed.contains { $0.id == note.id } }.count
+                            self?.say("\(left) still unread: GitHub did not answer. Try again in a moment.")
+                        }
+                    }
+                })
+            }
+            return list + [key("Copy Link", "doc.on.doc", .openSecond, group: .copy)]
         case .project(let project):
             return [first, key("Show in Finder", "folder", .openSecond),
                     copy("Copy Path", project.path, .copy)]

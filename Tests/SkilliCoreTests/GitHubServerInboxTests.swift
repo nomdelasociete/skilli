@@ -449,6 +449,19 @@ final class GitHubServerInboxTests: XCTestCase {
         XCTAssertEqual(inbox.notifications?.count, 0)
     }
 
+    func testSeveralMarkedReadAtOnceAskTheRelayOnce() async {
+        await relay.answer("GET /inbox/notifications", notes(["7", "8", "9"]))
+        await relay.answer("POST /inbox/notifications", notes(["9"]))
+        let inbox = inbox()
+        inbox.readNotifications()
+        await settle(inbox)
+        inbox.markedRead(["7", "8"])
+        XCTAssertEqual(inbox.notifications?.filter(\.unread).map(\.id), ["9"])
+        await settle(inbox)
+        let refreshed = await relay.count("POST /inbox/notifications")
+        XCTAssertEqual(refreshed, 1)
+    }
+
     func testMoreUnreadThanTheRelayKeepsIsSaid() async {
         await relay.answer("GET /inbox/notifications", notes(["7"], complete: false))
         let inbox = inbox()

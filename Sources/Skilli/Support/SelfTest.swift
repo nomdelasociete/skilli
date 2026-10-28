@@ -6452,7 +6452,7 @@ final class SelfTest {
     /// (Return opens), ⇥ → merge asked twice, ⌘⌫ marks read, the agents'
     /// tools.
     private func githubInbox() async {
-        let name = "GitHub: sign in with a code; pull requests by group, notifications (304 after); the strip; pr; ⇥ merge asks twice; ⌘⌫ read; tools"
+        let name = "GitHub: sign in with a code; pull requests by group, notifications (304 after); the strip; pr; ⇥ merge asks twice; ⌘⌫ read; ⇥ read all; tools"
         let stand = GitHubStandIn()
         guard let server = LoopbackServer(handler: { stand.answer($0) }), let port = await server.port() else {
             record(name, false, "no stand-in server", nil)
@@ -6472,10 +6472,10 @@ final class SelfTest {
         let page = await waitUntil(timeout: 1) { opened.first == base.absoluteString + "/login/device" } != nil
         let signedIn = await waitUntil(timeout: 10) { book.isSignedIn && book.lastRefresh != nil } != nil
         let grouped = book.pullRequests.map { "#\($0.number) \($0.group.rawValue)" }
-        let read = grouped == ["#1 ready", "#3 blocked", "#2 testing"] && book.unreadNotifications.map(\.id) == ["22", "21"]
+        let read = grouped == ["#1 ready", "#3 blocked", "#2 testing"] && book.unreadNotifications.map(\.id) == ["22", "21", "24"]
         // Read again: the notifications come back 304, kept.
         book.refresh(force: true)
-        let notModified = await waitUntil(timeout: 3) { stand.notModified == 1 } != nil && book.unreadNotifications.count == 2
+        let notModified = await waitUntil(timeout: 3) { stand.notModified == 1 } != nil && book.unreadNotifications.count == 3
 
         // The launcher with this GitHub.
         let launcher = context.launcher
@@ -6508,7 +6508,7 @@ final class SelfTest {
         }
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
-        let strip = await waitUntil(timeout: 2) { launcher.gitHubStripText == "1 Ready · 1 Blocked · 1 Testing — 2 unread" } != nil
+        let strip = await waitUntil(timeout: 2) { launcher.gitHubStripText == "1 Ready · 1 Blocked · 1 Testing — 3 unread" } != nil
         let stripText = launcher.gitHubStripText ?? "hidden"
         if let directory = context.snapshotDirectory, let png = launcher.snapshotPNG() {
             try? png.write(to: directory.appendingPathComponent("launcher-github-strip.png"))
@@ -6518,7 +6518,7 @@ final class SelfTest {
             }
         }
         for character in "pr " { await pressKey(character) }
-        let titles = ["Add the GitHub strip", "Fix the build", "Faster history", "Review the new API", "Fix the flaky test on main"]
+        let titles = ["Add the GitHub strip", "Fix the build", "Faster history", "Review the new API", "Fix the flaky test on main", "Crash on wake"]
         let listed = await waitUntil(timeout: 2) { launcher.resultTitles == titles } != nil
         let shown = launcher.resultTitles
         if let directory = context.snapshotDirectory, let png = launcher.snapshotPNG() {
@@ -6555,6 +6555,22 @@ final class SelfTest {
 
         let blocked = (try? await tools.call("list_pull_requests", arguments: ["group": "blocked"], run: nil)) ?? ""
         let notes = (try? await tools.call("list_github_notifications", arguments: [:], run: nil)) ?? ""
+
+        // ⇥ on a notification: Mark All as Read reads every one listed.
+        guard await focusTestWindow() else { return }
+        _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+        for character in "pr nimbus" { await pressKey(character) }
+        _ = await waitUntil(timeout: 2) { launcher.resultTitles == ["Review the new API", "Crash on wake"] }
+        await pressKey(nil, code: CGKeyCode(kVK_Tab))
+        let allOffered = await waitUntil(timeout: 2) {
+            launcher.shownActions.map(\.title) == ["Open", "Mark as Read", "Mark All as Read", "Copy Link"]
+        } != nil
+        let allOptions = launcher.shownActions.map(\.title)
+        for character in "all" { await pressKey(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let allRead = await waitUntil(timeout: 3) { stand.read == ["21", "22", "24"] && launcher.resultTitles.isEmpty } != nil
+        await closeLauncher()
+        let noneLeft = (try? await tools.call("mark_all_github_notifications_read", arguments: [:], run: nil)) ?? ""
         // Settings → GitHub as it stands (the app's own GitHub: signed out).
         context.settings.show(pane: .github)
         await pause(500)
@@ -6566,11 +6582,11 @@ final class SelfTest {
         let toolsOK = blocked.hasPrefix("blocked — nomdelasociete/skilli#3 “Fix the build” — lint failed")
             && notes.hasPrefix("22 — Review requested — nimbus-hq/nimbus “Review the new API”") && !notes.contains("Fix the flaky test on main") && !notes.contains("CI failed on main")
         record(name, code && page && signedIn && read && notModified && noStripSignedOut && toSettings && strip && listed && openedPR && offered && askedAgain
-                   && notYet && merged && markedRead && toolsOK,
+                   && notYet && merged && markedRead && toolsOK && allOffered && allRead && noneLeft == "No unread notification to mark.",
                "code \(code), page \(page), signed in \(signedIn); read \(read) (\(grouped)); 304 kept \(notModified); "
                    + "signed out: no strip \(noStripSignedOut), Return → Settings \(toSettings); strip \(strip) (“\(stripText)”); "
                    + "pr \(listed) (\(shown)); Return opens \(openedPR); ⇥ \(offered) (\(options)), asked again \(askedAgain), not before \(notYet), merged \(merged); "
-                   + "⌘⌫ read \(markedRead); tools \(toolsOK) (“\(blocked.prefix(80))”, “\(notes.prefix(60))”)",
+                   + "⌘⌫ read \(markedRead); all read \(allOffered) \(allRead) (\(allOptions), \(stand.read), “\(noneLeft)”); tools \(toolsOK) (“\(blocked.prefix(80))”, “\(notes.prefix(60))”)",
                nil)
     }
 
@@ -29863,6 +29879,9 @@ private final class GitHubStandIn: @unchecked Sendable {
           "subject":{"title":"CI failed on main","url":null,"type":"CheckSuite"},"repository":{"full_name":"nomdelasociete/skilli"}},
          {"id":"22","reason":"review_requested","unread":true,"updated_at":"2026-10-12T10:00:00Z",
           "subject":{"title":"Review the new API","url":"https://api.github.com/repos/nimbus-hq/nimbus/pulls/7","type":"PullRequest"},
+          "repository":{"full_name":"nimbus-hq/nimbus"}},
+         {"id":"24","reason":"mention","unread":true,"updated_at":"2026-10-12T07:00:00Z",
+          "subject":{"title":"Crash on wake","url":"https://api.github.com/repos/nimbus-hq/nimbus/issues/5","type":"Issue"},
           "repository":{"full_name":"nimbus-hq/nimbus"}}]
         """#
 }

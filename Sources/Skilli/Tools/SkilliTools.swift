@@ -631,6 +631,10 @@ final class SkilliTools {
                        description: "Marks one of the user's notifications read, by its id from list_github_notifications.",
                        group: .github, risk: .harmless,
                        parameters: [.init(name: "id", description: "The notification's id.")]),
+        ToolDefinition(name: "mark_all_github_notifications_read", title: "Mark GitHub notifications read",
+                       description: "Marks read every notification list_github_notifications gives for the same query (all of them without one). Only when the user asked for it.",
+                       group: .github, risk: .harmless,
+                       parameters: [.init(name: "query", description: "Words in the title or the repository.", isRequired: false)]),
         ToolDefinition(name: "search_contacts", title: "Search your contacts",
                        description: "Finds the user's contacts by anything known of them: name, nickname, company, job, department, email, phone, city or address, related people (\"la femme de Paul\"), websites. Returns the best matches with their details, best first. Use it for \"who is…\" and before writing to someone.",
                        group: .contacts, risk: .read,
@@ -1417,7 +1421,8 @@ final class SkilliTools {
             }
             return try await reminderTool(name, arguments: arguments, in: reminders, text: text)
 
-        case "list_pull_requests", "list_github_notifications", "merge_pull_request", "update_pull_request_branch", "mark_github_notification_read":
+        case "list_pull_requests", "list_github_notifications", "merge_pull_request", "update_pull_request_branch", "mark_github_notification_read",
+             "mark_all_github_notifications_read":
             guard let github, github.isSignedIn else {
                 throw Failure(message: "GitHub is not connected. The user signs in with GitHub in skil.li's Settings → GitHub.")
             }
@@ -1874,6 +1879,12 @@ final class SkilliTools {
             guard found.canUpdateBranch else { throw Failure(message: "\(found.repositoryFullName)#\(found.number) is not behind its base branch.") }
             try await github.updateBranch(found)
             return "Updating the branch of \(found.repositoryFullName)#\(found.number)."
+        case "mark_all_github_notifications_read":
+            guard github.notificationsRead else { return stale(notifications: true) + "Notifications not read yet." }
+            let shown = github.unreadNotifications.filter { fits([$0.title, $0.repository, $0.reasonTitle]) }
+            guard !shown.isEmpty else { return "No unread notification to mark." }
+            try await github.markRead(shown)
+            return "Marked \(shown.count) read."
         default:
             let id = try text("id")
             guard let note = github.notifications.first(where: { $0.id == id }) else { throw Failure(message: "No notification \(id).") }
