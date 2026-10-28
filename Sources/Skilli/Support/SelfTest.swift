@@ -25620,7 +25620,10 @@ final class SelfTest {
         let linesBefore = center.recordings.transcript(folder)?.lines.count ?? 0
         left.madeAgain = MeetingRecord.MadeAgain(language: "en-US", engine: TranscriptEngine.macOS.rawValue)
         try? center.recordings.write(left, to: folder)
-        let found = await RecorderCenter.left(in: center.recordings.root)
+        // Looked for where it is, as at launch in the recordings' folder
+        // (the played-back calls have one of their own).
+        let root = folder.deletingLastPathComponent()
+        let found = await RecorderCenter.left(in: root)
         let key = { (url: URL) in url.resolvingSymlinksInPath().standardizedFileURL.path }
         let toMake = found.toMakeAgain.filter { key($0.0) == key(folder) }
         center.pickUp(RecorderCenter.Left(toMakeAgain: toMake))
@@ -25630,7 +25633,7 @@ final class SelfTest {
         let after = center.recordings.read(folder)
         let lines = center.recordings.transcript(folder)?.lines.count ?? 0
         let noWindow = center.openWindows.isEmpty
-        let again = await RecorderCenter.left(in: center.recordings.root).toMakeAgain.contains { key($0.0) == key(folder) }
+        let again = await RecorderCenter.left(in: root).toMakeAgain.contains { key($0.0) == key(folder) }
         let passed = toMake.count == 1 && started && made && after?.state == .done && after?.language == "en-US" && lines > 0 && noWindow && !again
         record(name, passed,
                "found \(toMake.count), made again at once \(started), done \(made) (“\(after?.state.rawValue ?? "?")”, \(after?.language ?? "?"), \(linesBefore) → \(lines) lines), window \(noWindow ? "none" : "opened"), found again after \(again)",
@@ -26531,15 +26534,24 @@ final class SelfTest {
                 await pause(60)
             }
             let third = controller.shownLines[2]
-            clickedPlays = await waitUntil(timeout: 3) { controller.playing && controller.litLine == 2 && controller.spaceHint == "Pause" } != nil
-            clickDetail = String(format: "playing %@ at %.2f s (the line starts at %.2f s), lit %@, space says “%@”", "\(controller.playing)", controller.currentTime,
-                                 third.start, controller.litLine.map(String.init) ?? "none", controller.spaceHint ?? "")
+            // The line clicked is selected too: the hints are its own keys
+            // (phase 4), space still plays and pauses.
+            clickedPlays = await waitUntil(timeout: 3) { controller.playing && controller.litLine == 2 && controller.selectedLine == 2 } != nil
+            clickDetail = String(format: "playing %@ at %.2f s (the line starts at %.2f s), lit %@, selected %@", "\(controller.playing)", controller.currentTime,
+                                 third.start, controller.litLine.map(String.init) ?? "none", controller.selectedLine.map(String.init) ?? "none")
             await captureRecordingWindow(controller, as: "recorder-window-playing")
-            // Space pauses it.
+            // Still its keys (the capture took a moment): else none sent.
+            guard await recordingWindowHasKeys(controller, name) else {
+                controller.close()
+                return
+            }
+            // Space pauses it; esc lets the line go, the hint says Play.
             await pressKey(nil, code: CGKeyCode(kVK_Space))
-            let pausedAgain = await waitUntil(timeout: 2) { !controller.playing && controller.spaceHint == "Play" } != nil
-            clickedPlays = clickedPlays && pausedAgain
-            clickDetail += ", space pauses \(pausedAgain)"
+            let pausedAgain = await waitUntil(timeout: 2) { !controller.playing } != nil
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            let saysPlay = await waitUntil(timeout: 2) { controller.selectedLine == nil && controller.spaceHint == "Play" } != nil
+            clickedPlays = clickedPlays && pausedAgain && saysPlay
+            clickDetail += ", space pauses \(pausedAgain), esc: space says “\(controller.spaceHint ?? "")”"
         }
         controller.close()
         let inStep = found.0.count == 2 && found.1.count == 2 && drift < 0.002 && abs(lengths.me - lengths.them) < 0.05
