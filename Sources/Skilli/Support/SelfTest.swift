@@ -19207,8 +19207,9 @@ final class SelfTest {
             let leaseShown: @MainActor @Sendable () -> Bool = { launcher.isShowingFileMeaning && launcher.resultTitles.prefix(3).contains(lease) }
             // Name search, the pause, the candidates and the decision.
             let onItsOwn = await waitUntil(timeout: 20, leaseShown) != nil
-            // A file named so on that Mac would rightly keep it from starting.
-            let named = launcher.isShowingFileMeaning ? nil : launcher.resultTitles.first
+            // A file named so on that Mac would rightly keep it from
+            // starting: said, never by its name (the report is kept).
+            let named = !launcher.isShowingFileMeaning && !launcher.resultTitles.isEmpty
             var withTab = onItsOwn
             if !onItsOwn {
                 await pressKey(nil, code: CGKeyCode(kVK_Tab))
@@ -19218,7 +19219,7 @@ final class SelfTest {
             await pressKey(nil, code: CGKeyCode(kVK_Escape))
             meaningPassed = onItsOwn
             meaningDetail = "by meaning on its own: \(onItsOwn)" + (onItsOwn ? "" : ", with ⇥: \(withTab)")
-                + (named.map { ", a file named so: \($0)" } ?? "") + " (\(launcher.resultTitles.first ?? "nothing"))"
+                + (named ? ", a file is named so on this Mac" : "")
         }
         await closeLauncher()
         record(name, filesMode && found && shown && meaningPassed,

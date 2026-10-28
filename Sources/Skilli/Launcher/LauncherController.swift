@@ -1223,6 +1223,9 @@ final class LauncherController: NSObject {
                 if let pending = fileMeaningPending, pending != text {
                     fileMeaningTask?.cancel()
                     fileMeaningPending = nil
+                    // Its name search found nothing: forgotten, so going
+                    // back to that text searches, and asks by meaning, again.
+                    if fileResults?.query == pending { fileResults = nil }
                 }
                 // The last rows stay while Spotlight looks for the new text.
                 results = (fileResults?.files ?? []).map(LauncherItem.file)
