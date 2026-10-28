@@ -814,7 +814,7 @@ final class SelfTest {
             return await finish(after: [askRoutesOnVolume])
         }
         if scope == .clipmeaning {
-            return await finish(after: [clipboardMeaningOnVolume, clipboardMeaningAnswersFast])
+            return await finish(after: [clipboardMeaningOnVolume, clipboardMeaningAnswersFast, clipboardMeaningOverAMonth])
         }
         if scope == .decide {
             return await finish(after: [
@@ -823,6 +823,7 @@ final class SelfTest {
                 emojiByFeelingLive,
                 clipboardFindsByMeaning,
                 clipboardMeaningOnVolume,
+                clipboardMeaningOverAMonth,
                 askRoutesLive,
                 approvalRulesJudgedLive,
                 askFindsFinderMenus,
@@ -5236,6 +5237,7 @@ final class SelfTest {
         await clipboardKeepsAndFinds()
         await clipboardStoreMigrates()
         await clipboardFindsByMeaning()
+        await clipboardMeaningOverAMonthOnce()
         await clipboardPastesFromLauncher()
         await clipboardPreviewAndMeaning()
         await clipboardMeaningWaitsInPlace()
@@ -6452,7 +6454,7 @@ final class SelfTest {
     /// (Return opens), ⇥ → merge asked twice, ⌘⌫ marks read, the agents'
     /// tools.
     private func githubInbox() async {
-        let name = "GitHub: sign in with a code; pull requests by group, notifications (304 after); the strip; pr; ⇥ merge asks twice; ⌘⌫ read; tools"
+        let name = "GitHub: sign in with a code; pull requests by group, notifications (304 after); the strip; pr; ⇥ merge asks twice; ⌘⌫ read; ⇥ read all; tools"
         let stand = GitHubStandIn()
         guard let server = LoopbackServer(handler: { stand.answer($0) }), let port = await server.port() else {
             record(name, false, "no stand-in server", nil)
@@ -6472,10 +6474,10 @@ final class SelfTest {
         let page = await waitUntil(timeout: 1) { opened.first == base.absoluteString + "/login/device" } != nil
         let signedIn = await waitUntil(timeout: 10) { book.isSignedIn && book.lastRefresh != nil } != nil
         let grouped = book.pullRequests.map { "#\($0.number) \($0.group.rawValue)" }
-        let read = grouped == ["#1 ready", "#3 blocked", "#2 testing"] && book.unreadNotifications.map(\.id) == ["22", "21"]
+        let read = grouped == ["#1 ready", "#3 blocked", "#2 testing"] && book.unreadNotifications.map(\.id) == ["22", "21", "24", "25"]
         // Read again: the notifications come back 304, kept.
         book.refresh(force: true)
-        let notModified = await waitUntil(timeout: 3) { stand.notModified == 1 } != nil && book.unreadNotifications.count == 2
+        let notModified = await waitUntil(timeout: 3) { stand.notModified == 1 } != nil && book.unreadNotifications.count == 4
 
         // The launcher with this GitHub.
         let launcher = context.launcher
@@ -6508,7 +6510,7 @@ final class SelfTest {
         }
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
-        let strip = await waitUntil(timeout: 2) { launcher.gitHubStripText == "1 Ready · 1 Blocked · 1 Testing — 2 unread" } != nil
+        let strip = await waitUntil(timeout: 2) { launcher.gitHubStripText == "1 Ready · 1 Blocked · 1 Testing — 4 unread" } != nil
         let stripText = launcher.gitHubStripText ?? "hidden"
         if let directory = context.snapshotDirectory, let png = launcher.snapshotPNG() {
             try? png.write(to: directory.appendingPathComponent("launcher-github-strip.png"))
@@ -6518,7 +6520,7 @@ final class SelfTest {
             }
         }
         for character in "pr " { await pressKey(character) }
-        let titles = ["Add the GitHub strip", "Fix the build", "Faster history", "Review the new API", "Fix the flaky test on main"]
+        let titles = ["Add the GitHub strip", "Fix the build", "Faster history", "Review the new API", "Fix the flaky test on main", "Crash on wake", "Update the docs"]
         let listed = await waitUntil(timeout: 2) { launcher.resultTitles == titles } != nil
         let shown = launcher.resultTitles
         if let directory = context.snapshotDirectory, let png = launcher.snapshotPNG() {
@@ -6555,6 +6557,27 @@ final class SelfTest {
 
         let blocked = (try? await tools.call("list_pull_requests", arguments: ["group": "blocked"], run: nil)) ?? ""
         let notes = (try? await tools.call("list_github_notifications", arguments: [:], run: nil)) ?? ""
+
+        // ⇥ on a notification: Mark All as Read reads every one listed,
+        // not the one the search left out ("Update the docs").
+        guard await focusTestWindow() else { return }
+        _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+        for character in "pr nimbus" { await pressKey(character) }
+        _ = await waitUntil(timeout: 2) { launcher.resultTitles == ["Review the new API", "Crash on wake"] }
+        await pressKey(nil, code: CGKeyCode(kVK_Tab))
+        let allOffered = await waitUntil(timeout: 2) {
+            launcher.shownActions.map(\.title) == ["Open", "Mark as Read", "Mark All as Read", "Copy Link"]
+        } != nil
+        let allOptions = launcher.shownActions.map(\.title)
+        for character in "all" { await pressKey(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let allRead = await waitUntil(timeout: 3) {
+            stand.read == ["21", "22", "24"] && launcher.resultTitles.isEmpty && book.unreadNotifications.map(\.id) == ["25"]
+        } != nil
+        await closeLauncher()
+        // The tool reads what is left, then says none is.
+        let lastRead = (try? await tools.call("mark_all_github_notifications_read", arguments: [:], run: nil)) ?? ""
+        let noneLeft = (try? await tools.call("mark_all_github_notifications_read", arguments: [:], run: nil)) ?? ""
         // Settings → GitHub as it stands (the app's own GitHub: signed out).
         context.settings.show(pane: .github)
         await pause(500)
@@ -6566,11 +6589,12 @@ final class SelfTest {
         let toolsOK = blocked.hasPrefix("blocked — nomdelasociete/skilli#3 “Fix the build” — lint failed")
             && notes.hasPrefix("22 — Review requested — nimbus-hq/nimbus “Review the new API”") && !notes.contains("Fix the flaky test on main") && !notes.contains("CI failed on main")
         record(name, code && page && signedIn && read && notModified && noStripSignedOut && toSettings && strip && listed && openedPR && offered && askedAgain
-                   && notYet && merged && markedRead && toolsOK,
+                   && notYet && merged && markedRead && toolsOK && allOffered && allRead && lastRead == "Marked 1 read." && stand.read.last == "25"
+                   && noneLeft == "No unread notification to mark.",
                "code \(code), page \(page), signed in \(signedIn); read \(read) (\(grouped)); 304 kept \(notModified); "
                    + "signed out: no strip \(noStripSignedOut), Return → Settings \(toSettings); strip \(strip) (“\(stripText)”); "
                    + "pr \(listed) (\(shown)); Return opens \(openedPR); ⇥ \(offered) (\(options)), asked again \(askedAgain), not before \(notYet), merged \(merged); "
-                   + "⌘⌫ read \(markedRead); tools \(toolsOK) (“\(blocked.prefix(80))”, “\(notes.prefix(60))”)",
+                   + "⌘⌫ read \(markedRead); all read \(allOffered) \(allRead) (\(allOptions), \(stand.read), “\(lastRead)”, “\(noneLeft)”); tools \(toolsOK) (“\(blocked.prefix(80))”, “\(notes.prefix(60))”)",
                nil)
     }
 
@@ -15353,6 +15377,98 @@ final class SelfTest {
         }
     }
 
+    /// The whole kept history searched, not its last 240: over 3,000
+    /// copies spread over 30 days (the corpus, a few older ones planted,
+    /// chat and notes between), requests with and without days and kinds
+    /// named. Each: the copies read once narrowed, the questions asked,
+    /// the time, whether the copy asked for came first. The planted older
+    /// copies must all be found; one other request may miss.
+    private func clipboardMeaningOverAMonth() async {
+        await clipboardMeaningOverAMonth(oneRequest: false)
+    }
+
+    /// In `selftest ai`: one request over the month that names no day and
+    /// no kind, so every part of the history is asked, then their picks.
+    private func clipboardMeaningOverAMonthOnce() async {
+        await clipboardMeaningOverAMonth(oneRequest: true)
+    }
+
+    private func clipboardMeaningOverAMonth(oneRequest: Bool) async {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-clipboard-month-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        guard let store = try? ClipboardStore(folder: folder) else {
+            record("Clipboard by meaning over a month", false, "no scratch store", nil)
+            return
+        }
+        let history = ClipboardHistory(preferences: context.preferences, store: store,
+                                       pasteboard: NSPasteboard(name: NSPasteboard.Name("skilli-selftest-\(UUID().uuidString)")))
+        let now = Date.now
+        let calendar = Calendar.current
+        // Wednesday of last week, 10:00: what "last week" names.
+        let lastWeek = calendar.dateInterval(of: .weekOfYear, for: calendar.date(byAdding: .day, value: -7, to: now) ?? now)?.start
+            .addingTimeInterval(2 * 86_400 + 10 * 3_600) ?? now.addingTimeInterval(-8 * 86_400)
+        let planted: [ClipboardMeaningCopy] = [
+            .init("old.wifi", "Code wifi du chalet : Lumiere-Horizon-2026, réseau « Chalet Martin »", "Messages", 20 * 24 + 5),
+            .init("old.rib", "RIB Jean-François Martaing : FR76 3000 6000 0112 3456 7890 189", "Mail", 17 * 24 + 3),
+            .init("old.figma", "https://www.figma.com/file/k9Lm2/Horizon-Roadmap-Q4", "Figma", now.timeIntervalSince(lastWeek) / 3_600)
+        ]
+        let filler = ClipboardMeaningCorpus.filler
+        let spread = (0..<2_960).map { index -> ClipboardMeaningCopy in
+            let copy = filler[index % filler.count]
+            // Across 30 days, newest first, a little off the hour.
+            return ClipboardMeaningCopy("month.\(index)", "\(copy.text) (\(index / filler.count))", copy.app, Double(index) * 30 * 24 / 2_960 + 0.3)
+        }
+        var keys: [Int64: String] = [:]
+        for copy in ClipboardMeaningCorpus.copies + planted + spread {
+            guard let item = try? store.add(.init(kind: copy.kind, text: copy.text, app: nil, appName: copy.app, hash: "month-\(copy.key)"),
+                                            at: now.addingTimeInterval(-copy.hours * 3_600)).item else { continue }
+            if let ocr = copy.ocr { try? store.setOCR(ocr, for: item.id) }
+            keys[item.id] = copy.key
+        }
+        let all: [(request: String, wanted: String)] = [
+            ("la facture d'électricité", "bill"),
+            ("le code wifi du chalet", "old.wifi"),
+            ("le billet de train que j'ai copié hier", "ticket"),
+            ("l'adresse mail de Margot", "email.margot"),
+            ("the screenshot where the payout failed", "payout"),
+            ("le lien figma Horizon de la semaine dernière", "old.figma"),
+            ("le RIB de Jean-François", "old.rib")
+        ]
+        let cases = oneRequest ? all.filter { $0.wanted == "old.wifi" } : all
+        let older = Set(planted.map(\.key))
+        for provider in DecisionProvider.allCases {
+            let name = oneRequest
+                ? "Clipboard by meaning over a month with \(provider.title): a copy 20 days old found first among \(keys.count) copies, every part asked, under 15 s"
+                : "Clipboard by meaning over a month with \(provider.title): \(cases.count) requests among \(keys.count) copies over 30 days, "
+                    + "the older ones planted all found first, all but one found first, none past 15 s"
+            guard let key = userDecisionKeys[provider] else {
+                checks.append(Check(name: name, passed: true, skipped: true, detail: "no \(provider.title) key saved in Settings", latencyMs: nil))
+                continue
+            }
+            var right = 0, questions = 0
+            var olderMissed = 0
+            var seconds: [Double] = []
+            var details: [String] = []
+            for (request, wanted) in cases {
+                let start = ContinuousClock.now
+                let found = await history.searchByMeaning(request, keys: [provider: key], now: now)
+                let took = (ContinuousClock.now - start).milliseconds / 1_000
+                seconds.append(took)
+                questions += found?.questions ?? 0
+                let first = found?.items.first.flatMap { keys[$0.id] }
+                if first == wanted { right += 1 } else if older.contains(wanted) { olderMissed += 1 }
+                details.append("“\(request)” → \(first ?? "nothing")\(first == wanted ? "" : " (wrong)"): "
+                               + "\(found?.candidates ?? 0) copies, \(found?.questions ?? 0) questions, " + String(format: "%.2f s", took))
+            }
+            let sorted = seconds.sorted()
+            record(name, olderMissed == 0 && right >= cases.count - (oneRequest ? 0 : 1) && (sorted.last ?? 0) < 15,
+                   "\(right)/\(cases.count) right, \(questions) questions, " + String(format: "total %.2f s, median %.2f s, slowest %.2f s; ",
+                                                                                      seconds.reduce(0, +), sorted[sorted.count / 2], sorted.last ?? 0)
+                       + details.joined(separator: "; "),
+                   sorted[sorted.count / 2] * 1_000)
+        }
+    }
+
     /// How long ⇥ waits on each decision key with a full history (240
     /// copies, as on a Mac in use): 20 requests in a row, the median, the
     /// slowest, and how many got no answer within
@@ -15369,7 +15485,7 @@ final class SelfTest {
         let now = Date.now
         let corpus = ClipboardMeaningCorpus.copies
         let filler = ClipboardMeaningCorpus.filler
-        let copies = corpus + (0..<(ClipboardMeaning.candidateLimit - corpus.count)).map { index in
+        let copies = corpus + (0..<(MeaningRounds.questionSize - corpus.count)).map { index in
             let copy = filler[index % filler.count]
             return ClipboardMeaningCopy("more.\(index)", "\(copy.text) (\(index))", copy.app, 300 + Double(index))
         }
@@ -25319,11 +25435,19 @@ final class SelfTest {
     /// every later check is skipped (no key may land in another app).
     private func recordingWindowHasKeys(_ controller: RecordingWindowController, _ name: String) async -> Bool {
         controller.present()
-        if await waitUntil(timeout: 2, { controller.nsWindow.isKeyWindow && NSApp.isActive }) != nil { return true }
+        if await waitUntil(timeout: 2, { self.recordingWindowInFront(controller) }) != nil { return true }
         aborted = true
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
         record(name, false, "the recording's window did not take the keyboard (front: \(front)): stopped so no key lands elsewhere", nil)
         return false
+    }
+
+    /// The recording's window has the keys and the clicks: key, skil.li
+    /// active, and in front for the window server too (just brought
+    /// forward from another app, AppKit says active a moment before; a
+    /// click then only activates).
+    private func recordingWindowInFront(_ controller: RecordingWindowController) -> Bool {
+        controller.nsWindow.isKeyWindow && NSApp.isActive && NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid()
     }
 
     /// A real click at the middle of `frame` (AppKit's coordinates).
@@ -26089,15 +26213,192 @@ final class SelfTest {
         // The calls are English; the test Mac types French: Ask's language
         // says English, as a user would set it.
         context.preferences.voiceLanguage = "en-US"
-        await recorderCardShowsBothSourcesLive()
-        if !aborted { await recorderRecordsAPlayedBackCall() }
-        if !aborted { await recorderPausesBothTracksTogether() }
-        if !aborted { await recorderImportWaitsForTheRecording() }
-        if !aborted { await recorderOffersOneNeverStopped() }
-        if !aborted { await recorderQuitClosesItWhole() }
-        if !aborted { await recorderStopStuckOffersIt() }
-        if !aborted { await recorderSleepPausesUntilResumed() }
-        if !aborted { await recorderFromLinksAndTools() }
+        // Each from the test window in front: a recording's window closed
+        // makes skil.li an accessory again, and macOS puts another app in
+        // front.
+        let steps: [Step] = [recordingWindowKeepsTheDock, recorderCardShowsBothSourcesLive, recorderRecordsAPlayedBackCall,
+                             recorderPausesBothTracksTogether, recorderResamplesAMicrophoneStartedAgain, recorderMicrophoneFollowsItsDeviceRate,
+                             recorderMacSoundFollowsItsOutputRate, recorderMacSoundAtTheOutputsRate, recorderSaysATrackRecordsNothing,
+                             recorderImportWaitsForTheRecording, recorderOffersOneNeverStopped,
+                             recorderQuitClosesItWhole, recorderStopStuckOffersIt, recorderSleepPausesUntilResumed, recorderFromLinksAndTools]
+        for step in steps {
+            await takeFocus()
+            if aborted { return }
+            await step()
+        }
+    }
+
+    /// A recording's window puts skil.li in the Dock with the recorder's
+    /// icon (docs/meeting-recorder-views.md, "In the Dock"); the Dock's icon
+    /// brings the window forward from another app, and out of the Dock
+    /// once minimized; Settings opened and closed meanwhile
+    /// leaves both; the window closed, skil.li is an accessory again with
+    /// its own icon. The other way round too: Settings keeps the Dock, with
+    /// skil.li's own icon, once the recording's window closes.
+    private func recordingWindowKeepsTheDock() async {
+        let name = "Recorder: a recording's window puts skil.li in the Dock with the recorder's icon, the Dock's icon brings it forward from another app and minimized, Settings opened and closed meanwhile keeps both; closed, an accessory with its own icon again (and Settings keeps the Dock with its own icon)"
+        guard let center = context.recorder(), let folder = seedMeeting(center, title: "Dock check", script: Self.launchReview) else {
+            record(name, false, "the stand-in meeting could not be written", nil)
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let settings = context.settings
+        func regular() -> Bool { NSRunningApplication.current.activationPolicy == .regular }
+        func state() -> String {
+            "policy \(regular() ? "regular" : NSRunningApplication.current.activationPolicy == .accessory ? "accessory" : "prohibited"), icon \(Self.showsRecorderIcon() ? "recorder" : "app")"
+        }
+        let before = state()
+        let startedAccessory = NSRunningApplication.current.activationPolicy == .accessory && !Self.showsRecorderIcon()
+
+        center.open(folder)
+        guard let controller = await waitForWindow(center, folder) else {
+            record(name, false, "no window for the stand-in meeting (before: \(before))", nil)
+            return
+        }
+        let opened = await waitUntil(timeout: 2) { regular() && Self.showsRecorderIcon() } != nil
+        let openedState = state()
+        // Its tile, once the Dock has added it.
+        let tile = await waitUntil(timeout: 3) { Self.ownDockTile() != nil } != nil ? Self.ownDockTile() : nil
+        if tile != nil { await captureDock(as: "recorder-dock") }
+        // The Dock's icon with another app in front (TextEdit, a scratch
+        // file): skil.li comes in front with the recording's window, not
+        // Settings. Minimized, the Dock's icon brings it back out.
+        let bundleID = "com.apple.TextEdit"
+        let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-dock-\(getpid()).txt")
+        try? "dock".write(to: file, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        var otherInFront = false, dockBrings = false, fromMinimized = false
+        if let tile, let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
+           let textEdit = try? await NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: configuration),
+           await waitUntil(timeout: 5, { textEdit.isFinishedLaunching }) != nil {
+            let textEditPID = textEdit.processIdentifier
+            Self.makeFrontmost(pid: textEditPID)
+            otherInFront = await waitUntil(timeout: 4) { NSWorkspace.shared.frontmostApplication?.processIdentifier == textEditPID } != nil
+            if otherInFront {
+                AXUIElementPerformAction(tile.item, kAXPressAction as CFString)
+                dockBrings = await waitUntil(timeout: 3) { self.recordingWindowInFront(controller) } != nil
+            }
+            controller.nsWindow.miniaturize(nil)
+            if await waitUntil(timeout: 3, { controller.nsWindow.isMiniaturized }) != nil {
+                AXUIElementPerformAction(tile.item, kAXPressAction as CFString)
+                fromMinimized = await waitUntil(timeout: 3) { !controller.nsWindow.isMiniaturized && self.recordingWindowInFront(controller) } != nil
+            }
+            // The scratch file closed in TextEdit, TextEdit quit if it was not open.
+            Self.makeFrontmost(pid: textEditPID)
+            _ = await waitUntil(timeout: 2) { NSWorkspace.shared.frontmostApplication?.processIdentifier == textEditPID }
+            await cleanUp(bundleID: bundleID, wasRunning: wasRunning)
+        }
+        let settingsAfterDock = settings.isVisible
+        // Settings opened and closed: the recording's window keeps both.
+        settings.show()
+        let withSettings = await waitUntil(timeout: 2) { settings.isVisible } != nil && regular() && Self.showsRecorderIcon()
+        await closeSettings()
+        let afterSettings = await waitUntil(timeout: 1) { !regular() || !Self.showsRecorderIcon() } == nil
+        let afterSettingsState = state()
+        controller.close()
+        let closed = await waitUntil(timeout: 2) { !regular() && !Self.showsRecorderIcon() } != nil
+        let closedState = state()
+
+        // Settings first, then a recording's window, closed first: Settings
+        // keeps the Dock, with skil.li's own icon.
+        settings.show()
+        _ = await waitUntil(timeout: 2) { settings.isVisible }
+        center.open(folder)
+        let second = await waitForWindow(center, folder)
+        let bothRecorder = await waitUntil(timeout: 2) { regular() && Self.showsRecorderIcon() } != nil
+        second?.close()
+        let settingsKeeps = await waitUntil(timeout: 2) { regular() && !Self.showsRecorderIcon() } != nil
+        let settingsKeepsState = state()
+        await closeSettings()
+        let allClosed = await waitUntil(timeout: 2) { NSRunningApplication.current.activationPolicy == .accessory } != nil
+        record(name, startedAccessory && opened && tile != nil && otherInFront && dockBrings && fromMinimized && !settingsAfterDock && withSettings
+               && afterSettings && closed && bothRecorder && settingsKeeps && allClosed,
+               "before: \(before); window open: \(openedState) \(opened), Dock tile \(tile != nil), TextEdit in front \(otherInFront), the Dock's icon brought skil.li and the window in front \(dockBrings), brought it back minimized \(fromMinimized) (Settings shown \(settingsAfterDock)); Settings opened too \(withSettings), closed: \(afterSettingsState) \(afterSettings); window closed: \(closedState) \(closed); Settings then a window: recorder icon \(bothRecorder), window closed: \(settingsKeepsState) \(settingsKeeps); all closed, accessory \(allClosed)",
+               nil)
+    }
+
+    /// Whether the icon AppKit gives skil.li now is the recorder's: drawn at
+    /// 64 pt, its record light (red) is where skil.li's own icon has its
+    /// mint dot.
+    private static func showsRecorderIcon() -> Bool {
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64, bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return false }
+        // In points before the context, or it draws 1:1 in pixels.
+        rep.size = NSSize(width: 64, height: 64)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSApp.applicationIconImage?.draw(in: NSRect(x: 0, y: 0, width: 64, height: 64))
+        NSGraphicsContext.restoreGraphicsState()
+        // From the top left.
+        var pixel = [Int](repeating: 0, count: 4)
+        rep.getPixel(&pixel, atX: 42, y: 42)
+        return pixel[0] > 200 && pixel[1] < 110 && pixel[2] < 110
+    }
+
+    /// skil.li's tile in the Dock (the item whose application is this one),
+    /// its frame and the Dock's list's, in screen coordinates from the top
+    /// left, through the Dock's Accessibility.
+    private static func ownDockTile() -> (item: AXUIElement, frame: CGRect?, dock: CGRect?)? {
+        guard let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first else { return nil }
+        let own = Bundle.main.bundleURL.resolvingSymlinksInPath().path
+        func children(_ element: AXUIElement) -> [AXUIElement] {
+            var value: CFTypeRef?
+            AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value)
+            return value as? [AXUIElement] ?? []
+        }
+        for list in children(AXUIElementCreateApplication(dock.processIdentifier)) {
+            for item in children(list) {
+                var url: CFTypeRef?
+                AXUIElementCopyAttributeValue(item, kAXURLAttribute as CFString, &url)
+                if let url = url as? URL, url.resolvingSymlinksInPath().path == own { return (item, axFrame(item), axFrame(list)) }
+            }
+        }
+        return nil
+    }
+
+    /// skil.li's tile as the Dock shows it (Screen Recording): `name`, the
+    /// tile and its running dot with the Dock's glass around them (no other
+    /// app's tile), and `name-whole`, the whole Dock, to judge it among the
+    /// others.
+    private func captureDock(as name: String) async {
+        guard let directory = context.snapshotDirectory, let screen = NSScreen.screens.first?.frame else { return }
+        /// The tile's and the Dock's frames once the Dock is on screen.
+        func shown() -> (tile: CGRect, dock: CGRect)? {
+            guard let found = Self.ownDockTile(), let tile = found.frame, let dock = found.dock,
+                  dock.minY >= screen.minY, dock.maxY <= screen.maxY + 1 else { return nil }
+            return (tile, dock)
+        }
+        let source = CGEventSource(stateID: .hidSystemState)
+        func movePointer(to point: CGPoint) {
+            CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+        }
+        // A Dock that hides itself shows with the pointer on the screen's
+        // bottom edge (where it is unless moved).
+        let revealed = shown() == nil
+        if revealed { movePointer(to: CGPoint(x: screen.midX, y: screen.maxY - 1)) }
+        defer { if revealed { movePointer(to: CGPoint(x: screen.midX, y: screen.midY)) } }
+        // Still: its tile grown in, the Dock slid up (the same frames twice
+        // 100 ms apart).
+        var last: (tile: CGRect, dock: CGRect)?
+        var still: (tile: CGRect, dock: CGRect)?
+        for _ in 0..<40 where still == nil {
+            let now = shown()
+            if let now, let last, now.tile == last.tile, now.dock == last.dock { still = now }
+            last = now
+            await pause(100)
+        }
+        guard let still else { return }
+        func appKit(_ rect: CGRect) -> NSRect { NSRect(x: rect.minX, y: screen.maxY - rect.maxY, width: rect.width, height: rect.height) }
+        for (file, rect) in [(name, appKit(still.tile).insetBy(dx: 0, dy: -still.tile.height * 0.25)),
+                             ("\(name)-whole", appKit(still.dock).insetBy(dx: -12, dy: -12))] {
+            if let image = await GlassCheck.screenshot(of: rect), let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+                try? png.write(to: directory.appendingPathComponent("\(file).png"))
+            }
+        }
     }
 
     /// The played-back calls (`script/recorder-measure`: `push.sh` puts them
@@ -26134,9 +26435,9 @@ final class SelfTest {
     /// in both sides tell where each landed in its track.
     /// `ppm`: as a microphone whose clock runs that fast or slow hears it:
     /// stretched (or squeezed) by as much, a frame of it a moment of the
-    /// call at that clock's rate.
-    nonisolated private static func clip(_ source: URL?, seconds: Double, beeps: [Double], ppm: Double = 0, to url: URL) -> Bool {
-        let rate = 16000.0
+    /// call at that clock's rate. `rate`: the file's (a source at 16 kHz
+    /// only).
+    nonisolated private static func clip(_ source: URL?, seconds: Double, beeps: [Double], ppm: Double = 0, rate: Double = 16000, to url: URL) -> Bool {
         let factor = 1 + ppm * 1e-6
         let frames = Int(seconds * rate * factor)
         guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1),
@@ -26531,7 +26832,7 @@ final class SelfTest {
         if controller.shownLines.count > 3, let frame = controller.screenFrame(ofLine: 2) {
             // A real click on the third line, its window in front.
             controller.present()
-            guard await waitUntil(timeout: 2, { controller.nsWindow.isKeyWindow && NSApp.isActive }) != nil else {
+            guard await waitUntil(timeout: 2, { self.recordingWindowInFront(controller) }) != nil else {
                 aborted = true
                 controller.close()
                 let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
@@ -26670,6 +26971,388 @@ final class SelfTest {
                            expected, offsets.count, pairs.mine.count, BeepPairs.mean(before) * 1000, BeepPairs.mean(after) * 1000, step * 1000, spread * 1000,
                            restartStep * 1000, jumpLine),
                     nil)
+    }
+
+    // MARK: Rates and tracks that record nothing (a Bluetooth headset's call mode)
+
+    /// The default input or output (the one the Mac's sound follows).
+    nonisolated private static func defaultAudioDevice(input: Bool) -> AudioObjectID {
+        var device = AudioObjectID(kAudioObjectUnknown)
+        MacSoundTap.read(AudioObjectID(kAudioObjectSystemObject),
+                         input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultSystemOutputDevice, &device)
+        return device
+    }
+
+    nonisolated private static func nominalRate(of device: AudioObjectID) -> Double {
+        var rate = 0.0
+        MacSoundTap.read(device, kAudioDevicePropertyNominalSampleRate, &rate)
+        return rate
+    }
+
+    /// The rates a device offers, one by one (a range left out).
+    nonisolated private static func rates(of device: AudioObjectID) -> [Double] {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyAvailableNominalSampleRates, mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(device, &address, 0, nil, &size) == noErr, size > 0 else { return [] }
+        var ranges = [AudioValueRange](repeating: AudioValueRange(), count: Int(size) / MemoryLayout<AudioValueRange>.size)
+        guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &ranges) == noErr else { return [] }
+        return ranges.filter { $0.mMinimum == $0.mMaximum }.map(\.mMinimum)
+    }
+
+    /// A device's rate changed, as a headset going to its call mode changes
+    /// it; whether it took.
+    private func setNominalRate(_ rate: Double, of device: AudioObjectID) async -> Bool {
+        var wanted = rate
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate, mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        guard AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<Double>.size), &wanted) == noErr else { return false }
+        return await waitUntil(timeout: 3) { Self.nominalRate(of: device) == rate } != nil
+    }
+
+    /// Records from the Record card (↩), `seconds` of it with `during`
+    /// run at `at` seconds in, then Stop; the recording's folder once its
+    /// transcript is done (its window closed), and when `during` ran (s
+    /// into the recording).
+    private func recordForRates(_ center: RecorderCenter, _ name: String, title: String, seconds: Int, at: Int,
+                                started: () -> Void = {}, during: () async -> Void) async -> (folder: URL, at: Double)? {
+        center.showCard(title: title)
+        guard await waitUntil(timeout: 3, { center.isCardVisible && center.cardView.microphoneLine != "Starting…" }) != nil else {
+            record(name, false, "no Record card", nil)
+            return nil
+        }
+        guard await recordCardHasKeys(center, name) else { return nil }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 2, { center.recorder.phase == .recording }) != nil else {
+            record(name, false, "not recording", nil)
+            return nil
+        }
+        started()
+        await pause(at * 1000)
+        let moment = center.recorder.elapsed
+        await during()
+        await pause((seconds - at) * 1000)
+        center.control(.stop)
+        let done = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil && !center.openWindows.isEmpty } != nil
+        center.openWindows.forEach { $0.close() }
+        guard done, let folder = newestRecording(in: center.recordings.root) else {
+            record(name, false, "never done", nil)
+            return nil
+        }
+        return (folder, moment)
+    }
+
+    /// A microphone at 24 kHz, then at 16 kHz (a Bluetooth headset in its
+    /// call mode), its engine started again in the middle: resampled to
+    /// 48 kHz, each run placed by when the converter's output began, both
+    /// tracks in step on each side of the restart. Measured before the fix:
+    /// it held on main too; a converter made afresh for every buffer still
+    /// gives back all but 32 to 48 frames of it, never silence.
+    private func recorderResamplesAMicrophoneStartedAgain() async {
+        let name = "Recorder: a microphone at 24 kHz, then 16 kHz, its engine started again in the middle: resampled, its beeps all there, both tracks in step across the restart"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        var lines: [String] = []
+        var passed = true
+        for rate in [24000.0, 16000.0] {
+            let train = recorderScratch.appendingPathComponent("rate-\(Int(rate)).wav")
+            let them = recorderScratch.appendingPathComponent("rate-\(Int(rate))-them.wav")
+            _ = Self.clip(nil, seconds: 20, beeps: stride(from: 0.5, to: 20, by: 0.5).map { $0 }, rate: rate, to: train)
+            _ = Self.clip(nil, seconds: 20, beeps: stride(from: 0.5, to: 20, by: 0.5).map { $0 }, to: them)
+            center.recorder.standIn(microphone: train, alsoLeaveOut: [])
+            var play: Process?
+            var restarted = false
+            let made = await recordForRates(center, name, title: "Rate \(Int(rate / 1000)) kHz", seconds: 10, at: 5, started: {
+                try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
+                play = playElsewhere(them)
+            }, during: {
+                let before = center.recorder.microphone.restarts
+                center.recorder.microphone.simulateConfigurationChange()
+                restarted = center.recorder.microphone.restarts == before + 1
+            })
+            play?.terminate()
+            guard let (folder, restartAt) = made else { return }
+            let pairs = await Self.beepPairs(in: folder)
+            let (before, after) = pairs.around(restartAt)
+            let step = pairs.step(at: restartAt)
+            let heard = pairs.mine.count
+            let ok = restarted && heard >= 17 && before.count >= 4 && after.count >= 4 && step < 0.002
+            passed = passed && ok
+            lines.append(String(format: "%d kHz: started again %@, %d beeps on the microphone's track (~19 played), %d of them in step, offset %.1f ms before the restart, %.1f ms after (step %.2f ms)",
+                                Int(rate / 1000), "\(restarted)", heard, pairs.paired.count, BeepPairs.mean(before) * 1000, BeepPairs.mean(after) * 1000, step * 1000))
+        }
+        record(name, passed, lines.joined(separator: "; "), nil)
+    }
+
+    /// The audio setup changes its rate while recording, as a Bluetooth
+    /// headset does once a call uses its microphone: AVAudioEngine stops;
+    /// started again, the same engine kept its input's format from before,
+    /// refused its tap ("Format mismatch", "Failed to create tap, config
+    /// change pending!") and nothing came for the rest of the call. Here
+    /// the test Mac's output, from its rate to another it offers (the
+    /// engine runs at the output's rate; its input's own rate changing is
+    /// resampled, nothing stops): the microphone's buffers keep coming.
+    /// Skipped without a microphone allowed, or an output with one rate.
+    private func recorderMicrophoneFollowsItsDeviceRate() async {
+        let name = "Recorder: the audio setup changes its rate while recording (a headset's call mode): the microphone gets a new engine, its buffers keep coming"
+        let output = Self.defaultAudioDevice(input: false)
+        let rate = Self.nominalRate(of: output)
+        let offered = Self.rates(of: output)
+        guard Self.defaultAudioDevice(input: true) != kAudioObjectUnknown, AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+              let other = offered.contains(44100) && rate != 44100 ? 44100 : offered.first(where: { $0 != rate }) else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "no microphone allowed, or an output with one rate, on this Mac", latencyMs: nil))
+            return
+        }
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        center.recorder.standIn(microphone: nil, alsoLeaveOut: [])
+        defer { _ = Self.setNominalRateNow(rate, of: output) }
+        var changed = false
+        var after: (buffer: Double?, restarts: Int, at: Double) = (nil, 0, 0)
+        let restartsBefore = center.recorder.microphone.restarts
+        let made = await recordForRates(center, name, title: "Microphone rate", seconds: 9, at: 3, during: {
+            changed = await setNominalRate(other, of: output)
+            after.at = HostClock.now
+            await pause(5000)
+            after.buffer = center.recorder.trackTimes(.me).buffer
+            after.restarts = center.recorder.microphone.restarts - restartsBefore
+        })
+        // Put back before the next check reads it (the change takes a moment).
+        _ = await setNominalRate(rate, of: output)
+        guard made != nil else { return }
+        let lastBuffer = after.buffer.map { after.at + 5 - $0 } ?? .infinity
+        let passed = changed && after.restarts >= 1 && lastBuffer < 0.5
+        record(name, passed,
+               String(format: "the output from %.0f Hz to %.0f Hz %@; the microphone started again %d times; its last buffer %@ before the end of the 5 s after the change (under 0.5 s: they kept coming)",
+                      rate, other, changed ? "took" : "did not take", after.restarts,
+                      lastBuffer.isFinite ? String(format: "%.2f s", lastBuffer) : "never came"),
+               nil)
+    }
+
+    /// The output changes its rate while recording, as a Bluetooth headset
+    /// does going to its call mode: the Mac's sound's aggregate made again,
+    /// its buffers called by the rate they now come at. Before, they kept
+    /// being called 48 kHz: the call played fast (22 minutes in 11), then
+    /// silence. Here the test Mac's output, from its rate to another it
+    /// offers: the other side's beeps still half a second apart, both
+    /// tracks still in step.
+    private func recorderMacSoundFollowsItsOutputRate() async {
+        let name = "Recorder: the output changes its rate while recording (a headset's call mode): the Mac's sound made again at that rate, its beeps still 0.5 s apart, both tracks in step"
+        let output = Self.defaultAudioDevice(input: false)
+        let rate = Self.nominalRate(of: output)
+        let offered = Self.rates(of: output)
+        guard output != kAudioObjectUnknown, let other = offered.contains(44100) && rate != 44100 ? 44100 : offered.first(where: { $0 != rate }) else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "an output with a single rate", latencyMs: nil))
+            return
+        }
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let train = recorderScratch.appendingPathComponent("output-rate-train.wav")
+        _ = Self.clip(nil, seconds: 25, beeps: stride(from: 0.5, to: 25, by: 0.5).map { $0 }, to: train)
+        center.recorder.standIn(microphone: train, alsoLeaveOut: [])
+        defer { _ = Self.setNominalRateNow(rate, of: output) }
+        var play: Process?
+        var changed = false
+        let rebuildsBefore = center.recorder.macSound.rebuilds
+        var called = 0.0, rebuilds = 0
+        var formats: (tap: Double, aggregate: Double, output: Double) = (0, 0, 0)
+        // When it was made again at the new rate (s into the recording).
+        var recoveredAt = 0.0
+        let made = await recordForRates(center, name, title: "Output rate", seconds: 12, at: 5, started: {
+            try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
+            play = playElsewhere(train)
+        }, during: {
+            changed = await setNominalRate(other, of: output)
+            // Made again at the new rate (a rebuild retried a second later
+            // counts), 5 s at most.
+            _ = await waitUntil(timeout: 5) { center.recorder.macSound.calledRate == other }
+            recoveredAt = center.recorder.elapsed
+            (called, rebuilds, formats) = (center.recorder.macSound.calledRate, center.recorder.macSound.rebuilds - rebuildsBefore,
+                                           center.recorder.macSound.formats)
+        })
+        play?.terminate()
+        _ = await setNominalRate(rate, of: output)
+        guard let (folder, _) = made else { return }
+        // The other side's beeps once made again (the recording goes on 7 s
+        // after that): 2 kHz and half a second
+        // apart when called by their rate (44.1 kHz ones called 48 kHz come
+        // 0.459 s apart and 2.18 kHz high: the 2 kHz search misses them).
+        let them = await Task.detached { Self.beeps(in: folder.appendingPathComponent(Speaker.them.file)) }.value
+        let later = them.filter { $0 > recoveredAt + 0.5 }
+        let gaps = zip(later.dropFirst(), later).map { $0 - $1 }.filter { $0 < 0.75 }.sorted()
+        let gap = gaps.isEmpty ? .nan : gaps[gaps.count / 2]
+        let pairs = await Self.beepPairs(in: folder)
+        let after = pairs.paired.filter { $0.at > recoveredAt + 0.5 && $0.at < recoveredAt + 6.5 }
+        let passed = changed && rebuilds >= 1 && called == other && abs(gap - 0.5) < 0.003 && after.count >= 10
+        record(name, passed,
+               String(format: "the output from %.0f Hz to %.0f Hz %@; the Mac's sound made again %d times, its buffers called %.0f Hz (at %.1f s); after that %d of the other side's beeps found at 2 kHz, %.3f s apart (median), %d of the microphone's beeps in step with them over 6 s (of ~12), offset %.1f ms; then the tap's format %.0f Hz, the aggregate %.0f Hz, the output %.0f Hz",
+                      rate, other, changed ? "took" : "did not take", rebuilds, called, recoveredAt, later.count, gap, after.count, BeepPairs.mean(after.map(\.offset)) * 1000,
+                      formats.tap, formats.aggregate, formats.output),
+               nil)
+    }
+
+    /// A recording started while the output runs at another rate than
+    /// 48 kHz (44.1 kHz here; a headset already in its call mode, 24 kHz):
+    /// the tap's format still says 48 kHz while the aggregate runs at the
+    /// output's rate (measured on the test Mac). Its buffers called by the
+    /// aggregate's rate: the other side's beeps 0.5 s apart, in step with
+    /// the microphone's.
+    private func recorderMacSoundAtTheOutputsRate() async {
+        let name = "Recorder: a recording started with the output at 44.1 kHz (a headset already in its call mode): the Mac's sound called by the aggregate's rate, its beeps 0.5 s apart, both tracks in step"
+        let output = Self.defaultAudioDevice(input: false)
+        let rate = Self.nominalRate(of: output)
+        let offered = Self.rates(of: output)
+        // Another rate than the 48 kHz the tap's format says, even when the
+        // output is at it already.
+        guard output != kAudioObjectUnknown, let other = offered.contains(44100) ? 44100 : offered.first(where: { $0 != 48000 }) else {
+            checks.append(Check(name: name, passed: true, skipped: true, detail: "an output with no rate but 48 kHz", latencyMs: nil))
+            return
+        }
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let train = recorderScratch.appendingPathComponent("output-at-rate-train.wav")
+        _ = Self.clip(nil, seconds: 20, beeps: stride(from: 0.5, to: 20, by: 0.5).map { $0 }, to: train)
+        center.recorder.standIn(microphone: train, alsoLeaveOut: [])
+        defer { if other != rate { _ = Self.setNominalRateNow(rate, of: output) } }
+        // At it already: nothing written (an output that keeps its rate may
+        // refuse the write).
+        let changed = other == rate ? true : await setNominalRate(other, of: output)
+        // The audio setup settles before the card starts the sources.
+        if other != rate { await pause(1000) }
+        var play: Process?
+        var called = 0.0
+        var formats: (tap: Double, aggregate: Double, output: Double) = (0, 0, 0)
+        let made = await recordForRates(center, name, title: "Output at another rate", seconds: 9, at: 2, started: {
+            try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
+            play = playElsewhere(train)
+        }, during: {
+            (called, formats) = (center.recorder.macSound.calledRate, center.recorder.macSound.formats)
+        })
+        play?.terminate()
+        if other != rate { _ = await setNominalRate(rate, of: output) }
+        guard let (folder, _) = made else { return }
+        let them = await Task.detached { Self.beeps(in: folder.appendingPathComponent(Speaker.them.file)) }.value
+        let gaps = zip(them.dropFirst(), them).map { $0 - $1 }.filter { $0 < 0.75 }.sorted()
+        let gap = gaps.isEmpty ? .nan : gaps[gaps.count / 2]
+        let pairs = await Self.beepPairs(in: folder)
+        let passed = changed && called == other && abs(gap - 0.5) < 0.003 && pairs.paired.count >= 14
+        record(name, passed,
+               String(format: "the output at %.0f Hz %@ before the recording; the tap's format said %.0f Hz, the aggregate %.0f Hz, the buffers called %.0f Hz; %d of the other side's beeps found at 2 kHz, %.3f s apart (median), %d of the microphone's %d beeps in step with them, offset %.1f ms",
+                      other, changed ? "set" : "not set", formats.tap, formats.aggregate, called, them.count, gap, pairs.paired.count, pairs.mine.count,
+                      BeepPairs.mean(pairs.paired.map(\.offset)) * 1000),
+               nil)
+    }
+
+    nonisolated private static func setNominalRateNow(_ rate: Double, of device: AudioObjectID) -> Bool {
+        var wanted = rate
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate, mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        return AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<Double>.size), &wanted) == noErr
+    }
+
+    /// A track that records nothing (docs/meeting-recorder-views.md, "A
+    /// track that records nothing"): the stand-in microphone never played,
+    /// no buffer comes, while the Mac's sound plays. Within seconds the
+    /// menu bar's orange mark and its line, the card (Start Again ↩, Keep
+    /// Recording esc); esc keeps recording, not offered again; the
+    /// microphone speaking, the mark goes; silent again, offered again;
+    /// Start Again, a new engine, the mark and the card go.
+    private func recorderSaysATrackRecordsNothing() async {
+        let name = "Recorder: a track that records nothing (the microphone gives no buffer) is said within seconds: the menu bar's orange mark and line, the card; Keep Recording holds it, sound clears it, Start Again brings it back"
+        guard let center = context.recorder() else {
+            record(name, false, "no recorder", nil)
+            return
+        }
+        let train = recorderScratch.appendingPathComponent("silent-train.wav")
+        _ = Self.clip(nil, seconds: 60, beeps: stride(from: 0.5, to: 60, by: 0.5).map { $0 }, to: train)
+        center.recorder.standIn(microphone: train, alsoLeaveOut: [])
+        center.recorder.watchesSilence = true
+        defer { center.recorder.watchesSilence = false }
+        center.showCard(title: "Nothing recorded")
+        guard await waitUntil(timeout: 3, { center.isCardVisible && center.cardView.microphoneLine != "Starting…" }) != nil else {
+            record(name, false, "no Record card", nil)
+            return
+        }
+        guard await recordCardHasKeys(center, name) else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        guard await waitUntil(timeout: 2, { center.recorder.phase == .recording }) != nil else {
+            record(name, false, "not recording", nil)
+            return
+        }
+        let began = ContinuousClock.now
+        // The Mac plays (heard): only the microphone records nothing.
+        let play = playElsewhere(train)
+        defer { play?.terminate() }
+        func silentCard() -> Bool { center.isCardVisible && center.cardView.eyebrowText == "NOTHING RECORDED" }
+        let offered = await waitUntil(timeout: 8) { silentCard() } != nil
+        let after = Double((ContinuousClock.now - began).milliseconds) / 1000
+        let view = center.cardView
+        let said = (eyebrow: view.eyebrowText, line: view.detailText, button: view.buttonTitle)
+        // The menu bar draws eight times a second.
+        _ = await waitUntil(timeout: 1) { center.menuBar.button?.accessibilityLabel()?.contains("records nothing") == true }
+        let label = center.menuBar.button?.accessibilityLabel() ?? ""
+        let menu = center.menuBar.menuTitles
+        let macSilent = center.recorder.silent[.them]
+        if offered {
+            await captureRecordCard(center, as: "recorder-silent")
+            if let button = center.menuBar.button { await captureStatusItem(button, "recorder-menubar-silent") }
+        }
+        // esc: Keep Recording; not offered again while nothing comes.
+        var keys = false
+        if offered { keys = await waitUntil(timeout: 1.5) { center.cardWindow?.isKeyWindow == true } != nil }
+        var kept = false, notAgain = false, markStays = false
+        if keys {
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            kept = await waitUntil(timeout: 2) { !center.isCardVisible } != nil
+            await pause(3000)
+            notAgain = !center.isCardVisible
+            markStays = center.recorder.silent[.me] == .nothing
+        }
+        let openMenu = keys ? await openRecorderMenu(center, capture: "recorder-menu-silent.png") : []
+        // The microphone speaks: the mark goes.
+        try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
+        let cleared = await waitUntil(timeout: 4) { center.recorder.silent[.me] == nil } != nil
+        // Silent again (a new stretch): offered again; Start Again ↩.
+        center.recorder.microphone.silenceStandIn()
+        let again = await waitUntil(timeout: 8) { silentCard() } != nil
+        let restartsBefore = center.recorder.microphone.restarts
+        var startedAgain = false, back = false
+        if again, await waitUntil(timeout: 1.5, { center.cardWindow?.isKeyWindow == true }) != nil {
+            let pressed = HostClock.now
+            await pressKey(nil, code: CGKeyCode(kVK_Return))
+            startedAgain = await waitUntil(timeout: 2) { center.recorder.microphone.restarts == restartsBefore + 1 } != nil
+            // Sound from the new engine, and nothing said any more.
+            back = await waitUntil(timeout: 4) {
+                (center.recorder.trackTimes(.me).sound ?? 0) > pressed && center.recorder.silent[.me] == nil && !center.isCardVisible
+            } != nil
+        }
+        let labelBack = center.menuBar.button?.accessibilityLabel() ?? ""
+        center.control(.stop)
+        _ = await waitUntil(timeout: 60) { center.recorder.phase == .idle && center.recorder.transcribing == nil && !center.openWindows.isEmpty }
+        center.openWindows.forEach { $0.close() }
+        let line = "Nothing comes from MacBook Pro Microphone: what you say isn't recorded."
+        let conditions: [(String, Bool)] = [
+            ("offered", offered), ("within 5 s", after <= 5), ("eyebrow", said.eyebrow == "NOTHING RECORDED"), ("line", said.line == line),
+            ("Start Again", said.button == "Start Again"), ("label", label.contains("the microphone records nothing")),
+            ("menu line", menu.contains { $0.hasPrefix("Microphone · nothing comes from MacBook Pro Microphone") }), ("the Mac's sound fine", macSilent == nil),
+            ("card keys", keys), ("Keep Recording", kept), ("not again", notAgain), ("mark stays", markStays),
+            ("open menu says it", openMenu.contains { $0.hasPrefix("Microphone · nothing comes") }), ("sound clears it", cleared),
+            ("offered again", again), ("started again", startedAgain), ("back", back), ("label back", !labelBack.contains("records nothing"))
+        ]
+        let failed = conditions.filter { !$0.1 }.map(\.0)
+        record(name, failed.isEmpty,
+               (failed.isEmpty ? "" : "failed: \(failed.joined(separator: ", ")); ")
+                   + String(format: "card after %.1f s: “%@” “%@” “%@”; label “%@”; menu %@; ", after, said.eyebrow, said.line, said.button, label, menu.description)
+                   + "Keep Recording \(kept), not offered again \(notAgain), mark stays \(markStays); sound cleared it \(cleared); offered again \(again), Start Again \(startedAgain), back \(back)",
+               nil)
     }
 
     /// A file imported while a meeting records (docs/meeting-recorder-views.md,
@@ -29875,7 +30558,13 @@ private final class GitHubStandIn: @unchecked Sendable {
           "subject":{"title":"CI failed on main","url":null,"type":"CheckSuite"},"repository":{"full_name":"nomdelasociete/skilli"}},
          {"id":"22","reason":"review_requested","unread":true,"updated_at":"2026-10-12T10:00:00Z",
           "subject":{"title":"Review the new API","url":"https://api.github.com/repos/nimbus-hq/nimbus/pulls/7","type":"PullRequest"},
-          "repository":{"full_name":"nimbus-hq/nimbus"}}]
+          "repository":{"full_name":"nimbus-hq/nimbus"}},
+         {"id":"24","reason":"mention","unread":true,"updated_at":"2026-10-12T07:00:00Z",
+          "subject":{"title":"Crash on wake","url":"https://api.github.com/repos/nimbus-hq/nimbus/issues/5","type":"Issue"},
+          "repository":{"full_name":"nimbus-hq/nimbus"}},
+         {"id":"25","reason":"assign","unread":true,"updated_at":"2026-10-12T06:00:00Z",
+          "subject":{"title":"Update the docs","url":"https://api.github.com/repos/nomdelasociete/skilli/issues/11","type":"Issue"},
+          "repository":{"full_name":"nomdelasociete/skilli"}}]
         """#
 }
 

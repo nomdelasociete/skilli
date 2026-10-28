@@ -282,8 +282,6 @@ public struct SnippetMatcher: Sendable {
 public enum SnippetMeaning {
     /// What the model reads of each snippet's text.
     public static let previewLength = 80
-    /// One Choice question holds this many.
-    public static let candidateLimit = 240
 
     /// "“Home address” (keyword ;addr): 12 rue des Lilas, 75011 Paris…"
     public static func describe(_ snippet: Snippet) -> String {

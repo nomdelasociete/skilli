@@ -31,10 +31,8 @@ public struct HistoryVisit: Hashable, Sendable {
 }
 
 /// Pages searched the way a person remembers them: "la page sur les impôts
-/// d'hier". The decision model picks among recent visits, one line each.
+/// d'hier". The decision model picks among the visits kept, one line each.
 public enum HistoryMeaning {
-    public static let candidateLimit = 240
-
     /// Chrome counts microseconds since 1601.
     public static func chromeDate(_ microseconds: Int64) -> Date? {
         microseconds > 0 ? Date(timeIntervalSince1970: Double(microseconds) / 1_000_000 - 11_644_473_600) : nil

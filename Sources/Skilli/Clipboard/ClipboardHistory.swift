@@ -212,38 +212,40 @@ final class ClipboardHistory {
         let items: [ClipboardStore.Item]
         let label: String
         var unanswered: String?
+        /// The copies the model read (the history narrowed), and the
+        /// questions it took.
+        var candidates = 0
+        var questions = 0
     }
 
-    /// How long a search by meaning waits for each model: Jev answers 240
-    /// copies in well under a second; past this, the next key is tried.
-    static let answerLimit: Duration = .seconds(5)
+    /// How long a search by meaning waits for each question: Jev answers
+    /// 240 copies in well under a second; past this, the next key is
+    /// tried (a part of a long history is left out).
+    nonisolated static let answerLimit: Duration = .seconds(5)
 
-    /// "The electricity bill I copied yesterday": the recent copies, one
-    /// line each (what, where from, when, 200 characters), go to the
-    /// decision model, which picks. Only on ⇥ (Settings → Clipboard);
-    /// typing never sends anything. Nil when no key; `unanswered` when no
-    /// model answered within `answerLimit`, or every one failed.
+    /// "The electricity bill I copied yesterday": every kept copy, one line
+    /// each (what, where from, when, 200 characters), goes to the decision
+    /// model, which picks. A history longer than one question holds is
+    /// first narrowed to the days and kinds the request names
+    /// (`MeaningNarrowing`), then asked in parts of 240 at once and once
+    /// more among their likely picks (`MeaningRounds`). Only on ⇥
+    /// (Settings → Clipboard); typing never sends anything. Nil when no
+    /// key; `unanswered` when no model answered within `answerLimit`, or
+    /// every one failed.
     func searchByMeaning(_ request: String, keys: [DecisionProvider: String], now: Date = .now) async -> MeaningResult? {
         guard let store else { return nil }
-        let candidates = store.search("", limit: ClipboardMeaning.candidateLimit)
-        guard !candidates.isEmpty else { return MeaningResult(items: [], label: "") }
-        // Off the main thread: each text is read for what it is (Apple's data
-        // detectors). A newer search or a closed history cancels it, and
-        // then nothing is sent.
-        let work = Task.detached(priority: .userInitiated) { () -> [DecisionQuestion.Option]? in
-            var options: [DecisionQuestion.Option] = []
-            for item in candidates {
-                if Task.isCancelled { return nil }
-                options.append(DecisionQuestion.Option(value: "c\(item.id)", description: ClipboardMeaning.describe(
-                    kind: ClipboardMeaning.Kind(rawValue: item.kind.rawValue) ?? .text, text: item.text, ocr: item.ocr,
-                    appName: item.appName, copiedAt: item.copiedAt, tags: item.tags, now: now)))
+        // Off the main thread: the whole history read and narrowed. A newer
+        // search or a closed history cancels it, and then nothing is sent.
+        let narrowing = MeaningNarrowing(request, now: now)
+        let work = Task.detached(priority: .userInitiated) { () -> [ClipboardStore.Item] in
+            narrowing.narrowed(store.meaningCandidates(), date: \.copiedAt) { item, kind in
+                MeaningNarrowing.holds(kind, copy: ClipboardMeaning.Kind(rawValue: item.kind.rawValue) ?? .text, text: item.text, ocr: item.ocr)
             }
-            return options
         }
-        guard let options = await withTaskCancellationHandler(operation: { await work.value }, onCancel: { work.cancel() }),
-              !Task.isCancelled else { return nil }
-        let question = DecisionQuestion(name: "copy", instructions: ClipboardMeaning.instructions,
-                                        options: options + [.init(value: "none", description: "No copy fits what the user describes")])
+        let candidates = await withTaskCancellationHandler(operation: { await work.value }, onCancel: { work.cancel() })
+        guard !Task.isCancelled else { return nil }
+        guard !candidates.isEmpty else { return MeaningResult(items: [], label: "") }
+        let byValue = Dictionary(uniqueKeysWithValues: candidates.map { ("c\($0.id)", $0) })
         let input = ClipboardMeaning.input(request, now: now)
         var asked: [String] = []
         for provider in [DecisionProvider.typeSafe, .openAI] {
@@ -252,37 +254,35 @@ final class ClipboardHistory {
             asked.append(name)
             let start = ContinuousClock.now
             do {
-                // The request's own timeout is reset by each packet; this
-                // one is the whole wait.
-                let answers = try await withThrowingTaskGroup(of: [String: DecisionResult]?.self) { group in
-                    group.addTask {
-                        try await DecisionClient.decide([question], input: input, provider: provider, key: key,
-                                                        timeout: Self.answerLimit.milliseconds / 1_000)
-                    }
-                    group.addTask {
-                        try await Task.sleep(for: Self.answerLimit)
-                        return nil
-                    }
-                    defer { group.cancelAll() }
-                    return try await group.next() ?? nil
+                let outcome = try await MeaningRounds.decide(candidates.map { "c\($0.id)" }) { values in
+                    // Each text is read for what it is (Apple's data
+                    // detectors), each part on its own thread.
+                    let options = values.compactMap { value in byValue[value].map { item in
+                        DecisionQuestion.Option(value: value, description: ClipboardMeaning.describe(
+                            kind: ClipboardMeaning.Kind(rawValue: item.kind.rawValue) ?? .text, text: item.text, ocr: item.ocr,
+                            appName: item.appName, copiedAt: item.copiedAt, tags: item.tags, now: now))
+                    } }
+                    try Task.checkCancellation()
+                    let question = DecisionQuestion(name: "copy", instructions: ClipboardMeaning.instructions,
+                                                    options: options + [.init(value: "none", description: "No copy fits what the user describes")])
+                    return try await Self.ask(question, input: input, provider: provider, key: key)
                 }
-                guard let answers else {
+                guard let outcome else {
                     Log.actions.error("Clipboard by meaning with \(provider.rawValue, privacy: .public): no answer in \(Self.answerLimit.compact, privacy: .public)")
                     continue
                 }
-                guard let answer = answers[question.name] else { continue }
-                let byID = Dictionary(uniqueKeysWithValues: candidates.map { ("c\($0.id)", $0) })
+                let answer = outcome.answer
                 // The likely ones, best first; a long tail of 1 % guesses is noise.
-                let ranked = answer.probabilities
-                    .filter { $0.key != "none" && $0.value >= 0.04 }
-                    .sorted { $0.value > $1.value }
-                    .prefix(8)
-                    .compactMap { byID[$0.key] }
+                let ranked = answer.choice == "none" && (answer.probabilities[answer.choice] ?? 0) > 0.6 ? [] : MeaningRounds.kept(answer.probabilities)
+                let items = store.items(ranked.compactMap { byValue[$0]?.id })
                 let elapsed = ContinuousClock.now - start
                 // The request and what was picked; never what was copied.
-                Log.trace("Clipboard by meaning “\(request)”: \(candidates.count) copies, \(name) picked \(answer.probabilities.sorted { $0.value > $1.value }.prefix(3).map { "\($0.key) \(Int($0.value * 100))%" }) in \(elapsed.compact)")
-                return MeaningResult(items: answer.choice == "none" && (answer.probabilities[answer.choice] ?? 0) > 0.6 ? [] : ranked,
-                                     label: "\(name) · \(String(format: "%.2f s", elapsed.milliseconds / 1_000))")
+                Log.trace("Clipboard by meaning “\(request)”: \(candidates.count) copies, \(outcome.questions) questions in \(outcome.rounds) rounds"
+                          + (outcome.unanswered > 0 ? " (\(outcome.unanswered) unanswered)" : "")
+                          + ", \(name) picked \(answer.probabilities.sorted { $0.value > $1.value }.prefix(3).map { "\($0.key) \(Int($0.value * 100))%" }) in \(elapsed.compact)")
+                let parts = outcome.unanswered > 0 ? " · \(outcome.parts - outcome.unanswered) of \(outcome.parts) parts" : ""
+                return MeaningResult(items: items, label: "\(name) · \(String(format: "%.2f s", elapsed.milliseconds / 1_000))\(parts)",
+                                     candidates: candidates.count, questions: outcome.questions)
             } catch {
                 // A newer search or a closed history: nothing to say.
                 if Task.isCancelled { return nil }
@@ -291,6 +291,26 @@ final class ClipboardHistory {
         }
         guard !asked.isEmpty, !Task.isCancelled else { return nil }
         return MeaningResult(items: [], label: "", unanswered: "\(asked.joined(separator: " and ")) did not answer")
+    }
+
+    /// One question, waiting `answerLimit` at most; nil past it. The
+    /// request's own timeout is reset by each packet; this one is the whole
+    /// wait.
+    nonisolated private static func ask(_ question: DecisionQuestion, input: String, provider: DecisionProvider,
+                                        key: String) async throws -> MeaningRounds.Answer? {
+        let answers = try await withThrowingTaskGroup(of: [String: DecisionResult]?.self) { group in
+            group.addTask {
+                try await DecisionClient.decide([question], input: input, provider: provider, key: key,
+                                                timeout: answerLimit.milliseconds / 1_000)
+            }
+            group.addTask {
+                try await Task.sleep(for: answerLimit)
+                return nil
+            }
+            defer { group.cancelAll() }
+            return try await group.next() ?? nil
+        }
+        return answers?[question.name].map { MeaningRounds.Answer(choice: $0.choice, probabilities: $0.probabilities) }
     }
 
     /// Puts an item back on the clipboard: every format it was copied with,

@@ -54,7 +54,9 @@ others must agree to be recorded.
 **While it records**, a red dot in the menu bar shows the time and both
 sides' sound. Its menu pauses, resumes, stops, or turns a source off.
 When the call app leaves the call, or the meeting is over and quiet for a
-minute, a card offers to stop.
+minute, a card offers to stop. If a side records nothing (your headset's
+microphone giving no sound at all, for example), an orange mark shows in
+the menu bar within seconds, and a card offers **Start Again**.
 
 **Webcam and screen** are off until you turn them on, from the card or
 the red dot's menu: the meeting's window is recorded with the sound, and
@@ -68,6 +70,9 @@ Them 1, Them 2…, until you name them).
 
 ![A recording's window: both sides' waveforms above the transcript, each line with its speaker and time](images/recorder-window.png "Click a line to play from there.")
 
+- **In the Dock**: while the window is open, skil.li is in the Dock and
+  in ⌘⇥, its dot a red recording light. Click it to come back to the
+  window.
 - **Click a line** to play from there.
 - **Name a speaker**: click the name (or ⌥↩), pick from the attendees.
 - **Fix a line**: select it, ↩ edits its words, ⇥ gives it to the next

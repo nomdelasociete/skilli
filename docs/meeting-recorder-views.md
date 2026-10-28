@@ -6,8 +6,10 @@ with three rounds of captures on the test Mac (light and dark). Phase 2
 Moment section of `docs/meeting-recorder.md`. Quit and sleep: 2026-10-25,
 from that file's "Quit and sleep". Phase 3 (the webcam and the screen):
 spec, 2026-10-25, written before building. Phases 4 and 5 (last): each
-written before building, dated in its own section. That file says what
-is recorded, kept and measured; this says what each phase shows. Each
+written before building, dated in its own section. In the Dock (a
+recording's window as a tile with its own icon): 2026-10-28. That file
+says what is recorded, kept and measured; this says what each phase
+shows. Each
 view is drawn by the code that runs it (`remote recorder` saves
 `recorder-*.png`).
 
@@ -1475,3 +1477,156 @@ Names put on voices by the user's AI (the user names them, phase 4),
 a chapter renamed by hand, a summary edited in the window (edit
 `summary.md`, the window reads it again when opened), several skillies
 after every transcript (one).
+
+# In the Dock
+
+Spec, 2026-10-28, written before building, after the first real
+recording: its window had no tile in the Dock and no place in ⌘⇥, so
+once another app's window covered it, it was easy to lose.
+
+## The moment
+
+1. **When**: a recording's window is open (opened by itself once the
+   transcript is made, from `recs`, a reminder's link, an import) and the
+   user goes to another app: to write the follow-up mail, to join the
+   next call, to look something up. Then back to the window, the way back
+   to any Mac window.
+2. **The path**: skil.li's tile in the Dock, with the recorder's icon,
+   and its place in ⌘⇥. A click on the tile, or ⌘⇥ to skil.li, brings the
+   recording's window forward (minimized, it comes back out of the Dock).
+   Nothing new to learn: the ways every app's window comes back.
+3. **Hint or push**: neither taught nor pushed. The tile comes as the
+   window opens and goes as it closes, where the user looks for open
+   windows already. No badge, no bounce, no sound.
+4. **Deterministic**: the windows open decide it, in code
+   (`DockPresence`); no AI, nothing leaves the Mac.
+5. **Wrong**: a tile that never comes leaves the window as easy to lose
+   as before (the menu bar's recorder and `recs` still reach it). A tile
+   left after the last window closed is a stray app in the Dock and ⌘⇥
+   (a click on it shows Settings, as opening skil.li again does). The
+   recorder's icon left after the windows closed shows on skil.li's own
+   alerts and in the Dock next time Settings opens. Two windows undoing
+   each other: before, closing Settings took skil.li out of the Dock
+   while a recording's window was open; one place now decides for every
+   window. `remote recorder` checks each of these.
+
+## The tile
+
+- skil.li is in the Dock and ⌘⇥ (`.regular`) while at least one window
+  that needs it is open: Settings, or a recording's window (any number,
+  minimized ones included). It is an accessory again, in the menu bar
+  only, once the last of them closes. While it is in front, its own menus
+  are in the menu bar, as with Settings.
+- **The icon**: the recorder's while any recording's window is open,
+  Settings in front or not; skil.li's own while only Settings is.
+  Decided: the tile says a recording is open; an icon that changed as the
+  focus moved between skil.li's own windows would flicker in the Dock and
+  in ⌘⇥ for nothing, and the recording's window is the one the tile is
+  there for (Settings is a menu bar click away).
+- **A click on the tile** brings skil.li's window last in front, a
+  recording's or Settings, out of the Dock when minimized. With none
+  open (skil.li opened again from Finder, Spotlight, `open -a`),
+  Settings, as before. **⌘⇥** to skil.li brings all its windows forward,
+  the one last in front on top, as for any app.
+
+## The recorder's icon
+
+skil.li's icon, its glass S as it is on the petrol squircle; its dot
+becomes the recording light: a red disc (the menu bar's red dot while
+recording) in a thin white glass ring, a little larger than the dot so it
+reads in the Dock and ⌘⇥.
+
+- Made in Icon Composer: `assets/brand/recorder-icon/RecorderIcon.icon`
+  (the S's path from `AppIcon.icon`; the light and its ring in a group of
+  their own, not translucent, so the red stays red).
+- Shipped as `Sources/Skilli/Resources/RecorderIcon.icns`, 16 to 1024 px,
+  made by `assets/brand/recorder-icon/make-icns.swift`. A picture set
+  with `NSApp.applicationIconImage` is drawn by the Dock as given, so
+  each size carries the macOS icon grid's margins and the shadow of
+  Xcode's own icns for the app icon; read when a recording's window first
+  shows, let go once the last closes (`applicationIconImage = nil` puts
+  skil.li's own icon back).
+- The Default look only: the Dock draws skil.li's own icon in its Default
+  look in dark mode too. One picture is set, so the Dark, Clear and
+  Tinted icon styles are not followed.
+
+# A track that records nothing
+
+Spec, 2026-10-28, from `docs/meeting-recorder.md`'s "A track that
+records nothing" (when it is said, and why a card): a call recorded
+with a Bluetooth headset lost the user's side whole and nothing said so.
+Shown while recording only; nothing changes in the Record card, which
+already says the Mac's sound blocked before ↩.
+
+## The menu bar
+
+```
+ ● 12:04 ⣀⣤⣶⣤ 🎙̸      ← the microphone records nothing: an orange mark
+```
+
+- **The label**: the dot, the time and the waves as before; after the
+  waves, for each track that records nothing, its symbol struck through
+  in orange (the microphone `mic.slash.fill`, the Mac's sound
+  `speaker.slash.fill`), before the screen's mark when both show. Its
+  accessibility label adds "the microphone records nothing" (or "the
+  Mac's sound records nothing"). It goes once the track records
+  something.
+- **The red dot's menu**: the track's item says why in place of its
+  device, that part in orange, its level after it as before:
+
+  ```
+  ✓ Microphone · nothing comes from AirPods Pro   ▂▄▆█
+  ✓ The Mac's Sound · Every app                   ▂▄▆█
+  ```
+
+  "nothing comes from AirPods Pro" (no buffer for 3 s), "only silence
+  from AirPods Pro" (exact zeros since it started); the Mac's sound:
+  "nothing comes", "only silence". A click turns it off as before
+  (turned on again, it starts afresh).
+
+## The card
+
+The call's end card's place, frame and type, once for a stretch:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ● NOTHING RECORDED                                12:04  │  orange dot
+│                                                          │
+│ Weekly design review                                     │
+│ Nothing comes from AirPods Pro: what you say isn't       │
+│ recorded.                                                │
+│ ──────────────────────────────────────────────────────── │
+│ Keep Recording esc                       ( Start Again ↩ )│
+└──────────────────────────────────────────────────────────┘
+```
+
+- **The line**, by track and reason:
+  - "Nothing comes from AirPods Pro: what you say isn't recorded."
+  - "AirPods Pro gives only silence: what you say isn't recorded."
+  - "Nothing comes from the Mac's sound: the others aren't recorded."
+  - "The Mac's sound gives only silence while Google Chrome plays: allow
+    skil.li in Screen & System Audio Recording." with Privacy ⌘↩ beside
+    Keep Recording esc, opening that list.
+- **Start Again ↩**: that source made afresh (the microphone: a new
+  engine; the Mac's sound: the tap and its aggregate again), counted from
+  then: still nothing after 3 s (5 s of silence), the card comes again.
+- **Keep Recording esc**: the card goes; not offered again until the
+  track gives sound, the mark staying meanwhile.
+- The track records something again: the card goes by itself.
+- Never over another card (the call's end, the wake card, the Record
+  card): it comes once that one has gone; the call's end offered while
+  it shows comes once it has gone too. Never while paused: a pause
+  closes it, offered again at Resume if the track still records
+  nothing. It never takes the keys from the app the user types in; a
+  click does, or a second without a key.
+- The line wraps: the card grows to hold all of it (what to allow
+  included).
+
+## Said, and not said
+
+- Said: no buffer for 3 s; exact zeros for 5 s since the source started
+  (the Mac's sound: while an app has played sound for 5 s).
+- Not said: a quiet stretch after the track gave sound since its source
+  started (muted, nobody talking), a source turned off, a paused
+  recording (the mark goes at the pause, each track is read again at
+  Resume), the Record card's meters (the card says it there already).

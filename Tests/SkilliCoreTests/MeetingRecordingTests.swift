@@ -521,3 +521,125 @@ final class MeetingTranscriptTests: XCTestCase {
         XCTAssertTrue(String(decoding: try file.encoded(), as: UTF8.self).contains("\"w\":\"Bonjour\""))
     }
 }
+
+final class SilentTrackTests: XCTestCase {
+    /// The case measured: the microphone's engine started again at 100 s
+    /// without its tap; nothing came for the rest of the call.
+    func testAnEngineStartedAgainThatGivesNothingIsSaidWithinSeconds() {
+        var watch = SilentTrack(since: 90)
+        XCTAssertNil(watch.update(now: 99, lastBuffer: 98.9, lastSound: 98.9).reason)
+        watch.started(at: 100)
+        XCTAssertNil(watch.update(now: 101, lastBuffer: 98.9, lastSound: 98.9).reason)
+        XCTAssertNil(watch.update(now: 102.9, lastBuffer: 98.9, lastSound: 98.9).reason, "under 3 s: a restart takes a moment")
+        let said = watch.update(now: 103, lastBuffer: 98.9, lastSound: 98.9)
+        XCTAssertEqual(said.reason, .nothing)
+        XCTAssertTrue(said.offer)
+        let later = watch.update(now: 600, lastBuffer: 98.9, lastSound: 98.9)
+        XCTAssertEqual(later.reason, .nothing)
+        XCTAssertFalse(later.offer, "the card once for a stretch; the menu bar says it all along")
+    }
+
+    func testBuffersThatStopComingAreNothing() {
+        var watch = SilentTrack(since: 0)
+        XCTAssertNil(watch.update(now: 60, lastBuffer: 59.9, lastSound: 59.9).reason)
+        XCTAssertNil(watch.update(now: 62.8, lastBuffer: 59.9, lastSound: 59.9).reason)
+        XCTAssertEqual(watch.update(now: 63, lastBuffer: 59.9, lastSound: 59.9).reason, .nothing)
+    }
+
+    /// A microphone always gives some noise, a quiet room too: exact zeros
+    /// from its start are a track that records nothing.
+    func testOnlyZerosSinceTheStartAreSaid() {
+        var watch = SilentTrack(since: 10)
+        XCTAssertNil(watch.update(now: 14.9, lastBuffer: 14.9, lastSound: nil).reason)
+        let said = watch.update(now: 15, lastBuffer: 14.95, lastSound: nil)
+        XCTAssertEqual(said.reason, .zeros)
+        XCTAssertTrue(said.offer)
+        XCTAssertEqual(watch.update(now: 16, lastBuffer: 15.95, lastSound: 2).reason, .zeros, "sound from before the start does not count")
+    }
+
+    /// Once the track gave sound since its start, quiet is only quiet: the
+    /// user muted, nobody talking.
+    func testAQuietStretchAfterSoundIsNeverSaid() {
+        var watch = SilentTrack(since: 0)
+        XCTAssertNil(watch.update(now: 3, lastBuffer: 3, lastSound: 1).reason)
+        XCTAssertNil(watch.update(now: 300, lastBuffer: 299.95, lastSound: 1).reason)
+    }
+
+    /// The engine started again by itself counts from then: zeros since are
+    /// said even after sound before it.
+    func testZerosAfterTheSourceStartedAgainAreSaid() {
+        var watch = SilentTrack(since: 0)
+        XCTAssertNil(watch.update(now: 50, lastBuffer: 50, lastSound: 49).reason)
+        watch.started(at: 60)
+        XCTAssertNil(watch.update(now: 64, lastBuffer: 64, lastSound: 49).reason)
+        XCTAssertEqual(watch.update(now: 65, lastBuffer: 65, lastSound: 49).reason, .zeros)
+        watch.started(at: 30)
+        XCTAssertEqual(watch.since, 60, "never moved back")
+    }
+
+    /// The Mac's sound gives exact zeros whenever nothing plays: its zeros
+    /// count only once an app has played sound for 5 s.
+    func testTheMacsSoundCountsZerosOnlyWhileAnAppPlays() {
+        var watch = SilentTrack(since: 0)
+        var playing = false
+        XCTAssertNil(watch.update(now: 30, lastBuffer: 30, lastSound: nil, playing: { playing }).reason, "nothing plays: zeros are right")
+        playing = true
+        XCTAssertNil(watch.update(now: 31, lastBuffer: 31, lastSound: nil, playing: { playing }).reason)
+        XCTAssertNil(watch.update(now: 35.9, lastBuffer: 35.9, lastSound: nil, playing: { playing }).reason)
+        let said = watch.update(now: 36, lastBuffer: 36, lastSound: nil, playing: { playing })
+        XCTAssertEqual(said.reason, .zeros)
+        XCTAssertTrue(said.offer)
+        playing = false
+        let stopped = watch.update(now: 37, lastBuffer: 37, lastSound: nil, playing: { playing })
+        XCTAssertNil(stopped.reason, "the app stopped: the card withdrawn")
+        playing = true
+        XCTAssertNil(watch.update(now: 38, lastBuffer: 38, lastSound: nil, playing: { playing }).reason, "playing again: counted afresh")
+        let again = watch.update(now: 43, lastBuffer: 43, lastSound: nil, playing: { playing })
+        XCTAssertEqual(again.reason, .zeros)
+        XCTAssertFalse(again.offer, "no sound came in between: the same stretch, not offered twice")
+    }
+
+    func testTheMacsSoundIsNotAskedOnceItGaveSound() {
+        var watch = SilentTrack(since: 0)
+        var asked = 0
+        XCTAssertNil(watch.update(now: 30, lastBuffer: 30, lastSound: 2, playing: { asked += 1; return true }).reason)
+        XCTAssertEqual(asked, 0, "Core Audio is asked only while it matters")
+    }
+
+    func testKeepRecordingHoldsUntilTheTrackGivesSound() {
+        var watch = SilentTrack(since: 0)
+        XCTAssertTrue(watch.update(now: 3, lastBuffer: nil, lastSound: nil).offer)
+        watch.keep()
+        watch.started(at: 10)
+        let restarted = watch.update(now: 13, lastBuffer: nil, lastSound: nil)
+        XCTAssertEqual(restarted.reason, .nothing)
+        XCTAssertFalse(restarted.offer, "started again by itself, still nothing: Keep Recording stands")
+        XCTAssertNil(watch.update(now: 14, lastBuffer: 14, lastSound: 14).reason)
+        watch.started(at: 20)
+        XCTAssertTrue(watch.update(now: 23, lastBuffer: 19, lastSound: 19).offer, "sound came in between: a new stretch is offered")
+    }
+
+    func testStartAgainOffersAgainWhenItStillRecordsNothing() {
+        var watch = SilentTrack(since: 0)
+        XCTAssertTrue(watch.update(now: 3, lastBuffer: nil, lastSound: nil).offer)
+        watch.startedAgain(at: 4)
+        XCTAssertNil(watch.update(now: 6, lastBuffer: nil, lastSound: nil).reason)
+        XCTAssertTrue(watch.update(now: 7, lastBuffer: nil, lastSound: nil).offer)
+    }
+
+    func testACardBusyElsewhereOffersItAtTheNextUpdate() {
+        var watch = SilentTrack(since: 0)
+        XCTAssertTrue(watch.update(now: 3, lastBuffer: nil, lastSound: nil).offer)
+        watch.offerAgain()
+        XCTAssertTrue(watch.update(now: 4, lastBuffer: nil, lastSound: nil).offer)
+        XCTAssertFalse(watch.update(now: 5, lastBuffer: nil, lastSound: nil).offer)
+    }
+
+    func testTheLinesSayWhatIsNotRecorded() {
+        XCTAssertEqual(SilentTrack.line(.nothing, speaker: .me, device: "AirPods Pro"), "Nothing comes from AirPods Pro: what you say isn't recorded.")
+        XCTAssertEqual(SilentTrack.line(.zeros, speaker: .them, device: "", playing: "Google Chrome"),
+                       "The Mac's sound gives only silence while Google Chrome plays: allow skil.li in Screen & System Audio Recording.")
+        XCTAssertEqual(SilentTrack.menuLine(.nothing, device: "AirPods Pro"), "nothing comes from AirPods Pro")
+        XCTAssertEqual(SilentTrack.menuLine(.zeros, device: nil), "only silence")
+    }
+}

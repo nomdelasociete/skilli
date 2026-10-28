@@ -64,14 +64,17 @@ enum BrowserHistory {
         }
     }
 
-    /// The last pages visited: what a search by meaning chooses among.
-    static func recent(limit: Int = HistoryMeaning.candidateLimit, source: Source = Source()) async -> [HistoryVisit] {
-        await read(source, limit: limit) { browser in
+    /// The last pages visited, newest first; every page the browsers keep
+    /// when no limit: what a search by meaning chooses among.
+    static func recent(limit: Int? = nil, source: Source = Source()) async -> [HistoryVisit] {
+        // SQLite reads a negative limit as none.
+        let rows = limit ?? -1
+        return await read(source, limit: limit ?? .max) { browser in
             if browser.kind == .safari {
-                return ("\(Self.safariSelect) GROUP BY i.id HAVING stamp > 0 ORDER BY stamp DESC LIMIT \(limit)", [])
+                return ("\(Self.safariSelect) GROUP BY i.id HAVING stamp > 0 ORDER BY stamp DESC LIMIT \(rows)", [])
             }
             let table = browser.kind == .chrome ? "urls" : "moz_places"
-            return ("\(Self.select(browser)) FROM \(table) WHERE hidden = 0 AND \(Self.stamp(browser)) > 0 ORDER BY \(Self.stamp(browser)) DESC LIMIT \(limit)", [])
+            return ("\(Self.select(browser)) FROM \(table) WHERE hidden = 0 AND \(Self.stamp(browser)) > 0 ORDER BY \(Self.stamp(browser)) DESC LIMIT \(rows)", [])
         }
     }
 
@@ -194,33 +197,42 @@ enum BrowserHistory {
     }
 
     /// "la page sur les impôts d'hier": the decision model picks among the
-    /// last pages visited. Only titles, sites and dates are sent.
+    /// pages the browsers keep, narrowed to the days the request names when
+    /// they are more than one question holds (`MeaningNarrowing`), asked in
+    /// parts when still more (`MeaningRounds`). Only titles, sites and dates
+    /// are sent.
     static func searchByMeaning(_ request: String, keys: [DecisionProvider: String], among given: [HistoryVisit]? = nil,
                                 source: Source = Source()) async -> (visits: [HistoryVisit], label: String)? {
-        var candidates = given ?? []
-        if given == nil { candidates = await recent(source: source) }
-        guard !candidates.isEmpty else { return ([], "") }
         let now = Date.now
-        let question = DecisionQuestion(
-            name: "page", instructions: HistoryMeaning.instructions,
-            options: candidates.enumerated().map { .init(value: "p\($0.offset)", description: HistoryMeaning.describe($0.element, now: now)) }
-                + [.init(value: "none", description: "No page fits what the user describes")]
-        )
+        var all = given ?? []
+        if given == nil { all = await recent(source: source) }
+        let candidates = MeaningNarrowing(request, now: now).narrowed(all, date: \.visited) { _, _ in false }
+        guard !candidates.isEmpty else { return ([], "") }
         for provider in [DecisionProvider.typeSafe, .openAI] {
             guard let key = keys[provider] else { continue }
             let start = ContinuousClock.now
             do {
-                let answers = try await DecisionClient.decide([question], input: HistoryMeaning.input(request, now: now), provider: provider, key: key)
-                guard let answer = answers[question.name] else { continue }
-                let ranked = answer.probabilities.filter { $0.key != "none" && $0.value >= 0.04 }
-                    .sorted { $0.value > $1.value }
-                    .prefix(8)
-                    .compactMap { entry in Int(entry.key.dropFirst()).flatMap { candidates.indices.contains($0) ? candidates[$0] : nil } }
+                let outcome = try await MeaningRounds.decide(candidates.indices.map { "p\($0)" }) { values in
+                    let question = DecisionQuestion(
+                        name: "page", instructions: HistoryMeaning.instructions,
+                        options: values.compactMap { value in
+                            Int(value.dropFirst()).map { .init(value: value, description: HistoryMeaning.describe(candidates[$0], now: now)) }
+                        } + [.init(value: "none", description: "No page fits what the user describes")]
+                    )
+                    let answers = try await DecisionClient.decide([question], input: HistoryMeaning.input(request, now: now), provider: provider, key: key)
+                    return answers[question.name].map { MeaningRounds.Answer(choice: $0.choice, probabilities: $0.probabilities) }
+                }
+                guard let outcome else { continue }
+                let ranked = MeaningRounds.kept(outcome.answer.probabilities)
+                    .compactMap { value in Int(value.dropFirst()).flatMap { candidates.indices.contains($0) ? candidates[$0] : nil } }
                 let elapsed = ContinuousClock.now - start
                 let name = provider == .typeSafe ? "Jev" : "Decisions"
-                Log.trace("History by meaning: \(candidates.count) candidates, \(ranked.count) picked by \(name) in \(elapsed.compact)")
-                return (ranked, "\(name) · \(String(format: "%.2f s", elapsed.milliseconds / 1_000))")
+                Log.trace("History by meaning: \(candidates.count) candidates, \(outcome.questions) questions in \(outcome.rounds) rounds"
+                          + (outcome.unanswered > 0 ? " (\(outcome.unanswered) unanswered)" : "") + ", \(ranked.count) picked by \(name) in \(elapsed.compact)")
+                let parts = outcome.unanswered > 0 ? " · \(outcome.parts - outcome.unanswered) of \(outcome.parts) parts" : ""
+                return (ranked, "\(name) · \(String(format: "%.2f s", elapsed.milliseconds / 1_000))\(parts)")
             } catch {
+                if Task.isCancelled { return nil }
                 Log.actions.error("History by meaning with \(provider.rawValue, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
             }
         }

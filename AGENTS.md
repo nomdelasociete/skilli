@@ -118,8 +118,8 @@ Mac mini, driven from here:
 | Where | What | Command |
 |---|---|---|
 | This Mac, any time | Unit tests, builds | `./script/build_and_run.sh test` |
-| This Mac, any time (no keys, no windows; restarts skil.li ~2 s) | Clipboard store, search, OCR; setup drawn off screen; live decisions (Ask, emoji, clipboard and files by meaning, nothing written) | `./script/build_and_run.sh selftest clipboard` / `selftest setup` / `selftest decide` |
-| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote clipmeaning`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote pictures` (the recorder's webcam and screen: a stand-in camera, a slides window, a scratch Chrome, ~3 min), `remote voices` (the recorder's phase 4: the played-back calls' voices told apart, an import, a line edited and undone, speakers renamed, Transcribe Again, ~10 min), `remote whisper` (Better transcription: its download from a stand-in server, whisper on the played-back calls, the echo drop with its times, ~25 min), `remote followups` (the recorder's phase 5 in a recording's window: ⌘K, the recap mail, the summary, chapters, action items to a scratch Reminders list, with the Mac's own AI provider, ~5 min), `remote guides` (the guides' pictures, light and dark, into `dist/remote/guides`; `script/guide-images.sh` then copies them to `website/guides/images`), `remote` (all) |
+| This Mac, any time (no keys, no windows; restarts skil.li ~2 s) | Clipboard store, search, OCR; setup drawn off screen; live decisions (Ask, emoji, clipboard and files by meaning, nothing written); the clipboard by meaning on volume and over a month | `./script/build_and_run.sh selftest clipboard` / `selftest setup` / `selftest decide` / `selftest clipmeaning` |
+| Mac mini | Everything with keys: launcher, shortcuts, Settings, Kill, clipboard paste, Ask, Commands, Claude, browser tabs, files seeded for Spotlight, sound output switched and put back | `./script/build_and_run.sh remote ai`, `remote settings`, `remote glass`, `remote browser`, `remote files`, `remote sound`, `remote projects`, `remote keyboard`, `remote scripts`, `remote history`, `remote brew`, `remote imports`, `remote roundtrip`, `remote card`, `remote control`, `remote sight`, `remote calc`, `remote handoff`, `remote mcpauth`, `remote toolrights`, `remote settingtools`, `remote windows`, `remote models`, `remote panes`, `remote catalog`, `remote rootsearch`, `remote dictation`, `remote snippets`, `remote shortcuts`, `remote settingsearch`, `remote meetingbar`, `remote previews`, `remote emoji`, `remote undo`, `remote chess`, `remote doit`, `remote apps`, `remote routes`, `remote clipmeaning`, `remote defaultbrowser` (changes the default browser and puts it back), `remote recorder` (a recording's window in the Dock with its icon, then records played-back calls: plays sound, ~4 min), `remote moment` (the recorder's moment: stand-in meetings, a scratch Chrome on the microphone, ~4 min), `remote pictures` (the recorder's webcam and screen: a stand-in camera, a slides window, a scratch Chrome, ~3 min), `remote voices` (the recorder's phase 4: the played-back calls' voices told apart, an import, a line edited and undone, speakers renamed, Transcribe Again, ~10 min), `remote whisper` (Better transcription: its download from a stand-in server, whisper on the played-back calls, the echo drop with its times, ~25 min), `remote followups` (the recorder's phase 5 in a recording's window: ⌘K, the recap mail, the summary, chapters, action items to a scratch Reminders list, with the Mac's own AI provider, ~5 min), `remote guides` (the guides' pictures, light and dark, into `dist/remote/guides`; `script/guide-images.sh` then copies them to `website/guides/images`), `remote` (all) |
 
 Nothing else that opens skil.li runs on the developer's Mac: `selftest` refuses other
 scopes and `benchmark` refuses outright unless `SKILLI_LOCAL_UI=1` (a Mac
@@ -533,6 +533,13 @@ starts from it.
   gradient, a mint S in dark mode. The system adds mask, shadow and glass; never
   bake them in. Check the Default, Dark, Tinted and Clear renders and 16/32 px
   with `ictool` (command in `assets/brand/README.md`) before changing it.
+- `RecorderIcon.icns` (`Sources/Skilli/Resources`): the Dock's icon while
+  a recording's window is open (`DockPresence`), skil.li's icon with its
+  dot as a red recording light in a white glass ring. Its source is
+  `assets/brand/recorder-icon/RecorderIcon.icon` (Icon Composer);
+  `swift assets/brand/recorder-icon/make-icns.swift` makes every size
+  with the system's margins and shadow baked in, since the Dock draws a
+  picture set at runtime as given. Change both together.
 - `BrandMark`: sizes from `3d/skilli-logo-3d.png` (the 3D v4, retained
   2026-10-12) with `sips -z`.
 - `MenuBarIcon`: `menu-template.svg`, vector, template rendering; load it via
@@ -564,10 +571,17 @@ starts from it.
 - Three entry points, all covered by `selftest` (also with another app in
   front): status menu “Settings…”, typing “settings” in the launcher, ⌘,
   while the launcher is open. `selftest settings` runs just these.
-- While Settings is open, and only then, skil.li is in the Dock and ⌘⇥
-  (`.regular`); it is an accessory again once the window closes. A
-  minimized Settings stays open, so its Dock icon stays. A click on the
-  icon shows Settings (`applicationShouldHandleReopen`).
+- While Settings or a recording's window is open, and only then, skil.li
+  is in the Dock and ⌘⇥ (`.regular`); it is an accessory again once the
+  last of them closes. One place decides, `DockPresence` (`hold` as a
+  window shows, `release` as it closes): never set the activation policy
+  or `applicationIconImage` elsewhere (the launch's `.accessory` and the
+  probes' own modes aside), or one window's close takes the Dock from
+  another still open. A minimized window stays open, so its
+  Dock icon stays. A click on the icon brings the one last in front
+  (`applicationShouldHandleReopen`), Settings when none is open. The
+  recorder's icon while a recording's window is open, Settings in front
+  or not (docs/meeting-recorder-views.md, "In the Dock").
 - Layout follows System Settings: glass sidebar of tinted `IconTile`s, one
   pane per row, each pane a grouped form under a centered `PaneHeader`.
 - A pane reads the preferences it shows in its `body` (not only inside a
@@ -2210,13 +2224,26 @@ re-investigating.
   automatic. The rules the measurements set (Measured) are the code's:
   the Mac's sound is one Core Audio process tap on every process but
   skil.li's (`MacSoundTap`, a private aggregate on the default output,
-  rebuilt when the output changes), its IO block on Core Audio's
+  rebuilt when the output changes or changes its rate: the output's, the
+  aggregate's and the tap's format listened to, its buffers called by the
+  aggregate's rate; a headset's call mode at 24 kHz, its buffers still
+  called 48 kHz, put 22 minutes of a call in 11), its IO block on Core Audio's
   real-time thread (no queue: on one, macOS let it fall behind with the
   display off); `NSAudioCaptureUsageDescription` in Info.plist (without
   it the tap records silence and says nothing; with it macOS asks once,
   System Audio Recording, even with Screen Recording allowed); the microphone through
-  `AVAudioEngine` started again on `AVAudioEngineConfigurationChange`
-  (`MicrophoneTrack`); a recording holds `beginActivity` with
+  `AVAudioEngine`, a new engine on each `AVAudioEngineConfigurationChange`
+  and when one gives no buffer 2 s after it started (`MicrophoneTrack`;
+  never the same engine again: it kept its input's format, AVAudioEngine
+  refused its tap, "Failed to create tap, config change pending!", told
+  the caller nothing and ran on without it for a whole call). A track
+  whose source is on and records nothing (`SilentTrack` in SkilliCore,
+  from `AudioInbox.times`, once a second in `RecorderCenter.tickWatch`):
+  no buffer for 3 s, or only exact zeros for 5 s since its source last
+  started (the Mac's sound: while an app has played for 5 s); an orange
+  mark in the menu bar and the reason in its menu while it lasts, a card
+  once for a stretch (`RecordCard.Content.silent`: Start Again ↩, Keep
+  Recording esc); a quiet stretch after sound never said; a recording holds `beginActivity` with
   `.latencyCritical`, idle system and display sleep off. Each track
   (`TrackWriter`) is placed by its own clock (`TrackTimeline` in
   SkilliCore): inside a run by the device's sample time, a missed cycle
@@ -2292,7 +2319,12 @@ re-investigating.
   recorderchild`, SIGKILLed), one quit (the same child sent SIGTERM, which
   goes through `NSApp.terminate` and `quitReply` as in skil.li), a sleep
   and a wake (macOS's notifications posted: the test Mac cannot be woken
-  without a person), links and tools; `recorder-*.png`.
+  without a person), links and tools; a 24 kHz and a 16 kHz microphone
+  started again mid-way, the test Mac's input and output changing their
+  rates mid-recording and the output at 44.1 kHz from the start (put
+  back after), a microphone that gives nothing
+  (`MeetingRecorder.watchesSilence`: the stand-ins give nothing until
+  played, so only that check watches); `recorder-*.png`.
 - The recorder's moment (phase 2, 2026-10-24; docs/meeting-recorder.md's
   Moment, its views in docs/meeting-recorder-views.md "Phase 2"): the
   five cases are code, never a model (`MeetingMoment.read` in
@@ -2624,11 +2656,16 @@ re-investigating.
   GitHub's search quicklink): Return opens (a notification is then read),
   ⌘Return copies the link, ⌘K (or ⇥) its actions (Open, the merge method,
   Update Branch, Checks, Copy Link; merging asks again in the card: Return
-  twice), ⌘⌫ marks a notification read. Agents: `list_pull_requests`,
-  `list_github_notifications`, `merge_pull_request` and
-  `update_pull_request_branch` (changes: the card asks),
-  `mark_github_notification_read`. `selftest github` (a stand-in GitHub:
-  device flow, GraphQL, 304, merge, read).
+  twice), ⌘⌫ marks a notification read; on a notification, ⌘K's Mark All
+  as Read (two listed or more) reads every notification the list shows,
+  the search narrowing it (one PATCH per thread: `PUT /notifications`
+  would also read those skil.li does not show; one relay reread after).
+  Agents: `list_pull_requests`, `list_github_notifications`,
+  `merge_pull_request` and `update_pull_request_branch` (changes: the card
+  asks), `mark_github_notification_read`,
+  `mark_all_github_notifications_read` (same `query` as the list).
+  `selftest github` (a stand-in GitHub: device flow, GraphQL, 304, merge,
+  read, read all).
 - Keep Awake for a while (`AwakeRequest` in SkilliCore,
   `SystemCommands.keepAwake`): "awake 1 hour", "do not sleep 1", "garde le
   mac éveillé 2h", "caffeinate until 6pm", "pas de veille jusqu'à 18h30",
@@ -2938,7 +2975,9 @@ re-investigating.
   app behind it. Search Snippets ("snip ", `LauncherController.Mode.snippets`,
   a pink chip): every snippet by name, keyword or first words; ⇥ by
   meaning (`SnippetLibrary.searchByMeaning`): "mon iban", "adresse du
-  bureau" go to Jev or OpenAI Decisions in one Choice, each snippet told
+  bureau" go to Jev or OpenAI Decisions in one Choice (past 240
+  snippets, those holding a kind the request names, then in parts:
+  `MeaningNarrowing`, `MeaningRounds`), each snippet told
   by its name, keyword and first 80 characters as written (placeholders
   unfilled, never the rest; a bank or card number or a key goes as what it
   is, "(an IBAN)", never itself: `ToolCallSummary.maskingSecrets`, also in
@@ -3255,7 +3294,8 @@ re-investigating.
   the request's words, ranked as above, then opened in the last 90 days,
   then PDFs, office files, archives, videos, audio and screenshots
   changed this week, a project's only if opened), one line each (kind, readable name, folder, "yesterday 18:02") in
-  one Choice to Jev or OpenAI Decisions; the likely ones (≥ 4 %) best
+  one Choice to Jev or OpenAI Decisions (the 240 is what Spotlight
+  gathers, not a part of a longer list: files have no rounds); the likely ones (≥ 4 %) best
   first, ~0.3 s. On ⇥, or on its own when the name search found nothing
   and the text stayed put 400 ms more (`searchFiles`); only with Settings
   → Launcher → Search files by meaning on (default) and a decision key.
@@ -3596,9 +3636,11 @@ re-investigating.
   escaped) once typing pauses 100 ms; rows: title, site · "21:08" /
   "yesterday" / "Mon" / "12 Oct", the browser's icon. Return opens the page
   in the browser it came from, ⌘Return copies its address. ⇥ by meaning
-  (`BrowserHistory.searchByMeaning`): the last 240 pages, one line each
-  (title, site, "yesterday 18:02"), in one Choice to Jev or OpenAI
-  Decisions, only on ⇥ and with Settings → Launcher → Search browser
+  (`BrowserHistory.searchByMeaning`): every page the browsers keep
+  (2026-10-28: no longer only the last 240), one line each (title, site,
+  "yesterday 18:02"), in one Choice to Jev or OpenAI Decisions; past 240,
+  narrowed to the days the request names, then in parts as the
+  clipboard's (`MeaningNarrowing`, `MeaningRounds`), only on ⇥ and with Settings → Launcher → Search browser
   history by meaning on (default). Agents: `search_history`.
   `selftest history` (scratch Chrome, Zen and Safari histories).
 - Skillies (`ScriptLibrary`, `ScriptCommand` in SkilliCore, Settings →
@@ -3805,12 +3847,25 @@ re-investigating.
   `PreviewParts.swift`, shared with Search Snippets') made for each kind of
   copy (below), then Information (copied as a relative date, times copied:
   `copies` column, added to older files on open). ⇥ searches by meaning
-  (`ClipboardHistory.searchByMeaning`, `ClipboardMeaning`): the last 240
-  copies, one line each (kind, app, "yesterday 18:02", 200 characters of
+  (`ClipboardHistory.searchByMeaning`, `ClipboardMeaning`): every kept
+  copy (2026-10-28: no longer only the last 240), one line each (kind,
+  app, "yesterday 18:02", 200 characters of
   text or OCR; a text that is one value says which, as the preview reads
   it with `CopiedValue`: "An email address from Front, …", "A link",
   "Code in Swift", so "email" finds the addresses), in one Choice to Jev or OpenAI Decisions with now's date;
-  the likely ones (≥ 4 %) best first, ~0.25 s. While it waits the list is
+  the likely ones (≥ 4 %) best first, ~0.25 s. Past 240 copies (one
+  Choice holds 255 options), `MeaningNarrowing` (SkilliCore) first keeps
+  those from the days the request names (today, yesterday, avant-hier,
+  last week, Monday, 3 days ago…, one day of slack each side), then
+  those of a kind it names (email, link, image/screenshot/capture,
+  phone, IBAN/RIB, file: found in the text or OCR, or the copy's kind);
+  a step that would leave nothing is skipped. What is still past 240 goes
+  in parts of 240, asked together (16 at a time), each part's likely ones
+  (≥ 4 %, eight at most) then asked again together (`MeaningRounds`);
+  each question gets `answerLimit`, a part that does not answer is left
+  out and the header says so ("Jev · 1.84 s · 12 of 13 parts"). The
+  store reads every copy's first 1,000 characters
+  (`ClipboardStore.meaningCandidates`), the picked ones whole. While it waits the list is
   one line, "Searching by meaning…" with a spinner (the copies the words
   found are not the answer); typing on cancels the request. Each model gets
   `ClipboardHistory.answerLimit` (5 s, the whole wait, not the request's
@@ -3822,7 +3877,9 @@ re-investigating.
   `ClipboardMeaningCorpus` (a kind of copy, which one, what it was about;
   tune and held-out halves, as `AskRouteCorpus`) among 91 copies, then
   times 20 requests among 240 copies (median under 1.5 s, at most one past
-  5 s). Only on ⇥ and with Settings
+  5 s), then 7 requests among 3,054 copies over 30 days (days, kinds,
+  neither; the three older copies planted found first, all but one request right, none past 15 s; the 20-day-old one, every part asked, in `selftest ai` too). `clipmeaning` types
+  nothing: it runs on this Mac too (`selftest clipmeaning`). Only on ⇥ and with Settings
   → Clipboard → Search by meaning on (default); typing never sends
   anything, and the trace logs the request and picked ids, not the copies. Kept in
   `~/Library/Application Support/skil.li/Clipboard` (0700): `history.sqlite`

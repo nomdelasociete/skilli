@@ -3,13 +3,11 @@ import Foundation
 /// The clipboard history searched the way a person remembers it: "the
 /// electricity bill I copied yesterday", "Thomas's address", "that train
 /// ticket screenshot". A decision model (Jev, OpenAI Decisions) picks among
-/// the recent copies, each described in one line; only on ⇥, and only short
-/// excerpts leave the Mac.
+/// the kept copies, each described in one line (`MeaningRounds` past one
+/// question's worth); only on ⇥, and only short excerpts leave the Mac.
 public enum ClipboardMeaning {
     /// What the model reads of each copy.
     public static let excerptLength = 200
-    /// How many recent copies one search looks through.
-    public static let candidateLimit = 240
 
     public enum Kind: String, Sendable {
         case text

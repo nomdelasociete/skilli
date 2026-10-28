@@ -98,6 +98,11 @@ final class RecorderCenter {
         card.onStop = { [weak self] in self?.control(.stop) }
         card.onResume = { [weak self] in self?.control(.resume) }
         card.onKeepRecording = { [weak self] reason in self?.watch.kept(reason) }
+        card.onStartAgain = { [weak self] speaker in
+            guard let self else { return }
+            Task { await self.recorder.startAgain(speaker) }
+        }
+        card.onKeepSilent = { [weak self] speaker in self?.recorder.keepSilent(speaker) }
         card.onToggleSource = { [weak self] speaker in self?.toggle(speaker) }
         // An unfinished one answered (Save, Later, Discard): the next.
         card.onSave = { [weak self] folder, record in
@@ -592,6 +597,7 @@ final class RecorderCenter {
     /// then the call's end.
     private func tickWatch() {
         guard recorder.isRecording, let reading else { return }
+        checkTracks()
         let holders = microphoneUse.lastHolders
         // No app known yet (joining, or nothing to go on): the first on the
         // microphone is the call; the one the link opens in, once it runs.
@@ -614,6 +620,25 @@ final class RecorderCenter {
         }
     }
 
+    /// A track that records nothing (`SilentTrack`): the card offers Start
+    /// Again, once for a stretch, when it is free (never over another
+    /// card); it goes once the track records something again.
+    private func checkTracks() {
+        let offers = recorder.checkTracks()
+        if case .silent(let speaker, _)? = card.content, recorder.silent[speaker] == nil { card.dismiss() }
+        guard let speaker = offers.first else { return }
+        guard !card.isVisible, let reason = recorder.silent[speaker] else {
+            offers.forEach { recorder.offerAgain($0) }
+            return
+        }
+        offers.dropFirst().forEach { recorder.offerAgain($0) }
+        let device = recorder.deviceName(speaker)
+        let app = speaker == .them && reason == .zeros ? MacSoundTap.playing() : nil
+        Log.trace("Recorder: \(speaker == .me ? "the microphone" : "the Mac's sound") records nothing: Start Again offered")
+        card.showSilent(speaker, title: recorder.title, elapsed: recorder.elapsed,
+                        line: SilentTrack.line(reason, speaker: speaker, device: device, playing: app), privacy: speaker == .them && reason == .zeros)
+    }
+
     /// The call's app (nil: none), picked from the red dot's menu or found;
     /// its front window kept.
     func setCallApp(_ app: MicrophoneApp?, picked: Bool) {
@@ -626,8 +651,9 @@ final class RecorderCenter {
     /// The call ended: a card offers Stop (never taking the keys from the
     /// app the user types in).
     private func offerStop(_ reason: CallEndWatch.Reason) {
-        // The wake card up: offered once it is answered, still pending.
-        if case .slept? = card.content {
+        // Another card up (the wake card, a track that records nothing):
+        // offered once it is answered, if still true.
+        if card.content != nil {
             watch.offerAgain()
             return
         }
@@ -740,9 +766,15 @@ final class RecorderCenter {
         if !recorder.isRecording {
             stopWatching()
             if case .callEnded? = card.content { card.dismiss() }
+            if case .silent? = card.content { card.dismiss() }
         }
         // Resumed or stopped from the menu bar: the card at wake goes.
         if card.content == .slept, recorder.phase != .paused { card.dismiss() }
+        // Paused: a track's card goes, offered again once it records again.
+        if case .silent(let speaker, _)? = card.content, recorder.phase == .paused {
+            card.dismiss()
+            recorder.offerAgain(speaker)
+        }
         // Closed: what was asked meanwhile, in order.
         if recorder.phase == .idle, !afterClosing.isEmpty {
             let asked = afterClosing

@@ -362,6 +362,28 @@ final class ClipboardStore: @unchecked Sendable {
         }
     }
 
+    /// Every kept copy, newest first, its text and OCR cut at `words`
+    /// characters: what a search by meaning reads (an excerpt and the
+    /// kinds in it), light enough for a long history. Never pasted:
+    /// `items(_:)` reads the ones picked whole.
+    func meaningCandidates(words: Int = 1_000) -> [Item] {
+        lock.lock()
+        defer { lock.unlock() }
+        let columns = Self.columns.replacingOccurrences(of: "text, ocr", with: "substr(text, 1, \(words)), substr(ocr, 1, \(words))")
+        return (try? rows("SELECT \(columns) FROM items ORDER BY copied DESC", [])) ?? []
+    }
+
+    /// These copies, whole, in the order given; a forgotten one left out.
+    func items(_ ids: [Int64]) -> [Item] {
+        guard !ids.isEmpty else { return [] }
+        lock.lock()
+        defer { lock.unlock() }
+        let found = (try? rows("SELECT \(Self.columns) FROM items WHERE id IN (\(ids.map { _ in "?" }.joined(separator: ", ")))",
+                               ids.map(Value.int))) ?? []
+        let byID = Dictionary(uniqueKeysWithValues: found.map { ($0.id, $0) })
+        return ids.compactMap { byID[$0] }
+    }
+
     /// Images Jev has not tagged yet, newest first.
     func untaggedImages(limit: Int) -> [Item] {
         lock.lock()

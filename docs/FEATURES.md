@@ -224,8 +224,9 @@ open.
 Everything you copy, and your screenshots, ready to paste again.
 
 - **Clipboard History** (✦C, `cb`): text, images and files; search
-  without accents, even words inside images; ⇥ by meaning ("my train
-  ticket from yesterday") or by what a copy is ("email", "a link"). ↩ pastes, ⇧↩ plain text, ⌘↩ copies, ⌘⌫ forgets
+  without accents, even words inside images; ⇥ by meaning, through the
+  whole history kept ("my train ticket from yesterday") or by what a copy
+  is ("email", "a link"). ↩ pastes, ⇧↩ plain text, ⌘↩ copies, ⌘⌫ forgets
   (⌘Z brings it back for 10 s). With CleanShot X, ⌘K on an image
   annotates it, pins it or adds it to Quick Access.
 - **Previews** by kind: a link's card (picture, title, site), a color's
@@ -431,11 +432,16 @@ Your meetings recorded on this Mac, both sides, then written out.
   nothing before ↩; during a meeting, it is that meeting's. While it
   records, a red dot, the time and both sides' waves in the menu bar,
   whose menu pauses, resumes and stops, turns a source off or on, and
-  says which app the call is in. When that app leaves the call, or the
+  says which app the call is in. A side that records nothing (no sound
+  at all from the microphone, or only silence from the Mac's sound
+  while an app plays) is said within seconds: an orange mark in the menu
+  bar, and a card offering Start Again. When that app leaves the call, or the
   meeting is over and quiet for a minute, a card offers Stop. Then its
   window: both sides' waveforms, played in step, and the transcript line
   by line, Me and Them (Room in person); a click plays from a line; ⌘C
-  copies it, ⌘⌫ deletes the recording (⌘Z brings it back). Without
+  copies it, ⌘⌫ deletes the recording (⌘Z brings it back). While it is
+  open, skil.li is in the Dock and ⌘⇥ with the recorder's icon (its dot
+  a red recording light): a click there brings the window back. Without
   headphones, the other side the microphone heard again is left out of
   your lines. Quitting skil.li (a logout too) stops it whole, its
   transcript made at the next launch without asking. The Mac asleep (the

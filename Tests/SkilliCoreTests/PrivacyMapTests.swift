@@ -409,7 +409,7 @@ final class PrivacyMapTests: XCTestCase {
     /// when Ask picks one.
     func testLauncherAndSkilliesSayWhatGoes() {
         XCTAssertEqual(PrivacyMap.line(for: "launcher", everything)?.text,
-                       "When you press ⇥ in Search Browser History, your words and the titles, sites and dates of your last pages go to "
+                       "When you press ⇥ in Search Browser History, your words and the titles, sites and dates of your pages go to "
                            + "TypeSafe Jev; in Search Files, your words and the names, kinds, folders and dates of the files that may fit go to "
                            + "TypeSafe Jev. Typing alone stays here.")
         var filesOff = everything
@@ -426,14 +426,14 @@ final class PrivacyMapTests: XCTestCase {
 
     func testClipboardSaysWhatGoesFromItsSwitches() {
         XCTAssertEqual(PrivacyMap.line(for: "clipboard", everything)?.text,
-                       "When you press ⇥, short excerpts of your last copies go to TypeSafe Jev; each image you copy and each screenshot "
+                       "When you press ⇥, short excerpts of your copies go to TypeSafe Jev; each image you copy and each screenshot "
                            + "go once to TypeSafe Jev, as a small picture, to say what it shows; a link you look at is opened, without your "
                            + "cookies, to read its title and picture. Words in images are read here.")
         var openAIOnly = everything
         openAIOnly.typeSafeKey = false
         openAIOnly.linkPreviews = false
         XCTAssertEqual(PrivacyMap.line(for: "clipboard", openAIOnly)?.text,
-                       "When you press ⇥, short excerpts of your last copies go to OpenAI. Words in images are read here.", "never images to OpenAI")
+                       "When you press ⇥, short excerpts of your copies go to OpenAI. Words in images are read here.", "never images to OpenAI")
         var noScreenshots = everything
         noScreenshots.screenshots = false
         noScreenshots.clipboardMeaning = false
