@@ -168,7 +168,7 @@ public enum PrivacyMap {
         pane: "clipboard", toggle: "Search by meaning with ⇥")
     public static let snippets = Flow(
         "snippets", "Snippets by meaning",
-        sends: "Your words, and each snippet's name, keyword and a preview of \(SnippetMeaning.previewLength) characters, placeholders unfilled; an IBAN, a French RIB, a card number whose check digit is right, or a key (a known prefix such as sk- or ghp_, or one word of 40 letters and digits or more) goes as what it is (“an IBAN”), never itself; other numbers go as written.",
+        sends: "Your words, and each snippet's name, keyword and a preview of \(SnippetMeaning.previewLength) characters, placeholders unfilled; an IBAN, a French RIB, a card number whose check digit is right, or a key (a known prefix such as sk- or ghp_, or one word of 40 letters and digits or more) goes as what it is (“an IBAN”, “a bank account number”), never itself; other numbers go as written.",
         when: "Only when you press ⇥ in Search Snippets.",
         pane: "snippets", toggle: "Find snippets by meaning with ⇥")
     public static let emoji = Flow(
