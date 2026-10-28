@@ -616,7 +616,7 @@ final class SkilliTools {
                        parameters: [.init(name: "group", description: "Only this group.", options: ["ready", "blocked", "waiting", "testing"], isRequired: false),
                                     .init(name: "query", description: "Words in the title or the repository.", isRequired: false)]),
         ToolDefinition(name: "list_github_notifications", title: "Read your GitHub notifications",
-                       description: "The user's unread GitHub notifications, newest first: id, why (review requested, mentioned, CI…), repository, title, link.",
+                       description: "The user's unread GitHub notifications that ask them for something (review requested, mentioned, assigned…), newest first: id, why, repository, title, link. Activity on their own threads and on what they watch is left out.",
                        group: .github, risk: .read,
                        parameters: [.init(name: "query", description: "Words in the title or the repository.", isRequired: false)]),
         ToolDefinition(name: "merge_pull_request", title: "Merge a pull request",

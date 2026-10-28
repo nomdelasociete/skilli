@@ -1640,7 +1640,8 @@ final class LauncherController: NSObject {
             emptyState.stringValue = github?.isSignedIn != true ? "Sign in with GitHub in Settings → GitHub"
                 : github?.lastRefresh == nil ? (github?.problem ?? "Reading GitHub…")
                 : text.isEmpty ? githubGroup.map { "Nothing \($0.title.lowercased())" }
-                    ?? (github?.notificationsRead == true ? "No open pull request, no unread notification" : "No open pull request")
+                    ?? (github?.notificationsRead == true && github?.notificationsComplete == true
+                        ? "No open pull request, no unread notification" : "No open pull request")
                 : "Nothing with “\(text)”"
         case .agenda:
             sectionHeader.stringValue = agendaEvents == nil ? "Calendar" : text.isEmpty ? "Coming up" : "Events with “\(text)”"
@@ -3982,7 +3983,7 @@ final class LauncherController: NSObject {
     /// The strip's counts, from what GitHub said last.
     func updateGitHubStrip() {
         guard let github else { return }
-        githubStrip.show(pullRequests: github.pullRequests, unread: github.unreadNotifications.count,
+        githubStrip.show(pullRequests: github.pullRequests, unread: github.unreadNotifications.count, unreadComplete: github.notificationsComplete,
                          problem: github.problem, reading: github.lastRefresh == nil && github.problem == nil)
         if isVisible, mode == .github { updateResults(query: searchField.stringValue) }
     }

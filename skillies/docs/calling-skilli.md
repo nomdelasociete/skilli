@@ -175,7 +175,7 @@ page: add a line here when you add a tool. -->
 | Tool | What it does | Arguments |
 | --- | --- | --- |
 | `list_pull_requests` | Your open pull requests and reviews, by group (ready, blocked, waiting, testing). reads | `group?`, `query?` |
-| `list_github_notifications` | Your unread GitHub notifications. reads | `query?` |
+| `list_github_notifications` | Your unread GitHub notifications that ask you for something (review, mention, assignment). reads | `query?` |
 | `merge_pull_request` | Merges a pull request. | `pull_request` |
 | `update_pull_request_branch` | Updates a pull request's branch. | `pull_request` |
 | `mark_github_notification_read` | Marks a notification read. light | `id` |
