@@ -3427,6 +3427,20 @@ re-investigating.
   (`launcherConvertsCurrencies`): a seeded table, "800 try in eur"
   typed key by key, the first row read before ↩, ⌘K, ↩ pasted, EUR
   learned for TRY.
+- Money in a calculation ("120 € + 30 $", "49 $ * 12", "20 % de 85 €",
+  "1k € + 200 £ en dollars"; `Calculator.sums`, tried before a lone
+  amount): `Parser.money` (`MoneyTerms`) reads a currency after each
+  number (up to three words, "2,5k €") or a symbol before it ("€49";
+  not "kr"/"fr"), and converts each amount into the first currency read
+  as it reads it (`Parser.Value.currency`). Money ± money or a number,
+  money × or ÷ a number, money ÷ money a ratio (no row); money × money, a
+  power or a function of money: none. Rows: the first currency, then the
+  user's own when another, or the targets typed ("in eur, gbp"; half
+  typed: the rows it had). The detail lists each rate used ("1 GBP =
+  1,3371 USD, 1 EUR = 1,1186 USD"); no rate when nothing is converted,
+  so "49 $ * 12" needs no table. `Result.currency` marks money (⌘K Copy
+  with Currency, the selected price); `conversion` only when one
+  currency was converted (Copy Rate).
 - Mac controls (`SystemCommand`, run through `AIActionController.runMac`
   from the launcher, shortcuts and Ask): play/pause, next and previous
   track, volume up/down, mute — the keyboard's own media keys

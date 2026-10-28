@@ -187,7 +187,8 @@ The search panel you open from anywhere. ✦Space.
 - **Calculator**: math as typed (French decimals, percentages), units,
   time in a city; ↩ pastes the result in your app, ⌘↩ or ⌘C copies it.
 - **Convert Currencies**: "800 TRY" (to your currency), "800 TRY in €",
-  "49 £ en dollars", "100 usd in eur, gbp", answered as you type at the
+  "49 £ en dollars", "100 usd in eur, gbp", "120 € + 30 $", "49 $ * 12",
+  answered as you type at the
   day's mid-market rates (central banks through Frankfurter, else the
   ECB); the row says the rate and its day. A price selected where the
   launcher opens comes first, converted. ⌘K: Copy with Currency ⇧⌘C,

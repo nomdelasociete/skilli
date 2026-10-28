@@ -16978,7 +16978,7 @@ final class SelfTest {
     /// currency while "in e…" is typed, then EUR); ⌘K adds Copy with
     /// Currency and Copy Rate; ↩ pastes it and EUR becomes TRY's default.
     private func launcherConvertsCurrencies() async {
-        let name = "Currencies: “800 try in eur” answers as it is typed, before ↩; ⌘K Copy with Currency and Copy Rate; ↩ pastes it; EUR learned for TRY"
+        let name = "Currencies: “800 try in eur” answers as it is typed, before ↩; ⌘K Copy with Currency and Copy Rate; ↩ pastes it; EUR learned for TRY; “120 eur - 30 usd” in EUR"
         guard let store = context.currencyRates else {
             record(name, false, "no exchange rates in this run", nil)
             return
@@ -17034,8 +17034,22 @@ final class SelfTest {
         await pause(300)
         await closeLauncher()
         textView.string = ""
-        record(name, steady && listed && pasted && learned,
-               "as typed: \(steady) (\(seen.joined(separator: ", "))); ⌘K \(list): \(listed); ↩ pasted “\(expected.copy)”: \(pasted); EUR learned for TRY: \(learned)", nil)
+        // Money in a calculation: "-" types without Shift, which synthetic keys can lose.
+        let sum = "120 eur - 30 usd"
+        guard await openLauncher() else {
+            record(name, false, "the launcher did not open for “\(sum)”", nil)
+            return
+        }
+        for character in sum { await pressKey(character) }
+        let total = Calculator.evaluate(sum, currency: store.context)
+        let sumShown = await waitUntil(timeout: 1) {
+            self.context.launcher.query == sum && self.context.launcher.resultTitles.first == total?.display
+        } != nil
+        let summed = sumShown && total?.currency == "EUR"
+        let sumTitle = context.launcher.resultTitles.first ?? "nothing"
+        await closeLauncher()
+        record(name, steady && listed && pasted && learned && summed,
+               "as typed: \(steady) (\(seen.joined(separator: ", "))); ⌘K \(list): \(listed); ↩ pasted “\(expected.copy)”: \(pasted); EUR learned for TRY: \(learned); “\(sum)” \(sumTitle) (expected \(total?.display ?? "none")): \(summed)", nil)
     }
 
     // MARK: - Mac controls

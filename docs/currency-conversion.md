@@ -2,7 +2,8 @@
 
 Proposal, 2026-10-27. **Status**: phase 1 built the same day ("Daily
 rates are enough. Build phase 1"); AGENTS.md → Calculator says how it
-works. Two choices made while building: the switch is the Catalog's
+works. Mixed arithmetic ("120 € + 30 $") built 2026-10-28. Two choices
+made while building: the switch is the Catalog's
 Convert Currencies (no new Settings pane, no "Your currency" setting:
 the Mac's region decides, a typed target overrides), and an amount
 already in your currency goes to the last target picked, else the dollar
@@ -147,10 +148,15 @@ step:
 - ↩ pastes "89,40", ⌘↩ / ⌘C copy it (the calculator's `copy`). ⌘K adds
   Copy Rate and Copy with Currency ("89,40 €").
 
-### Mixed arithmetic (later in phase 1)
+### Mixed arithmetic
 
 "120 € + 30 $" and "49 $ * 12" in one currency (the first one's, or the
 target's): the parser's values get an optional currency, like units do.
+Built: each amount is converted into the first currency as it is read;
+the row in that currency comes first, then one in the user's own when
+it differs ("49 $ * 12" for a euro user: $588, then 525,66 €). The
+detail lists every rate used. Money × money, a power or a function of
+money gives no row.
 
 ### Reachable from skillies
 
