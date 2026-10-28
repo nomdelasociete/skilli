@@ -94,6 +94,7 @@
 		396E2632055AD1F7129CB2A7 /* ToolPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB31721765A4E8DC0473C2AC /* ToolPolicy.swift */; };
 		3A6A621C1F7CBB341D59FE39 /* WebcamTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D0EF415E975D2E3F48CBB8 /* WebcamTrack.swift */; };
 		3B15B4791D4AEC5FB2D4C006 /* TextTransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = F98CC687E1FFD670804157AD /* TextTransform.swift */; };
+		3B5DB7747BEC97F65B409B57 /* FileRanking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14027BC3129BE30DD1B43EFF /* FileRanking.swift */; };
 		3C4E61AA23EF2F07EE74AB15 /* LinkedAppFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = D691F5FFBC7BB5E3C283D27B /* LinkedAppFile.swift */; };
 		3CE1A5A3FE2A813CA92DDA87 /* AutomationAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77CE5D0F11D474C383E07DD8 /* AutomationAccess.swift */; };
 		3DA9E7C2E0AFAFA49E3651FC /* RuleJudge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2732D404236157CC8A325E63 /* RuleJudge.swift */; };
@@ -469,6 +470,7 @@
 		12DC7142B23BEFA22F3FC736 /* MeetingWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingWatch.swift; sourceTree = "<group>"; };
 		133FC9BC883F7262C3BBED4E /* KeyRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyRouter.swift; sourceTree = "<group>"; };
 		137FCEB6B269DC65B055F5DF /* RecentSearchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentSearchStore.swift; sourceTree = "<group>"; };
+		14027BC3129BE30DD1B43EFF /* FileRanking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileRanking.swift; sourceTree = "<group>"; };
 		14AB222399F43877F4FA1C20 /* TextEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEngine.swift; sourceTree = "<group>"; };
 		160142702AC74E853E62D50A /* MeetingTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingTranscriber.swift; sourceTree = "<group>"; };
 		1652A2C8726A9428E6EDCBA2 /* SkillieEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillieEnvironment.swift; sourceTree = "<group>"; };
@@ -882,6 +884,7 @@
 				8E2E96D4F84B6C203230D779 /* EventRequest.swift */,
 				934105A5408E3F507B34C21E /* FeatureCatalog.swift */,
 				852C091E294DB6DBCB00F276 /* FileMeaning.swift */,
+				14027BC3129BE30DD1B43EFF /* FileRanking.swift */,
 				4EA51B92C127D5758C086CEF /* FormProfile.swift */,
 				D0DF5D9C8356B74689D65260 /* FuzzyMatcher.swift */,
 				B5A35E54F69A3211F500FFD3 /* GIFSearch.swift */,
@@ -1659,6 +1662,7 @@
 				E110B8E83D49340AA42970AE /* EventRequest.swift in Sources */,
 				6DFB399DDA046FA27C9AB77E /* FeatureCatalog.swift in Sources */,
 				E22FEEB40D26857007128B9B /* FileMeaning.swift in Sources */,
+				3B5DB7747BEC97F65B409B57 /* FileRanking.swift in Sources */,
 				831213E51CAF1973EBB80352 /* FormProfile.swift in Sources */,
 				A1103836F2CD56F9D38AAF8E /* FuzzyMatcher.swift in Sources */,
 				1D7729B502A98EB7ECDA647C /* GIFSearch.swift in Sources */,

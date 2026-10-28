@@ -49,7 +49,7 @@ chip shows the mode; esc leaves it.
 | `snip` | Your snippets |
 | `:` | Emoji and symbols (also ⌃⌘Space) |
 | `gif` | GIFs, from Klipy and your Mac |
-| `f` | Files, with Spotlight |
+| `f` | Your files, cloud drives included (not your projects' dependencies) |
 | `tab` | Tabs open in Safari, Chrome, Arc, Brave, Edge… |
 | `hist` | Your browser history |
 | `@` | Contacts |
@@ -63,8 +63,9 @@ chip shows the mode; esc leaves it.
 
 In the clipboard, files, browser history, snippets and emoji, **⇥**
 searches by meaning instead of by name: "my train ticket from yesterday",
-"the invoice from the plumber". That needs your SI's choosing key (see
-[Your SI and privacy](privacy.md)).
+"the invoice from the plumber". In Search Files it does so on its own
+when no file is named like what you typed. That needs your SI's choosing
+key (see [Your SI and privacy](privacy.md)).
 
 ## Without a mode
 

@@ -3267,17 +3267,41 @@ re-investigating.
 - File search (`FileSearch`, `FileMeaning` in SkilliCore): Search Files
   or "f " / "file " / "fichier " turns the launcher into Spotlight's files
   (a green chip). Typing searches names (every word, case and accents
-  ignored) once typing pauses 100 ms, in the home folder without Library,
-  hidden folders and app bundles, recently used first; Return opens,
+  ignored) once typing pauses 100 ms: words' starts first (`"x*"cdw`,
+  Spotlight's word index, ~3× faster than a substring), then words in
+  the folders above ("martin invoice"), then any word anywhere in the
+  name, each only while fewer than 15 fit (`FileSearch.search`). A query
+  that reaches its 6 000 cap (Spotlight's, before anything is left out)
+  is followed by the same on files the user opened, which dependency
+  folders never fit. In the home and
+  the cloud drives (`~/Library/CloudStorage`, `~/Library/Mobile
+  Documents`, shown "Google Drive/…", "iCloud Drive/…"); left out
+  (`FileRanking.exclusion`): the rest of Library, hidden folders,
+  dependency folders (`node_modules`, `Pods`, `vendor`, a `venv`,
+  `~/go/pkg`…), anything inside a package (an app, a framework, a Photos
+  library, an asset catalog), and a code project's build output unless
+  opened. A project is the nearest folder above with `.git`,
+  `package.json`, `Package.swift`… (looked up once per folder, not in
+  cloud drives: a look there can wait on the drive). Ranked by
+  `FileRanking.score`: the name that is what was typed, then starting
+  with it, then words starting with it; opened lately; a project's code
+  and its files unchanged for a month behind unless an extension is
+  typed ("config.ts"). Dates and kind come with the results (value-list
+  attributes: read one by one, a common word's dates took seconds).
+  docs/file-search.md has the measures. Return opens,
   ⌘Return shows in Finder. ⇥ searches by meaning
   (`FileSearch.searchByMeaning`): up to 240 candidates (files named with
-  the request's words, then opened in the last 90 days, then PDFs,
-  office files, archives, videos, audio and screenshots changed this
-  week), one line each (kind, readable name, folder, "yesterday 18:02") in
+  the request's words, ranked as above, then opened in the last 90 days,
+  then PDFs, office files, archives, videos, audio and screenshots
+  changed this week, a project's only if opened), one line each (kind, readable name, folder, "yesterday 18:02") in
   one Choice to Jev or OpenAI Decisions (the 240 is what Spotlight
   gathers, not a part of a longer list: files have no rounds); the likely ones (≥ 4 %) best
-  first, ~0.3 s. Only on ⇥ and with Settings → Launcher → Search files by
-  meaning on (default). Spotlight's C API (`MDQuery`), synchronous, one
+  first, ~0.3 s. On ⇥, or on its own when the name search found nothing
+  and the text stayed put 400 ms more (`searchFiles`); only with Settings
+  → Launcher → Search files by meaning on (default) and a decision key.
+  A word of one or two letters counts only in a name, a folder word must
+  start a folder's word: "mon contrat de location" is not a name because
+  of a Desktop folder, so the search by meaning still starts. Spotlight's C API (`MDQuery`), synchronous, one
   query at a time on its own queue, stopped when no longer wanted or after
   3 s: queries started together (one per key) were seen waiting forever,
   and NSMetadataQuery's main-run-loop notifications crashed the Swift
@@ -3399,7 +3423,9 @@ re-investigating.
   section; "Search KLIPY" as the field's placeholder (required). Nothing
   typed: Recently Used, then Trending on Klipy (one request as the mode
   opens); typed, once typing pauses 250 ms: Klipy's GIFs, then On this
-  Mac (Spotlight, `com.compuserve.gif` whose name holds every word), each
+  Mac (Spotlight, `com.compuserve.gif` whose name holds every word, in
+  the home and cloud drives, dependency folders, packages and build
+  output left out as in Search Files), each
   its own section; each search's answer kept for the mode's life. Tiles
   show Klipy's `md.jpg` still (~20 KB, sharp at 2×), decoded off the main
   thread at the tile's pixels into an `NSCache` of 16 MB; only the

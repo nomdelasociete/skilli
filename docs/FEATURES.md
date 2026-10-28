@@ -170,8 +170,11 @@ The search panel you open from anywhere. ✦Space.
 - **Modes** by a prefix, each with a chip: see their sections (Clipboard
   `cb`, Snippets `snip`, Emoji `:`, GIFs `gif`, Calendar `cal`, Reminders `todo`,
   GitHub `pr`, the Catalog `?`).
-- **Search Files** (`f`): by name with Spotlight, or by what it was about
-  with ⇥. ↩ opens, ⌘↩ shows in Finder; with CleanShot X, ⌘K on an image
+- **Search Files** (`f`): by name with Spotlight, or by what it was about:
+  on its own when no file is named so ("f mon bail"), at once with ⇥. Your files first: dependency folders (`node_modules`, `Pods`…),
+  app and library insides and build output left out, cloned projects'
+  code behind; Google Drive, Dropbox, OneDrive and iCloud Drive
+  included; a word can name a folder above ("martin invoice"). ↩ opens, ⌘↩ shows in Finder; with CleanShot X, ⌘K on an image
   or an MP4 sends it there (annotate, pin, Quick Access).
 - **Search Tabs** (`tab`): any tab open in Safari, Chrome, Arc, Brave,
   Edge…; ↩ shows it.
@@ -211,8 +214,8 @@ The search panel you open from anywhere. ✦Space.
   (guides pull it to the middles); this puts it back.
 
 Settings: the launcher's keys and Open Settings from the launcher ·
-Search browser history by meaning with ⇥ · Search files by meaning with
-⇥ · Advanced: Opens on · Starts again empty · Type in English while
+Search browser history by meaning with ⇥ · Search files by meaning ·
+Advanced: Opens on · Starts again empty · Type in English while
 open.
 
 <!-- pane: clipboard -->

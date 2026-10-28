@@ -19287,7 +19287,7 @@ final class SelfTest {
     /// "f contrat-location…" finds the file by name and ⌘Return shows it in
     /// Finder; "f mon contrat de location" ⇥ finds it by meaning.
     private func launcherFindsFiles() async {
-        let name = "Search Files: “f …” finds a file by name, ⌘Return shows it in Finder; a description ⇥ finds it by meaning"
+        let name = "Search Files: “f …” finds a file by name, ⌘Return shows it in Finder; a description no name fits finds it by meaning on its own"
         let marker = Int.random(in: 1000...9999)
         let lease = "Contrat-location-appartement-\(marker).pdf"
         guard let folder = await seedFiles([lease, "Facture-EDF-octobre-\(marker).pdf"]) else { return }
@@ -19318,12 +19318,24 @@ final class SelfTest {
             guard await focusTestWindow() else { return }
             _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
             for character in "f mon contrat de location" { await pressKey(character) }
-            await pressKey(nil, code: CGKeyCode(kVK_Tab))
-            let byMeaning = await waitUntil(timeout: 8) { launcher.isShowingFileMeaning && launcher.resultTitles.prefix(3).contains(lease) } != nil
+            // No file is named so: by meaning on its own, no ⇥; ⇥ after,
+            // only to tell the two apart in the report.
+            let leaseShown: @MainActor @Sendable () -> Bool = { launcher.isShowingFileMeaning && launcher.resultTitles.prefix(3).contains(lease) }
+            // Name search, the pause, the candidates and the decision.
+            let onItsOwn = await waitUntil(timeout: 20, leaseShown) != nil
+            // A file named so on that Mac would rightly keep it from
+            // starting: said, never by its name (the report is kept).
+            let named = !launcher.isShowingFileMeaning && !launcher.resultTitles.isEmpty
+            var withTab = onItsOwn
+            if !onItsOwn {
+                await pressKey(nil, code: CGKeyCode(kVK_Tab))
+                withTab = await waitUntil(timeout: 8, leaseShown) != nil
+            }
             await captureLauncher(as: "launcher-files-meaning.png")
             await pressKey(nil, code: CGKeyCode(kVK_Escape))
-            meaningPassed = byMeaning
-            meaningDetail = "by meaning: \(byMeaning) (\(launcher.resultTitles.first ?? "nothing"))"
+            meaningPassed = onItsOwn
+            meaningDetail = "by meaning on its own: \(onItsOwn)" + (onItsOwn ? "" : ", with ⇥: \(withTab)")
+                + (named ? ", a file is named so on this Mac" : "")
         }
         await closeLauncher()
         record(name, filesMode && found && shown && meaningPassed,

@@ -658,8 +658,8 @@ struct LauncherPane: View {
                 }
                 .settingAnchor("historyMeaningSearch")
                 Toggle(isOn: $preferences.fileMeaningSearch) {
-                    LabelDetail("Search files by meaning with ⇥",
-                                "In Search Files (“f contrat”), describe a file, then ⇥: it is found among those named with your words, opened lately or changed this week.")
+                    LabelDetail("Search files by meaning",
+                                "In Search Files (“f mon bail”), describe a file: when no file is named so, it is found by meaning on its own, and ⇥ does it at once. Among those named with your words, opened lately or changed this week.")
                 }
                 .settingAnchor("fileMeaningSearch")
             } footer: {
