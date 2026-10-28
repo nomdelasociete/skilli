@@ -1885,6 +1885,8 @@ final class SkilliTools {
             guard !shown.isEmpty else { return "No unread notification to mark." }
             do {
                 try await github.markRead(shown)
+            } catch let error as GitHubError where error.accountChanged {
+                throw Failure(message: error.message)
             } catch {
                 // Some may be read already: say how many are left.
                 let left = github.unreadNotifications.filter { note in shown.contains { $0.id == note.id } }.count

@@ -37,6 +37,8 @@ struct GitHubError: LocalizedError {
     var retryAfter: Date?
     /// The token is not valid any more: sign in again.
     var signedOut = false
+    /// A sign-out or another account stopped a batch half way.
+    var accountChanged = false
     var errorDescription: String? { message }
 }
 
@@ -768,25 +770,29 @@ final class GitHubBook {
 
     /// One PATCH per thread, one after the other (GitHub has no "mark
     /// these read"; `PUT /notifications` would read every one, those
-    /// skil.li does not show too). One that fails does not stop the
-    /// others: those read are shown read, then the relay is told once, then
-    /// the first failure is thrown. A sign-out or another account on the
-    /// way stops it, nothing shown.
+    /// skil.li does not show too). A thread GitHub refuses does not stop
+    /// the others; what holds for every one does (no network, a rate
+    /// limit, the token refused). Those read are shown read, then the relay
+    /// is told once, then the first failure is thrown. A sign-out or
+    /// another account on the way stops it, nothing shown (`accountChanged`).
     func markRead(_ notifications: [GitHubNotification]) async throws {
         guard let token else { throw GitHubError(message: "Sign in to GitHub in skil.li's Settings first.") }
         let generation = accountGeneration
+        let changed = GitHubError(message: "The GitHub account changed before every notification was marked read.", accountChanged: true)
         var read: Set<String> = []
         var failure: Error?
         for notification in notifications {
-            guard accountGeneration == generation else { return }
+            guard accountGeneration == generation else { throw changed }
             do {
                 try await client.markRead(notification.id, token: token)
                 read.insert(notification.id)
             } catch {
                 failure = failure ?? error
+                let github = error as? GitHubError
+                if error is URLError || github?.retryAfter != nil || github?.signedOut == true { break }
             }
         }
-        guard accountGeneration == generation else { return }
+        guard accountGeneration == generation else { throw changed }
         if !read.isEmpty {
             if serverSync {
                 server.markedRead(read)

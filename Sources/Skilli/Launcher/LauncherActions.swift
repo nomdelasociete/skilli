@@ -439,6 +439,8 @@ extension LauncherController {
                     Task { [weak self] in
                         do {
                             try await github.markRead(listed)
+                        } catch let error as GitHubError where error.accountChanged {
+                            self?.say(error.message)
                         } catch {
                             let left = github.unreadNotifications.filter { note in listed.contains { $0.id == note.id } }.count
                             self?.say("\(left) still unread: GitHub did not answer. Try again in a moment.")

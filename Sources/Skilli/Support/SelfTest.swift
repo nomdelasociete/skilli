@@ -6472,10 +6472,10 @@ final class SelfTest {
         let page = await waitUntil(timeout: 1) { opened.first == base.absoluteString + "/login/device" } != nil
         let signedIn = await waitUntil(timeout: 10) { book.isSignedIn && book.lastRefresh != nil } != nil
         let grouped = book.pullRequests.map { "#\($0.number) \($0.group.rawValue)" }
-        let read = grouped == ["#1 ready", "#3 blocked", "#2 testing"] && book.unreadNotifications.map(\.id) == ["22", "21", "24"]
+        let read = grouped == ["#1 ready", "#3 blocked", "#2 testing"] && book.unreadNotifications.map(\.id) == ["22", "21", "24", "25"]
         // Read again: the notifications come back 304, kept.
         book.refresh(force: true)
-        let notModified = await waitUntil(timeout: 3) { stand.notModified == 1 } != nil && book.unreadNotifications.count == 3
+        let notModified = await waitUntil(timeout: 3) { stand.notModified == 1 } != nil && book.unreadNotifications.count == 4
 
         // The launcher with this GitHub.
         let launcher = context.launcher
@@ -6508,7 +6508,7 @@ final class SelfTest {
         }
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
-        let strip = await waitUntil(timeout: 2) { launcher.gitHubStripText == "1 Ready · 1 Blocked · 1 Testing — 3 unread" } != nil
+        let strip = await waitUntil(timeout: 2) { launcher.gitHubStripText == "1 Ready · 1 Blocked · 1 Testing — 4 unread" } != nil
         let stripText = launcher.gitHubStripText ?? "hidden"
         if let directory = context.snapshotDirectory, let png = launcher.snapshotPNG() {
             try? png.write(to: directory.appendingPathComponent("launcher-github-strip.png"))
@@ -6518,7 +6518,7 @@ final class SelfTest {
             }
         }
         for character in "pr " { await pressKey(character) }
-        let titles = ["Add the GitHub strip", "Fix the build", "Faster history", "Review the new API", "Fix the flaky test on main", "Crash on wake"]
+        let titles = ["Add the GitHub strip", "Fix the build", "Faster history", "Review the new API", "Fix the flaky test on main", "Crash on wake", "Update the docs"]
         let listed = await waitUntil(timeout: 2) { launcher.resultTitles == titles } != nil
         let shown = launcher.resultTitles
         if let directory = context.snapshotDirectory, let png = launcher.snapshotPNG() {
@@ -6556,7 +6556,8 @@ final class SelfTest {
         let blocked = (try? await tools.call("list_pull_requests", arguments: ["group": "blocked"], run: nil)) ?? ""
         let notes = (try? await tools.call("list_github_notifications", arguments: [:], run: nil)) ?? ""
 
-        // ⇥ on a notification: Mark All as Read reads every one listed.
+        // ⇥ on a notification: Mark All as Read reads every one listed,
+        // not the one the search left out ("Update the docs").
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
         for character in "pr nimbus" { await pressKey(character) }
@@ -6568,8 +6569,12 @@ final class SelfTest {
         let allOptions = launcher.shownActions.map(\.title)
         for character in "all" { await pressKey(character) }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
-        let allRead = await waitUntil(timeout: 3) { stand.read == ["21", "22", "24"] && launcher.resultTitles.isEmpty } != nil
+        let allRead = await waitUntil(timeout: 3) {
+            stand.read == ["21", "22", "24"] && launcher.resultTitles.isEmpty && book.unreadNotifications.map(\.id) == ["25"]
+        } != nil
         await closeLauncher()
+        // The tool reads what is left, then says none is.
+        let lastRead = (try? await tools.call("mark_all_github_notifications_read", arguments: [:], run: nil)) ?? ""
         let noneLeft = (try? await tools.call("mark_all_github_notifications_read", arguments: [:], run: nil)) ?? ""
         // Settings → GitHub as it stands (the app's own GitHub: signed out).
         context.settings.show(pane: .github)
@@ -6582,11 +6587,12 @@ final class SelfTest {
         let toolsOK = blocked.hasPrefix("blocked — nomdelasociete/skilli#3 “Fix the build” — lint failed")
             && notes.hasPrefix("22 — Review requested — nimbus-hq/nimbus “Review the new API”") && !notes.contains("Fix the flaky test on main") && !notes.contains("CI failed on main")
         record(name, code && page && signedIn && read && notModified && noStripSignedOut && toSettings && strip && listed && openedPR && offered && askedAgain
-                   && notYet && merged && markedRead && toolsOK && allOffered && allRead && noneLeft == "No unread notification to mark.",
+                   && notYet && merged && markedRead && toolsOK && allOffered && allRead && lastRead == "Marked 1 read." && stand.read.last == "25"
+                   && noneLeft == "No unread notification to mark.",
                "code \(code), page \(page), signed in \(signedIn); read \(read) (\(grouped)); 304 kept \(notModified); "
                    + "signed out: no strip \(noStripSignedOut), Return → Settings \(toSettings); strip \(strip) (“\(stripText)”); "
                    + "pr \(listed) (\(shown)); Return opens \(openedPR); ⇥ \(offered) (\(options)), asked again \(askedAgain), not before \(notYet), merged \(merged); "
-                   + "⌘⌫ read \(markedRead); all read \(allOffered) \(allRead) (\(allOptions), \(stand.read), “\(noneLeft)”); tools \(toolsOK) (“\(blocked.prefix(80))”, “\(notes.prefix(60))”)",
+                   + "⌘⌫ read \(markedRead); all read \(allOffered) \(allRead) (\(allOptions), \(stand.read), “\(lastRead)”, “\(noneLeft)”); tools \(toolsOK) (“\(blocked.prefix(80))”, “\(notes.prefix(60))”)",
                nil)
     }
 
@@ -29882,7 +29888,10 @@ private final class GitHubStandIn: @unchecked Sendable {
           "repository":{"full_name":"nimbus-hq/nimbus"}},
          {"id":"24","reason":"mention","unread":true,"updated_at":"2026-10-12T07:00:00Z",
           "subject":{"title":"Crash on wake","url":"https://api.github.com/repos/nimbus-hq/nimbus/issues/5","type":"Issue"},
-          "repository":{"full_name":"nimbus-hq/nimbus"}}]
+          "repository":{"full_name":"nimbus-hq/nimbus"}},
+         {"id":"25","reason":"assign","unread":true,"updated_at":"2026-10-12T06:00:00Z",
+          "subject":{"title":"Update the docs","url":"https://api.github.com/repos/nomdelasociete/skilli/issues/11","type":"Issue"},
+          "repository":{"full_name":"nomdelasociete/skilli"}}]
         """#
 }
 
