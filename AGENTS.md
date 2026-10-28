@@ -3290,13 +3290,14 @@ re-investigating.
   attributes: read one by one, a common word's dates took seconds).
   docs/file-search.md has the measures. Return opens,
   ⌘Return shows in Finder. ⇥ searches by meaning
-  (`FileSearch.searchByMeaning`): up to 240 candidates (files named with
-  the request's words, ranked as above, then opened in the last 90 days,
+  (`FileSearch.searchByMeaning`): up to 240 candidates (the rows the
+  name search shows, files named with the request's words, ranked as above, then opened in the last 90 days,
   then PDFs, office files, archives, videos, audio and screenshots
   changed this week, a project's only if opened), one line each (kind, readable name, folder, "yesterday 18:02") in
   one Choice to Jev or OpenAI Decisions (the 240 is what Spotlight
   gathers, not a part of a longer list: files have no rounds); the likely ones (≥ 4 %) best
-  first, ~0.3 s. On ⇥, or on its own when the name search found nothing
+  first, ~0.3 s, then every row the name search showed: by meaning never
+  loses a file named so. On ⇥, or on its own when the name search found nothing
   and the text stayed put 400 ms more (`searchFiles`); only with Settings
   → Launcher → Search files by meaning on (default) and a decision key.
   A word of one or two letters counts only in a name, a folder word must

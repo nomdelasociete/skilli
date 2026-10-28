@@ -2319,20 +2319,24 @@ final class LauncherController: NSObject {
         }
     }
 
-    /// ⇥, or no file named so: the decision model picks among recent files.
+    /// ⇥, or no file named so: the decision model picks among recent files
+    /// and the ones named so. Its picks first, then every file the name
+    /// search showed: by meaning never loses one.
     private func searchFilesByMeaning() {
         let text = searchField.stringValue
         guard fileMeaningOn, !text.trimmingCharacters(in: .whitespaces).isEmpty, let keys = fileDecisionKeys?() else { return }
+        let named = fileResults?.query == text ? fileResults?.files ?? [] : []
         fileMeaningTask?.cancel()
         fileMeaningPending = text
         sectionHeader.stringValue = "Searching by meaning…"
         fileMeaningTask = Task { [weak self] in
             guard let self else { return }
-            let found = await FileSearch.searchByMeaning(text, keys: keys)
+            let found = await FileSearch.searchByMeaning(text, keys: keys, named: named)
             guard !Task.isCancelled, self.mode == .files, self.searchField.stringValue == text else { return }
             self.fileMeaningPending = nil
             if let found {
-                self.fileMeaning = (text, found.files, found.label)
+                let picked = Set(found.files.map(\.url))
+                self.fileMeaning = (text, found.files + named.filter { !picked.contains($0.url) }, found.label)
                 self.updateResults(query: text)
             } else {
                 self.sectionHeader.stringValue = "Search by meaning did not answer"

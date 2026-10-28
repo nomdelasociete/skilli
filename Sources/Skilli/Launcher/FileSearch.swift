@@ -107,16 +107,18 @@ enum FileSearch {
         return Array(files.sorted { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }.prefix(limit))
     }
 
-    /// What a search by meaning chooses among: files named with the
-    /// request's words, then the ones opened lately, then documents
-    /// changed this week, each with its share of the 240 places.
-    /// Gathered here, chosen by the model.
-    static func candidates(for request: String) async -> [File] {
+    /// What a search by meaning chooses among: the files the name search
+    /// already shows (`named`), files named with the request's words,
+    /// then the ones opened lately, then documents changed this week,
+    /// each with its share of the 240 places. Gathered here, chosen by
+    /// the model.
+    static func candidates(for request: String, named: [File] = []) async -> [File] {
         var files: [File] = []
         var seen = Set<String>()
         func add(_ found: [File]) {
             for file in found where files.count < FileMeaning.candidateLimit && seen.insert(file.url.path).inserted { files.append(file) }
         }
+        add(named)
         let words = FileMeaning.significantWords(request).prefix(5)
         if words.count > 1 { add(await search(words.joined(separator: " "), limit: 15)) }
         for word in words { add(await search(word, limit: 15)) }
@@ -234,10 +236,10 @@ enum FileSearch {
 
     /// "le contrat de location du mois dernier": the decision model picks
     /// among recent files. Only names, kinds, folders and dates are sent.
-    static func searchByMeaning(_ request: String, keys: [DecisionProvider: String],
+    static func searchByMeaning(_ request: String, keys: [DecisionProvider: String], named: [File] = [],
                                 among given: [File]? = nil) async -> (files: [File], label: String)? {
         var candidates = given ?? []
-        if given == nil { candidates = await self.candidates(for: request) }
+        if given == nil { candidates = await self.candidates(for: request, named: named) }
         guard !candidates.isEmpty else { return ([], "") }
         let now = Date.now
         let question = DecisionQuestion(

@@ -19287,7 +19287,7 @@ final class SelfTest {
     /// "f contrat-location…" finds the file by name and ⌘Return shows it in
     /// Finder; "f mon contrat de location" ⇥ finds it by meaning.
     private func launcherFindsFiles() async {
-        let name = "Search Files: “f …” finds a file by name, ⌘Return shows it in Finder; a description no name fits finds it by meaning on its own"
+        let name = "Search Files: “f …” finds a file by name, ⌘Return shows it in Finder; a description no name fits finds it by meaning on its own; ⇥ keeps what the name found"
         let marker = Int.random(in: 1000...9999)
         let lease = "Contrat-location-appartement-\(marker).pdf"
         guard let folder = await seedFiles([lease, "Facture-EDF-octobre-\(marker).pdf"]) else { return }
@@ -19336,6 +19336,19 @@ final class SelfTest {
             meaningPassed = onItsOwn
             meaningDetail = "by meaning on its own: \(onItsOwn)" + (onItsOwn ? "" : ", with ⇥: \(withTab)")
                 + (named ? ", a file is named so on this Mac" : "")
+
+            // ⇥ on a name that fits: the file named so stays among the rows,
+            // whatever the model picks.
+            let bill = "Facture-EDF-octobre-\(marker).pdf"
+            guard await focusTestWindow() else { return }
+            _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+            for character in "f edf octobre \(marker)" { await pressKey(character) }
+            let billNamed = await waitUntil(timeout: 5) { launcher.resultTitles.contains(bill) } != nil
+            await pressKey(nil, code: CGKeyCode(kVK_Tab))
+            let billKept = await waitUntil(timeout: 15) { launcher.isShowingFileMeaning && launcher.resultTitles.contains(bill) } != nil
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            meaningPassed = meaningPassed && billNamed && billKept
+            meaningDetail += "; by name: \(billNamed), still there with ⇥: \(billKept)"
         }
         await closeLauncher()
         record(name, filesMode && found && shown && meaningPassed,

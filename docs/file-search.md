@@ -73,7 +73,10 @@ no longer receive `node_modules` names, and see cloud files.
    request, and for up to 240 candidates (the cleaned name matches, then
    files opened in 90 days, then documents changed this week, cloud
    drives' included) each one's name, kind, folder and modified date;
-   never a file's content, and nothing while names fit.
+   never a file's content, and nothing while names fit. Its rows: the
+   model's picks first, then every file the name search showed, so ⇥
+   never loses a file named so (2026-10-28: "by meaning should give at
+   least the same exact results where there are results").
 5. **Wrong**: a file left out that was wanted (a README in a dependency
    the user is reading): Finder's own search still finds it, and once
    opened from there it is "used" and comes back for build output (not
