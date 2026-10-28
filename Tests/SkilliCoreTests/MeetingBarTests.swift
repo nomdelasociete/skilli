@@ -242,13 +242,43 @@ final class MeetingBarTests: XCTestCase {
         XCTAssertEqual(MeetingDismissals.key(unsynced), "local-3@\(Int(start.timeIntervalSince1970))", "no server id yet: the item id")
     }
 
-    func testDismissedIsForgottenOnceItEnds() {
+    func testDismissedIsSavedThenForgottenOnceItEnds() throws {
+        let suite = "MeetingBarTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var dismissed = MeetingDismissals(defaults: defaults)
+        dismissed.insert(sync)
+        dismissed.save(to: defaults)
+        let relaunched = MeetingDismissals(defaults: defaults)
+        XCTAssertTrue(relaunched.contains(sync), "read back from the defaults: a relaunch keeps it")
+        XCTAssertEqual(relaunched.refreshed(with: [sync], now: sync.end.addingTimeInterval(-1)), relaunched, "kept while it is on")
+        let ended = relaunched.refreshed(with: [sync], now: sync.end)
+        XCTAssertTrue(ended.until.isEmpty, "gone at its end")
+        ended.save(to: defaults)
+        XCTAssertNil(defaults.object(forKey: MeetingDismissals.defaultsKey), "nothing left saved")
+    }
+
+    func testDismissedFollowsAMeetingMadeLonger() {
         var dismissed = MeetingDismissals()
         dismissed.insert(sync)
-        let saved = MeetingDismissals(dismissed.until)
-        XCTAssertTrue(saved.contains(sync), "read back as saved: a relaunch keeps it")
-        XCTAssertEqual(saved.pruned(now: sync.end.addingTimeInterval(-1)), saved, "kept while it is on")
-        XCTAssertTrue(saved.pruned(now: sync.end).until.isEmpty, "gone at its end")
+        var longer = sync
+        longer.end = sync.end.addingTimeInterval(30 * 60)
+        let refreshed = dismissed.refreshed(with: [longer], now: sync.end)
+        XCTAssertTrue(refreshed.contains(longer), "still dismissed past its old end")
+        XCTAssertNil(MeetingBar.plan([longer], now: sync.end, options: options, presence: idle, dismissed: refreshed).shown)
+        XCTAssertTrue(refreshed.refreshed(with: [longer], now: longer.end).until.isEmpty, "gone at its new end")
+    }
+
+    func testDismissedBeforeItsFirstSyncStaysOnceItHasAServerID() {
+        let local = AgendaEvent(id: "local-1", title: "Weekly sync", start: start, end: start.addingTimeInterval(30 * 60),
+                                notes: "https://meet.google.com/abc-defg-hij")
+        var synced = local
+        synced.externalID = "server-sync"
+        var dismissed = MeetingDismissals()
+        dismissed.insert(local)
+        XCTAssertTrue(dismissed.contains(synced), "the same item id and start")
+        let refreshed = dismissed.refreshed(with: [synced], now: start)
+        XCTAssertNotNil(refreshed.until[MeetingDismissals.key(synced)], "kept by its server id from then on")
     }
 
     func testTimeLeftReadsInHoursPastAnHour() {

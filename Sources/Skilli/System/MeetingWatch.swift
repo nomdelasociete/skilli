@@ -41,7 +41,6 @@ final class MeetingWatch: NSObject, NSMenuDelegate {
     /// Dismissed from the menu bar, each occurrence until it ends: saved,
     /// so a relaunch does not bring it back.
     private var dismissed: MeetingDismissals
-    private static let dismissedKey = "MeetingWatch.dismissed"
     /// Already joined or offered as it started.
     private var started: Set<String> = []
     /// Alerts already shown (`MeetingAlerts.due`'s keys).
@@ -65,7 +64,7 @@ final class MeetingWatch: NSObject, NSMenuDelegate {
         self.calendar = calendar
         self.preferences = preferences
         self.defaults = defaults
-        dismissed = MeetingDismissals(defaults.dictionary(forKey: Self.dismissedKey) as? [String: Date] ?? [:])
+        dismissed = MeetingDismissals(defaults: defaults)
         super.init()
         microphone.onChange = { [weak self] in self?.refresh() }
         let workspace = NSWorkspace.shared.notificationCenter
@@ -88,7 +87,7 @@ final class MeetingWatch: NSObject, NSMenuDelegate {
             return
         }
         let events = calendar.soonEvents(now: now).filter { !$0.isAllDay && !$0.declined }
-        let kept = dismissed.pruned(now: now)
+        let kept = dismissed.refreshed(with: events, now: now)
         if kept != dismissed { saveDismissed(kept) }
         var next: Date?
         func wait(until date: Date) {
@@ -320,11 +319,7 @@ final class MeetingWatch: NSObject, NSMenuDelegate {
 
     private func saveDismissed(_ kept: MeetingDismissals) {
         dismissed = kept
-        if kept.until.isEmpty {
-            defaults.removeObject(forKey: Self.dismissedKey)
-        } else {
-            defaults.set(kept.until, forKey: Self.dismissedKey)
-        }
+        kept.save(to: defaults)
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -332,9 +327,10 @@ final class MeetingWatch: NSObject, NSMenuDelegate {
         record.isHidden = !recordable(shown)
     }
 
-    /// Self-test hook: forget what was dismissed, offered or joined.
+    /// Self-test hook: forget what was dismissed, offered or joined. The
+    /// dismissals saved stay (the user's): read again at the next launch.
     func resetForTest() {
-        saveDismissed(MeetingDismissals())
+        dismissed = MeetingDismissals()
         started = []
         alerted = []
         seenInCall = []
