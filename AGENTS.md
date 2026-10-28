@@ -2210,13 +2210,26 @@ re-investigating.
   automatic. The rules the measurements set (Measured) are the code's:
   the Mac's sound is one Core Audio process tap on every process but
   skil.li's (`MacSoundTap`, a private aggregate on the default output,
-  rebuilt when the output changes), its IO block on Core Audio's
+  rebuilt when the output changes or changes its rate: the output's, the
+  aggregate's and the tap's format listened to, its buffers called by the
+  aggregate's rate; a headset's call mode at 24 kHz, its buffers still
+  called 48 kHz, put 22 minutes of a call in 11), its IO block on Core Audio's
   real-time thread (no queue: on one, macOS let it fall behind with the
   display off); `NSAudioCaptureUsageDescription` in Info.plist (without
   it the tap records silence and says nothing; with it macOS asks once,
   System Audio Recording, even with Screen Recording allowed); the microphone through
-  `AVAudioEngine` started again on `AVAudioEngineConfigurationChange`
-  (`MicrophoneTrack`); a recording holds `beginActivity` with
+  `AVAudioEngine`, a new engine on each `AVAudioEngineConfigurationChange`
+  and when one gives no buffer 2 s after it started (`MicrophoneTrack`;
+  never the same engine again: it kept its input's format, AVAudioEngine
+  refused its tap, "Failed to create tap, config change pending!", told
+  the caller nothing and ran on without it for a whole call). A track
+  whose source is on and records nothing (`SilentTrack` in SkilliCore,
+  from `AudioInbox.times`, once a second in `RecorderCenter.tickWatch`):
+  no buffer for 3 s, or only exact zeros for 5 s since its source last
+  started (the Mac's sound: while an app has played for 5 s); an orange
+  mark in the menu bar and the reason in its menu while it lasts, a card
+  once for a stretch (`RecordCard.Content.silent`: Start Again ↩, Keep
+  Recording esc); a quiet stretch after sound never said; a recording holds `beginActivity` with
   `.latencyCritical`, idle system and display sleep off. Each track
   (`TrackWriter`) is placed by its own clock (`TrackTimeline` in
   SkilliCore): inside a run by the device's sample time, a missed cycle
@@ -2292,7 +2305,11 @@ re-investigating.
   recorderchild`, SIGKILLed), one quit (the same child sent SIGTERM, which
   goes through `NSApp.terminate` and `quitReply` as in skil.li), a sleep
   and a wake (macOS's notifications posted: the test Mac cannot be woken
-  without a person), links and tools; `recorder-*.png`.
+  without a person), links and tools; a 24 kHz and a 16 kHz microphone
+  started again mid-way, the test Mac's input and output changing their
+  rates mid-recording (put back after), a microphone that gives nothing
+  (`MeetingRecorder.watchesSilence`: the stand-ins give nothing until
+  played, so only that check watches); `recorder-*.png`.
 - The recorder's moment (phase 2, 2026-10-24; docs/meeting-recorder.md's
   Moment, its views in docs/meeting-recorder-views.md "Phase 2"): the
   five cases are code, never a model (`MeetingMoment.read` in

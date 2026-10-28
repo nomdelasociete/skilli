@@ -159,6 +159,86 @@ final class MeetingRecorder {
     /// Seconds the Mac's sound gave only digital silence (nil: nothing came).
     var macSilentFor: Double? { phase == .idle ? nil : macInbox.silentFor }
 
+    /// Whether each track on records anything (docs/meeting-recorder.md,
+    /// "A track that records nothing"), and why one does not, now: the menu
+    /// bar's orange mark and its line, the card.
+    private var silence: [Speaker: SilentTrack] = [:]
+    private(set) var silent: [Speaker: SilentTrack.Reason] = [:]
+    #if SKILLI_SELFTEST
+    /// Self-test: the stand-ins give nothing until a check plays them, so
+    /// only the checks of this watch turn it on.
+    var watchesSilence = false
+    #endif
+
+    /// Once a second while recording: each track on, whether it records
+    /// anything. The tracks the card offers Start Again for now (none while
+    /// paused: nothing is recorded then anyway).
+    func checkTracks() -> [Speaker] {
+        #if SKILLI_SELFTEST
+        guard watchesSilence else { return [] }
+        #endif
+        guard isRecording else { return [] }
+        let now = HostClock.now
+        var offers: [Speaker] = []
+        for speaker in Speaker.allCases {
+            guard isOn(speaker) else {
+                silence[speaker] = nil
+                silent[speaker] = nil
+                continue
+            }
+            let times = (speaker == .me ? micInbox : macInbox).times
+            var watch = silence[speaker] ?? SilentTrack(since: max(start, times.restarted ?? 0))
+            if let restarted = times.restarted { watch.started(at: restarted) }
+            // The Mac's sound gives zeros whenever nothing plays.
+            let playing: (() -> Bool)? = speaker == .them ? { MacSoundTap.playing() != nil } : nil
+            let (reason, offer) = watch.update(now: now, lastBuffer: times.buffer, lastSound: times.sound, playing: playing)
+            silence[speaker] = watch
+            if silent[speaker] != reason {
+                silent[speaker] = reason
+                if let reason { Log.actions.error("Recorder: \(speaker == .me ? "the microphone" : "the Mac's sound", privacy: .public) records nothing (\(reason == .nothing ? "no buffer" : "only zeros", privacy: .public))") }
+            }
+            if offer, phase == .recording { offers.append(speaker) } else if offer { silence[speaker]?.offerAgain() }
+        }
+        return offers
+    }
+
+    /// The card was busy: Start Again offered for `speaker` at the next check.
+    func offerAgain(_ speaker: Speaker) {
+        silence[speaker]?.offerAgain()
+    }
+
+    /// Keep Recording in the card: not offered again until it gives sound.
+    func keepSilent(_ speaker: Speaker) {
+        silence[speaker]?.keep()
+    }
+
+    /// Start Again in the card: the source made afresh (a new engine, the
+    /// tap and its aggregate again), counted from now.
+    func startAgain(_ speaker: Speaker) async {
+        guard isRecording, isOn(speaker) else { return }
+        silence[speaker]?.startedAgain(at: HostClock.now)
+        silent[speaker] = nil
+        if speaker == .me {
+            await microphone.restart()
+        } else {
+            do {
+                try macSound.restart()
+                macSoundFailure = nil
+            } catch {
+                macSoundFailure = error.localizedDescription
+                Log.actions.error("Recorder: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        onChange?()
+    }
+
+    /// The device a track's lines name: the microphone's, "the Mac's sound".
+    func deviceName(_ speaker: Speaker) -> String {
+        guard speaker == .me else { return "the Mac's sound" }
+        if case .on(let name) = microphone.state { return name }
+        return "the microphone"
+    }
+
     // MARK: - The card
 
     /// The Record card opened (or ⌘R pressed): the sources on run, their
@@ -259,6 +339,8 @@ final class MeetingRecorder {
 
     private func stopSources() {
         sourcesStarted = false
+        silence = [:]
+        silent = [:]
         microphone.stop()
         macSound.stop()
         madePictures?.stopAll()
@@ -333,6 +415,8 @@ final class MeetingRecorder {
         }
         self.folder = folder
         self.record = record
+        silence = [:]
+        silent = [:]
         everOn = Set(Speaker.allCases.filter { $0 == .me ? sources.microphone : sources.macSound })
         pausedAt = nil
         pausedTotal = 0
@@ -729,6 +813,12 @@ final class MeetingRecorder {
     /// Self-test: a camera drawn here stands in for one (nil: the real one).
     func standIn(camera: StandInCamera?) {
         pictures.webcam.standIn = camera
+    }
+
+    /// Self-test: when a track's last buffer and last sound came, and its
+    /// source last started again (host seconds).
+    func trackTimes(_ speaker: Speaker) -> (buffer: Double?, sound: Double?, restarted: Double?) {
+        (speaker == .me ? micInbox : macInbox).times
     }
     #endif
 }

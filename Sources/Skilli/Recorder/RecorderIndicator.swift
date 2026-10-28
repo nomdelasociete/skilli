@@ -7,9 +7,10 @@ import SkilliCore
 /// resumes and stops, names each source with its level (a click turns it
 /// off or on for the rest of the recording), the webcam and the screen's
 /// window (phase 3) and the call's app. A screen that gives no picture
-/// is the one thing added to the label: an orange mark, and why in the
-/// menu. After Stop, a ring fills as the transcript is made. Never a
-/// hidden recording: it shows for as long as one runs.
+/// and a track that records nothing (`SilentTrack`) are the only things
+/// added to the label: an orange mark each, and why in the menu. After
+/// Stop, a ring fills as the transcript is made. Never a hidden recording:
+/// it shows for as long as one runs.
 @MainActor
 final class RecorderIndicator: NSObject, NSMenuDelegate {
     var onPause: (() -> Void)?
@@ -94,8 +95,12 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
             mac.append(paused ? 0 : levels.mac)
             said = MeetingTranscript.clock(recorder.elapsed)
             let noPicture = pictures?.screen.problem != nil
-            button.image = Self.recording(time: said, paused: paused, mic: mic, mac: mac, noPicture: noPicture)
-            button.setAccessibilityLabel((paused ? "Recording paused, \(said)" : "Recording, \(said)") + (noPicture ? ", the screen gives no picture" : ""))
+            let silent = Set(recorder.silent.keys)
+            button.image = Self.recording(time: said, paused: paused, mic: mic, mac: mac, noPicture: noPicture, silent: silent)
+            button.setAccessibilityLabel((paused ? "Recording paused, \(said)" : "Recording, \(said)")
+                + (silent.contains(.me) ? ", the microphone records nothing" : "")
+                + (silent.contains(.them) ? ", the Mac's sound records nothing" : "")
+                + (noPicture ? ", the screen gives no picture" : ""))
             button.toolTip = paused ? "“\(recorder.title)” paused" : "Recording “\(recorder.title)”"
             if menuOpen { updateSourceItems() }
         } else if holding {
@@ -276,18 +281,24 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
             } else {
                 device = on ? (recorder.macSoundFailure == nil ? "Every app" : "Not available") : "Off"
             }
-            let title = "\(speaker == .me ? "Microphone" : "The Mac's Sound") · \(on ? device : "Off")"
+            // A track that records nothing says why in place of its device.
+            let silent = on ? recorder.silent[speaker].map { SilentTrack.menuLine($0, device: speaker == .me && device != "Off" ? device : nil) } : nil
+            let title = "\(speaker == .me ? "Microphone" : "The Mac's Sound") · \(silent ?? (on ? device : "Off"))"
             if item.title != title { item.title = title }
             item.state = on ? .on : .off
-            item.attributedTitle = on ? Self.withMeter(title, level: speaker == .me ? levels.mic : levels.mac) : nil
+            item.attributedTitle = on ? Self.withMeter(title, level: speaker == .me ? levels.mic : levels.mac, warning: silent) : nil
         }
     }
 
     /// The item's words, then its level as four bars rising, the lit ones
     /// in the label color (quiet speech still shows: square root).
-    static func withMeter(_ title: String, level: Double) -> NSAttributedString {
+    /// `warning`: the part of the title said in orange.
+    static func withMeter(_ title: String, level: Double, warning: String? = nil) -> NSAttributedString {
         let font = NSFont.menuFont(ofSize: 0)
         let text = NSMutableAttributedString(string: title + "   ", attributes: [.font: font])
+        if let warning, let range = title.range(of: warning, options: .backwards) {
+            text.addAttribute(.foregroundColor, value: NSColor.systemOrange, range: NSRange(range, in: title))
+        }
         let lit = Int((min(1, max(0, level)).squareRoot() * 4).rounded(.up))
         for (index, bar) in ["▂", "▄", "▆", "█"].enumerated() {
             text.append(NSAttributedString(string: bar, attributes: [
@@ -324,17 +335,24 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     private static let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
     private static let height: CGFloat = 16
 
-    /// The dot, the time, the waves, and while the screen gives no
-    /// picture a small screen struck through in orange: drawn when the
-    /// menu bar draws it, in its appearance (the label color is light on a
-    /// dark bar).
-    static func recording(time: String, paused: Bool, mic: [Double], mac: [Double], noPicture: Bool = false) -> NSImage {
+    /// The dot, the time, the waves; a track that records nothing, its
+    /// symbol struck through in orange (the microphone, the speaker); the
+    /// screen giving no picture, a small screen struck through in orange:
+    /// drawn when the menu bar draws it, in its appearance (the label color
+    /// is light on a dark bar).
+    static func recording(time: String, paused: Bool, mic: [Double], mac: [Double], noPicture: Bool = false, silent: Set<Speaker> = []) -> NSImage {
         let text = NSAttributedString(string: time, attributes: [.font: font, .foregroundColor: NSColor.labelColor])
         let textWidth = ceil(text.size().width)
         // Whole points: 2 pt bars a point apart stay sharp on a 1x screen.
         let wavesWidth = CGFloat(mic.count) * 3 - 1
+        let symbols = Speaker.allCases.filter(silent.contains).compactMap { speaker in
+            NSImage(systemSymbolName: speaker == .me ? "mic.slash.fill" : "speaker.slash.fill", accessibilityDescription: nil)?
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
+                    .applying(NSImage.SymbolConfiguration(paletteColors: [.systemOrange])))
+        }
+        let symbolsWidth = symbols.reduce(0) { $0 + 6 + ceil($1.size.width) }
         let markWidth: CGFloat = noPicture ? 6 + 12 : 0
-        let size = NSSize(width: 8 + 5 + textWidth + 6 + wavesWidth + markWidth, height: height)
+        let size = NSSize(width: 8 + 5 + textWidth + 6 + wavesWidth + symbolsWidth + markWidth, height: height)
         let image = NSImage(size: size, flipped: false) { _ in
             let dot = NSRect(x: 0.5, y: (height - 8) / 2, width: 7.5, height: 7.5)
             if paused {
@@ -361,9 +379,15 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
                 NSRect(x: x, y: middle + 1, width: 2, height: up).fill()
                 NSRect(x: x, y: middle - 1 - down, width: 2, height: down).fill()
             }
+            var after = left + wavesWidth
+            for symbol in symbols {
+                let x = (after + 6).rounded()
+                symbol.draw(in: NSRect(x: x, y: ((height - symbol.size.height) / 2).rounded(), width: symbol.size.width, height: symbol.size.height))
+                after = x + ceil(symbol.size.width)
+            }
             if noPicture {
                 // A screen (a rounded rectangle on its foot), struck through.
-                let x = (left + wavesWidth + 6).rounded()
+                let x = (after + 6).rounded()
                 NSColor.systemOrange.setStroke()
                 let screen = NSBezierPath(roundedRect: NSRect(x: x + 0.75, y: 4.75, width: 10.5, height: 8), xRadius: 1.5, yRadius: 1.5)
                 screen.lineWidth = 1.5

@@ -16,7 +16,11 @@ changed by it (the AI's actions first, the copies after, as every ⌘K
 list). Built in two pull requests: first the window's ⌘K, chapters, the
 summary, action items and the recap mail; then Ask about a meeting,
 skillies for recordings, the agents' tools and the links, which Done,
-Where it lives and Privacy name already.
+Where it lives and Privacy name already. 2026-10-28: a call recorded
+with a Bluetooth headset lost one side and sped up the other (Measured,
+"A headset's call mode"): the Mac's sound now follows its output's rate,
+the microphone gets a new engine at each change, and a track that
+records nothing is said while recording (A track that records nothing).
 
 Asked for: a meeting recorder like omarchy-meeting-recorder (an
 open-source recorder for Omarchy Linux): your microphone and the
@@ -183,8 +187,16 @@ need a browser extension: not planned.
   pauses, and failing without each of these): the tap's IO on Core Audio's
   real-time thread under an activity that keeps macOS from napping it;
   sound written by the device's sample time, a missed cycle written as
-  silence of its length; every `AVAudioEngine` started again after a
-  change of the audio setup; the display kept on while recording.
+  silence of its length; a new `AVAudioEngine` after each change of the
+  audio setup (never the same one again: it kept its input's format from
+  before and ran on without its tap), and another when one gives no
+  buffer 2 s after it started; the Mac's sound's aggregate made again
+  when the output changes or changes its rate (a headset's call mode),
+  its buffers called by the rate they come at; the display kept on while
+  recording.
+- A track that records nothing (no buffer for 3 s, or only digital
+  silence since its source started) is said within seconds: an orange
+  mark in the menu bar, and a card (A track that records nothing).
 - The call ends (the meeting app leaves its call, or the event is over and
   the Mac's sound has been silent for a minute): a card offers Stop ↩.
 - Written as it comes: a crash or a power cut keeps what was recorded,
@@ -195,6 +207,55 @@ need a browser extension: not planned.
   once. skil.li quitting (a
   logout too) stops it as Stop does, and the Mac going to sleep pauses it:
   see Quit and sleep.
+
+## A track that records nothing
+
+2026-10-28, after a call recorded with AirPods Pro 2 lost the user's
+side whole and nothing said so during its 22 minutes (Measured, "A
+headset's call mode"): the menu bar's microphone wave lay flat, and
+nobody watches the menu bar in a call. The rule (AGENTS.md → A
+feature's moment):
+
+**1. When**: while recording, a track whose source is on records
+nothing:
+
+- no buffer for 3 s (an engine started again without its tap, a tap
+  that stopped), or
+- buffers, but only digital silence (exact zeros) for 5 s since its
+  source last started (a tap macOS does not allow, an input muted from
+  the start).
+
+The Mac's sound gives exact zeros whenever nothing plays: its zeros
+count only once an app has played sound for 5 s (Core Audio's running
+outputs, as the Record card checks it). Once a track has given sound
+since its source started, a quiet stretch is only quiet (the user
+muted, nobody talking): never said. Its source started again (a change
+of the audio setup, Start Again) counts afresh.
+
+**2. What is shown**: for as long as it lasts, an orange mark in the
+menu bar (the microphone or the speaker struck through, after the
+waves) and the reason in the red dot's menu, in place of the device
+("Microphone · nothing comes from AirPods Pro"). Once for a stretch, a
+card, the call's end's: what is not recorded, Start Again ↩ (that source
+made afresh: a new engine, or the tap and its aggregate), Keep
+Recording esc; for the Mac's sound's silence, ⌘↩ opens Screen & System
+Audio Recording. It goes once the track records something.
+
+**3. A push, once**: the one push while recording besides the call's
+end, because nothing can be done about it after the call: what was not
+recorded is lost. Never over another card (it waits for it), never
+while paused, never taking the keys from the app the user types in (a
+click does). Keep Recording holds until the track gives sound again; a
+later stretch is said again.
+
+**4. Deterministic, no Jev**: buffers, zeros and Core Audio's running
+outputs, read once a second from memory (`SilentTrack` in SkilliCore,
+`AudioInbox.times`).
+
+**5. Wrong**: a microphone gives some noise even in a quiet room; one
+that records nothing gives exact zeros or no buffer at all. A wrong card
+costs one esc; a quiet stretch after sound is never said, so a muted
+call never brings it. A dead track not said costs the recording.
 
 ## Quit and sleep
 
@@ -807,6 +868,25 @@ SpeakerKit through the helper: 9.5 % DER on the Mac's sound (Measured
 voices than people on the Mac's sound. whisper's prompt is handed to the
 helper in a UTF-8 file: as a process argument it arrived decomposed
 (NFD), and the accented names fell to 60 %.
+
+### A headset's call mode
+
+2026-10-28, a 22-minute call recorded with AirPods Pro 2 (the Mac's
+sound and the microphone both on them), read afterwards in its files and
+in macOS's log:
+
+| Track | What the file held | Why (macOS's log) |
+|---|---|---|
+| The Mac's sound (`them.m4a`) | 1,371.66 s, the call's 22 minutes in its first 11 (twice as fast), then silence | the aggregate made on the AirPods at 48 kHz; a second later the microphone in use put them in their call mode, 24 kHz; the tap's rate was read once, its buffers still called 48 kHz: half as long, padded to the stop |
+| The microphone (`me.m4a`) | 1,371.66 s of exact zeros (64,299 AAC packets of 4 bytes) | the call mode moved the input from 48 to 24 kHz, AVAudioEngine stopped; started again, the same engine kept its input's format: "Format mismatch: input hw 24000 Hz, client format 48000 Hz", then "Failed to create tap, config change pending!"; it started without its tap (no error to the caller) and no other change came: no buffer for 22 minutes, while coreaudiod reported the voice reaching skil.li's input |
+
+The other suspicion, a sample time on another clock than the buffer's
+frames making every buffer a gap and a converter afresh for each: a
+converter made afresh for every buffer, 24 or 16 kHz to 48 kHz, buffers
+of 240 to 2,400 frames, gives back all of each but 32 to 48 frames;
+never silence. Rules it set (During): the Mac's sound made again when
+its output changes its rate, a new engine for the microphone at each
+change and when one gives nothing, a track that records nothing said.
 
 ### What the measurements changed
 
