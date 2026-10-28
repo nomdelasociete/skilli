@@ -24,6 +24,15 @@ final class HistoryMeaningTests: XCTestCase {
         let long = HistoryVisit(url: "https://example.com", title: String(repeating: "a ", count: 74) + "12345 67890 12345678901 04", browser: "Safari",
                                 bundleID: "com.apple.Safari", visited: nil, visits: 1)
         XCTAssertFalse(HistoryMeaning.describe(long).contains("12345"), "masked before the cut")
+        // Masking shortens what comes before: a number past the old cut still goes masked.
+        let ibans = String(repeating: "FR76 3000 6000 0112 3456 7890 189 ", count: 4) + String(repeating: "x", count: 82)
+        let shifted = HistoryVisit(url: "https://example.com", title: ibans + " 12345 67890 12345678901 04", browser: "Safari",
+                                   bundleID: "com.apple.Safari", visited: nil, visits: 1)
+        XCTAssertEqual(HistoryMeaning.describe(shifted), "“" + String(repeating: "(an IBAN) ", count: 4) + String(repeating: "x", count: 82)
+                       + " (a bank account number)” on example.com")
+        let untitled = HistoryVisit(url: "https://example.com/reset?token=abc123#x", title: "", browser: "Safari",
+                                    bundleID: "com.apple.Safari", visited: nil, visits: 1)
+        XCTAssertEqual(HistoryMeaning.describe(untitled), "“https://example.com/reset?…” on example.com", "no query")
         XCTAssertEqual(HistoryMeaning.shortWhen(visit.visited!, now: now, calendar: calendar), "yesterday")
         XCTAssertEqual(HistoryMeaning.shortWhen(now.addingTimeInterval(-3_600), now: now, calendar: calendar), "08:00")
         XCTAssertEqual(HistoryMeaning.shortWhen(now.addingTimeInterval(-3 * 86_400), now: now, calendar: calendar), "Fri")

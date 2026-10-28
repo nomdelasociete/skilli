@@ -292,7 +292,7 @@ public enum ToolCallSummary {
             let flat = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
             if looksSecret(flat) { return hidden }
             // A bank or card number or a key inside the text goes as what it is.
-            let shown = maskingSecrets(withoutQuery(flat))
+            let shown = maskingSecrets(withoutQuery(flat), upTo: valueLimit)
             return "“" + (shown.count > valueLimit ? String(shown.prefix(valueLimit - 1)) + "…" : shown) + "”"
         case let number as NSNumber:
             return CFGetTypeID(number) == CFBooleanGetTypeID() ? (number.boolValue ? "true" : "false") : number.stringValue
@@ -424,12 +424,16 @@ public enum ToolCallSummary {
     /// by what it is: the words around stay, the number never goes. A
     /// number written in groups ("FR76 3000 6000 …") is one: an IBAN whose
     /// check digits match or a RIB whose key matches exactly, else the
-    /// longest run of up to nine words that looks like one.
-    public static func maskingSecrets(_ text: String) -> String {
-        let words = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+    /// longest run of up to nine words that looks like one. With `limit`,
+    /// it stops once the result is longer: each part kept was read with
+    /// the words after it, so a cut never splits a number.
+    public static func maskingSecrets(_ text: String, upTo limit: Int? = nil) -> String {
+        let words = text.split(separator: " ", omittingEmptySubsequences: false)
         var kept: [String] = []
+        var length = -1
         var index = 0
         while index < words.count {
+            if let limit, length > limit { break }
             var masked = false
             // A run never ends on a word of punctuation alone ("… 04 – Banque").
             let ends = stride(from: min(words.count, index + 9), to: index, by: -1).filter { end in
@@ -472,9 +476,10 @@ public enum ToolCallSummary {
                 }
             }
             if !masked {
-                kept.append(words[index])
+                kept.append(String(words[index]))
                 index += 1
             }
+            length += (kept.last?.count ?? 0) + 1
         }
         return kept.joined(separator: " ")
     }
@@ -511,7 +516,7 @@ public enum ToolCallSummary {
     }
 
     /// A link without its query and fragment: they often carry tokens.
-    private static func withoutQuery(_ text: String) -> String {
+    static func withoutQuery(_ text: String) -> String {
         guard text.contains("://"), !text.contains(" "), let components = URLComponents(string: text),
               components.query != nil || components.fragment != nil
         else { return text }

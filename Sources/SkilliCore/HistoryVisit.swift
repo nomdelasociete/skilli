@@ -49,9 +49,11 @@ public enum HistoryMeaning {
     }
 
     /// "“Impôts 2026 : déclaration” on impots.gouv.fr, yesterday 18:02": the
-    /// title masked as clipboard excerpts are, before its cut.
+    /// title masked as clipboard excerpts are, before its cut; without a
+    /// title, the address without its query (it often carries tokens).
     public static func describe(_ visit: HistoryVisit, now: Date = .now, calendar: Calendar = .current) -> String {
-        var line = "“\(ClipboardMeaning.excerpt(visit.shownTitle, limit: 160))”"
+        let title = visit.title.isEmpty ? ToolCallSummary.withoutQuery(visit.url) : visit.title
+        var line = "“\(ClipboardMeaning.excerpt(title, limit: 160))”"
         if !visit.domain.isEmpty { line += " on \(visit.domain)" }
         if let visited = visit.visited { line += ", \(ClipboardMeaning.when(visited, now: now, calendar: calendar))" }
         return line
