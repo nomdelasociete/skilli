@@ -203,7 +203,7 @@ need a browser extension: not planned.
    no meeting's window known): "Whole Screen", right after the meeting's
    window. During the call, the red dot's menu, Screen ▸, the same list.
    From a skillie or an agent, `set_recording_source source=screen
-   display=…` and the link `skilli://record/source?source=screen&display=…`
+   on=true display=…` and the link `skilli://record/source?source=screen&display=…`
    (asked first).
 3. **Hint or push**: neither, but what the whole screen shows is not
    what a window shows: each time it is the pick, the card's note line

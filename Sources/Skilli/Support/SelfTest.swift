@@ -28009,23 +28009,29 @@ final class SelfTest {
         let several = ScreenDisplays.list().count > 1
         let pickTitle = several ? main.name : "Whole Screen"
         let appearances = (panel.appearance, window.appearance)
+        defer { (panel.appearance, window.appearance) = appearances }
         var listed: [String] = []
         var picked = false
         for (index, (suffix, appearance)) in GlassCheck.appearances.enumerated() {
             panel.appearance = appearance
             window.appearance = appearance
             await pause(500)
-            let escape = DispatchWorkItem {
-                let source = CGEventSource(stateID: .hidSystemState)
-                for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap) }
-            }
+            guard await recordCardHasKeys(center, name) else { return }
+            // A list left open closes in 8 s: no key goes anywhere else.
+            let escape = DispatchWorkItem { Self.closeOwnMenu() }
             DispatchQueue.global().asyncAfter(deadline: .now() + 8, execute: escape)
             if index == 0 {
                 _ = await clickCardRow(center, .screen)
             } else {
                 _ = await clickCardRow(center, .screen, at: 130)
             }
-            await pause(800)
+            guard await screenListOpen() else {
+                escape.cancel()
+                record(name, false, "the Screen row's list did not open (\(suffix): the row “\(view.screenLine)”)", nil)
+                center.closeCardWithoutKeys()
+                return
+            }
+            await pause(500)
             if let directory = context.snapshotDirectory, let png = await WindowCapture.png(of: [window, panel], withMenu: true) {
                 try? png.write(to: directory.appendingPathComponent("recorder-whole-screen-picker-\(suffix).png"))
             }
@@ -28036,8 +28042,7 @@ final class SelfTest {
                 listed = titles.filter { $0 == "Whole Screen" || $0 == "The Meeting's Window" || ScreenDisplays.list().map(\.name).contains($0) }
             } else {
                 // Seen checked; closed as it was.
-                let source = CGEventSource(stateID: .hidSystemState)
-                for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap) }
+                Self.closeOwnMenu()
                 await pause(300)
             }
             escape.cancel()
@@ -28300,6 +28305,33 @@ final class SelfTest {
             await pause(60)
         }
         return true
+    }
+
+    /// Whether a menu of skil.li's own is open on screen (the window list:
+    /// one of its windows at the menus' level), so an Escape goes there.
+    nonisolated private static func ownMenuOpen() -> Bool {
+        let layer = Int(CGWindowLevelForKey(.popUpMenuWindow))
+        let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        return windows.contains {
+            ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == getpid() && ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == layer
+        }
+    }
+
+    /// Escape into skil.li's own open menu, never when none is open (it
+    /// would land in whatever has the keys).
+    nonisolated private static func closeOwnMenu() {
+        guard ownMenuOpen() else { return }
+        let source = CGEventSource(stateID: .hidSystemState)
+        for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap) }
+    }
+
+    /// The Record card's Screen list open: a menu of skil.li's own on
+    /// screen, its "Whole Screen" among its items.
+    private func screenListOpen() async -> Bool {
+        await waitUntil(timeout: 2) {
+            Self.ownMenuOpen() && Self.axElements(roles: [kAXMenuItemRole], under: AXUIElementCreateApplication(getpid())) { _ in true }
+                .contains { Self.axTitle($0) == "Whole Screen" }
+        } != nil
     }
 
     /// The menu open in skil.li (a pop-up list): its item titled `title`
@@ -30050,8 +30082,10 @@ final class SelfTest {
               let directory = guidesDirectory else {
             return guideMissing(name, "no Record card")
         }
+        defer { panel.appearance = nil }
         var written: [String] = []
         for (suffix, look) in GlassCheck.appearances {
+            guard await recordCardHasKeys(center, "Guide picture: \(name)") else { return }
             panel.appearance = look
             // The card, and room under it for the list.
             let card = panel.frame.insetBy(dx: Theme.glassMargin, dy: Theme.glassMargin)
@@ -30060,18 +30094,20 @@ final class SelfTest {
             backdrop.level = panel.level
             backdrop.order(.below, relativeTo: panel.windowNumber)
             await pause(900)
-            let escape = DispatchWorkItem {
-                let source = CGEventSource(stateID: .hidSystemState)
-                for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap) }
-            }
+            // A list left open closes in 8 s: no key goes anywhere else.
+            let escape = DispatchWorkItem { Self.closeOwnMenu() }
             DispatchQueue.global().asyncAfter(deadline: .now() + 8, execute: escape)
             // The screen off, no meeting's window found: its row opens the list.
             _ = await clickCardRow(center, .screen)
-            await pause(900)
+            guard await screenListOpen() else {
+                escape.cancel()
+                backdrop.orderOut(nil)
+                return guideMissing(name, "the Screen row's list did not open (\(suffix))")
+            }
+            await pause(500)
             let png = await WindowCapture.png(of: [backdrop, panel], withMenu: true, cropped: backdrop)
             escape.cancel()
-            let source = CGEventSource(stateID: .hidSystemState)
-            for down in [true, false] { CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Escape), keyDown: down)?.post(tap: .cghidEventTap) }
+            Self.closeOwnMenu()
             await pause(400)
             backdrop.orderOut(nil)
             guard let png, let image = NSBitmapImageRep(data: png) else { continue }

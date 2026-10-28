@@ -1698,11 +1698,15 @@ window's (Phase 3, "The files").
   ```
 
 - **↩** records it from that moment, as any pick. Screen Recording as
-  for a window (macOS's question as it is turned on, "Not allowed · ⌘↩
-  opens Privacy" when refused). macOS's second question, to "bypass the
-  private window picker", is what lets an app record whole screens:
-  without it the row says "Not recorded: macOS doesn't let skil.li
-  record the whole screen" in orange, ⌃⌄ still there for a window.
+  for a window: macOS's question as it is picked, the card stepped down
+  under it meanwhile and back up after; refused, "Not allowed · ⌘↩
+  opens Privacy" in orange (no window can be recorded either). macOS's
+  second question, to "bypass the private window picker", is what lets
+  an app record whole screens: without it the row says "Not recorded:
+  macOS doesn't let skil.li record the whole screen" in orange, ⌃⌄
+  still there to pick a window instead. The card's note says what the
+  whole screen records only while it does: not for a screen that failed
+  or was refused.
 
 ## The menu bar while recording
 

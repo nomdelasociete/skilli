@@ -468,7 +468,9 @@ final class RecorderCenter {
     private func sayScreen(_ target: ScreenTarget) {
         switch target {
         case .display:
-            card.setScreenNote(ScreenTrack.wholeScreenNote, automation: false)
+            // Only once it records: never for a screen refused or failed.
+            let recording = recorder.pictures.screen.target?.isSame(as: target) == true
+            card.setScreenNote(recording ? ScreenTrack.wholeScreenNote : nil, automation: false)
         case .window(let window) where window.id == meetingWindow?.id:
             meetingTab = meetingFound?.tab
             card.setScreenNote(meetingFound?.note, automation: meetingFound?.automation ?? false)
