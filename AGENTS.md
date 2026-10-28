@@ -1036,7 +1036,8 @@ starts from it.
   more, the start of one taught word whose value is strict (a duration, a
   time, a level); free-text values ("event", "remind me", "rec") only
   after the whole word or an alias, so a search like "visual st" never
-  becomes a command. Nothing read: the launcher as before. No new key, ⇥
+  becomes a command. An alias typed wins (`aw` on an app is never cut
+  short to "awake"). Nothing read: the launcher as before. No new key, ⇥
   stays Ask. A new value word: add it to `LauncherShorthand.shortened`
   only if its parser rejects plain words (a test keeps the two-letter
   starts apart).

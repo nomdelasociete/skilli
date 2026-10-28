@@ -22,7 +22,9 @@ public enum LauncherShorthand {
         guard let space = text.firstIndex(of: " ") else { return nil }
         let rest = text[text.index(after: space)...].trimmingCharacters(in: .whitespaces)
         guard !rest.isEmpty else { return nil }
-        if let (alias, _) = LauncherAliases.split(text, among: aliases), let word = aliased[alias.id] { return word + " " + rest }
+        // The user's alias wins: on a row that reads a value it carries it;
+        // on anything else ("aw" for an app) the word is not cut short.
+        if let (alias, _) = LauncherAliases.split(text, among: aliases) { return aliased[alias.id].map { $0 + " " + rest } }
         let typed = text[..<space].lowercased()
         guard typed.count >= minimum, typed.allSatisfy(\.isLetter) else { return nil }
         let words = shortened.filter { $0.count > typed.count && $0.hasPrefix(typed) }

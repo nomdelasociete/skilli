@@ -38,6 +38,8 @@ final class LauncherShorthandTests: XCTestCase {
         XCTAssertEqual(LauncherShorthand.expand("r Weekly sync", aliases: aliases).flatMap(RecordRequest.name), "Weekly sync")
         XCTAssertNil(LauncherShorthand.expand("e smile", aliases: aliases), "a mode's alias opens the mode, as before")
         XCTAssertNil(LauncherShorthand.expand("a ", aliases: aliases))
+        let arc = [LauncherAlias(id: "app:/Applications/Arc.app", alias: "aw", title: "Arc")]
+        XCTAssertNil(LauncherShorthand.expand("aw 2", aliases: arc), "the user's alias wins over a word cut short")
     }
 
     func testEveryShortenedWordIsTaught() {

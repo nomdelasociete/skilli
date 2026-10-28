@@ -28,6 +28,8 @@ typed whole, cut short, or replaced by the user's alias:
   text included (`r Weekly sync`). Rows that read a value: Keep Awake
   (`awake`) and Record Meeting (`rec`). Aliases on modes and skillies keep
   working as before (`openAlias`).
+- The user's alias wins: `aw` set on an app keeps `aw 2` for that app; a
+  word is cut short only when the first word is no alias.
 - Nothing read (`awa`, `awa `, `awa soon`): the launcher is as it was; the
   plain row stays (↩ toggles).
 - ⇥ keeps its meaning (Ask outside the modes): no new key, no new mode.
