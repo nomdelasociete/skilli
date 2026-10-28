@@ -2649,7 +2649,13 @@ re-investigating.
   Agents' lists say "Not up to date: …" when their kind could not be read
   again. Notifications not read yet (`notificationsRead`: since sign-in,
   or since the relay's copy was dropped) show no count, never "0 unread";
-  the `GitHub (relay):` trace names any hold. The relay itself answers
+  the `GitHub (relay):` trace names any hold. While this Mac's saved
+  pairing waits for its identity check (each activation and renewal:
+  GitHub, then the relay; about 2 s, longer on a slow network;
+  `checksIdentity`, scoped to the configured relay), the
+  macNotReady hold is said in grey as "Checking this Mac…" in the strip,
+  the GitHub mode and Settings, not as an orange problem; a failed check
+  is orange again. The relay itself answers
   428 only for a grant that is gone: a read that crossed a new grant is
   read again there.
   "pr " / "prs " or GitHub Inbox: the GitHub mode (grey chip; "gh " stays

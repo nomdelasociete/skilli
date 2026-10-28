@@ -125,10 +125,13 @@ final class RelayDeviceSessionTests: XCTestCase {
         client.renew()
         try await finish(client)
         for _ in 0..<500 {
+            // The renewed token waits for its check: said as checking.
+            if client.configuration(origin: origin) == nil { XCTAssertTrue(client.checksIdentity(origin: origin)) }
             if client.configuration(origin: origin)?.token == "v2.rotated" { break }
             try await Task.sleep(for: .milliseconds(2))
         }
         XCTAssertEqual(client.configuration(origin: origin)?.token, "v2.rotated")
+        XCTAssertFalse(client.checksIdentity(origin: origin))
     }
 
     func testFailedEnrollmentSavePreservesVerifiedConnection() async throws {
@@ -613,6 +616,56 @@ final class RelayDeviceSessionTests: XCTestCase {
         XCTAssertTrue(client.message?.contains("different GitHub account") == true)
         nativeToken = nil
         XCTAssertNil(client.configuration(origin: origin))
+        client.suspend()
+    }
+
+    func testARestoredPairingChecksItsIdentityUntilVerified() async throws {
+        let server = RelayReplies([])
+        let client = session(RelayVault(try existing()), server)
+        var nativeToken = "alice"
+        client.githubToken = { nativeToken }
+        XCTAssertTrue(client.checksIdentity(origin: origin), "Not verified yet, not failed: checking")
+        XCTAssertFalse(client.checksIdentity(origin: "https://other-relay.example"), "Saved for another relay: not this one's check")
+        client.activate(origin: origin)
+        for _ in 0..<500 {
+            if client.configuration(origin: origin) != nil { break }
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertNotNil(client.configuration(origin: origin))
+        XCTAssertFalse(client.checksIdentity(origin: origin))
+        nativeToken = "alice-again"
+        XCTAssertTrue(client.checksIdentity(origin: origin), "Another GitHub sign-in is checked again")
+        nativeToken = "alice"
+        client.suspend()
+        XCTAssertTrue(client.checksIdentity(origin: origin), "Each activation checks again")
+    }
+
+    func testAFailedIdentityCheckIsNoLongerChecking() async throws {
+        let server = RelayReplies([])
+        await server.setIdentity(status: 503)
+        let client = session(RelayVault(try existing()), server)
+        client.githubToken = { "alice" }
+        client.activate(origin: origin)
+        for _ in 0..<500 {
+            if !client.checksIdentity(origin: origin) { break }
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertFalse(client.checksIdentity(origin: origin))
+        XCTAssertNil(client.configuration(origin: origin))
+        XCTAssertTrue(client.message?.contains("Could not verify") == true)
+        // Tried again (Settings shown again): checking at once, said.
+        var changes = 0
+        client.onChange = { changes += 1 }
+        await server.setIdentity()
+        client.activate(origin: origin)
+        XCTAssertTrue(client.checksIdentity(origin: origin))
+        XCTAssertGreaterThan(changes, 0)
+        for _ in 0..<500 {
+            if client.configuration(origin: origin) != nil { break }
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        XCTAssertNotNil(client.configuration(origin: origin))
+        XCTAssertFalse(client.checksIdentity(origin: origin))
         client.suspend()
     }
 
