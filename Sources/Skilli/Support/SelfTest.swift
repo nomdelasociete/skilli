@@ -27056,6 +27056,8 @@ final class SelfTest {
         let rebuildsBefore = center.recorder.macSound.rebuilds
         var called = 0.0, rebuilds = 0
         var formats: (tap: Double, aggregate: Double, output: Double) = (0, 0, 0)
+        // When it was made again at the new rate (s into the recording).
+        var recoveredAt = 0.0
         let made = await recordForRates(center, name, title: "Output rate", seconds: 12, at: 5, started: {
             try? center.recorder.microphone.playStandIn(at: mach_absolute_time())
             play = playElsewhere(train)
@@ -27064,25 +27066,27 @@ final class SelfTest {
             // Made again at the new rate (a rebuild retried a second later
             // counts), 5 s at most.
             _ = await waitUntil(timeout: 5) { center.recorder.macSound.calledRate == other }
+            recoveredAt = center.recorder.elapsed
             (called, rebuilds, formats) = (center.recorder.macSound.calledRate, center.recorder.macSound.rebuilds - rebuildsBefore,
                                            center.recorder.macSound.formats)
         })
         play?.terminate()
         _ = await setNominalRate(rate, of: output)
-        guard let (folder, changeAt) = made else { return }
-        // The other side's beeps after the change: 2 kHz and half a second
+        guard let (folder, _) = made else { return }
+        // The other side's beeps once made again (the recording goes on 7 s
+        // after that): 2 kHz and half a second
         // apart when called by their rate (44.1 kHz ones called 48 kHz come
         // 0.459 s apart and 2.18 kHz high: the 2 kHz search misses them).
         let them = await Task.detached { Self.beeps(in: folder.appendingPathComponent(Speaker.them.file)) }.value
-        let later = them.filter { $0 > changeAt + 1 }
+        let later = them.filter { $0 > recoveredAt + 0.5 }
         let gaps = zip(later.dropFirst(), later).map { $0 - $1 }.filter { $0 < 0.75 }.sorted()
         let gap = gaps.isEmpty ? .nan : gaps[gaps.count / 2]
         let pairs = await Self.beepPairs(in: folder)
-        let after = pairs.paired.filter { $0.at > changeAt + 1 && $0.at < changeAt + 8 }
+        let after = pairs.paired.filter { $0.at > recoveredAt + 0.5 && $0.at < recoveredAt + 6.5 }
         let passed = changed && rebuilds >= 1 && called == other && abs(gap - 0.5) < 0.003 && after.count >= 10
         record(name, passed,
-               String(format: "the output from %.0f Hz to %.0f Hz %@; the Mac's sound made again %d times, its buffers called %.0f Hz; after the change %d of the other side's beeps found at 2 kHz, %.3f s apart (median), %d of the microphone's beeps in step with them (of ~14), offset %.1f ms; 2 s after the change the tap's format %.0f Hz, the aggregate %.0f Hz, the output %.0f Hz",
-                      rate, other, changed ? "took" : "did not take", rebuilds, called, later.count, gap, after.count, BeepPairs.mean(after.map(\.offset)) * 1000,
+               String(format: "the output from %.0f Hz to %.0f Hz %@; the Mac's sound made again %d times, its buffers called %.0f Hz (at %.1f s); after that %d of the other side's beeps found at 2 kHz, %.3f s apart (median), %d of the microphone's beeps in step with them over 6 s (of ~12), offset %.1f ms; then the tap's format %.0f Hz, the aggregate %.0f Hz, the output %.0f Hz",
+                      rate, other, changed ? "took" : "did not take", rebuilds, called, recoveredAt, later.count, gap, after.count, BeepPairs.mean(after.map(\.offset)) * 1000,
                       formats.tap, formats.aggregate, formats.output),
                nil)
     }
@@ -27111,10 +27115,12 @@ final class SelfTest {
         let train = recorderScratch.appendingPathComponent("output-at-rate-train.wav")
         _ = Self.clip(nil, seconds: 20, beeps: stride(from: 0.5, to: 20, by: 0.5).map { $0 }, to: train)
         center.recorder.standIn(microphone: train, alsoLeaveOut: [])
-        defer { _ = Self.setNominalRateNow(rate, of: output) }
-        let changed = await setNominalRate(other, of: output)
+        defer { if other != rate { _ = Self.setNominalRateNow(rate, of: output) } }
+        // At it already: nothing written (an output that keeps its rate may
+        // refuse the write).
+        let changed = other == rate ? true : await setNominalRate(other, of: output)
         // The audio setup settles before the card starts the sources.
-        await pause(1000)
+        if other != rate { await pause(1000) }
         var play: Process?
         var called = 0.0
         var formats: (tap: Double, aggregate: Double, output: Double) = (0, 0, 0)
@@ -27125,7 +27131,7 @@ final class SelfTest {
             (called, formats) = (center.recorder.macSound.calledRate, center.recorder.macSound.formats)
         })
         play?.terminate()
-        _ = await setNominalRate(rate, of: output)
+        if other != rate { _ = await setNominalRate(rate, of: output) }
         guard let (folder, _) = made else { return }
         let them = await Task.detached { Self.beeps(in: folder.appendingPathComponent(Speaker.them.file)) }.value
         let gaps = zip(them.dropFirst(), them).map { $0 - $1 }.filter { $0 < 0.75 }.sorted()
