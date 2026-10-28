@@ -1218,6 +1218,12 @@ final class LauncherController: NSObject {
                 results = fileMeaning.files.map(LauncherItem.file)
             } else {
                 fileMeaning = nil
+                // Typing on stops a search by meaning for older text before
+                // anything is sent for it.
+                if let pending = fileMeaningPending, pending != text {
+                    fileMeaningTask?.cancel()
+                    fileMeaningPending = nil
+                }
                 // The last rows stay while Spotlight looks for the new text.
                 results = (fileResults?.files ?? []).map(LauncherItem.file)
                 if fileResults?.query != text { searchFiles(text) }
@@ -2056,7 +2062,9 @@ final class LauncherController: NSObject {
             self.updateResults(query: text)
             guard files.isEmpty, self.fileMeaningOn, self.fileMeaningPending != text, self.fileMeaning?.query != text else { return }
             try? await Task.sleep(for: .milliseconds(400))
-            guard !Task.isCancelled, self.mode == .files, self.searchField.stringValue == text else { return }
+            // ⇥ in the meantime already asked.
+            guard !Task.isCancelled, self.mode == .files, self.searchField.stringValue == text,
+                  self.fileMeaningPending != text, self.fileMeaning?.query != text else { return }
             self.searchFilesByMeaning()
         }
     }

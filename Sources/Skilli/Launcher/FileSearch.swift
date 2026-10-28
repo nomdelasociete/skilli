@@ -248,6 +248,8 @@ enum FileSearch {
         )
         for provider in [DecisionProvider.typeSafe, .openAI] {
             guard let key = keys[provider] else { continue }
+            // Typed on while the candidates were gathered: nothing sent.
+            guard !Task.isCancelled else { return nil }
             let start = ContinuousClock.now
             do {
                 let answers = try await DecisionClient.decide([question], input: FileMeaning.input(request, now: now), provider: provider, key: key)
