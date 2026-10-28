@@ -5237,6 +5237,7 @@ final class SelfTest {
         await clipboardKeepsAndFinds()
         await clipboardStoreMigrates()
         await clipboardFindsByMeaning()
+        await clipboardMeaningOverAMonthOnce()
         await clipboardPastesFromLauncher()
         await clipboardPreviewAndMeaning()
         await clipboardMeaningWaitsInPlace()
@@ -15380,8 +15381,19 @@ final class SelfTest {
     /// copies spread over 30 days (the corpus, a few older ones planted,
     /// chat and notes between), requests with and without days and kinds
     /// named. Each: the copies read once narrowed, the questions asked,
-    /// the time, whether the copy asked for came first.
+    /// the time, whether the copy asked for came first. The planted older
+    /// copies must all be found; one other request may miss.
     private func clipboardMeaningOverAMonth() async {
+        await clipboardMeaningOverAMonth(oneRequest: false)
+    }
+
+    /// In `selftest ai`: one request over the month that names no day and
+    /// no kind, so every part of the history is asked, then their picks.
+    private func clipboardMeaningOverAMonthOnce() async {
+        await clipboardMeaningOverAMonth(oneRequest: true)
+    }
+
+    private func clipboardMeaningOverAMonth(oneRequest: Bool) async {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-clipboard-month-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         guard let store = try? ClipboardStore(folder: folder) else {
@@ -15413,7 +15425,7 @@ final class SelfTest {
             if let ocr = copy.ocr { try? store.setOCR(ocr, for: item.id) }
             keys[item.id] = copy.key
         }
-        let cases: [(request: String, wanted: String)] = [
+        let all: [(request: String, wanted: String)] = [
             ("la facture d'électricité", "bill"),
             ("le code wifi du chalet", "old.wifi"),
             ("le billet de train que j'ai copié hier", "ticket"),
@@ -15422,14 +15434,19 @@ final class SelfTest {
             ("le lien figma Horizon de la semaine dernière", "old.figma"),
             ("le RIB de Jean-François", "old.rib")
         ]
+        let cases = oneRequest ? all.filter { $0.wanted == "old.wifi" } : all
+        let older = Set(planted.map(\.key))
         for provider in DecisionProvider.allCases {
-            let name = "Clipboard by meaning over a month with \(provider.title): \(cases.count) requests among \(keys.count) copies over 30 days, "
-                + "all but one found first, none past 15 s"
+            let name = oneRequest
+                ? "Clipboard by meaning over a month with \(provider.title): a copy 20 days old found first among \(keys.count) copies, every part asked, under 15 s"
+                : "Clipboard by meaning over a month with \(provider.title): \(cases.count) requests among \(keys.count) copies over 30 days, "
+                    + "the older ones planted all found first, all but one found first, none past 15 s"
             guard let key = userDecisionKeys[provider] else {
                 checks.append(Check(name: name, passed: true, skipped: true, detail: "no \(provider.title) key saved in Settings", latencyMs: nil))
                 continue
             }
             var right = 0, questions = 0
+            var olderMissed = 0
             var seconds: [Double] = []
             var details: [String] = []
             for (request, wanted) in cases {
@@ -15439,12 +15456,12 @@ final class SelfTest {
                 seconds.append(took)
                 questions += found?.questions ?? 0
                 let first = found?.items.first.flatMap { keys[$0.id] }
-                if first == wanted { right += 1 }
+                if first == wanted { right += 1 } else if older.contains(wanted) { olderMissed += 1 }
                 details.append("“\(request)” → \(first ?? "nothing")\(first == wanted ? "" : " (wrong)"): "
                                + "\(found?.candidates ?? 0) copies, \(found?.questions ?? 0) questions, " + String(format: "%.2f s", took))
             }
             let sorted = seconds.sorted()
-            record(name, right >= cases.count - 1 && (sorted.last ?? 0) < 15,
+            record(name, olderMissed == 0 && right >= cases.count - (oneRequest ? 0 : 1) && (sorted.last ?? 0) < 15,
                    "\(right)/\(cases.count) right, \(questions) questions, " + String(format: "total %.2f s, median %.2f s, slowest %.2f s; ",
                                                                                       seconds.reduce(0, +), sorted[sorted.count / 2], sorted.last ?? 0)
                        + details.joined(separator: "; "),

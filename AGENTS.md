@@ -3834,7 +3834,7 @@ re-investigating.
   tune and held-out halves, as `AskRouteCorpus`) among 91 copies, then
   times 20 requests among 240 copies (median under 1.5 s, at most one past
   5 s), then 7 requests among 3,054 copies over 30 days (days, kinds,
-  neither; all but one right, none past 15 s). `clipmeaning` types
+  neither; the three older copies planted found first, all but one request right, none past 15 s; the 20-day-old one, every part asked, in `selftest ai` too). `clipmeaning` types
   nothing: it runs on this Mac too (`selftest clipmeaning`). Only on ⇥ and with Settings
   → Clipboard → Search by meaning on (default); typing never sends
   anything, and the trace logs the request and picked ids, not the copies. Kept in

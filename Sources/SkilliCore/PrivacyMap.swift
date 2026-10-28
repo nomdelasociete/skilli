@@ -163,7 +163,7 @@ public enum PrivacyMap {
         pane: "launcher", toggle: "Search browser history by meaning with ⇥")
     public static let clipboard = Flow(
         "clipboard", "Clipboard by meaning",
-        sends: "Your words, and your kept copies in short: every one, or, past \(MeaningRounds.questionSize), those from the days and of the kind your words name; \(MeaningRounds.questionSize) to a question, the likely ones asked again together. \(ClipboardMeaning.excerptLength) characters each (words read in images, what images show), their app and date; a bank or card number or a key goes as what it is, never itself.",
+        sends: "Your words, and your kept copies in short, \(ClipboardMeaning.excerptLength) characters each (words read in images, what images show), their app and date: every one, or, past \(MeaningRounds.questionSize), those from the days and of the kind your words name; \(MeaningRounds.questionSize) to a question, the likely ones asked again together. A bank or card number or a key goes as what it is, never itself.",
         when: "Only when you press ⇥ in Clipboard History.",
         pane: "clipboard", toggle: "Search by meaning with ⇥")
     public static let snippets = Flow(
