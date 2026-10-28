@@ -129,4 +129,15 @@ final class GitHubInboxTests: XCTestCase {
         XCTAssertEqual(GitHubNotifications.webURL(subject: "https://api.github.com/repos/o/r/releases/123", type: "Release", repository: "o/r").absoluteString,
                        "https://github.com/o/r/releases")
     }
+
+    func testOnlyNotificationsThatAskTheUserAreForThem() {
+        func note(_ reason: String) -> GitHubNotification {
+            GitHubNotification(id: reason, reason: reason, type: "PullRequest", title: "t", repository: "o/r",
+                               updatedAt: Date(), unread: true, url: URL(string: "https://github.com/o/r")!)
+        }
+        let asking = ["review_requested", "approval_requested", "mention", "team_mention", "assign", "invitation"]
+        let activity = ["author", "state_change", "comment", "ci_activity", "subscribed", "manual", "security_alert", "something_new"]
+        XCTAssertEqual(asking.filter { note($0).isForYou }, asking)
+        XCTAssertEqual(activity.filter { note($0).isForYou }, [])
+    }
 }

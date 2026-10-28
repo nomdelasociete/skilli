@@ -6518,7 +6518,7 @@ final class SelfTest {
             }
         }
         for character in "pr " { await pressKey(character) }
-        let titles = ["Add the GitHub strip", "Fix the build", "Faster history", "Review the new API", "CI failed on main"]
+        let titles = ["Add the GitHub strip", "Fix the build", "Faster history", "Review the new API", "Fix the flaky test on main"]
         let listed = await waitUntil(timeout: 2) { launcher.resultTitles == titles } != nil
         let shown = launcher.resultTitles
         if let directory = context.snapshotDirectory, let png = launcher.snapshotPNG() {
@@ -6548,7 +6548,7 @@ final class SelfTest {
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
         for character in "pr main" { await pressKey(character) }
-        _ = await waitUntil(timeout: 2) { launcher.resultTitles == ["CI failed on main"] }
+        _ = await waitUntil(timeout: 2) { launcher.resultTitles == ["Fix the flaky test on main"] }
         await pressKey(nil, code: CGKeyCode(kVK_Delete), flags: .maskCommand)
         let markedRead = await waitUntil(timeout: 3) { stand.read == ["21"] && launcher.resultTitles.isEmpty } != nil
         await closeLauncher()
@@ -6564,7 +6564,7 @@ final class SelfTest {
         await closeSettings()
         await githubPaneSignedIn(book)
         let toolsOK = blocked.hasPrefix("blocked — nomdelasociete/skilli#3 “Fix the build” — lint failed")
-            && notes.hasPrefix("22 — Review requested — nimbus-hq/nimbus “Review the new API”") && !notes.contains("CI failed on main")
+            && notes.hasPrefix("22 — Review requested — nimbus-hq/nimbus “Review the new API”") && !notes.contains("Fix the flaky test on main") && !notes.contains("CI failed on main")
         record(name, code && page && signedIn && read && notModified && noStripSignedOut && toSettings && strip && listed && openedPR && offered && askedAgain
                    && notYet && merged && markedRead && toolsOK,
                "code \(code), page \(page), signed in \(signedIn); read \(read) (\(grouped)); 304 kept \(notModified); "
@@ -29856,7 +29856,10 @@ private final class GitHubStandIn: @unchecked Sendable {
         + #"]}},"search":{"nodes":[]}}}"#
 
     private static let notifications = #"""
-        [{"id":"21","reason":"ci_activity","unread":true,"updated_at":"2026-10-12T09:00:00Z",
+        [{"id":"21","reason":"assign","unread":true,"updated_at":"2026-10-12T09:00:00Z",
+          "subject":{"title":"Fix the flaky test on main","url":"https://api.github.com/repos/nomdelasociete/skilli/issues/9","type":"Issue"},
+          "repository":{"full_name":"nomdelasociete/skilli"}},
+         {"id":"23","reason":"author","unread":true,"updated_at":"2026-10-12T08:00:00Z",
           "subject":{"title":"CI failed on main","url":null,"type":"CheckSuite"},"repository":{"full_name":"nomdelasociete/skilli"}},
          {"id":"22","reason":"review_requested","unread":true,"updated_at":"2026-10-12T10:00:00Z",
           "subject":{"title":"Review the new API","url":"https://api.github.com/repos/nimbus-hq/nimbus/pulls/7","type":"PullRequest"},

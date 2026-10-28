@@ -30,6 +30,11 @@ public struct GitHubNotification: Identifiable, Hashable, Sendable {
 
     /// "Review requested", "Mentioned", "CI"…
     public var reasonTitle: String { GitHubNotifications.reasonTitle(reason) }
+
+    /// Someone asks the user for something: a review, a mention, an
+    /// assignment. Not the activity on their own threads or what they watch
+    /// (2026-10-28: 35 of 334 unread), which skil.li neither counts nor lists.
+    public var isForYou: Bool { GitHubNotifications.forYou.contains(reason) }
 }
 
 /// One page of GitHub's `/notifications`, as the client fetched it.
@@ -130,6 +135,9 @@ public enum GitHubNotifications {
         }
         return URL(string: base + repository + page) ?? URL(string: base + "notifications")!
     }
+
+    /// The reasons that ask the user for something (`isForYou`).
+    static let forYou: Set<String> = ["review_requested", "approval_requested", "mention", "team_mention", "assign", "invitation"]
 
     public static func reasonTitle(_ reason: String) -> String {
         switch reason {

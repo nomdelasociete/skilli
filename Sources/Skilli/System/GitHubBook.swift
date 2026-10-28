@@ -370,8 +370,9 @@ final class GitHubBook {
     var canSignIn: Bool { !clientID().isEmpty }
 
     /// Pull requests first (ready, blocked, waiting, testing), then unread
-    /// notifications; the launcher's GitHub mode and the agents' lists.
-    var unreadNotifications: [GitHubNotification] { notifications.filter(\.unread) }
+    /// notifications that ask the user for something (`isForYou`); the
+    /// strip's count, the launcher's GitHub mode and the agents' lists.
+    var unreadNotifications: [GitHubNotification] { notifications.filter { $0.unread && $0.isForYou } }
 
     // MARK: Refreshing
 
