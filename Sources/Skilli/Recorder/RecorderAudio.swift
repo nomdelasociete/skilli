@@ -132,7 +132,6 @@ final class AudioInbox: @unchecked Sendable {
             defer { os_unfair_lock_unlock(lock) }
             lastPut = mach_absolute_time()
             if firstPut == 0 { firstPut = lastPut }
-            defer { if lastLevel > 0 { lastSound = lastPut } }
             let scale = 1 / Float(found)
             guard keepsSamples else {
                 // The meters only.
@@ -143,12 +142,16 @@ final class AudioInbox: @unchecked Sendable {
                     power += sum * scale * sum * scale
                 }
                 lastLevel = (power / Float(frames)).squareRoot()
+                if lastLevel > 0 { lastSound = lastPut }
                 return
             }
             guard count + frames <= capacity, chunkCount < Self.chunkCapacity else {
                 droppedFrames += frames
                 return
             }
+            // Only a buffer kept says sound came (a dropped one leaves the
+            // level of the one before).
+            defer { if lastLevel > 0 { lastSound = lastPut } }
             var power: Float = 0
             for frame in 0..<frames {
                 var sum: Float = 0
