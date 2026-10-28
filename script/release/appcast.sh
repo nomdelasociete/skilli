@@ -22,8 +22,8 @@ fi
 # stays critical for anyone below the last critical build, read from the
 # live feed. Every release reads it first and stops when it cannot: a feed
 # only when it holds a release, an empty or other page would look like one
-# without a critical release.
-live="$(curl -fsSL "$FEED_URL")" || live=""
+# without a critical release. A stalled read stops too, after 30 s.
+live="$(curl -fsSL --max-time 30 "$FEED_URL")" || live=""
 [[ "$live" == *"<rss"* && "$live" =~ \<sparkle:version\>[0-9]+\</sparkle:version\> ]] \
   || { echo "Cannot read $FEED_URL as a feed to keep its critical release." >&2; exit 2; }
 critical=()
