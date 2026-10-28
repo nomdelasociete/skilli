@@ -619,6 +619,21 @@ final class SilentTrackTests: XCTestCase {
         XCTAssertTrue(watch.update(now: 23, lastBuffer: 19, lastSound: 19).offer, "sound came in between: a new stretch is offered")
     }
 
+    /// Buffers back after the stretch, but only zeros: no sound since it was
+    /// said, so Keep Recording still holds through the next outage.
+    func testBuffersBackWithOnlyZerosDoNotEndTheStretch() {
+        var watch = SilentTrack(since: 0)
+        XCTAssertNil(watch.update(now: 10, lastBuffer: 10, lastSound: 9).reason)
+        let said = watch.update(now: 13, lastBuffer: 10, lastSound: 9)
+        XCTAssertEqual(said.reason, .nothing)
+        XCTAssertTrue(said.offer)
+        watch.keep()
+        XCTAssertNil(watch.update(now: 14, lastBuffer: 14, lastSound: 9).reason, "zeros since sound: quiet, not said")
+        XCTAssertFalse(watch.update(now: 20, lastBuffer: 16, lastSound: 9).offer, "out again, no sound in between: Keep Recording holds")
+        XCTAssertNil(watch.update(now: 21, lastBuffer: 21, lastSound: 21).reason)
+        XCTAssertTrue(watch.update(now: 25, lastBuffer: 21, lastSound: 21).offer, "sound came in between: a new stretch")
+    }
+
     func testStartAgainOffersAgainWhenItStillRecordsNothing() {
         var watch = SilentTrack(since: 0)
         XCTAssertTrue(watch.update(now: 3, lastBuffer: nil, lastSound: nil).offer)
