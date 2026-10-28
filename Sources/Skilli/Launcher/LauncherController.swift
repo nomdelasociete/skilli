@@ -2325,12 +2325,14 @@ final class LauncherController: NSObject {
     private func searchFilesByMeaning() {
         let text = searchField.stringValue
         guard fileMeaningOn, !text.trimmingCharacters(in: .whitespaces).isEmpty, let keys = fileDecisionKeys?() else { return }
-        let named = fileResults?.query == text ? fileResults?.files ?? [] : []
         fileMeaningTask?.cancel()
         fileMeaningPending = text
         sectionHeader.stringValue = "Searching by meaning…"
         fileMeaningTask = Task { [weak self] in
             guard let self else { return }
+            // ⇥ before the name search came back: that search first.
+            let named = self.fileResults?.query == text ? self.fileResults?.files ?? [] : await FileSearch.search(text)
+            guard !Task.isCancelled else { return }
             let found = await FileSearch.searchByMeaning(text, keys: keys, named: named)
             guard !Task.isCancelled, self.mode == .files, self.searchField.stringValue == text else { return }
             self.fileMeaningPending = nil

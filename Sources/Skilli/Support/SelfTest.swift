@@ -19290,10 +19290,12 @@ final class SelfTest {
         let name = "Search Files: “f …” finds a file by name, ⌘Return shows it in Finder; a description no name fits finds it by meaning on its own; ⇥ keeps what the name found"
         let marker = Int.random(in: 1000...9999)
         let lease = "Contrat-location-appartement-\(marker).pdf"
-        guard let folder = await seedFiles([lease, "Facture-EDF-octobre-\(marker).pdf"]) else { return }
+        let bill = "Facture-EDF-octobre-\(marker).pdf"
+        guard let folder = await seedFiles([lease, bill]) else { return }
         defer { try? FileManager.default.removeItem(at: folder) }
-        guard await spotlightFinds(lease) else {
-            record(name, false, "Spotlight never indexed the file", nil)
+        // Spotlight takes seeded files seconds apart: each waited for.
+        guard await spotlightFinds(lease), await spotlightFinds(bill) else {
+            record(name, false, "Spotlight never indexed the files", nil)
             return
         }
         let launcher = context.launcher
@@ -19339,7 +19341,6 @@ final class SelfTest {
 
             // ⇥ on a name that fits: the file named so stays among the rows,
             // whatever the model picks.
-            let bill = "Facture-EDF-octobre-\(marker).pdf"
             guard await focusTestWindow() else { return }
             _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
             for character in "f edf octobre \(marker)" { await pressKey(character) }
