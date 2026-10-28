@@ -16,6 +16,7 @@ images, files, and your screenshots too.
 - **Search** by the words, without worrying about accents, even words
   inside images. **⇥** searches by meaning: "my train ticket from
   yesterday", or what a copy is: "email", "a link", "phone number".
+  While it searches, the list says so; keep typing to stop it.
 - **The preview** beside the list shows each copy as what it is: a link
   as a card (picture, title, site), a color as a swatch with its Hex, RGB
   and HSL, an image with the text in it, a file's thumbnail.

@@ -799,7 +799,7 @@ final class SelfTest {
         }
         if scope == .previews {
             window.center()
-            return await finish(after: [takeFocus, clipboardPreviewsShowEachKind, clipboardPreviewAndMeaning])
+            return await finish(after: [takeFocus, clipboardPreviewsShowEachKind, clipboardPreviewAndMeaning, clipboardMeaningWaitsInPlace])
         }
         if scope == .clipboard {
             return await finish(after: [
@@ -814,7 +814,7 @@ final class SelfTest {
             return await finish(after: [askRoutesOnVolume])
         }
         if scope == .clipmeaning {
-            return await finish(after: [clipboardMeaningOnVolume])
+            return await finish(after: [clipboardMeaningOnVolume, clipboardMeaningAnswersFast])
         }
         if scope == .decide {
             return await finish(after: [
@@ -5238,6 +5238,7 @@ final class SelfTest {
         await clipboardFindsByMeaning()
         await clipboardPastesFromLauncher()
         await clipboardPreviewAndMeaning()
+        await clipboardMeaningWaitsInPlace()
         await clipboardPreviewsShowEachKind()
         await windowsPlaceTheFrontWindow()
         await arrangeWindowsLearnsAndPutsBack()
@@ -15352,6 +15353,62 @@ final class SelfTest {
         }
     }
 
+    /// How long ⇥ waits on each decision key with a full history (240
+    /// copies, as on a Mac in use): 20 requests in a row, the median, the
+    /// slowest, and how many got no answer within
+    /// `ClipboardHistory.answerLimit`.
+    private func clipboardMeaningAnswersFast() async {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-clipboard-latency-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        guard let store = try? ClipboardStore(folder: folder) else {
+            record("Clipboard by meaning answers fast", false, "no scratch store", nil)
+            return
+        }
+        let history = ClipboardHistory(preferences: context.preferences, store: store,
+                                       pasteboard: NSPasteboard(name: NSPasteboard.Name("skilli-selftest-\(UUID().uuidString)")))
+        let now = Date.now
+        let corpus = ClipboardMeaningCorpus.copies
+        let filler = ClipboardMeaningCorpus.filler
+        let copies = corpus + (0..<(ClipboardMeaning.candidateLimit - corpus.count)).map { index in
+            let copy = filler[index % filler.count]
+            return ClipboardMeaningCopy("more.\(index)", "\(copy.text) (\(index))", copy.app, 300 + Double(index))
+        }
+        for copy in copies {
+            guard let item = try? store.add(.init(kind: copy.kind, text: copy.text, app: nil, appName: copy.app, hash: "latency-\(copy.key)"),
+                                            at: now.addingTimeInterval(-copy.hours * 3_600)).item else { continue }
+            if let ocr = copy.ocr { try? store.setOCR(ocr, for: item.id) }
+        }
+        let requests = (ClipboardMeaningCorpus.tune.prefix(10) + ClipboardMeaningCorpus.holdout.prefix(10)).map(\.request)
+        let limit = ClipboardHistory.answerLimit.milliseconds / 1_000
+        for provider in DecisionProvider.allCases {
+            let name = "Clipboard by meaning answers fast with \(provider.title): \(requests.count) requests among \(copies.count) copies, "
+                + "median under 1.5 s, at most one unanswered, none answered past \(Int(limit)) s"
+            guard let key = userDecisionKeys[provider] else {
+                checks.append(Check(name: name, passed: true, skipped: true, detail: "no \(provider.title) key saved in Settings", latencyMs: nil))
+                continue
+            }
+            var seconds: [Double] = []
+            var unanswered = 0, past = 0
+            for request in requests {
+                let start = ContinuousClock.now
+                let found = await history.searchByMeaning(request, keys: [provider: key], now: now)
+                let took = (ContinuousClock.now - start).milliseconds / 1_000
+                seconds.append(took)
+                if found?.unanswered != nil || found == nil { unanswered += 1 }
+                // The cap, and a second for the descriptions built before it.
+                else if took > limit + 1 { past += 1 }
+            }
+            let sorted = seconds.sorted()
+            let median = sorted[sorted.count / 2]
+            let ninetieth = sorted[min(sorted.count - 1, sorted.count * 9 / 10)]
+            record(name, median < 1.5 && unanswered <= 1 && past == 0,
+                   String(format: "median %.2f s, 90th %.2f s, slowest %.2f s, fastest %.2f s, no answer %d, answered past the cap %d", median, ninetieth,
+                          sorted.last ?? 0, sorted.first ?? 0, unanswered, past)
+                       + "; each: " + seconds.map { String(format: "%.2f", $0) }.joined(separator: " "),
+                   median * 1_000)
+        }
+    }
+
     /// Keep screenshots too: a new image in the watched folder joins the
     /// history and its words are found, read on this Mac; with Jev's
     /// folder switch off, nothing asks for the key (nothing sent).
@@ -15516,6 +15573,74 @@ final class SelfTest {
         await closeLauncher()
         record(name, pictureShown && informed && meaningPassed,
                "picture shown: \(pictureShown), information: \(info); \(meaningDetail)", nil)
+    }
+
+    /// ⇥ in the history while the model thinks: the list is one line,
+    /// "Searching by meaning…" with a spinner, not the copies the words
+    /// found; typing on stops the search; no answer says so and ⇥ asks
+    /// again. Answers come from this test (nothing sent).
+    private func clipboardMeaningWaitsInPlace() async {
+        let name = "Clipboard ⇥ waits in place: one “Searching by meaning…” line with a spinner, typing on stops it, no answer says so and ⇥ asks again"
+        guard let store = context.clipboard.store else {
+            record(name, false, "no clipboard store", nil)
+            return
+        }
+        let words = "Rendez-vous plombier \(Int.random(in: 100...999))"
+        guard let copy = try? store.add(.init(kind: .text, text: words, app: "com.apple.Notes", appName: "Notes",
+                                              hash: ClipboardHistory.hash("text", Data(words.utf8)))).item else {
+            record(name, false, "could not add the copy", nil)
+            return
+        }
+        defer { try? store.delete(copy.id) }
+        let launcher = context.launcher
+        let saved = (launcher.clipboardMeaningAvailable, launcher.clipboardMeaning)
+        defer { (launcher.clipboardMeaningAvailable, launcher.clipboardMeaning) = saved }
+        // Slow first (stopped when typed on, then answering late), then no
+        // answer.
+        var asks = 0, stopped = 0, late = 0
+        launcher.clipboardMeaningAvailable = { true }
+        launcher.clipboardMeaning = { _ in
+            asks += 1
+            guard asks == 1 else { return ClipboardHistory.MeaningResult(items: [], label: "", unanswered: "Jev did not answer") }
+            do { try await Task.sleep(for: .seconds(8)) } catch { stopped += 1 }
+            late += 1
+            return ClipboardHistory.MeaningResult(items: [], label: "", unanswered: "Late answer")
+        }
+
+        guard await focusTestWindow() else { return }
+        window.makeFirstResponder(textView)
+        textView.string = ""
+        _ = await hyperChord(["c"], trigger: Self.ownTriggerKeyCode)
+        _ = await waitUntil(timeout: 1) { self.context.launcher.isInClipboard }
+        for character in "plombier" { await pressKey(character) }
+        let byWords = await waitUntil(timeout: 1) { launcher.resultTitles.first?.hasPrefix("Rendez-vous plombier") == true } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Tab))
+        let waiting = await waitUntil(timeout: 1) {
+            launcher.isShowingMeaningSpinner && launcher.resultTitles.isEmpty && launcher.emptyStateText == "Searching by meaning…"
+        } != nil
+        let searchingFooter = launcher.shownFooter
+        let noTabWhileSearching = !searchingFooter.contains { $0.hasPrefix("By Meaning") }
+        await captureLauncherBothWays(as: "launcher-clipboard-searching")
+        await pressKey("s")
+        let typedOn = await waitUntil(timeout: 1) { stopped == 1 && !launcher.isShowingMeaningSpinner } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Delete))
+        // The late answer is back and dropped: the words' results stay.
+        let wordsBack = await waitUntil(timeout: 1) {
+            late == 1 && launcher.resultTitles.first?.hasPrefix("Rendez-vous plombier") == true
+        } != nil && !launcher.isShowingMeaning && launcher.emptyStateText == nil
+        await pressKey(nil, code: CGKeyCode(kVK_Tab))
+        let unanswered = await waitUntil(timeout: 1) {
+            launcher.emptyStateText == "Jev did not answer: ⇥ tries again" && !launcher.isShowingMeaningSpinner
+        } != nil
+        let footer = launcher.shownFooter
+        let offersAgain = footer.contains { $0.hasPrefix("By Meaning") }
+        await captureLauncherBothWays(as: "launcher-clipboard-unanswered")
+        await pressKey(nil, code: CGKeyCode(kVK_Tab))
+        let askedAgain = await waitUntil(timeout: 1) { asks == 3 } != nil
+        await closeLauncher()
+        record(name, byWords && waiting && noTabWhileSearching && typedOn && wordsBack && unanswered && offersAgain && askedAgain,
+               "found by words: \(byWords), searching line with spinner: \(waiting), footer while searching \(searchingFooter), typing on stopped it: \(typedOn), words back, the late answer dropped: \(wordsBack), "
+                   + "no answer said: \(unanswered), footer \(footer), ⇥ asked again: \(askedAgain)", nil)
     }
 
     /// ✦C, then each kind of copy in the preview, newest first with ↓,

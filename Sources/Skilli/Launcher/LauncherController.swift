@@ -52,6 +52,8 @@ final class LauncherController: NSObject {
     /// Counts the shows: a selection read for an earlier one is dropped.
     private var selectionShow = 0
     private let emptyState = NSTextField(labelWithString: "No results")
+    /// Beside the empty line while ⇥ searches the history by meaning.
+    private let meaningSpinner = NSProgressIndicator()
     private let hints = HintBar()
     /// One line in the footer's place: what failed and what to do (rule 6:
     /// never a bare beep), until the next key.
@@ -492,6 +494,11 @@ final class LauncherController: NSObject {
     private var meaning: (query: String, result: ClipboardHistory.MeaningResult)?
     private var meaningTask: Task<Void, Never>?
     private var meaningPending: String?
+    /// While ⇥ waits, the list is one line, "Searching by meaning…", with
+    /// a spinner: the copies found by the words are not the answer.
+    private var isSearchingClipboardMeaning: Bool {
+        clipboardMode && meaningPending != nil && meaningPending == searchField.stringValue
+    }
     private let clipPreview = ClipboardPreviewView()
     /// The emoji picker, eight across, in the list's place.
     private let emojiGrid = EmojiGridView(frame: NSRect(x: 0, y: Layout.footerHeight + 1 + Layout.listBottomPadding,
@@ -531,6 +538,8 @@ final class LauncherController: NSObject {
     /// Self-test hooks: the preview, and whether rows came by meaning.
     var clipboardPreview: ClipboardPreviewView { clipPreview }
     var isShowingMeaning: Bool { meaning != nil && meaning?.query == searchField.stringValue }
+    var isShowingMeaningSpinner: Bool { !meaningSpinner.isHidden }
+    var emptyStateText: String? { emptyState.isHidden ? nil : emptyState.stringValue }
     private var thumbnails: [Int64: NSImage] = [:]
     private var appIcons: [String: NSImage] = [:]
     private var processRefresh: Task<Void, Never>?
@@ -1319,7 +1328,14 @@ final class LauncherController: NSObject {
         } else if mode == .gifs {
             results = gifRows(text).map(LauncherItem.gif)
         } else if clipboardMode {
-            if let meaning, meaning.query == text {
+            // Typed on: the search asked about other words stops.
+            if let pending = meaningPending, pending != text {
+                meaningTask?.cancel()
+                meaningPending = nil
+            }
+            if meaningPending == text, !text.isEmpty {
+                results = []
+            } else if let meaning, meaning.query == text {
                 results = meaning.result.items.map(LauncherItem.clip)
             } else {
                 // SQLite FTS5 on this Mac: well under a millisecond.
@@ -1564,14 +1580,16 @@ final class LauncherController: NSObject {
             emptyState.stringValue = "No results"
         case .clipboard:
             if meaningPending == text, !text.isEmpty {
-                sectionHeader.stringValue = "Searching by meaning…"
+                sectionHeader.stringValue = "By meaning"
             } else if let meaning, meaning.query == text {
-                sectionHeader.stringValue = "By meaning · \(meaning.result.label)"
+                sectionHeader.stringValue = meaning.result.unanswered == nil ? "By meaning · \(meaning.result.label)" : "By meaning"
             } else {
                 sectionHeader.stringValue = query.isEmpty ? "Copied recently" : "Copied"
             }
-            if let meaning, meaning.query == text {
-                emptyState.stringValue = "No copy fits “\(text)”"
+            if meaningPending == text, !text.isEmpty {
+                emptyState.stringValue = "Searching by meaning…"
+            } else if let meaning, meaning.query == text {
+                emptyState.stringValue = meaning.result.unanswered.map { "\($0): ⇥ tries again" } ?? "No copy fits “\(text)”"
             } else {
                 emptyState.stringValue = clipboardStatus?() ?? (query.isEmpty ? "Nothing copied yet" : (meaningAvailable ? "No words match: ⇥ searches by meaning" : "No results"))
             }
@@ -1695,6 +1713,11 @@ final class LauncherController: NSObject {
         selectionLabel.isHidden = mode != nil
         emptyState.isHidden = !results.isEmpty
         if results.isEmpty, beside != nil { placeEmptyState() }
+        // Setup rows fill the list: the search's line goes in the header.
+        if clipboardMode, !results.isEmpty, meaningPending == text || (meaning?.query == text && meaning?.result.unanswered != nil) {
+            sectionHeader.stringValue = emptyState.stringValue
+        }
+        showMeaningSpinner(isSearchingClipboardMeaning && results.isEmpty)
         laps.lap("labels")
         showRows()
         laps.lap("rows")
@@ -1827,6 +1850,25 @@ final class LauncherController: NSObject {
         let width = Layout.splitListWidth - 40
         let height = min(ceil(emptyState.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: 100)).height ?? 20), 40)
         emptyState.frame = NSRect(x: 20, y: (middle - height / 2).rounded(), width: width, height: height)
+    }
+
+    /// The spinner on the empty line, left of its words, the pair centred.
+    private func showMeaningSpinner(_ shown: Bool) {
+        guard shown else {
+            meaningSpinner.stopAnimation(nil)
+            meaningSpinner.isHidden = true
+            return
+        }
+        let size: CGFloat = 16, gap: CGFloat = 8
+        let words = ceil(emptyState.attributedStringValue.size().width)
+        let line = emptyState.frame
+        // The words move right by half the spinner and its gap: centred, the
+        // pair is.
+        emptyState.frame = line.offsetBy(dx: (size + gap) / 2, dy: 0)
+        let x = (line.midX - (words + size + gap) / 2).rounded()
+        meaningSpinner.frame = NSRect(x: x, y: (line.midY - size / 2).rounded(), width: size, height: size)
+        meaningSpinner.isHidden = false
+        meaningSpinner.startAnimation(nil)
     }
 
     /// "trop content mais crevé": the decision model picks the emoji.
@@ -2350,12 +2392,8 @@ final class LauncherController: NSObject {
             let found = await clipboardMeaning(text)
             guard let self, !Task.isCancelled, self.clipboardMode, self.searchField.stringValue == text else { return }
             self.meaningPending = nil
-            if let found {
-                self.meaning = (text, found)
-            } else {
-                self.sectionHeader.stringValue = "Search by meaning did not answer"
-            }
-            if found != nil { self.updateResults(query: text) }
+            self.meaning = found.map { (text, $0) }
+            self.updateResults(query: text)
         }
     }
 
@@ -3752,7 +3790,10 @@ final class LauncherController: NSObject {
         case .kill:
             if unfolded == nil, case .process(let group, nil)? = item, group.entries.count > 1 { return "Processes" }
             return nil
-        case .clipboard: return meaningAvailable && typed && !isShowingMeaning ? "By Meaning" : nil
+        // Not while it searches; not answered: ⇥ asks again.
+        case .clipboard:
+            return meaningAvailable && typed && !isSearchingClipboardMeaning
+                && (!isShowingMeaning || meaning?.result.unanswered != nil) ? "By Meaning" : nil
         case .files: return fileMeaningOn && typed && !isShowingFileMeaning ? "By Meaning" : nil
         case .history: return historyMeaningOn && typed && !isShowingHistoryMeaning ? "By Meaning" : nil
         case .snippets: return snippetMeaningOn && typed && !isShowingSnippetMeaning && !snippetList.isEmpty ? "By Meaning" : nil
@@ -4230,6 +4271,11 @@ final class LauncherController: NSObject {
         }
         card.addSubview(gifGrid)
         card.addSubview(emptyState)
+        meaningSpinner.style = .spinning
+        meaningSpinner.controlSize = .small
+        meaningSpinner.isDisplayedWhenStopped = false
+        meaningSpinner.isHidden = true
+        card.addSubview(meaningSpinner)
 
         // Section header (top).
         sectionHeader.font = Theme.Font.sectionHeader
