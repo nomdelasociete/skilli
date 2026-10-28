@@ -2,9 +2,11 @@ import AppKit
 import Sparkle
 
 /// Updates of the Developer ID build, by Sparkle (`script/release`): the
-/// feed (skil.li/appcast.xml) is checked once a day; a new version asks
-/// before it installs. Development builds carry no feed or key: no updater
-/// at all, so they never replace themselves with a release.
+/// feed (skil.li/appcast.xml) is checked once a day; a new version
+/// downloads and installs on its own unless the user turned that off
+/// (`SUAutomaticallyUpdate`), and a critical one shows at once and cannot be
+/// skipped. Development builds carry no feed or key: no updater at all, so
+/// they never replace themselves with a release.
 @MainActor
 final class SoftwareUpdate: NSObject, SPUStandardUserDriverDelegate {
     private var controller: SPUStandardUpdaterController?

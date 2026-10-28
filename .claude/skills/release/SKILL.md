@@ -23,6 +23,8 @@ On GitHub's Macs (`.github/workflows/release.yml`), never on the developer's Mac
 gh workflow run release.yml --repo nomdelasociete/skilli --ref main
 ```
 
+A critical release (a security fix, a fix users must not stay without), only when the maintainer asks for one: add `-f critical=true`. Sparkle then shows it at once to every older build, even with automatic updates on, and it cannot be skipped; later releases stay critical for builds below it.
+
 The run waits for the maintainer's approval (the `release` environment): tell the maintainer it is waiting, with its link (`gh run list --workflow release.yml --limit 1`). Then about 15 minutes: archive, two notarizations, the signed feed, the GitHub release, the cask. Done when the run is green and its log ends with `Published skil.li <version> (<build>)` (`gh run watch <id>`; `gh run view <id> --log-failed` when it is not).
 
 - The environment has no secrets yet (`gh secret list --env release --repo nomdelasociete/skilli`): the maintainer runs `script/release/ci-secrets.sh <.p12> <AuthKey_….p8>` once; its header says where each file comes from.
@@ -35,7 +37,7 @@ The run waits for the maintainer's approval (the `release` environment): tell th
 
 ## 3. Check what users get
 
-- `curl -sI https://skil.li/download` → `302` to the new release's `skil.li.dmg`; `curl -sL https://skil.li/appcast.xml` holds `<sparkle:version><build></sparkle:version>`.
+- `curl -sI https://skil.li/download` → `302` to the new release's `skil.li.dmg`; `curl -sL https://skil.li/appcast.xml` holds `<sparkle:version><build></sparkle:version>`, and `<sparkle:criticalUpdate` exactly when this release or one before it was critical.
 - On the Mac mini, under its lock (AGENTS.md → Where tests run): `brew update`, `brew install --cask nomdelasociete/tap/skilli` (or `upgrade`), `spctl -a -vv --type execute /Applications/Skilli.app` says `source=Notarized Developer ID`, the app opens. Then `brew uninstall --cask skilli` and reopen `~/skilli-selftest/Skilli.app`: the mini's test app shares the bundle ID.
 - `brew audit --cask --online nomdelasociete/tap/skilli` over SSH: unset `HTTPS_PROXY`/`HTTP_PROXY` for it (the session's proxy adds responses Homebrew counts as redirects).
 

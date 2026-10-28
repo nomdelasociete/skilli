@@ -263,7 +263,11 @@ unsigned, its unit tests run.
 3. `appcast.sh`: Sparkle's feed for the zip, signed with the EdDSA key
    (`SKILLI_SPARKLE_KEY_FILE` in GitHub Actions, else the login keychain's,
    account `nomdelasociete-skilli`, made once by `keys.sh`; public key
-   `I+4nuoWKfHEjDRI6pOl/wO04kxCWkFSpzglqJMphf24=`).
+   `I+4nuoWKfHEjDRI6pOl/wO04kxCWkFSpzglqJMphf24=`). A critical release
+   (`SKILLI_CRITICAL_UPDATE=true`, the workflow's `critical` input) is
+   marked `sparkle:criticalUpdate`; the feed holds one release, so a later
+   one stays critical below the last critical build, read from the live
+   feed (unreadable: the release stops).
 4. A GitHub release `v<version>-<build>` of this repository (public,
    GPL-3.0, since 2026-10-18): the DMG and zip, plus `skil.li.dmg` and
    `appcast.xml` under stable names. The website redirects `skil.li/download`
@@ -277,8 +281,14 @@ unsigned, its unit tests run.
    then.
 
 A build number the feed already has is refused: commit, then release
-again. Updates: Sparkle checks once a day and asks before installing
-(`SoftwareUpdate`, status menu → Check for Updates…). A user moving from a
+again. Updates (2026-10-28: every user on the latest version): Sparkle
+checks once a day, downloads a new version on its own and installs it when
+skil.li quits; one still waiting at the next check is offered (Install and
+Relaunch). `SUAutomaticallyUpdate` in Info.plist is only the default: a
+user who unticks it in the update window is asked instead. A critical
+release shows at once and cannot be skipped. Homebrew installs update the
+same way (`auto_updates`: `brew upgrade` leaves them to Sparkle).
+`SoftwareUpdate`, status menu → Check for Updates…. A user moving from a
 development build to the Developer ID one grants Accessibility again
 (another signature).
 
