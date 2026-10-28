@@ -908,6 +908,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         launcher.searchRecordingWords = { [weak self] text in await self?.recordingLibrary.searchWords(text) ?? [] }
         launcher.onRecordingsMode = { [weak self] in self?.recordingLibrary.reload() }
+        // Read again (one renamed, deleted, made): its rows follow.
+        recordingLibrary.onChange = { [weak self] in self?.launcher.recordingsChanged() }
         launcher.onOpenRecording = { [weak self] name in
             guard let self else { return }
             self.recorderCenter.open(self.recordingLibrary.folder(name))

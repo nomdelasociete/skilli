@@ -24091,6 +24091,11 @@ final class SelfTest {
         // Every recording window closed whatever happens: the link's check
         // opens one of its own.
         defer { center.openWindows.forEach { $0.close() } }
+        // No AI in these two, each in a window of its own (all closed after
+        // the rename): before the stand-in's, whatever the provider.
+        if !aborted { await pendingSaysWhyAndOffersTheEngines(center) }
+        if !aborted { await recordingRenamedFromItsWindow(center) }
+        if aborted { return }
         center.open(folder)
         guard let controller = await waitForWindow(center, folder) else {
             record("Recorder phase 5", false, "no window for the stand-in meeting", nil)
@@ -24114,8 +24119,6 @@ final class SelfTest {
         if !aborted { await skilliesForRecordingsRunOnThem(center, controller) }
         if !aborted { await transcriptToolsAskEveryTime(center, folder) }
         if !aborted { await reminderLinkOpensTheMeeting(center, folder) }
-        if !aborted { await pendingSaysWhyAndOffersTheEngines(center) }
-        if !aborted { await recordingRenamedFromItsWindow(center) }
     }
 
     /// The stand-in meeting (invented people): Camille is the user, Margot
@@ -24273,10 +24276,10 @@ final class SelfTest {
         // From 4:50, as asked: the rate goes up at once, the position at the
         // host time asked a moment later (setRate(_:time:atHostTime:)).
         let fromThere = await waitUntil(timeout: 2) {
-            let at = center.window(for: first)?.playedTime ?? 0
+            let at = center.window(for: first)?.currentTime ?? 0
             return at >= 289 && at < 296
         } != nil
-        let at = center.window(for: first)?.playedTime ?? 0
+        let at = center.window(for: first)?.currentTime ?? 0
         center.window(for: first).map { if $0.playing { $0.togglePlay() } }
         for step in 0..<6 { await move(to: frame.minX + frame.width * (0.3 + 0.08 * CGFloat(step)), frame.maxY - 260) }
         await pause(200)
@@ -24708,9 +24711,11 @@ final class SelfTest {
         let whisperReady = BetterTranscription.isReady()
         let offered = engines.map(\.title) == ["macOS", "Better transcription"] && engines.first?.enabled == true
             && engines.last?.enabled == whisperReady
+        // macOS's languages, then Transcribe (never before they are in).
+        let languages = await waitUntil(timeout: 5) { controller.canTranscribe } != nil && !controller.shownPendingLanguages.isEmpty
         await captureRecordingWindow(controller, as: "recorder-pending")
-        record(name, said && offered,
-               "“\(controller.shownState)” \(said); engines \(engines.map { "\($0.title) \($0.enabled ? "on" : "dimmed")" }.joined(separator: ", ")), Better transcription \(whisperReady ? "downloaded" : "not downloaded") \(offered)",
+        record(name, said && offered && languages,
+               "“\(controller.shownState)” \(said); engines \(engines.map { "\($0.title) \($0.enabled ? "on" : "dimmed")" }.joined(separator: ", ")), Better transcription \(whisperReady ? "downloaded" : "not downloaded") \(offered); \(controller.shownPendingLanguages.count) languages, Transcribe \(controller.canTranscribe ? "on" : "off")",
                nil)
     }
 

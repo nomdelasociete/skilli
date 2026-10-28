@@ -877,6 +877,14 @@ final class LauncherController: NSObject {
         updateResults(query: searchField.stringValue)
     }
 
+    /// The recordings read again (one renamed, deleted, made): the rows
+    /// that name them, at the root and in `recs`, redrawn.
+    func recordingsChanged() {
+        catalog = nil
+        guard panel.isVisible, mode == nil || mode == .recordings else { return }
+        updateResults(query: searchField.stringValue)
+    }
+
     func hide() {
         let wasVisible = panel.isVisible
         if wasVisible { keep() }
@@ -3312,8 +3320,8 @@ final class LauncherController: NSObject {
             let title = typed.trimmingCharacters(in: .whitespacesAndNewlines)
             self.closeActions()
             guard !title.isEmpty, title != summary.title else { return }
+            // Its rows follow once the recordings are read again.
             self.onRenameRecording?(summary.folder, title)
-            self.refreshResults()
         }
     }
 

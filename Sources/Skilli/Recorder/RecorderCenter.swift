@@ -882,13 +882,20 @@ final class RecorderCenter {
             throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(error.localizedDescription)")
         }
         if let lines = recordings.transcript(moved)?.lines {
-            try? MeetingTranscriber.markdown(record, lines: lines).write(to: moved.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)
+            do {
+                try MeetingTranscriber.markdown(record, lines: lines).write(to: moved.appendingPathComponent("transcript.md"), atomically: true, encoding: .utf8)
+            } catch {
+                // Its title and folder back: never a heading naming another.
+                record.title = before
+                try? recordings.write(record, to: moved)
+                try? FileManager.default.moveItem(at: moved, to: folder)
+                throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(error.localizedDescription)")
+            }
         }
         Log.trace("Recorder: renamed “\(title)” (\(moved.lastPathComponent))")
         NotificationCenter.default.post(name: Recordings.changed, object: nil)
-        // Its window stays, on the folder it is in now: one closed and
-        // opened again under the pointer had AppKit route the closed one's
-        // mouse exit to it once freed.
+        // Its window stays, on the folder it is in now (the sound playing
+        // goes on).
         if let open {
             windows[Self.key(folder)] = nil
             open.moved(to: moved)

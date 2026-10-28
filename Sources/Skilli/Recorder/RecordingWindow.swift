@@ -163,11 +163,12 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var selectedLine: Int? { view.selectedLine }
     var playing: Bool { (player?.rate ?? 0) > 0 }
     /// Where the sound is, in seconds (a self-test reads it).
-    var playedTime: Double { player?.currentTime().seconds ?? 0 }
     var currentTime: Double { player?.currentTime().seconds ?? 0 }
     var litLine: Int? { view.litLine }
     var shownState: String { view.stateText }
     var shownPendingEngines: [(title: String, enabled: Bool)] { Array(zip(view.pendingEngines, view.pendingEnginesEnabled)) }
+    var shownPendingLanguages: [String] { view.pendingLanguages }
+    var canTranscribe: Bool { view.canTranscribe }
     var spaceHint: String? { view.spaceHint }
     var shownHints: [String] { view.hintLabels }
     var shownLanes: [String] { view.shownLanes }
@@ -1240,6 +1241,8 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
     /// Self-test hooks.
     var pendingEngines: [String] { engineMenu.isHidden ? [] : engineMenu.itemTitles }
     var pendingEnginesEnabled: [Bool] { engineMenu.itemArray.map(\.isEnabled) }
+    var pendingLanguages: [String] { languageMenu.isHidden ? [] : languageMenu.itemTitles }
+    var canTranscribe: Bool { !transcribeButton.isHidden && transcribeButton.isEnabled }
     private(set) var litLine: Int?
     /// The line selected (phase 4), by its place in `lines`.
     private(set) var selectedLine: Int?
@@ -1441,8 +1444,6 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         showState("Waiting to be transcribed…")
     }
 
-    /// No transcript: the language this Mac could not transcribe, and the
-    /// ones it can.
     /// No transcript: why (`why`, as said when it failed; else the
     /// language this Mac could not transcribe), the engines and the
     /// languages of the one picked (docs/meeting-recorder.md, "A language
@@ -1473,6 +1474,10 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         let index = engineMenu.indexOfSelectedItem
         guard let languagesOf, engineIDs.indices.contains(index) else { return }
         let engine = engineIDs[index]
+        // Never the engine before's languages with this one: Transcribe
+        // waits for them.
+        languageIDs = []
+        transcribeButton.isEnabled = false
         Task {
             let languages = await languagesOf(engine)
             guard engineIDs.indices.contains(engineMenu.indexOfSelectedItem), engineIDs[engineMenu.indexOfSelectedItem] == engine else { return }
