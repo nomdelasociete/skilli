@@ -30,6 +30,11 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     private var correcting: [ObjectIdentifier: CMTime] = [:]
     /// Loading it: once, however often the window is shown meanwhile.
     private var loadingPlayer = false
+    /// A play asked before every player could take it: from when (the
+    /// latest asked), played once each is ready; nil when none waits.
+    private var pendingPlay: CMTime?
+    /// The players' readiness watched for it.
+    private var readyWatch: [NSKeyValueObservation] = []
     /// Where to play from once the player is loaded (a link's `at`).
     private var playOnLoad: Double?
     private var observer: Any?
@@ -153,6 +158,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
     var shownNames: [String: String] { view.names }
     var selectedLine: Int? { view.selectedLine }
     var playing: Bool { (player?.rate ?? 0) > 0 }
+    /// Where the sound is, in seconds (a self-test reads it).
+    var playedTime: Double { player?.currentTime().seconds ?? 0 }
     var currentTime: Double { player?.currentTime().seconds ?? 0 }
     var litLine: Int? { view.litLine }
     var shownState: String { view.stateText }
@@ -351,7 +358,8 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
                 self.pictures.append(picture)
                 layers.append((AVPlayerLayer(player: picture), size))
             }
-            self.view.setPictures(layers)
+            // One that failed while the others loaded is not shown.
+            self.view.setPictures(layers.filter { layer, _ in self.pictures.contains { $0 === layer.player } })
             self.view.duration = max(self.record.seconds, composition.duration.seconds.isFinite ? composition.duration.seconds : 0)
             self.observer = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 20), queue: .main) { [weak self] time in
                 MainActor.assumeIsolated {
@@ -384,6 +392,14 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
 
     func togglePlay() {
         guard let player else { return }
+        // A play still waiting for its players: this one stops it, at the
+        // time it asked (the next press plays from there).
+        if let time = pendingPlay {
+            cancelPendingPlay()
+            for each in [player] + pictures { each.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) }
+            view.played(to: time.seconds, playing: false)
+            return
+        }
         if player.rate > 0 {
             player.pause()
             pictures.forEach { $0.pause() }
@@ -403,21 +419,82 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         if play || player.rate > 0 {
             playAll(from: time)
         } else {
+            // A play waiting is not wanted any more.
+            cancelPendingPlay()
             for each in [player] + pictures { each.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) }
         }
         view.played(to: seconds, playing: play || player.rate > 0)
     }
 
     /// Every player from `time`, started at the same host time a moment
-    /// from now: the pictures in step with the sound.
+    /// from now: the pictures in step with the sound. A player not ready
+    /// yet (a window just opened at a time: a reminder's link) is waited
+    /// for: `setRate(_:time:atHostTime:)` raises until it is, and that
+    /// exception, through this task's frames, left Swift's executor state
+    /// pointing into a gone frame (skil.li crashed on the next actor check).
     private func playAll(from time: CMTime) {
         guard let player else { return }
+        // A picture that cannot play is left out: the sound plays without it.
+        removeFailedPictures()
+        guard !Self.failed(player) else { return cancelPendingPlay() }
+        let all = [player] + pictures
+        guard all.allSatisfy(Self.ready) else {
+            // Each watched from now, the player and its item (`.initial`: one
+            // ready meanwhile is not missed); the time played is the latest
+            // asked.
+            pendingPlay = time
+            readyWatch = all.filter { !Self.ready($0) }.flatMap { each -> [NSKeyValueObservation] in
+                let changed: @Sendable () -> Void = { [weak self] in Task { @MainActor in self?.playWhenReady() } }
+                var watched = [each.observe(\.status, options: [.initial, .new]) { _, _ in changed() }]
+                if let item = each.currentItem {
+                    watched.append(item.observe(\.status, options: [.initial, .new]) { _, _ in changed() })
+                }
+                return watched
+            }
+            return
+        }
+        cancelPendingPlay()
         let host = CMTimeAdd(CMClockGetTime(CMClockGetHostTimeClock()), CMTime(value: 1, timescale: 20))
         for each in [player] + pictures {
             each.setRate(1, time: time, atHostTime: host)
         }
         // Each picture starts then: nothing to correct before.
         correcting = Dictionary(uniqueKeysWithValues: pictures.map { (ObjectIdentifier($0), host) })
+    }
+
+    /// The play waiting: once every player is ready, from the time last
+    /// asked; dropped if the sound cannot play (a picture that cannot is
+    /// left out).
+    private func playWhenReady() {
+        guard let time = pendingPlay, let player else { return }
+        removeFailedPictures()
+        guard !Self.failed(player) else { return cancelPendingPlay() }
+        guard ([player] + pictures).allSatisfy(Self.ready) else { return }
+        playAll(from: time)
+    }
+
+    /// A picture that cannot play goes, its player and what showed it.
+    private func removeFailedPictures() {
+        let failed = pictures.filter(Self.failed)
+        guard !failed.isEmpty else { return }
+        pictures.removeAll(where: Self.failed)
+        view.removePictures(failed)
+    }
+
+    /// Ready to be started at a host time: the player and its item.
+    private static func ready(_ player: AVPlayer) -> Bool {
+        player.status == .readyToPlay && player.currentItem?.status == .readyToPlay
+    }
+
+    /// The player or its item cannot play.
+    private static func failed(_ player: AVPlayer) -> Bool {
+        player.status == .failed || player.currentItem?.status == .failed
+    }
+
+    /// No play waits any more: paused, sought without playing, or played.
+    private func cancelPendingPlay() {
+        pendingPlay = nil
+        readyWatch = []
     }
 
     /// While playing, a picture more than a frame off the sound (a file
@@ -430,7 +507,7 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
             let key = ObjectIdentifier(picture)
             if let pending = correcting[key], CMTimeCompare(hostNow, pending) < 0 { continue }
             correcting[key] = nil
-            guard let item = picture.currentItem, item.duration.isNumeric else { continue }
+            guard Self.ready(picture), let item = picture.currentItem, item.duration.isNumeric else { continue }
             let wanted = min(now.seconds, item.duration.seconds)
             if abs(picture.currentTime().seconds - wanted) > 0.07, now.seconds < item.duration.seconds {
                 let host = CMTimeAdd(hostNow, CMTime(value: 1, timescale: 20))
@@ -1443,6 +1520,12 @@ private final class RecordingView: NSView, NSTableViewDataSource, NSTableViewDel
         needsLayout = true
     }
 
+    /// Pictures that cannot play: no longer shown.
+    func removePictures(_ players: [AVPlayer]) {
+        picturesColumn.remove(players)
+        needsLayout = true
+    }
+
     func setPeaks(me: [Float], them: [Float]) {
         waveform.me = me
         waveform.them = them
@@ -2260,6 +2343,17 @@ private final class PicturesColumn: NSView {
             view.layer?.addSublayer(layer)
             addSubview(view)
             return (view, size)
+        }
+        needsLayout = true
+    }
+
+    /// The pictures of these players taken out.
+    func remove(_ players: [AVPlayer]) {
+        shown.removeAll { picture in
+            guard let layer = picture.view.layer?.sublayers?.first as? AVPlayerLayer, let player = layer.player,
+                  players.contains(where: { $0 === player }) else { return false }
+            picture.view.removeFromSuperview()
+            return true
         }
         needsLayout = true
     }

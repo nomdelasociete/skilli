@@ -24078,6 +24078,7 @@ final class SelfTest {
             record("Recorder phase 5", false, "no recorder", nil)
             return
         }
+        await aRecordingOpenedAtATimePlaysOnceReady(center)
         guard let folder = seedMeeting(center, title: "Onboarding launch review", script: Self.launchReview) else {
             record("Recorder phase 5", false, "the stand-in meeting could not be written", nil)
             return
@@ -24216,6 +24217,74 @@ final class SelfTest {
             guard (try? file.write(from: buffer)) != nil else { return false }
         }
         return true
+    }
+
+    /// A recording's window opened at a time, as a reminder's link opens it,
+    /// plays from there once its player is ready, and skil.li goes on: it
+    /// played at once, AVPlayer raised (not ready yet), and the next actor
+    /// check crashed, here as another window opened under the pointer.
+    private func aRecordingOpenedAtATimePlaysOnceReady(_ center: RecorderCenter) async {
+        let name = "Recorder: a recording's window opened at a time (a reminder's link) plays from there once ready, and skil.li goes on, another window opened under the pointer"
+        guard let first = seedMeeting(center, title: "Closed under the pointer", script: Self.launchReview),
+              var record = center.recordings.read(first) else {
+            record(name, false, "no meeting", nil)
+            return
+        }
+        record.chapters = [MeetingRecord.Chapter(title: "Launch", start: 0.5), MeetingRecord.Chapter(title: "Pricing", start: 135)]
+        try? center.recordings.write(record, to: first)
+        center.open(first)
+        let screenHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        let source = CGEventSource(stateID: .hidSystemState)
+        func move(to x: CGFloat, _ y: CGFloat) async {
+            CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: CGPoint(x: x, y: screenHeight - y),
+                    mouseButton: .left)?.post(tap: .cghidEventTap)
+            await pause(80)
+        }
+        let frame: NSRect
+        // Its window held here only in this block: closed, nothing else keeps it.
+        do {
+            guard let window = await waitForWindow(center, first),
+                  await waitUntil(timeout: 20, { window.showsWaveform }) != nil else {
+                self.record(name, false, "no window with its waveform", nil)
+                return
+            }
+            frame = window.nsWindow.frame
+            // The pointer over it, across the chapter marks; played, its ⌘K
+            // opened, as the reminder link check leaves it.
+            for step in 0..<10 { await move(to: frame.minX + frame.width * (0.2 + 0.06 * CGFloat(step)), frame.maxY - 210) }
+            window.togglePlay()
+            await pause(600)
+            window.togglePlay()
+            window.showActions()
+            await pause(300)
+            window.closeActions()
+        }
+        // Closed, and opened again on the same folder playing from a time.
+        center.window(for: first)?.close()
+        center.open(first, at: 290)
+        let played = await waitUntil(timeout: 5) { center.window(for: first)?.playing == true } != nil
+        // From 4:50, as asked: the rate goes up at once, the position at the
+        // host time asked a moment later (setRate(_:time:atHostTime:)).
+        let fromThere = await waitUntil(timeout: 2) {
+            let at = center.window(for: first)?.playedTime ?? 0
+            return at >= 289 && at < 296
+        } != nil
+        let at = center.window(for: first)?.playedTime ?? 0
+        center.window(for: first).map { if $0.playing { $0.togglePlay() } }
+        for step in 0..<6 { await move(to: frame.minX + frame.width * (0.3 + 0.08 * CGFloat(step)), frame.maxY - 260) }
+        await pause(200)
+        guard let second = seedMeeting(center, title: "Opened under the pointer", script: Array(Self.launchReview.prefix(3))) else {
+            self.record(name, false, "no second meeting", nil)
+            return
+        }
+        center.open(second)
+        let opened = await waitForWindow(center, second) != nil
+        for step in 0..<10 { await move(to: frame.minX + frame.width * (0.8 - 0.06 * CGFloat(step)), frame.maxY - 200) }
+        await pause(1500)
+        center.openWindows.forEach { $0.close() }
+        await pause(300)
+        self.record(name, played && fromThere && opened,
+                    "opened at 4:50, played \(played) from \(MeetingTranscript.clock(at)) \(fromThere); the next window opened \(opened), still running after the pointer moved over it", nil)
     }
 
     private func waitForWindow(_ center: RecorderCenter, _ folder: URL) async -> RecordingWindowController? {
