@@ -1638,7 +1638,8 @@ final class LauncherController: NSObject {
             sectionHeader.stringValue = github?.isSignedIn != true ? "GitHub"
                 : githubGroup.map { "\($0.title) · \(shown)" } ?? (text.isEmpty ? "Pull requests and notifications" : "GitHub with “\(text)”")
             emptyState.stringValue = github?.isSignedIn != true ? "Sign in with GitHub in Settings → GitHub"
-                : github?.lastRefresh == nil ? (github?.problem ?? (github?.checkingThisMac == true ? "Checking this Mac…" : "Reading GitHub…"))
+                : github?.checkingThisMac == true ? "Checking this Mac…"
+                : github?.lastRefresh == nil ? (github?.problem ?? "Reading GitHub…")
                 : text.isEmpty ? githubGroup.map { "Nothing \($0.title.lowercased())" }
                     ?? (github?.notificationsRead == true && github?.notificationsComplete == true
                         ? "No open pull request, no unread notification" : "No open pull request")
