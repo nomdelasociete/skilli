@@ -68,6 +68,9 @@ Them 1, Them 2…, until you name them).
 
 ![A recording's window: both sides' waveforms above the transcript, each line with its speaker and time](images/recorder-window.png "Click a line to play from there.")
 
+- **In the Dock**: while the window is open, skil.li is in the Dock and
+  in ⌘⇥, its dot a red recording light. Click it to come back to the
+  window.
 - **Click a line** to play from there.
 - **Name a speaker**: click the name (or ⌥↩), pick from the attendees.
 - **Fix a line**: select it, ↩ edits its words, ⇥ gives it to the next

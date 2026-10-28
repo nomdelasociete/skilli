@@ -1800,11 +1800,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return nil
     }
 
-    /// Opening skil.li again (Finder, Spotlight, `open -a`) while it runs
-    /// shows Settings: the only window it has, and the way back when the
-    /// menu bar icon is hidden.
+    /// A click on skil.li's Dock icon brings the window that keeps it there
+    /// (a recording's, Settings), the one last in front, minimized or not.
+    /// Opening skil.li again (Finder, Spotlight, `open -a`) while none is
+    /// open shows Settings: the way back when the menu bar icon is hidden.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        settings.show()
+        if let window = DockPresence.windows.first {
+            Foreground.bring(window)
+        } else {
+            settings.show()
+        }
         return false
     }
 
