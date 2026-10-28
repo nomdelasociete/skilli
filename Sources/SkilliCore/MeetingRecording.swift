@@ -607,6 +607,9 @@ public struct SilentTrack: Equatable, Sendable {
     /// card not offered again until the track gives sound.
     private var offered = false
     private var kept = false
+    /// The last sound when it was said: only sound after it ends the
+    /// stretch (buffers back with only zeros do not).
+    private var soundWhenSaid = -Double.infinity
 
     public init(since: Double) {
         self.since = since
@@ -658,13 +661,14 @@ public struct SilentTrack: Equatable, Sendable {
         }
         let zeros = !heard && zerosFrom.map { now - $0 >= Self.zerosFor } == true
         let reason: Reason? = nothing ? .nothing : zeros ? .zeros : nil
-        if heard, !nothing {
+        if heard, !nothing, (lastSound ?? -.infinity) > soundWhenSaid {
             // It records something: a later stretch is offered again.
             offered = false
             kept = false
         }
         guard let reason, !offered, !kept else { return (reason, false) }
         offered = true
+        soundWhenSaid = lastSound ?? -.infinity
         return (reason, true)
     }
 
