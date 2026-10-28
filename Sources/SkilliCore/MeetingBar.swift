@@ -136,7 +136,7 @@ public enum MeetingBar {
     /// during a meeting, and the moments that can change them (each minute
     /// while a number is said: one timer, never a poll).
     public static func plan(_ events: [AgendaEvent], now: Date, options: Options, presence: Presence = Presence(),
-                            dismissed: Set<String> = []) -> Plan {
+                            dismissed: MeetingDismissals = MeetingDismissals()) -> Plan {
         guard let lead = options.lead else { return Plan() }
         func leaves(_ event: AgendaEvent) -> Date {
             options.countdown || options.hideAfter < 0 ? event.end
@@ -145,7 +145,7 @@ public enum MeetingBar {
         func showsAt(_ event: AgendaEvent) -> Date {
             lead == Int.max ? .distantPast : event.start.addingTimeInterval(-TimeInterval(lead * 60))
         }
-        let candidates = events.filter { (!options.callsOnly || $0.meeting != nil) && !dismissed.contains($0.id) }
+        let candidates = events.filter { (!options.callsOnly || $0.meeting != nil) && !dismissed.contains($0) }
         let current = candidates.filter { $0.start <= now && leaves($0) > now }.max { $0.start < $1.start }
         let upcoming = candidates.filter { $0.start > now }.min { $0.start < $1.start }
         let due = upcoming.flatMap { now >= showsAt($0) ? $0 : nil }

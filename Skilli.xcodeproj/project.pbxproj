@@ -265,6 +265,7 @@
 		B1BB9EBFA711A5E237DCCD3F /* CopiedColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D2A4B0A49EADE906DCAE43A /* CopiedColor.swift */; };
 		B2F4ED9AFC496993B9D5C5BC /* RelayInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5883A013981BCCB2A5C8C645 /* RelayInbox.swift */; };
 		B30C601DAAE60EEBE5CF7A7E /* Reminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D0A34413F83EEBBE4B6BDFE /* Reminders.swift */; };
+		B3560F77421836DD3BB89435 /* MeetingDismissals.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A127C21198D61CDC8D6B202 /* MeetingDismissals.swift */; };
 		B356254A656403CF73E81E6B /* BrowserHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF91D64C6E06D80F6EA699B5 /* BrowserHistory.swift */; };
 		B3731BEB0FCAF73CA24C3D08 /* HeldKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A93305ED67627FE38C474B1 /* HeldKeys.swift */; };
 		B4125951A88CEB67DDAE15DF /* SettingsTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFAC4F714AD1BD0682334E74 /* SettingsTable.swift */; };
@@ -645,6 +646,7 @@
 		85F2AB86D0BAAAB6AFFBCD42 /* LinkedApps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedApps.swift; sourceTree = "<group>"; };
 		8732062FD8B77A5854F219BF /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		89E0D24BB08C681F85EBAB46 /* MeetingTranscriptEdits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingTranscriptEdits.swift; sourceTree = "<group>"; };
+		8A127C21198D61CDC8D6B202 /* MeetingDismissals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingDismissals.swift; sourceTree = "<group>"; };
 		8A40D3CFA91BD88988262038 /* MeetingCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingCard.swift; sourceTree = "<group>"; };
 		8B3FCF19ED92966C1F980365 /* TextDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextDiff.swift; sourceTree = "<group>"; };
 		8C3814650F4988D15D917E44 /* ContactCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactCard.swift; sourceTree = "<group>"; };
@@ -921,6 +923,7 @@
 				90463C73E58643E235F10DDC /* MeaningSearch.swift */,
 				F6BF0BBE7DD28A30361C6987 /* MeetingAlert.swift */,
 				D91CD308B15A5E0DC4E6BC74 /* MeetingBar.swift */,
+				8A127C21198D61CDC8D6B202 /* MeetingDismissals.swift */,
 				8FC2DCFD5F3A0C7F5B65178B /* MeetingFollowUp.swift */,
 				115A6B490420DDF7ECF9B5E5 /* MeetingMoment.swift */,
 				A81041CFFEA3339FA692A753 /* MeetingPictures.swift */,
@@ -1700,6 +1703,7 @@
 				26A93005AEFF15C6E775D4B9 /* MeaningSearch.swift in Sources */,
 				F3F28EC722CF8EF122FB6E18 /* MeetingAlert.swift in Sources */,
 				C93CD3DF22722B8F18A5AF75 /* MeetingBar.swift in Sources */,
+				B3560F77421836DD3BB89435 /* MeetingDismissals.swift in Sources */,
 				CF69A0117B0FFEAC560382A1 /* MeetingFollowUp.swift in Sources */,
 				BF3E48D2E22DE3E01FA4572D /* MeetingMoment.swift in Sources */,
 				F195ED0CB6AC73F51611FBA2 /* MeetingPictures.swift in Sources */,
