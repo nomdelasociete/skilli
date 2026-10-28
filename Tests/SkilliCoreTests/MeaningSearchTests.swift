@@ -97,6 +97,8 @@ final class MeaningNarrowingTests: XCTestCase {
         XCTAssertFalse(holds(.phone, "82,40 € à régler"))
         XCTAssertTrue(holds(.iban, "Mon IBAN : FR76 3000 6000 0112 3456 7890 189"))
         XCTAssertFalse(holds(.iban, "FR76 et le reste"))
+        XCTAssertTrue(holds(.iban, "RIB : 12345 67890 12345678901 04"))
+        XCTAssertFalse(holds(.iban, "12345 67890 12345678901 05"))
         XCTAssertTrue(holds(.image, "", copy: .image))
         XCTAssertTrue(holds(.image, "/Users/me/Desktop/Capture.png", copy: .files))
         XCTAssertFalse(holds(.image, "/Users/me/Devis.pdf", copy: .files))

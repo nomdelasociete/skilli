@@ -352,7 +352,7 @@ public enum ToolCallSummary {
     public static func looksSecret(_ value: String) -> Bool {
         let value = value.trimmingCharacters(in: .whitespaces)
         if value.count >= 12, secretPrefixes.contains(where: value.hasPrefix) { return true }
-        if isCardNumber(value) || isIBAN(value) { return true }
+        if isCardNumber(value) || isIBAN(value) || isRIB(value) { return true }
         // One long word of letters and digits mixed, no path, no address.
         guard value.count >= 32, !value.contains(where: \.isWhitespace), !value.contains("/"), !value.contains("@") else { return false }
         let letters = value.contains(where: \.isLetter)
@@ -384,10 +384,33 @@ public enum ToolCallSummary {
             && characters.dropFirst(4).contains(where: \.isNumber)
     }
 
-    /// What a secret is, said in its place: "(an IBAN)", "(a card number)",
-    /// "(a key)"; nil when `value` is not one.
+    /// A French RIB: bank code (5 digits), branch code (5 digits), account
+    /// number (11 digits or letters), key (2 digits), spaces between groups
+    /// allowed; the key must match, so 23 digits in a row are not one.
+    /// Letters count as digits (A, J → 1; B, K, S → 2 …), then the key is
+    /// 97 - (89 × bank + 15 × branch + 3 × account) mod 97.
+    static func isRIB(_ value: String) -> Bool {
+        let compact = Array(value.filter { $0 != " " }.uppercased())
+        guard compact.count == 23, compact.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }),
+              compact[0..<10].allSatisfy(\.isNumber), compact[21...].allSatisfy(\.isNumber) else { return false }
+        func number(_ characters: ArraySlice<Character>) -> Int? {
+            Int(String(characters.map { character -> Character in
+                guard let ascii = character.asciiValue, character.isLetter else { return character }
+                // A–I → 1–9, J–R → 1–9, S–Z → 2–9.
+                let offset = Int(ascii) - 65
+                return Character(String(offset < 9 ? offset + 1 : offset < 18 ? offset - 8 : offset - 16))
+            }))
+        }
+        guard let bank = number(compact[0..<5]), let branch = number(compact[5..<10]),
+              let account = number(compact[10..<21]), let key = number(compact[21...]) else { return false }
+        return 97 - (89 * bank + 15 * branch + 3 * account) % 97 == key
+    }
+
+    /// What a secret is, said in its place: "(an IBAN)", "(a bank account
+    /// number)", "(a card number)", "(a key)"; nil when `value` is not one.
     public static func secretKind(_ value: String) -> String? {
         if isIBAN(value) { return "(an IBAN)" }
+        if isRIB(value) { return "(a bank account number)" }
         if isCardNumber(value) { return "(a card number)" }
         return looksSecret(value) ? "(a key)" : nil
     }
@@ -395,8 +418,8 @@ public enum ToolCallSummary {
     /// Free text with each bank or card number and each key in it replaced
     /// by what it is: the words around stay, the number never goes. A
     /// number written in groups ("FR76 3000 6000 …") is one: an IBAN whose
-    /// check digits match exactly, else the longest run of up to nine
-    /// words that looks like one.
+    /// check digits match or a RIB whose key matches exactly, else the
+    /// longest run of up to nine words that looks like one.
     public static func maskingSecrets(_ text: String) -> String {
         let words = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
         var kept: [String] = []
@@ -412,6 +435,11 @@ public enum ToolCallSummary {
             }
             if let end = ends.first(where: { hasIBANCheckDigits(span($0)) }) {
                 kept.append("(an IBAN)")
+                index = end
+                continue
+            }
+            if let end = ends.first(where: { isRIB(span($0)) }) {
+                kept.append("(a bank account number)")
                 index = end
                 continue
             }

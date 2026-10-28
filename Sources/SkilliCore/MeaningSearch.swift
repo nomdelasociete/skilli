@@ -76,8 +76,8 @@ public struct MeaningNarrowing: Equatable, Sendable {
     }
 
     /// Whether a copy holds this kind: an address or a link anywhere in
-    /// its words, a phone number, an IBAN (checked as the masking checks
-    /// it), an image (or image files), files.
+    /// its words, a phone number, an IBAN or a RIB (checked as the masking
+    /// checks it), an image (or image files), files.
     public static func holds(_ kind: Kind, copy: ClipboardMeaning.Kind, text: String, ocr: String? = nil) -> Bool {
         let words = ocr.map { text + "\n" + $0 } ?? text
         switch kind {
@@ -98,7 +98,9 @@ public struct MeaningNarrowing: Equatable, Sendable {
                     in: number, range: NSRange(number.startIndex..., in: number)) == nil
             }
         case .iban:
-            return words.contains(where: \.isNumber) && ToolCallSummary.maskingSecrets(words).contains("(an IBAN)")
+            guard words.contains(where: \.isNumber) else { return false }
+            let masked = ToolCallSummary.maskingSecrets(words)
+            return masked.contains("(an IBAN)") || masked.contains("(a bank account number)")
         }
     }
 
