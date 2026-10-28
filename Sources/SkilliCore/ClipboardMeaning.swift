@@ -87,8 +87,8 @@ public enum ClipboardMeaning {
     /// card number or a key in them goes as what it is ("(an IBAN)"), never
     /// itself (`ToolCallSummary.maskingSecrets`).
     public static func excerpt(_ text: String, limit: Int = excerptLength) -> String {
-        // A little past the cut, so a number cut in two is still seen whole.
-        let collapsed = ToolCallSummary.maskingSecrets(String(text.split(whereSeparator: \.isWhitespace).joined(separator: " ").prefix(limit + 80)))
+        // Masked before the cut, which never splits a number.
+        let collapsed = ToolCallSummary.maskingSecrets(text.split(whereSeparator: \.isWhitespace).joined(separator: " "), upTo: limit)
         return collapsed.count > limit ? String(collapsed.prefix(limit)) + "…" : collapsed
     }
 

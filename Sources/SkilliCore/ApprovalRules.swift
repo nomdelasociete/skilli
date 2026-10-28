@@ -288,9 +288,11 @@ public enum ToolCallSummary {
         case is NSNull:
             return "null"
         case let text as String:
-            let flat = text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            // Tabs and line breaks as spaces: the masking reads words between spaces.
+            let flat = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
             if looksSecret(flat) { return hidden }
-            let shown = withoutQuery(flat)
+            // A bank or card number or a key inside the text goes as what it is.
+            let shown = maskingSecrets(withoutQuery(flat), upTo: valueLimit)
             return "“" + (shown.count > valueLimit ? String(shown.prefix(valueLimit - 1)) + "…" : shown) + "”"
         case let number as NSNumber:
             return CFGetTypeID(number) == CFBooleanGetTypeID() ? (number.boolValue ? "true" : "false") : number.stringValue
@@ -352,7 +354,7 @@ public enum ToolCallSummary {
     public static func looksSecret(_ value: String) -> Bool {
         let value = value.trimmingCharacters(in: .whitespaces)
         if value.count >= 12, secretPrefixes.contains(where: value.hasPrefix) { return true }
-        if isCardNumber(value) || isIBAN(value) { return true }
+        if isCardNumber(value) || isIBAN(value) || isRIB(value) { return true }
         // One long word of letters and digits mixed, no path, no address.
         guard value.count >= 32, !value.contains(where: \.isWhitespace), !value.contains("/"), !value.contains("@") else { return false }
         let letters = value.contains(where: \.isLetter)
@@ -384,54 +386,112 @@ public enum ToolCallSummary {
             && characters.dropFirst(4).contains(where: \.isNumber)
     }
 
-    /// What a secret is, said in its place: "(an IBAN)", "(a card number)",
-    /// "(a key)"; nil when `value` is not one.
+    /// A French RIB: bank code (5 digits), branch code (5 digits), account
+    /// number (11 digits or letters), key (2 digits), spaces between groups
+    /// allowed; the key must match, so 23 digits in a row are not one.
+    /// Letters count as digits (A, J → 1; B, K, S → 2 …), then the key is
+    /// 97 - (89 × bank + 15 × branch + 3 × account) mod 97.
+    static func isRIB(_ value: String) -> Bool {
+        let compact = Array(value.filter { $0 != " " }.uppercased())
+        guard compact.count == 23, compact.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }),
+              compact[0..<10].allSatisfy(\.isNumber), compact[21...].allSatisfy(\.isNumber) else { return false }
+        func number(_ characters: ArraySlice<Character>) -> Int? {
+            Int(String(characters.map { character -> Character in
+                guard let ascii = character.asciiValue, character.isLetter else { return character }
+                // A–I → 1–9, J–R → 1–9, S–Z → 2–9.
+                let offset = Int(ascii) - 65
+                return Character(String(offset < 9 ? offset + 1 : offset < 18 ? offset - 8 : offset - 16))
+            }))
+        }
+        guard let bank = number(compact[0..<5]), let branch = number(compact[5..<10]),
+              let account = number(compact[10..<21]), let key = number(compact[21...]) else { return false }
+        return 97 - (89 * bank + 15 * branch + 3 * account) % 97 == key
+    }
+
+    /// What a secret is, said in its place: "(an IBAN)", "(a bank account
+    /// number)", "(a card number)", "(a key)"; nil when `value` is not one.
     public static func secretKind(_ value: String) -> String? {
         if isIBAN(value) { return "(an IBAN)" }
+        if isRIB(value) { return "(a bank account number)" }
         if isCardNumber(value) { return "(a card number)" }
         return looksSecret(value) ? "(a key)" : nil
     }
 
+    /// What may come before a number and stays out of it.
+    private static let openers: Set<Character> = ["(", "[", "{", "<", "\"", "'", "«", "“", "‘"]
+
     /// Free text with each bank or card number and each key in it replaced
     /// by what it is: the words around stay, the number never goes. A
     /// number written in groups ("FR76 3000 6000 …") is one: an IBAN whose
-    /// check digits match exactly, else the longest run of up to nine
-    /// words that looks like one.
-    public static func maskingSecrets(_ text: String) -> String {
-        let words = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+    /// check digits match or a RIB whose key matches exactly, else the
+    /// longest run of up to nine words that looks like one. With `limit`,
+    /// it stops once the result is longer: each part kept was read with
+    /// the words after it, so a cut never splits a number.
+    public static func maskingSecrets(_ text: String, upTo limit: Int? = nil) -> String {
+        let words = text.split(separator: " ", omittingEmptySubsequences: false)
         var kept: [String] = []
+        var length = -1
         var index = 0
         while index < words.count {
+            // Each turn keeps one part, counted at the next.
+            if let last = kept.last { length += last.count + 1 }
+            if let limit, length > limit { break }
             var masked = false
-            let ends = Array(stride(from: min(words.count, index + 9), to: index, by: -1))
-            // Punctuation after it stays out of it ("…189,"), not before.
+            // A run never ends on a word of punctuation alone ("… 04 – Banque").
+            let ends = stride(from: min(words.count, index + 9), to: index, by: -1).filter { end in
+                end == index + 1 || words[end - 1].contains { $0.isLetter || $0.isNumber }
+            }
+            // A label glued to it stays ("RIB:…" → "RIB:(a bank account
+            // number)"); punctuation after it ("…189,", "…>") and a bracket or
+            // quote before it ("(1234…") stay out of it.
+            let first = words[index]
+            var label = ""
+            if let colon = first.firstIndex(where: { $0 == ":" || $0 == "=" }), colon != first.startIndex,
+               first.index(after: colon) != first.endIndex, first[..<colon].allSatisfy(\.isLetter) {
+                label = String(first[...colon])
+            }
             func span(_ end: Int) -> String {
-                var text = words[index..<end].joined(separator: " ")
-                while let last = text.unicodeScalars.last, CharacterSet.punctuationCharacters.contains(last) { text.removeLast() }
+                var text = String(words[index..<end].joined(separator: " ").dropFirst(label.count))
+                while let last = text.unicodeScalars.last, CharacterSet.punctuationCharacters.contains(last) || last == ">" { text.removeLast() }
+                while let first = text.first, openers.contains(first) || first == " " { text.removeFirst() }
                 return text
             }
             if let end = ends.first(where: { hasIBANCheckDigits(span($0)) }) {
-                kept.append("(an IBAN)")
+                kept.append(label + "(an IBAN)")
+                index = end
+                continue
+            }
+            if let end = ends.first(where: { isRIB(span($0)) }) {
+                kept.append(label + "(a bank account number)")
                 index = end
                 continue
             }
             for end in ends {
                 // Several words: a number in groups; a key is one word.
                 let text = span(end)
-                let kind = end - index > 1 ? (isIBAN(text) ? "(an IBAN)" : isCardNumber(text) ? "(a card number)" : nil) : secretKind(text)
+                let kind = end - index > 1 ? (looksLikeGroupedIBAN(text) ? "(an IBAN)" : isCardNumber(text) ? "(a card number)" : nil) : secretKind(text)
                 if let kind {
-                    kept.append(kind)
+                    kept.append(label + kind)
                     index = end
                     masked = true
                     break
                 }
             }
             if !masked {
-                kept.append(words[index])
+                kept.append(String(words[index]))
                 index += 1
             }
         }
         return kept.joined(separator: " ")
+    }
+
+    /// An IBAN in groups whose check digits may be wrong (a typo): as
+    /// written, in capitals and digits, digits for half of it at least, so
+    /// words after a year ("on 2026 delete files") are not one.
+    static func looksLikeGroupedIBAN(_ value: String) -> Bool {
+        guard isIBAN(value), !value.contains(where: \.isLowercase) else { return false }
+        let compact = value.filter { $0 != " " }
+        return compact.filter(\.isNumber).count * 2 >= compact.count
     }
 
     /// An IBAN whose check digits match (ISO 13616: the first four moved to
@@ -457,13 +517,22 @@ public enum ToolCallSummary {
     }
 
     /// A link without its query and fragment: they often carry tokens.
-    private static func withoutQuery(_ text: String) -> String {
-        guard text.contains("://"), !text.contains(" "), let components = URLComponents(string: text),
-              components.query != nil || components.fragment != nil
-        else { return text }
-        var trimmed = components
-        trimmed.query = nil
-        trimmed.fragment = nil
-        return (trimmed.string ?? text) + "?…"
+    /// Without a scheme ("bank.example/reset?rib=…"), or when it does not
+    /// parse, an address whose host has a dot is cut at its first ? or #.
+    static func withoutQuery(_ text: String) -> String {
+        guard !text.contains(" ") else { return text }
+        if text.contains("://"), let components = URLComponents(string: text) {
+            guard components.query != nil || components.fragment != nil else { return text }
+            var trimmed = components
+            trimmed.query = nil
+            trimmed.fragment = nil
+            return (trimmed.string ?? text) + "?…"
+        }
+        guard let cut = text.firstIndex(where: { $0 == "?" || $0 == "#" }), text.index(after: cut) != text.endIndex else { return text }
+        let address = text[..<cut]
+        let host = (address.range(of: "://").map { address[$0.upperBound...] } ?? address).prefix { $0 != "/" }
+        guard host.contains("."), host.first?.isLetter == true || host.first?.isNumber == true,
+              host.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" }) else { return text }
+        return address + "?…"
     }
 }

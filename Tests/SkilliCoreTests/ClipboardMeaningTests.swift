@@ -61,6 +61,10 @@ final class ClipboardMeaningTests: XCTestCase {
         let excerpt = ClipboardMeaning.excerpt(long)
         XCTAssertEqual(excerpt.count, ClipboardMeaning.excerptLength + 1)
         XCTAssertTrue(excerpt.hasSuffix("…"))
+        // A number across the cut goes masked, never its first half.
+        let edge = ClipboardMeaning.excerpt(String(repeating: "a", count: ClipboardMeaning.excerptLength - 10) + " 12345 67890 12345678901 04 suite")
+        XCTAssertFalse(edge.contains("12345"), edge)
+        XCTAssertTrue(edge.hasSuffix("…"), edge)
     }
 
     func testInputCarriesTheRequestAndNow() {

@@ -195,6 +195,46 @@ final class SnippetTests: XCTestCase {
         XCTAssertEqual(ClipboardMeaning.excerpt("Virement sur FR76 3000 6000 0112 3456 7890 189"), "Virement sur (an IBAN)")
     }
 
+    /// A French RIB (no country code, 23 characters) goes as a bank account
+    /// number once its key matches; 23 digits whose key does not stay.
+    /// Invented numbers whose keys match.
+    func testRIBGoesAsABankAccountNumber() {
+        let masked = "(a bank account number)"
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("12345678901234567890104"), masked)
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("Mon RIB : 12345 67890 12345678901 04, merci"), "Mon RIB : \(masked) merci")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("RIB 98765 43210 00ABC123456 65 à jour"), "RIB \(masked) à jour")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("98765 43210 00abc123456 65"), masked, "letters in either case")
+        XCTAssertEqual(ToolCallSummary.secretKind("1111122222333333333333391"), nil, "25 characters: not a RIB")
+        XCTAssertEqual(ToolCallSummary.secretKind("11111 22222 33333333333 91"), masked)
+        XCTAssertTrue(ToolCallSummary.looksSecret("12345 67890 12345678901 04"))
+        // The key does not match: an ordinary number, left as written.
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("Commande 12345 67890 12345678901 05"), "Commande 12345 67890 12345678901 05")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("12345678901234567890105"), "12345678901234567890105")
+        XCTAssertFalse(ToolCallSummary.isRIB("1234567890ABCDEFGHIJK0A"), "the key is two digits")
+        XCTAssertFalse(ToolCallSummary.isRIB("12345A78901234567890104"), "bank and branch are digits")
+        // IBANs and card numbers still go as what they are.
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("IBAN FR76 3000 6000 0112 3456 7890 189 ou RIB 12345 67890 12345678901 04"),
+                       "IBAN (an IBAN) ou RIB \(masked)")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("Carte 4111 1111 1111 1111 exp 12/28"), "Carte (a card number) exp 12/28")
+        XCTAssertEqual(ClipboardMeaning.excerpt("Virement sur 12345 67890 12345678901 04"), "Virement sur \(masked)")
+        // A bracket or quote before it does not hide it.
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("RIB : (12345678901234567890104)"), "RIB : \(masked)")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("« 12345 67890 12345678901 04 »"), "\(masked) »")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("IBAN (FR76 3000 6000 0112 3456 7890 189)"), "IBAN (an IBAN)")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("RIB <12345678901234567890104>"), "RIB \(masked)")
+        // A label glued to it stays, the number goes.
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("RIB:12345678901234567890104 merci"), "RIB:\(masked) merci")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("IBAN=FR7630006000011234567890189"), "IBAN=(an IBAN)")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("IBAN: FR76 3000 6000 0112 3456 7890 189"), "IBAN: (an IBAN)")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("voir https://example.com/a?b=1"), "voir https://example.com/a?b=1")
+        // With a limit, numbers in a row count toward it: it stops past it.
+        let many = Array(repeating: "12345 67890 12345678901 04", count: 50).joined(separator: " ")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets(many, upTo: 60), Array(repeating: masked, count: 3).joined(separator: " "))
+        // Words after a year are not an IBAN.
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("Please act on 2026 delete files"), "Please act on 2026 delete files")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("RDV le 12 mars 2026 au bureau"), "RDV le 12 mars 2026 au bureau")
+    }
+
     func testMeaningPicksTheLikelyOnesBestFirst() {
         let picked = SnippetMeaning.picked(["s2": 0.7, "s0": 0.2, "s5": 0.03, "none": 0.05, "s9": 0.5], choice: "s2", count: 6)
         XCTAssertEqual(picked, [2, 0], "under 4 % and unknown indexes left out")

@@ -158,17 +158,17 @@ public enum PrivacyMap {
         pane: "launcher", toggle: "Search files by meaning")
     public static let history = Flow(
         "history", "Browser history by meaning",
-        sends: "Your words, and the titles, sites and dates of the pages your browsers keep: every one, or, past \(MeaningRounds.questionSize), those from the days your words name; \(MeaningRounds.questionSize) to a question, the likely ones asked again together.",
+        sends: "Your words, and the titles, sites and dates of the pages your browsers keep: every one, or, past \(MeaningRounds.questionSize), those from the days your words name; \(MeaningRounds.questionSize) to a question, the likely ones asked again together. An IBAN, a French RIB, a card number whose check digit is right, or a key (a known prefix such as sk- or ghp_, or one word of 40 letters and digits or more) goes as what it is, never itself; other numbers go as written.",
         when: "Only when you press ⇥ in Browser History.",
         pane: "launcher", toggle: "Search browser history by meaning with ⇥")
     public static let clipboard = Flow(
         "clipboard", "Clipboard by meaning",
-        sends: "Your words, and your kept copies in short, \(ClipboardMeaning.excerptLength) characters each (words read in images, what images show), their app and date: every one, or, past \(MeaningRounds.questionSize), those from the days and of the kind your words name; \(MeaningRounds.questionSize) to a question, the likely ones asked again together. An IBAN, a card number whose check digit is right, or a key (a known prefix such as sk- or ghp_, or one word of 40 letters and digits or more) goes as what it is, never itself; other numbers go as written.",
+        sends: "Your words, and your kept copies in short, \(ClipboardMeaning.excerptLength) characters each (words read in images, what images show), their app and date: every one, or, past \(MeaningRounds.questionSize), those from the days and of the kind your words name; \(MeaningRounds.questionSize) to a question, the likely ones asked again together. An IBAN, a French RIB, a card number whose check digit is right, or a key (a known prefix such as sk- or ghp_, or one word of 40 letters and digits or more) goes as what it is, never itself; other numbers go as written.",
         when: "Only when you press ⇥ in Clipboard History.",
         pane: "clipboard", toggle: "Search by meaning with ⇥")
     public static let snippets = Flow(
         "snippets", "Snippets by meaning",
-        sends: "Your words, and each snippet's name, keyword and a preview of \(SnippetMeaning.previewLength) characters, placeholders unfilled; an IBAN, a card number whose check digit is right, or a key (a known prefix such as sk- or ghp_, or one word of 40 letters and digits or more) goes as what it is (“an IBAN”), never itself; other numbers go as written.",
+        sends: "Your words, and each snippet's name, keyword and a preview of \(SnippetMeaning.previewLength) characters, placeholders unfilled; an IBAN, a French RIB, a card number whose check digit is right, or a key (a known prefix such as sk- or ghp_, or one word of 40 letters and digits or more) goes as what it is (“an IBAN”, “a bank account number”), never itself; other numbers go as written.",
         when: "Only when you press ⇥ in Search Snippets.",
         pane: "snippets", toggle: "Find snippets by meaning with ⇥")
     public static let emoji = Flow(

@@ -48,9 +48,13 @@ public enum HistoryMeaning {
         microseconds > 0 ? Date(timeIntervalSince1970: Double(microseconds) / 1_000_000) : nil
     }
 
-    /// "“Impôts 2026 : déclaration” on impots.gouv.fr, yesterday 18:02".
+    /// "“Impôts 2026 : déclaration” on impots.gouv.fr, yesterday 18:02": the
+    /// title masked as clipboard excerpts are, before its cut; without a
+    /// title, the address; links in either without their query (it often
+    /// carries tokens).
     public static func describe(_ visit: HistoryVisit, now: Date = .now, calendar: Calendar = .current) -> String {
-        var line = "“\(String(visit.shownTitle.prefix(160)))”"
+        let title = visit.shownTitle.split(whereSeparator: \.isWhitespace).map { ToolCallSummary.withoutQuery(String($0)) }.joined(separator: " ")
+        var line = "“\(ClipboardMeaning.excerpt(title, limit: 160))”"
         if !visit.domain.isEmpty { line += " on \(visit.domain)" }
         if let visited = visit.visited { line += ", \(ClipboardMeaning.when(visited, now: now, calendar: calendar))" }
         return line
