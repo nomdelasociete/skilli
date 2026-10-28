@@ -37,7 +37,11 @@ Now the rows are ranked by rules on what macOS already knows, with no SI:
 4. **Added**: Google Drive, Dropbox, OneDrive and iCloud Drive
    (`~/Library/CloudStorage`, `~/Library/Mobile Documents`), left out
    until now with the rest of `~/Library`, shown as "Google Drive/…",
-   "iCloud Drive/…".
+   "iCloud Drive/…". Their dependency folders and packages are left out
+   as anywhere, but no code project is looked for there (so neither
+   build output left out nor code put behind): each look for a `.git`
+   or a `package.json` can wait on the drive, 0.8 s for a common word's
+   folders on one Mac, and code is rarely kept in a cloud drive.
 5. **Folder words**: "martin invoice" finds `Clients/Margot Martin/
    Invoice.pdf`: every word in the name or in a folder above it, one at
    least in the name.
