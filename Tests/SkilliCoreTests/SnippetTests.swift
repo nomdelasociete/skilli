@@ -217,6 +217,10 @@ final class SnippetTests: XCTestCase {
                        "IBAN (an IBAN) ou RIB \(masked)")
         XCTAssertEqual(ToolCallSummary.maskingSecrets("Carte 4111 1111 1111 1111 exp 12/28"), "Carte (a card number) exp 12/28")
         XCTAssertEqual(ClipboardMeaning.excerpt("Virement sur 12345 67890 12345678901 04"), "Virement sur \(masked)")
+        // A bracket or quote before it does not hide it.
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("RIB : (12345678901234567890104)"), "RIB : \(masked)")
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("« 12345 67890 12345678901 04 »"), masked)
+        XCTAssertEqual(ToolCallSummary.maskingSecrets("IBAN (FR76 3000 6000 0112 3456 7890 189)"), "IBAN (an IBAN)")
     }
 
     func testMeaningPicksTheLikelyOnesBestFirst() {

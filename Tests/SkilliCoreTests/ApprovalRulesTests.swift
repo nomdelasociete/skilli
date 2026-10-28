@@ -175,6 +175,17 @@ final class ApprovalRulesTests: XCTestCase {
         XCTAssertTrue(summary.contains("link: “https://example.com/reset?…”"), summary)
     }
 
+    /// A bank or card number inside a sentence goes as what it is, the words
+    /// around it stay.
+    func testArgumentsMaskNumbersInsideText() {
+        let summary = ToolCallSummary.arguments([
+            "note": "RIB : 12345 67890 12345678901 04",
+            "body": "Virement sur FR76 3000 6000 0112 3456 7890 189 demain",
+            "memo": "Carte 4111 1111 1111 1111 exp 12/28"
+        ])
+        XCTAssertEqual(summary, "body: “Virement sur (an IBAN) demain”, memo: “Carte (a card number) exp 12/28”, note: “RIB : (a bank account number)”")
+    }
+
     func testOrdinaryValuesStay() {
         let summary = ToolCallSummary.arguments(["keys": "cmd+s", "max_tokens": 200, "author": "Paul", "cask": true, "phone": "+33 6 12 34 56 78",
                                                  "id": "3f2a1b4c-9d8e-4f7a-b6c5-d4e3f2a1b0c9", "path": "/Users/me/Documents/Rapport annuel 2026.pdf"])

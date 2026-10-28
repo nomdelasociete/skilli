@@ -290,7 +290,8 @@ public enum ToolCallSummary {
         case let text as String:
             let flat = text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
             if looksSecret(flat) { return hidden }
-            let shown = withoutQuery(flat)
+            // A bank or card number or a key inside the text goes as what it is.
+            let shown = maskingSecrets(withoutQuery(flat))
             return "“" + (shown.count > valueLimit ? String(shown.prefix(valueLimit - 1)) + "…" : shown) + "”"
         case let number as NSNumber:
             return CFGetTypeID(number) == CFBooleanGetTypeID() ? (number.boolValue ? "true" : "false") : number.stringValue
@@ -420,6 +421,8 @@ public enum ToolCallSummary {
     /// number written in groups ("FR76 3000 6000 …") is one: an IBAN whose
     /// check digits match or a RIB whose key matches exactly, else the
     /// longest run of up to nine words that looks like one.
+    private static let openers: Set<Character> = ["(", "[", "{", "<", "\"", "'", "«", "“", "‘"]
+
     public static func maskingSecrets(_ text: String) -> String {
         let words = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
         var kept: [String] = []
@@ -427,10 +430,12 @@ public enum ToolCallSummary {
         while index < words.count {
             var masked = false
             let ends = Array(stride(from: min(words.count, index + 9), to: index, by: -1))
-            // Punctuation after it stays out of it ("…189,"), not before.
+            // Punctuation after it stays out of it ("…189,"), and a bracket
+            // or quote before it ("(1234…").
             func span(_ end: Int) -> String {
                 var text = words[index..<end].joined(separator: " ")
                 while let last = text.unicodeScalars.last, CharacterSet.punctuationCharacters.contains(last) { text.removeLast() }
+                while let first = text.first, openers.contains(first) { text.removeFirst() }
                 return text
             }
             if let end = ends.first(where: { hasIBANCheckDigits(span($0)) }) {

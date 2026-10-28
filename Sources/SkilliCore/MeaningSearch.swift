@@ -99,7 +99,8 @@ public struct MeaningNarrowing: Equatable, Sendable {
             }
         case .iban:
             guard words.contains(where: \.isNumber) else { return false }
-            let masked = ToolCallSummary.maskingSecrets(words)
+            // The masking reads words between spaces: a line break is one.
+            let masked = ToolCallSummary.maskingSecrets(words.split(whereSeparator: \.isWhitespace).joined(separator: " "))
             return masked.contains("(an IBAN)") || masked.contains("(a bank account number)")
         }
     }
