@@ -355,7 +355,7 @@ pause") or a shortcut. Irreversible ones ask first.
 
 - **Power and screen**: **Lock Screen**, **Sleep**, **Sleep Displays**,
   **Restart**, **Shut Down**, **Log Out**, **Keep Awake** (until turned
-  off), **Keep Awake for a While** (`awake 2h`, "until 6pm"; a cup in the
+  off), **Keep Awake for a While** (`awake 2h`, `aw 2h`, "until 6pm"; a cup in the
   menu bar, its menu: **Turn Off Keep Awake**). While it is kept awake,
   the cup shows at the right of the launcher's empty field, with the time
   left ("42 min") or alone when it has no end; under the pointer it says

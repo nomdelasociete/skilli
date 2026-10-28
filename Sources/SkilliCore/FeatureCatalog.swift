@@ -355,11 +355,11 @@ public enum FeatureCatalog {
                          oneLine: "Asks \(si) at the time you say: “every Monday at 9am sum up my PRs”",
                          group: .act, symbol: "calendar.badge.clock", run: .ask,
                          keywords: [si, "schedule", "every", "recurring", "routine", "cron", "chaque", "tous les", "planifier", "programmer"]),
-            CatalogEntry(id: "catalog.timer", title: "Timer", oneLine: "Counts down in the menu bar: “timer 10 min tea”, “timer 1:30”",
+            CatalogEntry(id: "catalog.timer", title: "Timer", oneLine: "Counts down in the menu bar: “timer 10 min tea”, “tim 1:30”",
                          group: .act, symbol: "timer", prefix: TimerRequest.word + " ", run: .type(TimerRequest.word + " ", hint: nil),
                          keywords: ["minuteur", "countdown", "chrono", "pomodoro"]),
             system(.keepAwake),
-            CatalogEntry(id: "catalog.awake", title: "Keep Awake for a While", oneLine: "Keeps the Mac awake for a time: “awake 2h”, “awake until 6pm”",
+            CatalogEntry(id: "catalog.awake", title: "Keep Awake for a While", oneLine: "Keeps the Mac awake for a time: “awake 2h”, “aw 2h”, “awake until 6pm”",
                          group: .act, symbol: "cup.and.saucer", prefix: AwakeRequest.word + " ", run: .type(AwakeRequest.word + " ", hint: nil),
                          keywords: ["caffeinate", "sleep", "veille", "éveillé"])
         ]
@@ -371,7 +371,7 @@ public enum FeatureCatalog {
             CatalogEntry(id: "catalog.microphone", title: "Microphone", oneLine: "Switches the microphone in use: built-in, AirPods, a headset…",
                          group: .act, symbol: "mic.fill", run: .type(AudioRoute.title(name: "", output: false), hint: nil),
                          keywords: AudioRoute.keywords(transport: .bluetooth, output: false)),
-            CatalogEntry(id: "catalog.volume", title: "Set Volume", oneLine: "Sets the sound to a level: “volume 30”, “mets le son à 30 %”",
+            CatalogEntry(id: "catalog.volume", title: "Set Volume", oneLine: "Sets the sound to a level: “volume 30”, “vo 30”, “mets le son à 30 %”",
                          group: .act, symbol: "speaker.wave.2.fill", prefix: VolumeRequest.word + " ",
                          run: .type(VolumeRequest.word + " ", hint: nil), keywords: ["sound", "level", "son", "niveau", "percent"]),
             CatalogEntry(id: "catalog.bluetooth", title: "Bluetooth Devices",

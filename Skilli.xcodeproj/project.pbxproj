@@ -252,6 +252,7 @@
 		AA7270CC05A8C28765EC6C9A /* AppIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61D48A25D8C9F405A4C19344 /* AppIndex.swift */; };
 		AB518AD7D5CEF1C5F645EAAB /* SettingsSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9FD96BC2FD37AA111FC3E09 /* SettingsSearch.swift */; };
 		AB77780C43AA783DD85AE10C /* Benchmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD3FFF919066544B9CB6E429 /* Benchmark.swift */; };
+		ACAE0E5D464D806719052315 /* LauncherShorthand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EB0952242384DA9E7B21A36 /* LauncherShorthand.swift */; };
 		AD4DF62D0F981E4DAA273468 /* EmojiOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06959F93DCB7FFBE388BD7C3 /* EmojiOrder.swift */; };
 		ADA8EB2408038C39E5D13F0E /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 909C3A5CA605D8B57F2E96C8 /* Permissions.swift */; };
 		AF377114BB38FDC39AEB9A2C /* SkilliLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41179504621E163F41E02EA3 /* SkilliLink.swift */; };
@@ -483,6 +484,7 @@
 		1B4DD2FE4CDE021E7536FF52 /* Snapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Snapshot.swift; sourceTree = "<group>"; };
 		1D2651D4F883D705A2100969 /* SnippetExpander.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetExpander.swift; sourceTree = "<group>"; };
 		1E9D2B2DD5473B8CC8517E27 /* RecorderChild.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecorderChild.swift; sourceTree = "<group>"; };
+		1EB0952242384DA9E7B21A36 /* LauncherShorthand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherShorthand.swift; sourceTree = "<group>"; };
 		21ABD4AD1E7BFB291A83F013 /* Chord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chord.swift; sourceTree = "<group>"; };
 		21F444F214E3E03561B85FAF /* SkilliMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkilliMain.swift; sourceTree = "<group>"; };
 		2221F1494C4E055BAED62F2A /* KeyBindings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBindings.swift; sourceTree = "<group>"; };
@@ -904,6 +906,7 @@
 				C4E49FD010C799A1DFD649C0 /* LauncherFooter.swift */,
 				C7C18D0A62567C6BC3D56E59 /* LauncherPlace.swift */,
 				C05B7B90EC9AF6CA91BF4AAD /* LauncherPrefix.swift */,
+				1EB0952242384DA9E7B21A36 /* LauncherShorthand.swift */,
 				676F38237780D688FB54E070 /* LayoutEditing.swift */,
 				6F2F9C4183D4F4976FB8F004 /* LinkedApp.swift */,
 				D691F5FFBC7BB5E3C283D27B /* LinkedAppFile.swift */,
@@ -1682,6 +1685,7 @@
 				C88A89C87AF9416F083E8A08 /* LauncherFooter.swift in Sources */,
 				2DBB6DC7A23C8B6F00F506F0 /* LauncherPlace.swift in Sources */,
 				61F00FEE2DD134F2C077A8D7 /* LauncherPrefix.swift in Sources */,
+				ACAE0E5D464D806719052315 /* LauncherShorthand.swift in Sources */,
 				2B9ABD58738B01D5E093572E /* LayoutEditing.swift in Sources */,
 				9CC59AF94967B65C99CA6167 /* LinkPreview.swift in Sources */,
 				DF6AC2A4E54C5FD03FD9B431 /* LinkTrust.swift in Sources */,
