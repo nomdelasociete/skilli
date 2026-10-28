@@ -2142,7 +2142,9 @@ re-investigating.
   the bar stays short, "12 min left · then Standup 14:30" (never a bare
   "12 min" read as the time to the next one), and the menu adds "Next: …"
   with its own Join; the menu joins, shows it in Calendar, opens the
-  agenda, dismisses);
+  agenda, dismisses: that occurrence only, until it ends, saved across
+  relaunches and full calendar syncs, `MeetingDismissals` keyed by the
+  server's id (`calendarItemExternalIdentifier`) and the start);
   "Alerts" (`MeetingAlert`, `MeetingAlerts` in SkilliCore): each On
   time or 1, 2, 5, 10, 15, 30 min or 1 h before, as the card or the card
   with every screen dark around it; each once at its minute (the Mac

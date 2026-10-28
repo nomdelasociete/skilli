@@ -15,6 +15,10 @@ public struct AgendaEvent: Equatable, Sendable, Identifiable {
     }
 
     public let id: String
+    /// The calendar server's id (`calendarItemExternalIdentifier`): kept
+    /// through a full sync of the calendar, when `id` is not. Shared by a
+    /// repeating event's occurrences; nil before the event first syncs.
+    public var externalID: String?
     public var title: String
     public var start: Date
     public var end: Date
@@ -28,9 +32,10 @@ public struct AgendaEvent: Equatable, Sendable, Identifiable {
     /// The user said no: never their next meeting.
     public var declined: Bool
 
-    public init(id: String, title: String, start: Date, end: Date, isAllDay: Bool = false, calendar: String = "", location: String = "",
-                notes: String = "", url: String? = nil, attendees: [Attendee] = [], declined: Bool = false) {
+    public init(id: String, externalID: String? = nil, title: String, start: Date, end: Date, isAllDay: Bool = false, calendar: String = "",
+                location: String = "", notes: String = "", url: String? = nil, attendees: [Attendee] = [], declined: Bool = false) {
         self.id = id
+        self.externalID = externalID
         self.title = title
         self.start = start
         self.end = end

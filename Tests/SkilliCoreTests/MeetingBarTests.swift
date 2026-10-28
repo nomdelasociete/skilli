@@ -213,9 +213,42 @@ final class MeetingBarTests: XCTestCase {
     }
 
     func testDismissedOrNeverShowsNothing() {
-        XCTAssertNil(MeetingBar.plan([sync], now: start, options: options, presence: idle, dismissed: ["sync"]).shown)
+        var dismissed = MeetingDismissals()
+        dismissed.insert(sync)
+        XCTAssertNil(MeetingBar.plan([sync], now: start, options: options, presence: idle, dismissed: dismissed).shown)
         let never = MeetingBar.Options(lead: nil, callsOnly: true, countdown: true, hideAfter: 10, nextDuringMeeting: true)
         XCTAssertEqual(MeetingBar.plan([sync], now: start, options: never), MeetingBar.Plan())
+    }
+
+    func testDismissedIsThatOccurrenceOnly() {
+        var dismissed = MeetingDismissals()
+        dismissed.insert(sync)
+        let tomorrow = AgendaEvent(id: "sync", title: "Weekly sync", start: start.addingTimeInterval(86_400),
+                                   end: start.addingTimeInterval(86_400 + 30 * 60), notes: "https://meet.google.com/abc-defg-hij")
+        XCTAssertEqual(MeetingBar.plan([tomorrow], now: tomorrow.start, options: options, presence: idle, dismissed: dismissed).shown?.id, "sync",
+                       "the next occurrence of a repeating meeting still shows")
+    }
+
+    func testDismissedSurvivesAFullSyncByTheServersID() {
+        let before = AgendaEvent(id: "local-1", externalID: "server-sync", title: "Weekly sync", start: start, end: start.addingTimeInterval(30 * 60),
+                                 notes: "https://meet.google.com/abc-defg-hij")
+        let after = AgendaEvent(id: "local-2", externalID: "server-sync", title: "Weekly sync", start: start, end: start.addingTimeInterval(30 * 60),
+                                notes: "https://meet.google.com/abc-defg-hij")
+        var dismissed = MeetingDismissals()
+        dismissed.insert(before)
+        XCTAssertTrue(dismissed.contains(after), "a new item id, the same server id and start")
+        XCTAssertNil(MeetingBar.plan([after], now: start, options: options, presence: idle, dismissed: dismissed).shown)
+        let unsynced = AgendaEvent(id: "local-3", externalID: "", title: "Draft", start: start, end: start.addingTimeInterval(60))
+        XCTAssertEqual(MeetingDismissals.key(unsynced), "local-3@\(Int(start.timeIntervalSince1970))", "no server id yet: the item id")
+    }
+
+    func testDismissedIsForgottenOnceItEnds() {
+        var dismissed = MeetingDismissals()
+        dismissed.insert(sync)
+        let saved = MeetingDismissals(dismissed.until)
+        XCTAssertTrue(saved.contains(sync), "read back as saved: a relaunch keeps it")
+        XCTAssertEqual(saved.pruned(now: sync.end.addingTimeInterval(-1)), saved, "kept while it is on")
+        XCTAssertTrue(saved.pruned(now: sync.end).until.isEmpty, "gone at its end")
     }
 
     func testTimeLeftReadsInHoursPastAnHour() {
