@@ -336,6 +336,7 @@ struct CatalogPane: View {
                         Text(alias.title)
                     }
                 }
+                .settingAnchor(UndoDelete.row(.alias, alias.id))
             }
         } header: {
             Text("Aliases")

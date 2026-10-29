@@ -62,6 +62,7 @@ struct ScheduledAsksSection: View {
             ForEach(scheduler.asks) { ask in
                 ScheduledAskRow(ask: ask, running: scheduler.running.contains(ask.id), next: scheduler.next(ask), scheduler: scheduler,
                                 deletes: deletes, showAnswer: showAnswer)
+                    .settingAnchor(UndoDelete.row(.scheduledAsk, ask.id))
             }
             HStack {
                 TextField("New", text: $said, prompt: Text("every Monday at 9:00 sum up my pull requests"))

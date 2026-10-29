@@ -198,6 +198,7 @@ private struct RulesSection: View {
                     .buttonStyle(.borderless)
                     .help("Remove this rule")
                 }
+                .settingAnchor(UndoDelete.row(.rule, rule.id))
             }
             Menu {
                 ForEach(suggestions) { suggestion in

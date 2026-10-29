@@ -80,6 +80,9 @@ final class SettingsSearchModel {
     @ObservationIgnored private var revealPane: SettingsPane?
     @ObservationIgnored private var awaitingPane = false
     @ObservationIgnored private var revealCount = 0
+    /// The row looked for came back with ⌘Z (`showRestored`): not found,
+    /// nothing moves.
+    @ObservationIgnored private var quietly = false
     /// The anchors under an Advanced section on screen that is closed.
     @ObservationIgnored private var closedAdvanced: [String: Int] = [:]
     /// Self-test hook: where the last row looked for was shown ("" its
@@ -202,11 +205,24 @@ final class SettingsSearchModel {
     /// delay; a guard gives up after 2 s on a pane that draws no row.
     /// `drawing`: the row was just added, not drawn yet: waited for.
     func reveal(_ anchor: String, in pane: SettingsPane, drawing: Bool = false) {
+        reveal(anchor, in: pane, drawing: drawing, quietly: false)
+    }
+
+    /// A row ⌘Z just brought back in Settings (`SettingsUndo`): its pane
+    /// again if the user left it, the row scrolled to and glowing. The pane
+    /// stays as it is (its search, its page); a row that does not show
+    /// there (behind a setting turned off since) moves nothing.
+    func showRestored(_ anchor: String, in pane: SettingsPane) {
+        reveal(anchor, in: pane, drawing: false, quietly: true)
+    }
+
+    private func reveal(_ anchor: String, in pane: SettingsPane, drawing: Bool, quietly: Bool) {
         revealing = anchor
         revealPane = pane
         landed = nil
         revealCount += 1
-        let redrawn = beforeReveal(pane, anchor) || drawing
+        self.quietly = quietly
+        let redrawn = (!quietly && beforeReveal(pane, anchor)) || drawing
         if navigation.pane != pane || redrawn {
             // Its rows say when it is drawn.
             awaitingPane = true
@@ -238,6 +254,9 @@ final class SettingsSearchModel {
             // Its Advanced opens (it saw `revealing`): the row lands as it appears.
         } else if let pane = revealPane, revealIsLoading(pane) {
             // Its rows are being read: the row lands as it appears.
+        } else if quietly {
+            // Back in its list, drawn on a later pass: it lands as it
+            // appears (the pane, not drawn anew, says nothing).
         } else {
             giveUp()
         }
@@ -248,6 +267,7 @@ final class SettingsSearchModel {
     private func giveUp() {
         guard let anchor = revealing, let pane = revealPane else { return }
         revealing = nil
+        guard !quietly else { return }
         if let other = SettingsSearch.shownWith[anchor], !other.isEmpty {
             reveal(other, in: pane)
         } else {

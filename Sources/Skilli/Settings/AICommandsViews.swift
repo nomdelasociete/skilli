@@ -267,7 +267,7 @@ struct AICommandsPane: View {
                 if yours.isEmpty {
                     Text("None yet: write one, or import one someone shared (Advanced).").foregroundStyle(.secondary)
                 }
-                ForEach(yours) { command in row(command) }
+                ForEach(yours) { command in row(command).settingAnchor(UndoDelete.row(.command, command.id)) }
                 Button {
                     model.editing = model.draft()
                 } label: {

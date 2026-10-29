@@ -675,6 +675,7 @@ final class SelfTest {
                 snippetsFoundByMeaning,
                 snippetsMaybeRow,
                 snippetDeleteUndoes,
+                settingsUndoStaysInTheWindow,
                 clipboardPastesFromLauncher,
                 clipboardForgetUndoes,
                 pasteInSequenceWithKeys,
@@ -2830,7 +2831,7 @@ final class SelfTest {
     private func undoChecks() async {
         let steps: [@MainActor () async -> Void] = [
             clipboardForgetUndoes, trashUndoes, layoutDeleteUndoes, reminderDeleteUndoes, eventDeleteUndoes,
-            snippetDeleteUndoes, commandDeleteUndoes, quicklinkDeleteUndoes, formDetailsUndo, keyRemovalUndoes,
+            snippetDeleteUndoes, settingsUndoStaysInTheWindow, commandDeleteUndoes, quicklinkDeleteUndoes, formDetailsUndo, keyRemovalUndoes,
             serverRemovalUndoes, ruleRemovalUndoes, scheduledAskDeleteUndoes, placeForgetUndoes, aliasRemovalUndoes,
             emojiWordsForgetUndoes, relayTokenRemovalUndoes, shortcutRemovalUndoes
         ]
@@ -3053,6 +3054,104 @@ final class SelfTest {
             library.snippet(snippet.id) == snippet && shortcuts.entryID(for: .snippet(snippet.id)) == shortcut
         }
         record(name, undo.passed, undo.detail, nil)
+    }
+
+    /// A delete made while Settings has the keys is undone in the window,
+    /// never by the card over the screen: the strip at the bottom of the
+    /// pane says it, the keys stay where they were; the real ⌘Z (Edit →
+    /// Undo) brings it back and its row glows in sight. A field typed in
+    /// keeps its own ⌘Z (the typing goes first), the strip's Undo still
+    /// brings it back in its pane; after 10 s the undo is gone with the
+    /// strip.
+    private func settingsUndoStaysInTheWindow() async {
+        let name = "Settings: a delete there is undone in the window (strip, ⌘Z, the row glows), never by the card; a field keeps its ⌘Z; gone after 10 s"
+        guard let deletes = context.deletes else { return record(name, false, "no deletes", nil) }
+        let settings = context.settings
+        let popover = context.aiActions.popover
+        let library = context.snippets
+        let shortcuts = context.shortcuts
+        let snippet = library.save(Snippet(id: "", name: "Selftest Strip Snippet", keyword: ";ststrip", text: "Kept in the window"))
+        let shortcut = shortcuts.add(.snippet(snippet.id))
+        let row = UndoDelete.row(.snippet, snippet.id)
+        defer {
+            library.delete(snippet.id)
+            shortcuts.remove(shortcut)
+            NotificationCenter.default.post(name: SettingTools.changed, object: nil)
+        }
+        func isBack() -> Bool { library.snippet(snippet.id) == snippet && shortcuts.entryID(for: .snippet(snippet.id)) == shortcut }
+        func delete() {
+            deletes.snippet(snippet, in: library, shortcuts: shortcuts)
+            // As the pane does after its Delete: the list read again.
+            NotificationCenter.default.post(name: SettingTools.changed, object: nil)
+        }
+        settings.show(pane: .snippets)
+        guard await waitUntil(timeout: 2, { settings.isVisible && settings.isKey }) != nil else {
+            return record(name, false, "Settings did not take the keys", nil)
+        }
+        await pause(600)
+        let sidebarBefore = settings.sidebarHasKeys
+
+        // 1. Deleted: the strip, no card, the keys where they were; ⌘Z.
+        delete()
+        let gone = library.snippet(snippet.id) == nil
+        let strip = await waitUntil(timeout: 1) { settings.undo.shown?.title == "Snippet Deleted" } != nil
+        let names = settings.undo.shown?.details.contains(snippet.name) == true
+        let noCard = !popover.isVisible
+        let keysKept = settings.isKey && settings.sidebarHasKeys == sidebarBefore
+        await pause(300)
+        await captureSettingsBothWays(as: "settings-undo-strip")
+        await pressKey("z", flags: .maskCommand)
+        let back = await waitUntil(timeout: 2) { isBack() } != nil
+        let stripGone = await waitUntil(timeout: 1) { settings.undo.shown == nil } != nil
+        let glowed = await waitUntil(timeout: 2) { settings.search.landed == row } != nil
+        let inSight = await waitUntil(timeout: 1) { settings.anchorVisibility(row) > 0.95 } != nil
+        let stillNoCard = !popover.isVisible && settings.isKey
+        let first = gone && strip && names && noCard && keysKept && back && stripGone && glowed && inSight && stillNoCard
+
+        // 2. Deleted again, then typing in a field of another pane: ⌘Z
+        // undoes the typing, not the delete; the strip's Undo brings it
+        // back, in its pane.
+        delete()
+        settings.show(pane: .ask)
+        await pause(600)
+        var typing = "no field for a new scheduled ask"
+        var fieldFirst = false
+        if settings.focusField(placeholder: "every Monday") {
+            await pause(200)
+            for character in "xyz" { _ = await typeCharacter(character) }
+            _ = await waitUntil(timeout: 1) { settings.editedText?.string == "xyz" }
+            await pressKey("z", flags: .maskCommand)
+            fieldFirst = await waitUntil(timeout: 1) { settings.editedText?.string != "xyz" } != nil
+                && library.snippet(snippet.id) == nil && settings.undo.shown != nil
+            typing = "⌘Z in the field: “\(settings.editedText?.string ?? "nil")”, the snippet still gone: \(library.snippet(snippet.id) == nil)"
+        }
+        settings.undo.undoNow()
+        let backByStrip = await waitUntil(timeout: 2) { isBack() } != nil
+        let inItsPane = await waitUntil(timeout: 2) { settings.pane == .snippets && settings.search.landed == row } != nil
+        let second = fieldFirst && backByStrip && inItsPane && !popover.isVisible
+
+        // 3. Deleted, left 10 s: the strip and its undo gone; ⌘Z then
+        // brings nothing back.
+        delete()
+        let offered = settings.undo.canUndo
+        let expired = await waitUntil(timeout: UndoDelete.seconds + 2) { settings.undo.shown == nil } != nil
+        let noUndoLeft = !settings.undo.canUndo
+        // ⌘Z where it would undo: Settings in front, else it proves nothing.
+        let stillInSettings = settings.isKey && NSApp.isActive
+        if stillInSettings {
+            await pressKey("z", flags: .maskCommand)
+        } else {
+            // Elsewhere now: no key for this run lands anywhere else.
+            aborted = true
+        }
+        await pause(400)
+        let stays = stillInSettings && library.snippet(snippet.id) == nil && !popover.isVisible
+        let third = offered && expired && noUndoLeft && stays
+        await closeSettings()
+
+        record(name, first && second && third,
+               "deleted \(gone); strip \(strip), names it \(names); no card \(noCard); keys kept \(keysKept) (sidebar \(sidebarBefore)); ⌘Z back \(back), strip gone \(stripGone), row glowed \(glowed), in sight \(inSight), no card \(stillNoCard) | \(typing); typing first \(fieldFirst); strip's Undo back \(backByStrip), in Snippets \(inItsPane) | undo offered \(offered), gone after 10 s \(expired), nothing left \(noUndoLeft), Settings in front \(stillInSettings), ⌘Z then brings nothing back \(stays); settings-undo-strip-*.png",
+               nil)
     }
 
     /// Settings → Commands → Delete on one of the user's: the command and
@@ -16812,7 +16911,7 @@ final class SelfTest {
         await closeLauncher()
 
         // 4. Settings → Emoji counts them; Forget empties them at once,
-        // nothing asked; ⌘Z in the card brings them back.
+        // nothing asked; ⌘Z in the window brings them back (the strip).
         // The library the pane is given (the self-test's own store).
         let library = settings.freshContext().emoji
         let counted = library?.saidCount ?? 0
@@ -16821,14 +16920,14 @@ final class SelfTest {
         _ = await waitUntil(timeout: 2) { settings.search.landed == "section.wordsLearned" }
         await pause(1_600)
         await captureSettingsBothWays(as: "settings-emoji-learned")
-        // Forget, pressed as a user would: no dialog, the undo card.
+        // Forget, pressed as a user would: no dialog, the strip.
         func button(_ title: String) -> AXUIElement? {
             Self.axElements(roles: [kAXButtonRole], where: { $0 == title }).first
         }
         let popover = context.aiActions.popover
         if let forget = button("Forget") { AXUIElementPerformAction(forget, kAXPressAction as CFString) }
         let forgotten = await waitUntil(timeout: 2) { library?.saidCount == 0 } != nil
-        let offered = await waitUntil(timeout: 2) { popover.shownTitle == "Words Forgotten" && popover.hintKeys == ["⌘Z", "esc"] } != nil
+        let offered = await waitUntil(timeout: 2) { settings.undo.shown?.title == "Words Forgotten" && !popover.isVisible } != nil
         await pressKey("z", flags: .maskCommand)
         let back = await waitUntil(timeout: 2) { library?.saidCount == counted } != nil
         await closeSettings()
@@ -16837,7 +16936,7 @@ final class SelfTest {
             name,
             picked && thumbs && toned && byFeeling && firstTyped && askedFirst == 1 && byName && againTyped && askedAgain == 0
                 && counted >= 1 && forgotten && offered && back,
-            "Medium pressed in Settings: \(picked); thumbs up: \(thumbs), typed “\(typedTone)”; by meaning: shown \(byFeeling), typed 😴 \(firstTyped), asked \(askedFirst); same words again: by name \(byName), typed 😴 \(againTyped), asked again \(askedAgain); Settings: \(counted) learned, forgotten at once \(forgotten), undo card \(offered), ⌘Z brought them back \(back); settings-emoji-*.png, settings-emoji-learned-*.png, launcher-emoji-tone.png",
+            "Medium pressed in Settings: \(picked); thumbs up: \(thumbs), typed “\(typedTone)”; by meaning: shown \(byFeeling), typed 😴 \(firstTyped), asked \(askedFirst); same words again: by name \(byName), typed 😴 \(againTyped), asked again \(askedAgain); Settings: \(counted) learned, forgotten at once \(forgotten), the strip \(offered), ⌘Z brought them back \(back); settings-emoji-*.png, settings-emoji-learned-*.png, launcher-emoji-tone.png",
             nil
         )
     }

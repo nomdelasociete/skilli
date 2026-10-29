@@ -516,10 +516,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     private lazy var snippetExpander = SnippetExpander(library: snippetLibrary, selection: selection, preferences: preferences)
     private lazy var aiActions = AIActionController(selection: selection, ai: ai, library: PromptLibrary.shared, layout: layout)
-    /// Every delete of the user's data: at once, Undo ⌘Z in the card for
-    /// 10 s (rule 2).
-    private lazy var deletes = UndoableDeletes { [weak self] title, details, undo in
-        self?.aiActions.offerUndo(title, details: details, undo)
+    /// Every delete of the user's data: at once, ⌘Z for 10 s (rule 2).
+    /// Made in Settings, undone in its window; anywhere else, the card.
+    /// Only the latest comes back: the other one goes (a card left up
+    /// would take ⌘Z from Settings through the tap; any card offer drops
+    /// Settings', `onUndoOffered`).
+    private lazy var deletes = UndoableDeletes { [weak self] title, details, row, undo in
+        guard let self else { return }
+        if self.settings.offerUndo(title, details: details, row: row, undo) {
+            self.aiActions.dropUndo()
+        } else {
+            self.aiActions.offerUndo(title, details: details, undo)
+        }
     }
     private lazy var aiCommands: AICommandsModel = {
         let model = AICommandsModel(library: PromptLibrary.shared, shortcuts: shortcuts)
@@ -1228,6 +1236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         aiActions.launcherSpot = { [weak self] in self?.launcher.restingGlassFrame() ?? .zero }
+        aiActions.onUndoOffered = { [weak self] in self?.settings.dropUndo() }
         aiActions.openLauncherFrame = { [weak self] in
             guard let launcher = self?.launcher, launcher.isVisible else { return nil }
             return launcher.glassFrame

@@ -245,6 +245,9 @@ final class AIActionController {
     private var unpromptedSince: ContinuousClock.Instant?
     /// Counts the undo offers: a later one keeps its card for its own time.
     private var undoOffers = 0
+    /// An undo offered in the card: the one Settings' strip holds goes
+    /// (only the latest delete comes back).
+    var onUndoOffered: @MainActor () -> Void = {}
     /// Opens a URL (a new mail, a contact): the self-test watches it instead.
     var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
     /// The user's contacts, for "qui est …" and "un mail à …" in Ask.
@@ -1998,6 +2001,7 @@ extension AIActionController: ToolPresenter {
     /// ↩, which belongs to the app the user went back to.
     func offerUndo(_ title: String, details: String, seconds: Double = UndoDelete.seconds, _ undo: @escaping @MainActor () throws -> Void) {
         cancel()
+        onUndoOffered()
         // The launcher still open (a copy forgotten with ⌘⌫): under its
         // glass, never over its rows.
         if let open = openLauncherFrame?() {

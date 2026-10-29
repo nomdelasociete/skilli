@@ -70,9 +70,9 @@ struct SettingsContext {
     var deleteLayout: @MainActor (SavedWindowLayout) -> Void = { _ in }
     /// Settings → Windows → Forget What skil.li Learned (⌘Z for 10 s).
     var forgetPlacements: @MainActor () -> Void = {}
-    /// Every delete of the user's data: at once, Undo ⌘Z in the card for
-    /// 10 s (rule 2). Without the app (previews): no card.
-    var deletes = UndoableDeletes { _, _, _ in }
+    /// Every delete of the user's data: at once, ⌘Z for 10 s (rule 2), in
+    /// the window (`SettingsUndo`). Without the app (previews): nothing.
+    var deletes = UndoableDeletes { _, _, _, _ in }
     /// What the user made, for Settings → Catalog: the launcher's "?"
     /// reads the same.
     var catalogInput: @MainActor () -> FeatureCatalog.Input = { FeatureCatalog.Input() }
@@ -282,6 +282,8 @@ struct SettingsRootView: View {
     /// The search atop the sidebar; the panes' rows find it in the
     /// environment (`settingAnchor`).
     let search: SettingsSearchModel
+    /// The strip at the bottom of the pane while a delete can be undone.
+    let undo: SettingsUndo
 
     var body: some View {
         NavigationSplitView {
@@ -295,6 +297,7 @@ struct SettingsRootView: View {
                         if let target = search.scrollTarget { proxy.scrollTo(target, anchor: .center) }
                     }
             }
+            .overlay(alignment: .bottom) { SettingsUndoStrip(undo: undo) }
         }
         .environment(search)
         // The panes that make what the launcher's New … asks for read it.

@@ -75,6 +75,7 @@ struct QuicklinksSection: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .settingAnchor(UndoDelete.row(.quicklink, link.id))
             }
             HStack {
                 Button("Add Quicklink") { editing = Self.new }

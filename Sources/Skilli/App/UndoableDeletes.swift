@@ -7,15 +7,23 @@ import SkilliCore
 /// brings it back for 10 s. Every such delete is here, so Settings, the
 /// launcher and the self-test run the same code. Secrets (API keys,
 /// tokens, a locked form value) wait in memory only for those 10 s and are
-/// never logged.
+/// never logged. Done in Settings, the undo is the window's own
+/// (`SettingsUndo`): ⌘Z there, a strip at the bottom of the pane, the row
+/// back in sight (`row`); elsewhere the card.
 @MainActor
 final class UndoableDeletes {
-    typealias Offer = @MainActor (_ title: String, _ details: String, _ undo: @escaping @MainActor () throws -> Void) -> Void
+    /// `row`: the anchor of the row that comes back in Settings
+    /// (`UndoDelete.row`, or the setting's own), nil when none shows.
+    typealias Offer = @MainActor (_ title: String, _ details: String, _ row: String?, _ undo: @escaping @MainActor () throws -> Void) -> Void
 
-    private let offer: Offer
+    private let present: Offer
 
     init(offer: @escaping Offer) {
-        self.offer = offer
+        present = offer
+    }
+
+    private func offer(_ title: String, _ details: String, row: String? = nil, _ undo: @escaping @MainActor () throws -> Void) {
+        present(title, details, row, undo)
     }
 
     /// Settings' lists that keep their own copy (snippets, quicklinks, the
@@ -111,7 +119,7 @@ final class UndoableDeletes {
     /// marked gets every recording from now on, said at once; ⌘Z puts back
     /// what was there.
     func skillieMarked(_ title: String, previous: String, in preferences: Preferences) {
-        offer("After Every Transcript", UndoDelete.details(title, " gets every recording from now on: its folder, with the sound, the pictures and the words.")) {
+        offer("After Every Transcript", UndoDelete.details(title, " gets every recording from now on: its folder, with the sound, the pictures and the words."), row: "recorderAfterTranscript") {
             preferences.recorderAfterTranscript = previous
         }
     }
@@ -137,7 +145,7 @@ final class UndoableDeletes {
         let moved = try store.moveToTrash()
         guard !moved.isEmpty else { return }
         Log.trace("Better transcription: moved to the Trash")
-        offer("Better Transcription Removed", UndoDelete.details("whisper large-v3-turbo", ": moved to the Trash, macOS's engine from now on.")) {
+        offer("Better Transcription Removed", UndoDelete.details("whisper large-v3-turbo", ": moved to the Trash, macOS's engine from now on."), row: "section.betterTranscription") {
             try store.putBack(moved)
         }
     }
@@ -149,7 +157,7 @@ final class UndoableDeletes {
         arranger.delete(layout.id)
         shortcuts.removeEntries(for: .windowLayout(layout.id))
         Log.trace("Window layout “\(layout.name)” deleted")
-        offer("Layout Deleted", UndoDelete.details(layout.name, ": its windows stay where they are.")) {
+        offer("Layout Deleted", UndoDelete.details(layout.name, ": its windows stay where they are."), row: UndoDelete.row(.layout, layout.id)) {
             try arranger.store(layout)
             shortcuts.restore(entries)
             Log.trace("Window layout “\(layout.name)” put back")
@@ -164,7 +172,7 @@ final class UndoableDeletes {
         let forgotten = learner.forget()
         Log.trace("Windows learned: forgotten")
         offer("Window Places Forgotten", UndoDelete.details(count == 1 ? "1 app's places" : "\(count) apps' places",
-                                                            ": Arrange Windows learns again from where you put them.")) {
+                                                            ": Arrange Windows learns again from where you put them."), row: "section.forgetPlaces") {
             learner.restore(forgotten)
             Log.trace("Windows learned: put back")
         }
@@ -173,7 +181,7 @@ final class UndoableDeletes {
     /// ⌘K → Remove Alias, and an alias removed in Settings → Catalog.
     func alias(of id: String, in preferences: Preferences, shown: @escaping @MainActor () -> Void = {}) {
         guard let removed = RemovedElement.take(from: &preferences.launcherAliases, where: { $0.id == id }) else { return }
-        offer("Alias Removed", UndoDelete.details(removed.element.alias, " for \(removed.element.title)")) {
+        offer("Alias Removed", UndoDelete.details(removed.element.alias, " for \(removed.element.title)"), row: UndoDelete.row(.alias, id)) {
             // Given to another item meanwhile, it stays there.
             removed.putBack(into: &preferences.launcherAliases) { $0.alias == removed.element.alias || $0.id == id }
             shown()
@@ -188,7 +196,7 @@ final class UndoableDeletes {
         let entries = shortcuts.config.shortcuts.filter { $0.action == .snippet(snippet.id) }
         guard let deleted = library.delete(snippet.id) else { return }
         shortcuts.removeEntries(for: .snippet(snippet.id))
-        offer("Snippet Deleted", UndoDelete.details(snippet.name, snippet.keyword.isEmpty ? "" : " (\(snippet.keyword))")) {
+        offer("Snippet Deleted", UndoDelete.details(snippet.name, snippet.keyword.isEmpty ? "" : " (\(snippet.keyword))"), row: UndoDelete.row(.snippet, snippet.id)) {
             library.restore(deleted)
             shortcuts.restore(entries)
             Self.shownAgain()
@@ -204,7 +212,7 @@ final class UndoableDeletes {
         model.shortcuts.removeEntries(for: .aiPrompt(id))
         model.refresh()
         let keys = entries.contains { $0.keys != nil }
-        offer("Command Deleted", UndoDelete.details(deleted.command.title, keys ? ": its shortcut too." : "")) {
+        offer("Command Deleted", UndoDelete.details(deleted.command.title, keys ? ": its shortcut too." : ""), row: UndoDelete.row(.command, id)) {
             let command = model.library.restore(deleted)
             if command.id == id { model.shortcuts.restore(entries) }
             model.refresh()
@@ -217,7 +225,7 @@ final class UndoableDeletes {
         let entries = shortcuts.config.shortcuts.filter { $0.action == .quicklink(link.id) }
         guard let removed = store.delete(link.id) else { return }
         shortcuts.removeEntries(for: .quicklink(link.id))
-        offer("Quicklink Deleted", UndoDelete.details(link.name, link.keyword.isEmpty ? "" : " (\(link.keyword))")) {
+        offer("Quicklink Deleted", UndoDelete.details(link.name, link.keyword.isEmpty ? "" : " (\(link.keyword))"), row: UndoDelete.row(.quicklink, link.id)) {
             store.restore(removed)
             shortcuts.restore(entries)
             Self.shownAgain()
@@ -230,7 +238,7 @@ final class UndoableDeletes {
         let secret = extra.isSensitive ? FormSecrets.value(of: extra) : nil
         guard let removed = RemovedElement.take(extra.id, from: &preferences.formProfiles.mine) else { return }
         FormSecrets.forget(extra)
-        offer("Field Forgotten", UndoDelete.details(extra.label.isEmpty ? "A field" : extra.label)) {
+        offer("Field Forgotten", UndoDelete.details(extra.label.isEmpty ? "A field" : extra.label), row: UndoDelete.row(.detail, extra.id)) {
             // The value first: the row shown again reads it.
             if let secret { FormSecrets.save(secret, for: extra) }
             removed.putBack(into: &preferences.formProfiles.mine)
@@ -244,7 +252,7 @@ final class UndoableDeletes {
         guard let removed = RemovedElement.take(extra.id, from: &preferences.formProfiles.others[index].extras) else { return }
         FormSecrets.forget(extra)
         let name = preferences.formProfiles.others[index].name
-        offer("Field Forgotten", UndoDelete.details(extra.label.isEmpty ? "A field" : extra.label, name.isEmpty ? "" : " of \(name)")) {
+        offer("Field Forgotten", UndoDelete.details(extra.label.isEmpty ? "A field" : extra.label, name.isEmpty ? "" : " of \(name)"), row: UndoDelete.row(.detail, extra.id)) {
             guard let index = preferences.formProfiles.others.firstIndex(where: { $0.id == person }) else { return }
             if let secret { FormSecrets.save(secret, for: extra) }
             removed.putBack(into: &preferences.formProfiles.others[index].extras)
@@ -259,7 +267,7 @@ final class UndoableDeletes {
         person.extras.forEach(FormSecrets.forget)
         let fields = person.extras.count
         offer("Removed from Your Details", UndoDelete.details(person.name.isEmpty ? "Someone" : person.name,
-                                                               fields == 0 ? "" : fields == 1 ? " and their field" : " and their \(fields) fields")) {
+                                                               fields == 0 ? "" : fields == 1 ? " and their field" : " and their \(fields) fields"), row: UndoDelete.row(.person, person.id)) {
             for (extra, secret) in secrets { FormSecrets.save(secret, for: extra) }
             removed.putBack(into: &preferences.formProfiles.others)
         }
@@ -268,7 +276,7 @@ final class UndoableDeletes {
     /// Settings → SI Accounts → Remove on the Claude API key.
     func apiKey(in ai: AIStore) {
         guard let key = ai.removeAPIKey() else { return }
-        offer("Key Removed", UndoDelete.details("Claude API key")) {
+        offer("Key Removed", UndoDelete.details("Claude API key"), row: "claudeAPIKey") {
             try ai.saveAPIKey(key)
         }
     }
@@ -276,7 +284,7 @@ final class UndoableDeletes {
     /// Settings → SI Accounts → Remove on a deciding key (OpenAI, TypeSafe).
     func decisionKey(_ provider: DecisionProvider, in ai: AIStore) {
         guard let key = ai.removeDecisionKey(for: provider) else { return }
-        offer("Key Removed", UndoDelete.details(provider == .openAI ? "OpenAI API key" : "TypeSafe Jev key")) {
+        offer("Key Removed", UndoDelete.details(provider == .openAI ? "OpenAI API key" : "TypeSafe Jev key"), row: provider == .openAI ? "openAIKey" : "typeSafeKey") {
             try ai.saveDecisionKey(key, for: provider)
         }
     }
@@ -285,7 +293,7 @@ final class UndoableDeletes {
     /// sign-in, its tools' rights and list; ⌘Z puts all back.
     func server(_ name: String, in settings: ToolSettings) {
         guard let removed = settings.removeServer(named: name) else { return }
-        offer("Server Removed", UndoDelete.details(name, removed.signIn.isEmpty ? "" : ": its sign-in too.")) {
+        offer("Server Removed", UndoDelete.details(name, removed.signIn.isEmpty ? "" : ": its sign-in too."), row: UndoDelete.row(.server, name)) {
             settings.restore(removed)
         }
     }
@@ -293,7 +301,7 @@ final class UndoableDeletes {
     /// Settings → Tools → Your Tools → −: the tool, its right, its token.
     func customTool(_ name: String, in settings: ToolSettings) {
         guard let removed = settings.removeCustomTool(named: name) else { return }
-        offer("Tool Removed", UndoDelete.details(name)) {
+        offer("Tool Removed", UndoDelete.details(name), row: UndoDelete.row(.tool, name)) {
             settings.restore(removed)
         }
     }
@@ -303,7 +311,7 @@ final class UndoableDeletes {
         guard let removed = settings.removeRule(id) else { return }
         // A rule never written (empty) goes without a word.
         guard !removed.element.said.isEmpty else { return }
-        offer("Rule Removed", UndoDelete.details(removed.element.text)) {
+        offer("Rule Removed", UndoDelete.details(removed.element.text), row: UndoDelete.row(.rule, id)) {
             settings.restoreRule(removed)
         }
     }
@@ -311,7 +319,7 @@ final class UndoableDeletes {
     /// Settings → Ask → On a Schedule → −.
     func scheduledAsk(_ id: UUID, in scheduler: AskScheduler) {
         guard let removed = scheduler.remove(id) else { return }
-        offer("Scheduled Ask Deleted", UndoDelete.details(removed.element.schedule.spoken, ": \(UndoDelete.escaped(UndoDelete.shortened(removed.element.ask)))")) {
+        offer("Scheduled Ask Deleted", UndoDelete.details(removed.element.schedule.spoken, ": \(UndoDelete.escaped(UndoDelete.shortened(removed.element.ask)))"), row: UndoDelete.row(.scheduledAsk, id)) {
             scheduler.restore(removed)
         }
     }
@@ -319,7 +327,7 @@ final class UndoableDeletes {
     /// Settings → Reminders → a place's −.
     func place(_ place: SavedPlace, in preferences: Preferences) {
         guard let removed = RemovedElement.take(place.id, from: &preferences.reminderPlaces) else { return }
-        offer("Place Forgotten", UndoDelete.details(place.name, place.address.isEmpty ? "" : ": \(UndoDelete.escaped(UndoDelete.shortened(place.address)))")) {
+        offer("Place Forgotten", UndoDelete.details(place.name, place.address.isEmpty ? "" : ": \(UndoDelete.escaped(UndoDelete.shortened(place.address)))"), row: UndoDelete.row(.place, place.id)) {
             removed.putBack(into: &preferences.reminderPlaces)
         }
     }
@@ -331,7 +339,7 @@ final class UndoableDeletes {
         guard count > 0 else { return }
         let forgotten = emoji.forgetSaid()
         Self.shownAgain()
-        offer("Words Forgotten", UndoDelete.details(count == 1 ? "1 phrase" : "\(count) phrases", " learned from your picks")) {
+        offer("Words Forgotten", UndoDelete.details(count == 1 ? "1 phrase" : "\(count) phrases", " learned from your picks"), row: "section.wordsLearned") {
             emoji.restoreSaid(forgotten)
             Self.shownAgain()
         }
@@ -341,14 +349,14 @@ final class UndoableDeletes {
     /// Settings → GIFs: the user's own Klipy key; ⌘Z saves it again.
     func klipyKey(in gifs: GIFLibrary) {
         guard let key = gifs.removeOwnKey() else { return }
-        offer("Key Removed", UndoDelete.details("Your Klipy key")) {
+        offer("Key Removed", UndoDelete.details("Your Klipy key"), row: "klipyKey") {
             try gifs.saveOwnKey(key)
         }
     }
 
     func relayToken(in github: GitHubBook) {
         guard let token = github.clearRelayToken() else { return }
-        offer("Token Removed", UndoDelete.details("Live updates token")) {
+        offer("Token Removed", UndoDelete.details("Live updates token"), row: "relayToken") {
             try github.saveRelayToken(token)
         }
     }
@@ -366,7 +374,7 @@ final class UndoableDeletes {
         if id == ShortcutStore.launcherOpenSettingsID {
             guard let chord = store.launcherOpenSettingsChord else { return }
             store.clear(id)
-            offer("Shortcut Removed", UndoDelete.details(chord.keycaps.joined(), " for Open Settings in the launcher")) {
+            offer("Shortcut Removed", UndoDelete.details(chord.keycaps.joined(), " for Open Settings in the launcher"), row: SettingsSearch.shortcutAnchor(id)) {
                 try store.setKeys([chord], for: id)
             }
             return
@@ -376,7 +384,7 @@ final class UndoableDeletes {
             return
         }
         if deleting { store.remove(id) } else { store.clear(id) }
-        offer("Shortcut Removed", UndoDelete.details(chords.map { $0.keycaps.joined() }.joined(separator: " "), " for \(store.title(of: entry))")) {
+        offer("Shortcut Removed", UndoDelete.details(chords.map { $0.keycaps.joined() }.joined(separator: " "), " for \(store.title(of: entry))"), row: SettingsSearch.shortcutAnchor(id)) {
             if store.config.shortcuts.contains(where: { $0.id == id }) {
                 try store.setKeys(chords, for: id)
             } else {

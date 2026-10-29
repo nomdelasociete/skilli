@@ -42,6 +42,7 @@
 		16543AA94D4A56299BB9711D /* TextDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3FCF19ED92966C1F980365 /* TextDiff.swift */; };
 		16C9EA0B5CFBE1ABAAD0B0BE /* SILabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A64CB3911A51390BA9A47F4 /* SILabel.swift */; };
 		16FB71692106D76A26B9C088 /* ResultViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE5D893083C944024E48AD3 /* ResultViews.swift */; };
+		17752F900B72B17C04CE5C34 /* SettingsUndo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F33750B9B584ADF8EBD2278 /* SettingsUndo.swift */; };
 		178EDBAFD06F0DF674AF61F6 /* CurrencyRateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD3764673D8027D8D6835137 /* CurrencyRateStore.swift */; };
 		1793277D981FCF675D57C595 /* RootSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3CA5109B0E7831907EAB78 /* RootSearch.swift */; };
 		1A09A7B64DB51DD704D03C76 /* EnglishInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA162AF12F0BF944DE4938CE /* EnglishInput.swift */; };
@@ -602,6 +603,7 @@
 		6DFAFFF8E51ADA4D23735148 /* GlassCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCheck.swift; sourceTree = "<group>"; };
 		6EA41B2539B0CABC91D045C0 /* AXWait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXWait.swift; sourceTree = "<group>"; };
 		6F2F9C4183D4F4976FB8F004 /* LinkedApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedApp.swift; sourceTree = "<group>"; };
+		6F33750B9B584ADF8EBD2278 /* SettingsUndo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUndo.swift; sourceTree = "<group>"; };
 		6F378531C6E04EA9CEE16A81 /* Transcriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transcriber.swift; sourceTree = "<group>"; };
 		6F3C7B66A9055954306373AB /* CardMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardMarkdown.swift; sourceTree = "<group>"; };
 		6F88F7F275CF87956DCAEE54 /* CardConversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardConversation.swift; sourceTree = "<group>"; };
@@ -1159,6 +1161,7 @@
 				BF5896B0D19D8CFECC155B70 /* RemindersPane.swift */,
 				4325959253D04417BF1E9B1C /* SettingsPreviews.swift */,
 				097FB857C8D704966EC79DD4 /* SettingsSearchViews.swift */,
+				6F33750B9B584ADF8EBD2278 /* SettingsUndo.swift */,
 				107A0B51CA2C5E76D2F16B57 /* SettingsViews.swift */,
 				7EFADC8783D3115E97300F38 /* SettingsWindowController.swift */,
 				05AC6607A474F9233EF1A0D6 /* SkilliesPane.swift */,
@@ -1945,6 +1948,7 @@
 				ED9C0CB6DAFDF86412160C9F /* SettingsGuide.swift in Sources */,
 				7941BC708F91339D5073E7CE /* SettingsPreviews.swift in Sources */,
 				1EBF306F33068103B4D76BA6 /* SettingsSearchViews.swift in Sources */,
+				17752F900B72B17C04CE5C34 /* SettingsUndo.swift in Sources */,
 				78DCC13782FCBB0FED17F4D3 /* SettingsViews.swift in Sources */,
 				B55A4D274DD2579DE95933AE /* SettingsWindowController.swift in Sources */,
 				93117C368F9D13BB9CFB2D6E /* SetupWindowController.swift in Sources */,

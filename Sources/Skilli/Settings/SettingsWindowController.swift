@@ -24,6 +24,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// The search atop the sidebar; kept with its index while the window
     /// comes and goes. The self-test reads it.
     let search: SettingsSearchModel
+    /// A delete made in Settings, undone there: ⌘Z, the strip at the
+    /// bottom of the pane (`offerUndo`). The self-test reads it.
+    let undo = SettingsUndo()
     /// The part of the Catalog to show once all its rows are in.
     private var pendingSection: String?
     /// A New … asked while an editor was open: shown once it closes.
@@ -56,6 +59,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             pane == .apps && self?.apps.page == .shortcuts && self?.apps.readingShortcuts == true
         }
         search.scrollToTop = { [weak self] in self?.scrollDetailToTop() }
+        undo.showRow = { [weak search] anchor, pane in search?.showRestored(anchor, in: pane) }
         catalog.onAllRowsShown = { [weak self] in
             guard let self, self.pendingSection != nil else { return }
             self.pendingSection = nil
@@ -218,6 +222,23 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window?.close()
     }
 
+    /// A delete of the user's data while Settings has the keys (the window,
+    /// or its sheet: an editor's Delete): undone in the window, ⌘Z and the
+    /// strip, `row` back in sight. False when the user is elsewhere (the
+    /// launcher, a recording's window): the card takes it.
+    func offerUndo(_ title: String, details: String, row: String?, _ perform: @escaping @MainActor () throws -> Void) -> Bool {
+        guard let window, let manager = window.undoManager, let key = NSApp.keyWindow,
+              key === window || key.sheetParent === window
+        else { return false }
+        undo.offer(title, details: details, row: row, pane: navigation.pane ?? .general, in: manager, perform)
+        return true
+    }
+
+    /// A newer delete went to the card: this one no longer comes back.
+    func dropUndo() {
+        undo.dropUndo()
+    }
+
     /// Self-test hook: the window as PNG, as it shows on screen. Falls back
     /// to an off-screen render, which leaves the sidebar's glass blank.
     func snapshotPNG(withMenu: Bool = false) async -> Data? {
@@ -334,6 +355,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         // Its sheet went with the window, not its draft: as on Cancel.
         commands?.editing = nil
         search.windowClosed()
+        undo.windowClosed()
         markTilt.pointer(at: nil)
         // A command editor closed with the window: its unsaved shortcuts
         // go with it, as on Cancel.
@@ -352,7 +374,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         search.shortcuts = context.shortcuts
         search.catalogInput = context.catalogInput
         let root = SettingsRootView(preferences: preferences, navigation: navigation, context: context, markTilt: markTilt,
-                                    catalog: catalog, apps: apps, skillies: skillies, search: search)
+                                    catalog: catalog, apps: apps, skillies: skillies, search: search, undo: undo)
         let host = NSHostingController(rootView: root)
         // SwiftUI owns the title (the selected pane) and the toolbar.
         host.sceneBridgingOptions = [.title, .toolbars]

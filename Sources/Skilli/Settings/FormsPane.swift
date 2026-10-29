@@ -59,6 +59,7 @@ struct FormsPane: View {
             Section {
                 ForEach($preferences.formProfiles.mine) { $extra in
                     ExtraRow(extra: $extra) { context.deletes.myDetail(extra, in: preferences) }
+                        .settingAnchor(UndoDelete.row(.detail, extra.id))
                 }
                 AddFieldMenu(present: preferences.formProfiles.mine.map(\.label)) { preferences.formProfiles.mine.append($0) }
             } header: {
@@ -104,6 +105,7 @@ struct FormsPane: View {
                     PersonRow(person: $person, context: context, preferences: preferences) {
                         context.deletes.person(person, in: preferences)
                     }
+                    .settingAnchor(UndoDelete.row(.person, person.id))
                 }
                 HStack {
                     TextField("Person or company", text: $newPerson, prompt: Text("A person or a company: Margot Martin, Nimbus SAS"))
@@ -239,6 +241,7 @@ private struct PersonRow: View {
         DisclosureGroup {
             ForEach($person.extras) { $extra in
                 ExtraRow(extra: $extra) { context.deletes.detail(extra, of: person.id, in: preferences) }
+                    .settingAnchor(UndoDelete.row(.detail, extra.id))
             }
             HStack {
                 AddFieldMenu(present: person.extras.map(\.label)) { person.extras.append($0) }
