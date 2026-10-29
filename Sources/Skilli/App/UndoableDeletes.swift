@@ -212,7 +212,7 @@ final class UndoableDeletes {
         model.shortcuts.removeEntries(for: .aiPrompt(id))
         model.refresh()
         let keys = entries.contains { $0.keys != nil }
-        offer("Command Deleted", UndoDelete.details(deleted.command.title, keys ? ": its shortcut too." : "")) {
+        offer("Command Deleted", UndoDelete.details(deleted.command.title, keys ? ": its shortcut too." : ""), row: UndoDelete.row(.command, id)) {
             let command = model.library.restore(deleted)
             if command.id == id { model.shortcuts.restore(entries) }
             model.refresh()

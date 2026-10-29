@@ -1405,7 +1405,9 @@ the launcher and the self-test call:
   are never logged and never reach a backup.
 - After ⌘Z the panes that keep their own copy read again
   (`SettingTools.changed`). A later undo card replaces an earlier one:
-  only the latest delete can come back.
+  only the latest delete can come back, between the card and Settings'
+  strip too (`AppDelegate`'s `deletes` drops the other one: a card left
+  up would take ⌘Z from Settings through the tap).
 - Made in Settings (the window or its sheet has the keys), the undo is
   the window's own, never the card over the screen (2026-10-29: the card
   sat at the launcher's place, far from the row, and its tap took ⌘Z from

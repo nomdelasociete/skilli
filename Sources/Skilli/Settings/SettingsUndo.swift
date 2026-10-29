@@ -84,6 +84,14 @@ final class SettingsUndo {
         perform(entry)
     }
 
+    /// A newer delete made elsewhere (the card has it): this one goes,
+    /// its strip with it.
+    func dropUndo() {
+        guard pending != nil else { return }
+        drop()
+        hide()
+    }
+
     /// The window closed: its undo manager goes with it.
     func windowClosed() {
         drop()

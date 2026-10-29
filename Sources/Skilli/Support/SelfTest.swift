@@ -3104,8 +3104,9 @@ final class SelfTest {
         let back = await waitUntil(timeout: 2) { isBack() } != nil
         let stripGone = await waitUntil(timeout: 1) { settings.undo.shown == nil } != nil
         let glowed = await waitUntil(timeout: 2) { settings.search.landed == row } != nil
+        let inSight = await waitUntil(timeout: 1) { settings.anchorVisibility(row) > 0.95 } != nil
         let stillNoCard = !popover.isVisible && settings.isKey
-        let first = gone && strip && names && noCard && keysKept && back && stripGone && glowed && stillNoCard
+        let first = gone && strip && names && noCard && keysKept && back && stripGone && glowed && inSight && stillNoCard
 
         // 2. Deleted again, then typing in a field of another pane: ⌘Z
         // undoes the typing, not the delete; the strip's Undo brings it
@@ -3135,14 +3136,16 @@ final class SelfTest {
         let offered = settings.undo.canUndo
         let expired = await waitUntil(timeout: UndoDelete.seconds + 2) { settings.undo.shown == nil } != nil
         let noUndoLeft = !settings.undo.canUndo
-        await pressKey("z", flags: .maskCommand)
+        // ⌘Z where it would undo: Settings in front, else it proves nothing.
+        let stillInSettings = settings.isKey && NSApp.isActive
+        if stillInSettings { await pressKey("z", flags: .maskCommand) }
         await pause(400)
-        let stays = library.snippet(snippet.id) == nil && !popover.isVisible
+        let stays = stillInSettings && library.snippet(snippet.id) == nil && !popover.isVisible
         let third = offered && expired && noUndoLeft && stays
         await closeSettings()
 
         record(name, first && second && third,
-               "deleted \(gone); strip \(strip), names it \(names); no card \(noCard); keys kept \(keysKept) (sidebar \(sidebarBefore)); ⌘Z back \(back), strip gone \(stripGone), row glowed \(glowed), no card \(stillNoCard) | \(typing); typing first \(fieldFirst); strip's Undo back \(backByStrip), in Snippets \(inItsPane) | undo offered \(offered), gone after 10 s \(expired), nothing left \(noUndoLeft), ⌘Z then brings nothing back \(stays); settings-undo-strip-*.png",
+               "deleted \(gone); strip \(strip), names it \(names); no card \(noCard); keys kept \(keysKept) (sidebar \(sidebarBefore)); ⌘Z back \(back), strip gone \(stripGone), row glowed \(glowed), in sight \(inSight), no card \(stillNoCard) | \(typing); typing first \(fieldFirst); strip's Undo back \(backByStrip), in Snippets \(inItsPane) | undo offered \(offered), gone after 10 s \(expired), nothing left \(noUndoLeft), Settings in front \(stillInSettings), ⌘Z then brings nothing back \(stays); settings-undo-strip-*.png",
                nil)
     }
 

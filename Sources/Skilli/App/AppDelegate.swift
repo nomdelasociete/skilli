@@ -518,9 +518,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var aiActions = AIActionController(selection: selection, ai: ai, library: PromptLibrary.shared, layout: layout)
     /// Every delete of the user's data: at once, ⌘Z for 10 s (rule 2).
     /// Made in Settings, undone in its window; anywhere else, the card.
+    /// Only the latest comes back: the other one goes (a card left up
+    /// would take ⌘Z from Settings through the tap).
     private lazy var deletes = UndoableDeletes { [weak self] title, details, row, undo in
-        guard let self, !self.settings.offerUndo(title, details: details, row: row, undo) else { return }
-        self.aiActions.offerUndo(title, details: details, undo)
+        guard let self else { return }
+        if self.settings.offerUndo(title, details: details, row: row, undo) {
+            self.aiActions.dropUndo()
+        } else {
+            self.settings.dropUndo()
+            self.aiActions.offerUndo(title, details: details, undo)
+        }
     }
     private lazy var aiCommands: AICommandsModel = {
         let model = AICommandsModel(library: PromptLibrary.shared, shortcuts: shortcuts)

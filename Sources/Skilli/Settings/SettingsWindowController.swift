@@ -234,6 +234,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         return true
     }
 
+    /// A newer delete went to the card: this one no longer comes back.
+    func dropUndo() {
+        undo.dropUndo()
+    }
+
     /// Self-test hook: the window as PNG, as it shows on screen. Falls back
     /// to an off-screen render, which leaves the sidebar's glass blank.
     func snapshotPNG(withMenu: Bool = false) async -> Data? {
