@@ -1584,6 +1584,8 @@ the launcher and the self-test call:
   watched), a snippet's keyword is erased once it is seen before the caret,
   the field or paragraph taken with nothing selected once the app shows it
   selected (Chromium and Electron apply it a moment later; up to 350 ms).
+  The text taken is the one the app says is selected, not the range asked:
+  Front counts other characters than its value holds.
 
 ### No workarounds where macOS has an API
 

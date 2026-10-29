@@ -127,21 +127,32 @@ final class SelectionService {
         guard selected == .success else {
             return notTaken("\(role) (\(length) characters) refused to select \(range.location)+\(range.length) (AXError \(selected.rawValue))", in: appID)
         }
-        // The app must now show, selected, exactly what will be replaced.
-        // Some apply it a moment later (Chromium and Electron: the page's
-        // own process selects): waited for, as long as a ⌘C would take.
-        let taken = (text as NSString).substring(with: range)
+        // The app must now show it selected: what the app says is selected
+        // is what the paste replaces, so that text is taken. Some apps
+        // select a moment later (Chromium and Electron: the page's own
+        // process does), waited for as long as a ⌘C would take; some count
+        // other characters than their value holds (Front: 1110 selected of
+        // 1115 asked), so the app's own selected text, not the range asked.
         let asked = ContinuousClock.now
-        var now = Self.selectedRange(element)
-        while now.map({ $0.location == range.location && $0.length == range.length }) != true, ContinuousClock.now < asked + Self.copyTimeout {
-            try? await Task.sleep(for: .milliseconds(8))
+        var now: CFRange?
+        var taken: String?
+        while true {
             now = Self.selectedRange(element)
+            if let now, now.length > 0 {
+                if let shown: String = Self.attribute(element, kAXSelectedTextAttribute), !InputScope.isBlank(shown) {
+                    taken = shown
+                } else if now.location == range.location, now.length == range.length {
+                    taken = (text as NSString).substring(with: range)
+                }
+            }
+            guard taken == nil, ContinuousClock.now < asked + Self.copyTimeout else { break }
+            try? await Task.sleep(for: .milliseconds(8))
         }
-        guard now.map({ $0.location == range.location && $0.length == range.length }) == true else {
-            let shown = now.map { "\($0.location)+\($0.length)" } ?? "none"
+        let shown = now.map { "\($0.location)+\($0.length)" } ?? "none"
+        guard let taken else {
             return notTaken("\(role) (\(length) characters) asked to select \(range.location)+\(range.length), shows \(shown)", in: appID)
         }
-        Log.trace("Take input in \(appID): \(role) (\(length) characters) selected \(range.location)+\(range.length) in \(ContinuousClock.now - asked)")
+        Log.trace("Take input in \(appID): \(role) (\(length) characters) asked to select \(range.location)+\(range.length), shows \(shown) after \(ContinuousClock.now - asked)")
         return Read(text: taken, source: .accessibility, tookInput: true)
     }
 
