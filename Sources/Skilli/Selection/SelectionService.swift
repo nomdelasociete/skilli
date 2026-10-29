@@ -150,7 +150,20 @@ final class SelectionService {
         }
         let shown = now.map { "\($0.location)+\($0.length)" } ?? "none"
         guard let taken else {
-            return notTaken("\(role) (\(length) characters) asked to select \(range.location)+\(range.length), shows \(shown)", in: appID)
+            // Late or never: whether the selection lands in the next 3 s,
+            // and the app's own count of characters, for the dev log.
+            let count: Int? = Self.attribute(element, kAXNumberOfCharactersAttribute)
+            Task { @MainActor in
+                let deadline = asked + .seconds(3)
+                var late = Self.selectedRange(element)
+                while late.map({ $0.length > 0 }) != true, ContinuousClock.now < deadline {
+                    try? await Task.sleep(for: .milliseconds(50))
+                    late = Self.selectedRange(element)
+                }
+                let landed = late.map { "\($0.location)+\($0.length)" } ?? "none"
+                Log.trace("Take input in \(appID): after \(ContinuousClock.now - asked), shows \(landed)")
+            }
+            return notTaken("\(role) (\(length) characters, \(count.map(String.init) ?? "no count") by the app's count) asked to select \(range.location)+\(range.length), shows \(shown)", in: appID)
         }
         Log.trace("Take input in \(appID): \(role) (\(length) characters) asked to select \(range.location)+\(range.length), shows \(shown) after \(ContinuousClock.now - asked)")
         return Read(text: taken, source: .accessibility, tookInput: true)
