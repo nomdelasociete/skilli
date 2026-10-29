@@ -66,6 +66,7 @@ struct WindowsPane: View {
                 if groups.count == 1 {
                     ForEach(groups[0].layouts) { layout in
                         LayoutRow(layout: layout, context: context, delete: { context.deleteLayout(layout) })
+                            .settingAnchor(UndoDelete.row(.layout, layout.id))
                     }
                 }
             } header: {
@@ -81,6 +82,7 @@ struct WindowsPane: View {
                 Section {
                     ForEach(group.layouts) { layout in
                         LayoutRow(layout: layout, context: context, delete: { context.deleteLayout(layout) })
+                            .settingAnchor(UndoDelete.row(.layout, layout.id))
                     }
                 } header: {
                     Text(group.title)

@@ -37,6 +37,18 @@ public enum UndoDelete {
         return result
     }
 
+    /// The lists of Settings whose rows a delete takes out.
+    public enum List: String, Sendable {
+        case snippet, quicklink, command, detail, person, server, tool, rule, scheduledAsk, place, alias, layout
+    }
+
+    /// The anchor of a row of `list` (`settingAnchor` in its pane): once
+    /// ⌘Z brought it back in Settings, it is scrolled to and glows, as a
+    /// row found by the search does. Never a `SettingsSearch` anchor.
+    public static func row(_ list: List, _ id: some CustomStringConvertible) -> String {
+        "restored.\(list.rawValue).\(id)"
+    }
+
     /// Room an undo card takes: its title, a line or two, its keys.
     public static let cardRoom: CGFloat = 150
 

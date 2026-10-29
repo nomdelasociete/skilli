@@ -516,10 +516,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     private lazy var snippetExpander = SnippetExpander(library: snippetLibrary, selection: selection, preferences: preferences)
     private lazy var aiActions = AIActionController(selection: selection, ai: ai, library: PromptLibrary.shared, layout: layout)
-    /// Every delete of the user's data: at once, Undo ⌘Z in the card for
-    /// 10 s (rule 2).
-    private lazy var deletes = UndoableDeletes { [weak self] title, details, undo in
-        self?.aiActions.offerUndo(title, details: details, undo)
+    /// Every delete of the user's data: at once, ⌘Z for 10 s (rule 2).
+    /// Made in Settings, undone in its window; anywhere else, the card.
+    private lazy var deletes = UndoableDeletes { [weak self] title, details, row, undo in
+        guard let self, !self.settings.offerUndo(title, details: details, row: row, undo) else { return }
+        self.aiActions.offerUndo(title, details: details, undo)
     }
     private lazy var aiCommands: AICommandsModel = {
         let model = AICommandsModel(library: PromptLibrary.shared, shortcuts: shortcuts)

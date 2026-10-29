@@ -69,6 +69,7 @@ struct SnippetsPane: View {
                         SnippetRow(snippet: snippet)
                     }
                     .buttonStyle(.plain)
+                    .settingAnchor(UndoDelete.row(.snippet, snippet.id))
                 }
                 Button {
                     editing = Self.new

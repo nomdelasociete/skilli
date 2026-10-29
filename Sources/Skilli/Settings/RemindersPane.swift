@@ -77,6 +77,7 @@ struct RemindersPane: View {
                             .help("Forget this place")
                         }
                     }
+                    .settingAnchor(UndoDelete.row(.place, place.id))
                 }
                 HStack {
                     TextField("Name", text: $newName, prompt: Text("Name: Bureau"))

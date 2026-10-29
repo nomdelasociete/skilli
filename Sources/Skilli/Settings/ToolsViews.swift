@@ -145,6 +145,7 @@ struct ToolsPane: View {
                             }
                         }
                     }
+                    .settingAnchor(UndoDelete.row(.server, server.name))
                 }
                 HStack(spacing: 16) {
                     Button {
@@ -228,6 +229,7 @@ struct ToolsPane: View {
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         }
                     }
+                    .settingAnchor(UndoDelete.row(.tool, tool.name))
                 }
                 Button {
                     editingTool = CustomTool(name: "", instructions: "", url: "https://")
