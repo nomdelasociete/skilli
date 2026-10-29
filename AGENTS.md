@@ -1581,7 +1581,9 @@ the launcher and the self-test call:
   held; with `postToPid` nothing has to wait for the user to release keys.
 - Wait on state, not on time: the clipboard comes back once the focused
   field's text changed (Accessibility; 250 ms only where nothing can be
-  watched), a snippet's keyword is erased once it is seen before the caret.
+  watched), a snippet's keyword is erased once it is seen before the caret,
+  the field or paragraph taken with nothing selected once the app shows it
+  selected (Chromium and Electron apply it a moment later; up to 350 ms).
 
 ### No workarounds where macOS has an API
 
