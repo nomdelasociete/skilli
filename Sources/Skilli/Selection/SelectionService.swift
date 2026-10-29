@@ -71,7 +71,22 @@ final class SelectionService {
         if let text = await readViaCopy() {
             return Read(text: text, source: .clipboard)
         }
+        Log.trace("No selection in \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"): \(accessibilitySelectionState()), ⌘C copied no text")
         return nil
+    }
+
+    /// What Accessibility says of the selection now, for the dev log when
+    /// nothing was read: lengths and roles only, never the text.
+    private func accessibilitySelectionState() -> String {
+        guard let element = focusedElement() else { return "no focused element" }
+        let role = [Self.attribute(element, kAXRoleAttribute) as String?, Self.attribute(element, kAXSubroleAttribute) as String?]
+            .compactMap { $0 }.joined(separator: "/")
+        var selected: CFTypeRef?
+        let error = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute as CFString, &selected)
+        let text = error == .success ? (selected as? String).map { "\(($0 as NSString).length) characters selected" } ?? "selected text not a string"
+            : "no selected text (AXError \(error.rawValue))"
+        let range = Self.selectedRange(element).map { "range \($0.location)+\($0.length)" } ?? "no range"
+        return "\(role.isEmpty ? "no role" : role), \(text), \(range)"
     }
 
     /// A paste with a line break would run a command there.
