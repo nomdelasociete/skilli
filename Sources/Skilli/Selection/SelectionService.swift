@@ -84,33 +84,63 @@ final class SelectionService {
 
     private func takeInput() async -> Read? {
         guard let app = NSWorkspace.shared.frontmostApplication, !Self.terminals.contains(app.bundleIdentifier ?? "") else { return nil }
+        let appID = app.bundleIdentifier ?? "?"
         var element = focusedElement()
         if element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) == nil, !accessibleApps.contains(app.processIdentifier) {
             // Electron apps (Slack, Discord, VS Code) build their
             // accessibility only when asked, as Raycast and Rectangle do.
             accessibleApps.insert(app.processIdentifier)
             let axApp = AXUIElementCreateApplication(app.processIdentifier)
-            if AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue) == .success {
+            let manual = AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+            Log.trace("Take input in \(appID): accessibility asked for (AXError \(manual.rawValue))")
+            if manual == .success {
                 for _ in 0..<4 where element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) == nil {
                     try? await Task.sleep(for: .milliseconds(40))
                     element = focusedElement()
                 }
             }
         }
-        guard let element,
-              (Self.attribute(element, kAXSubroleAttribute) as String?) != kAXSecureTextFieldSubrole,
-              let text: String = Self.attribute(element, kAXValueAttribute),
-              let cursor = Self.selectedRange(element), cursor.length == 0,
-              let range = InputScope.range(in: text, cursor: cursor.location)
-        else { return nil }
+        // Each way this can fail, in the dev log: lengths and roles only,
+        // never the text.
+        guard let element else { return notTaken("no focused element", in: appID) }
+        let role = [Self.attribute(element, kAXRoleAttribute) as String?, Self.attribute(element, kAXSubroleAttribute) as String?]
+            .compactMap { $0 }.joined(separator: "/")
+        guard (Self.attribute(element, kAXSubroleAttribute) as String?) != kAXSecureTextFieldSubrole else {
+            return notTaken("a password field", in: appID)
+        }
+        guard let text: String = Self.attribute(element, kAXValueAttribute) else {
+            return notTaken("\(role) gives no text value", in: appID)
+        }
+        let length = (text as NSString).length
+        guard let cursor = Self.selectedRange(element) else {
+            return notTaken("\(role) (\(length) characters) gives no cursor", in: appID)
+        }
+        guard cursor.length == 0 else {
+            return notTaken("\(role) (\(length) characters) has \(cursor.length) selected, but no selected text", in: appID)
+        }
+        guard let range = InputScope.range(in: text, cursor: cursor.location) else {
+            return notTaken("\(role) (\(length) characters) holds only blanks", in: appID)
+        }
         var selection = CFRange(location: range.location, length: range.length)
-        guard let value = AXValueCreate(.cfRange, &selection),
-              AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, value) == .success
-        else { return nil }
+        guard let value = AXValueCreate(.cfRange, &selection) else { return nil }
+        let selected = AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, value)
+        guard selected == .success else {
+            return notTaken("\(role) (\(length) characters) refused to select \(range.location)+\(range.length) (AXError \(selected.rawValue))", in: appID)
+        }
         // The app must now show, selected, exactly what will be replaced.
         let taken = (text as NSString).substring(with: range)
-        guard Self.selectedRange(element).map({ $0.location == range.location && $0.length == range.length }) == true else { return nil }
+        let now = Self.selectedRange(element)
+        guard now.map({ $0.location == range.location && $0.length == range.length }) == true else {
+            let shown = now.map { "\($0.location)+\($0.length)" } ?? "none"
+            return notTaken("\(role) (\(length) characters) asked to select \(range.location)+\(range.length), shows \(shown)", in: appID)
+        }
         return Read(text: taken, source: .accessibility, tookInput: true)
+    }
+
+    /// Why the text at the cursor was not taken, for the dev log.
+    private func notTaken(_ reason: String, in app: String) -> Read? {
+        Log.trace("Take input in \(app): \(reason)")
+        return nil
     }
 
     private static func selectedRange(_ element: AXUIElement) -> CFRange? {
