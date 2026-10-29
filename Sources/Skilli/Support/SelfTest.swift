@@ -3138,7 +3138,12 @@ final class SelfTest {
         let noUndoLeft = !settings.undo.canUndo
         // ⌘Z where it would undo: Settings in front, else it proves nothing.
         let stillInSettings = settings.isKey && NSApp.isActive
-        if stillInSettings { await pressKey("z", flags: .maskCommand) }
+        if stillInSettings {
+            await pressKey("z", flags: .maskCommand)
+        } else {
+            // Elsewhere now: no key for this run lands anywhere else.
+            aborted = true
+        }
         await pause(400)
         let stays = stillInSettings && library.snippet(snippet.id) == nil && !popover.isVisible
         let third = offered && expired && noUndoLeft && stays

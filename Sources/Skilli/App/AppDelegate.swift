@@ -519,13 +519,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Every delete of the user's data: at once, ⌘Z for 10 s (rule 2).
     /// Made in Settings, undone in its window; anywhere else, the card.
     /// Only the latest comes back: the other one goes (a card left up
-    /// would take ⌘Z from Settings through the tap).
+    /// would take ⌘Z from Settings through the tap; any card offer drops
+    /// Settings', `onUndoOffered`).
     private lazy var deletes = UndoableDeletes { [weak self] title, details, row, undo in
         guard let self else { return }
         if self.settings.offerUndo(title, details: details, row: row, undo) {
             self.aiActions.dropUndo()
         } else {
-            self.settings.dropUndo()
             self.aiActions.offerUndo(title, details: details, undo)
         }
     }
@@ -1236,6 +1236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         aiActions.launcherSpot = { [weak self] in self?.launcher.restingGlassFrame() ?? .zero }
+        aiActions.onUndoOffered = { [weak self] in self?.settings.dropUndo() }
         aiActions.openLauncherFrame = { [weak self] in
             guard let launcher = self?.launcher, launcher.isVisible else { return nil }
             return launcher.glassFrame
