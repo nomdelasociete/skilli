@@ -2055,7 +2055,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nomdelasociete.Skilli.core;
 				PRODUCT_NAME = SkilliCore;
 				SDKROOT = macosx;
@@ -2214,7 +2214,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nomdelasociete.Skilli;
 				PRODUCT_MODULE_NAME = Skilli;
 				PRODUCT_NAME = Skilli;
@@ -2241,7 +2241,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nomdelasociete.Skilli.core;
 				PRODUCT_NAME = SkilliCore;
 				SDKROOT = macosx;
@@ -2256,7 +2256,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nomdelasociete.Skilli.transcriber;
 				PRODUCT_MODULE_NAME = Transcriber;
 				PRODUCT_NAME = "skil.li Transcriber";
@@ -2286,7 +2286,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nomdelasociete.Skilli;
 				PRODUCT_MODULE_NAME = Skilli;
 				PRODUCT_NAME = Skilli;
@@ -2304,7 +2304,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nomdelasociete.Skilli.transcriber;
 				PRODUCT_MODULE_NAME = Transcriber;
 				PRODUCT_NAME = "skil.li Transcriber";
