@@ -1581,7 +1581,11 @@ the launcher and the self-test call:
   held; with `postToPid` nothing has to wait for the user to release keys.
 - Wait on state, not on time: the clipboard comes back once the focused
   field's text changed (Accessibility; 250 ms only where nothing can be
-  watched), a snippet's keyword is erased once it is seen before the caret.
+  watched), a snippet's keyword is erased once it is seen before the caret,
+  the field or paragraph taken with nothing selected once the app shows it
+  selected (Chromium and Electron apply it a moment later; up to 350 ms).
+  The text taken is the one the app says is selected, not the range asked:
+  Front counts other characters than its value holds.
 
 ### No workarounds where macOS has an API
 
@@ -4175,7 +4179,9 @@ re-investigating.
 - With nothing selected, `{selection}` commands take the field being edited
   (`InputScope`: whole field ≤ 2,000 characters, else the paragraph at the
   cursor), selected through Accessibility; never in password fields or
-  terminals; Electron apps get `AXManualAccessibility`.
+  terminals; Electron apps get `AXManualAccessibility` each time the field
+  is not seen (Claude showed no focus right after; they may drop it again),
+  then the field is waited for, up to 500 ms.
 - Self-test captures show only skil.li: no padding around windows, and a
   see-through card is captured only while the (large) test window is behind
   all of it. The user's own windows must never end up in `dist/`.

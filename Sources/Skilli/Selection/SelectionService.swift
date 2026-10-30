@@ -49,6 +49,9 @@ final class SelectionService {
     /// No signal tells us when the target app has consumed a paste.
     private static let pasteSettleDelay: Duration = .milliseconds(250)
     private static let accessibilityTimeout: Float = 0.25
+    /// How long an Electron app may take to show the field once its
+    /// accessibility is asked for.
+    private static let accessibilityBuildTimeout: Duration = .milliseconds(500)
 
     init(layout: KeyboardLayout) {
         self.layout = layout
@@ -65,13 +68,37 @@ final class SelectionService {
         if accessibilityReadEnabled, let text = accessibilitySelectionOverride ?? readViaAccessibility(), !InputScope.isBlank(text) {
             return Read(text: text, source: .accessibility)
         }
-        if takingInputIfEmpty, accessibilityReadEnabled, let taken = await takeInput() {
-            return taken
+        if takingInputIfEmpty, accessibilityReadEnabled {
+            let app = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            if let taken = await takeInput() {
+                return taken
+            }
+            // Its waits let the user switch apps: ⌘C there would read, and
+            // the paste then replace, another app's text.
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app else {
+                Log.trace("No selection: another app came in front while the field was being taken, nothing copied")
+                return nil
+            }
         }
         if let text = await readViaCopy() {
             return Read(text: text, source: .clipboard)
         }
+        Log.trace("No selection in \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"): \(accessibilitySelectionState()), ⌘C copied no text")
         return nil
+    }
+
+    /// What Accessibility says of the selection now, for the dev log when
+    /// nothing was read: lengths and roles only, never the text.
+    private func accessibilitySelectionState() -> String {
+        guard let element = focusedElement() else { return "no focused element" }
+        let role = [Self.attribute(element, kAXRoleAttribute) as String?, Self.attribute(element, kAXSubroleAttribute) as String?]
+            .compactMap { $0 }.joined(separator: "/")
+        var selected: CFTypeRef?
+        let error = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute as CFString, &selected)
+        let text = error == .success ? (selected as? String).map { "\(($0 as NSString).length) characters selected" } ?? "selected text not a string"
+            : "no selected text (AXError \(error.rawValue))"
+        let range = Self.selectedRange(element).map { "range \($0.location)+\($0.length)" } ?? "no range"
+        return "\(role.isEmpty ? "no role" : role), \(text), \(range)"
     }
 
     /// A paste with a line break would run a command there.
@@ -84,33 +111,111 @@ final class SelectionService {
 
     private func takeInput() async -> Read? {
         guard let app = NSWorkspace.shared.frontmostApplication, !Self.terminals.contains(app.bundleIdentifier ?? "") else { return nil }
+        let appID = app.bundleIdentifier ?? "?"
         var element = focusedElement()
-        if element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) == nil, !accessibleApps.contains(app.processIdentifier) {
-            // Electron apps (Slack, Discord, VS Code) build their
-            // accessibility only when asked, as Raycast and Rectangle do.
+        if element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) == nil {
+            // Electron apps (Slack, Discord, VS Code, Claude) build their
+            // accessibility only when asked, as Raycast and Rectangle do,
+            // and may drop it again: asked each time the field is not seen,
+            // then waited for. Apps that do not know the attribute say so
+            // at once, and nothing is waited for.
             accessibleApps.insert(app.processIdentifier)
             let axApp = AXUIElementCreateApplication(app.processIdentifier)
-            if AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue) == .success {
-                for _ in 0..<4 where element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) == nil {
-                    try? await Task.sleep(for: .milliseconds(40))
+            let manual = AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+            if manual == .success {
+                let asked = ContinuousClock.now
+                while element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) == nil,
+                      ContinuousClock.now < asked + Self.accessibilityBuildTimeout {
+                    try? await Task.sleep(for: .milliseconds(20))
                     element = focusedElement()
                 }
+                let seen = element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) != nil
+                Log.trace("Take input in \(appID): accessibility asked for, field \(seen ? "seen" : "still not seen") after \(ContinuousClock.now - asked)")
             }
         }
-        guard let element,
-              (Self.attribute(element, kAXSubroleAttribute) as String?) != kAXSecureTextFieldSubrole,
-              let text: String = Self.attribute(element, kAXValueAttribute),
-              let cursor = Self.selectedRange(element), cursor.length == 0,
-              let range = InputScope.range(in: text, cursor: cursor.location)
-        else { return nil }
+        // Each way this can fail, in the dev log: lengths and roles only,
+        // never the text.
+        guard let element else { return notTaken("no focused element", in: appID) }
+        // The wait above lets the user switch apps: never select (and later
+        // paste) in another app than the one the command started in.
+        var owner: pid_t = 0
+        guard AXUIElementGetPid(element, &owner) == .success, owner == app.processIdentifier else {
+            return notTaken("the focus moved to another app", in: appID)
+        }
+        let role = [Self.attribute(element, kAXRoleAttribute) as String?, Self.attribute(element, kAXSubroleAttribute) as String?]
+            .compactMap { $0 }.joined(separator: "/")
+        guard (Self.attribute(element, kAXSubroleAttribute) as String?) != kAXSecureTextFieldSubrole else {
+            return notTaken("a password field", in: appID)
+        }
+        guard let text: String = Self.attribute(element, kAXValueAttribute) else {
+            return notTaken("\(role) gives no text value", in: appID)
+        }
+        let length = (text as NSString).length
+        guard let cursor = Self.selectedRange(element) else {
+            return notTaken("\(role) (\(length) characters) gives no cursor", in: appID)
+        }
+        guard cursor.length == 0 else {
+            return notTaken("\(role) (\(length) characters) has \(cursor.length) selected, but no selected text", in: appID)
+        }
+        guard let range = InputScope.range(in: text, cursor: cursor.location) else {
+            return notTaken("\(role) (\(length) characters) holds only blanks", in: appID)
+        }
         var selection = CFRange(location: range.location, length: range.length)
-        guard let value = AXValueCreate(.cfRange, &selection),
-              AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, value) == .success
-        else { return nil }
-        // The app must now show, selected, exactly what will be replaced.
-        let taken = (text as NSString).substring(with: range)
-        guard Self.selectedRange(element).map({ $0.location == range.location && $0.length == range.length }) == true else { return nil }
+        guard let value = AXValueCreate(.cfRange, &selection) else { return nil }
+        let selected = AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, value)
+        guard selected == .success else {
+            return notTaken("\(role) (\(length) characters) refused to select \(range.location)+\(range.length) (AXError \(selected.rawValue))", in: appID)
+        }
+        // The app must now show it selected: what the app says is selected
+        // is what the paste replaces, so that text is taken. Some apps
+        // select a moment later (Chromium and Electron: the page's own
+        // process does), waited for as long as a ⌘C would take; some count
+        // other characters than their value holds (Front: 1110 selected of
+        // 1115 asked), so the app's own selected text, not the range asked.
+        let asked = ContinuousClock.now
+        var now: CFRange?
+        var taken: String?
+        while true {
+            now = Self.selectedRange(element)
+            if let now, now.length > 0 {
+                if let shown: String = Self.attribute(element, kAXSelectedTextAttribute), !InputScope.isBlank(shown) {
+                    taken = shown
+                } else if now.location == range.location, now.length == range.length {
+                    taken = (text as NSString).substring(with: range)
+                }
+            }
+            guard taken == nil, ContinuousClock.now < asked + Self.copyTimeout else { break }
+            try? await Task.sleep(for: .milliseconds(8))
+        }
+        let shown = now.map { "\($0.location)+\($0.length)" } ?? "none"
+        guard let taken else {
+            // Late or never: whether the selection lands in the next 3 s,
+            // and the app's own count of characters, for the dev log.
+            let count: Int? = Self.attribute(element, kAXNumberOfCharactersAttribute)
+            Task { @MainActor in
+                let deadline = asked + .seconds(3)
+                var late = Self.selectedRange(element)
+                while late.map({ $0.length > 0 }) != true, ContinuousClock.now < deadline {
+                    try? await Task.sleep(for: .milliseconds(50))
+                    late = Self.selectedRange(element)
+                }
+                let landed = late.map { "\($0.location)+\($0.length)" } ?? "none"
+                Log.trace("Take input in \(appID): after \(ContinuousClock.now - asked), shows \(landed)")
+            }
+            return notTaken("\(role) (\(length) characters, \(count.map(String.init) ?? "no count") by the app's count) asked to select \(range.location)+\(range.length), shows \(shown)", in: appID)
+        }
+        // The paste goes where the focus is: still this field, in this app.
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier, !focusMoved(from: element) else {
+            return notTaken("the focus moved while the field was being selected", in: appID)
+        }
+        Log.trace("Take input in \(appID): \(role) (\(length) characters) asked to select \(range.location)+\(range.length), shows \(shown) after \(ContinuousClock.now - asked)")
         return Read(text: taken, source: .accessibility, tookInput: true)
+    }
+
+    /// Why the text at the cursor was not taken, for the dev log.
+    private func notTaken(_ reason: String, in app: String) -> Read? {
+        Log.trace("Take input in \(app): \(reason)")
+        return nil
     }
 
     private static func selectedRange(_ element: AXUIElement) -> CFRange? {
