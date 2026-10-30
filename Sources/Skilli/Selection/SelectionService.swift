@@ -68,8 +68,17 @@ final class SelectionService {
         if accessibilityReadEnabled, let text = accessibilitySelectionOverride ?? readViaAccessibility(), !InputScope.isBlank(text) {
             return Read(text: text, source: .accessibility)
         }
-        if takingInputIfEmpty, accessibilityReadEnabled, let taken = await takeInput() {
-            return taken
+        if takingInputIfEmpty, accessibilityReadEnabled {
+            let app = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            if let taken = await takeInput() {
+                return taken
+            }
+            // Its waits let the user switch apps: ⌘C there would read, and
+            // the paste then replace, another app's text.
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app else {
+                Log.trace("No selection: another app came in front while the field was being taken, nothing copied")
+                return nil
+            }
         }
         if let text = await readViaCopy() {
             return Read(text: text, source: .clipboard)
