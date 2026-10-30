@@ -127,6 +127,12 @@ final class SelectionService {
         // Each way this can fail, in the dev log: lengths and roles only,
         // never the text.
         guard let element else { return notTaken("no focused element", in: appID) }
+        // The wait above lets the user switch apps: never select (and later
+        // paste) in another app than the one the command started in.
+        var owner: pid_t = 0
+        guard AXUIElementGetPid(element, &owner) == .success, owner == app.processIdentifier else {
+            return notTaken("the focus moved to another app", in: appID)
+        }
         let role = [Self.attribute(element, kAXRoleAttribute) as String?, Self.attribute(element, kAXSubroleAttribute) as String?]
             .compactMap { $0 }.joined(separator: "/")
         guard (Self.attribute(element, kAXSubroleAttribute) as String?) != kAXSecureTextFieldSubrole else {
@@ -188,6 +194,10 @@ final class SelectionService {
                 Log.trace("Take input in \(appID): after \(ContinuousClock.now - asked), shows \(landed)")
             }
             return notTaken("\(role) (\(length) characters, \(count.map(String.init) ?? "no count") by the app's count) asked to select \(range.location)+\(range.length), shows \(shown)", in: appID)
+        }
+        // The paste goes where the focus is: still this field, in this app.
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier, !focusMoved(from: element) else {
+            return notTaken("the focus moved while the field was being selected", in: appID)
         }
         Log.trace("Take input in \(appID): \(role) (\(length) characters) asked to select \(range.location)+\(range.length), shows \(shown) after \(ContinuousClock.now - asked)")
         return Read(text: taken, source: .accessibility, tookInput: true)
