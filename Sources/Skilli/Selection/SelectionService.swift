@@ -49,6 +49,9 @@ final class SelectionService {
     /// No signal tells us when the target app has consumed a paste.
     private static let pasteSettleDelay: Duration = .milliseconds(250)
     private static let accessibilityTimeout: Float = 0.25
+    /// How long an Electron app may take to show the field once its
+    /// accessibility is asked for.
+    private static let accessibilityBuildTimeout: Duration = .milliseconds(500)
 
     init(layout: KeyboardLayout) {
         self.layout = layout
@@ -101,18 +104,24 @@ final class SelectionService {
         guard let app = NSWorkspace.shared.frontmostApplication, !Self.terminals.contains(app.bundleIdentifier ?? "") else { return nil }
         let appID = app.bundleIdentifier ?? "?"
         var element = focusedElement()
-        if element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) == nil, !accessibleApps.contains(app.processIdentifier) {
-            // Electron apps (Slack, Discord, VS Code) build their
-            // accessibility only when asked, as Raycast and Rectangle do.
+        if element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) == nil {
+            // Electron apps (Slack, Discord, VS Code, Claude) build their
+            // accessibility only when asked, as Raycast and Rectangle do,
+            // and may drop it again: asked each time the field is not seen,
+            // then waited for. Apps that do not know the attribute say so
+            // at once, and nothing is waited for.
             accessibleApps.insert(app.processIdentifier)
             let axApp = AXUIElementCreateApplication(app.processIdentifier)
             let manual = AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue)
-            Log.trace("Take input in \(appID): accessibility asked for (AXError \(manual.rawValue))")
             if manual == .success {
-                for _ in 0..<4 where element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) == nil {
-                    try? await Task.sleep(for: .milliseconds(40))
+                let asked = ContinuousClock.now
+                while element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) == nil,
+                      ContinuousClock.now < asked + Self.accessibilityBuildTimeout {
+                    try? await Task.sleep(for: .milliseconds(20))
                     element = focusedElement()
                 }
+                let seen = element.flatMap({ Self.attribute($0, kAXValueAttribute) as String? }) != nil
+                Log.trace("Take input in \(appID): accessibility asked for, field \(seen ? "seen" : "still not seen") after \(ContinuousClock.now - asked)")
             }
         }
         // Each way this can fail, in the dev log: lengths and roles only,

@@ -4179,7 +4179,9 @@ re-investigating.
 - With nothing selected, `{selection}` commands take the field being edited
   (`InputScope`: whole field ≤ 2,000 characters, else the paragraph at the
   cursor), selected through Accessibility; never in password fields or
-  terminals; Electron apps get `AXManualAccessibility`.
+  terminals; Electron apps get `AXManualAccessibility` each time the field
+  is not seen (Claude showed no focus right after; they may drop it again),
+  then the field is waited for, up to 500 ms.
 - Self-test captures show only skil.li: no padding around windows, and a
   see-through card is captured only while the (large) test window is behind
   all of it. The user's own windows must never end up in `dist/`.
