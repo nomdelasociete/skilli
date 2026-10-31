@@ -69,13 +69,18 @@ final class GitHubWorkflows {
         // so a failed read is never taken for a start that did not happen
         // (and started again).
         var found: WorkflowRun?
+        var why = "GitHub did not give the run."
         for attempt in 1...3 where found == nil {
             if attempt > 1 { try? await Task.sleep(for: .seconds(2)) }
-            found = (try? await book.rest("GET", "\(repo)/actions/runs/\(id)")).flatMap(GitHubWorkflowAnswers.run)
+            do {
+                found = GitHubWorkflowAnswers.run(try await book.rest("GET", "\(repo)/actions/runs/\(id)"))
+            } catch {
+                why = error.localizedDescription
+            }
         }
         guard let run = found else {
             let page = GitHubWorkflowAnswers.dispatchedRunPage(answer) ?? dispatch.runsPage
-            throw Failure(message: "Started, but GitHub did not answer about the run: it is not followed or approved. "
+            throw Failure(message: "Started, but its run could not be read (\(why)): it is not followed or approved. "
                           + "Do not start it again: \(page.absoluteString)")
         }
         var progress = WorkflowProgress(run: run.named(dispatch.repository))
