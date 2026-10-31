@@ -111,11 +111,11 @@ actor GitHubClient {
 
     /// A REST call of the workflow runs (`GitHubWorkflows`): `path` after
     /// the API's root, its query in `query`; GitHub's answer when it is 2xx.
-    func rest(_ method: String, _ path: String, query: [URLQueryItem] = [], body: [String: Any]? = nil, token: String) async throws -> Data {
+    func rest(_ method: String, _ path: String, query: [URLQueryItem] = [], body: Data? = nil, token: String) async throws -> Data {
         var components = URLComponents(url: endpoints.api.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { components.queryItems = query }
         var request = Self.request(components.url!, method, token: token)
-        if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
+        request.httpBody = body
         return try await send(request).data
     }
 
@@ -800,7 +800,9 @@ final class GitHubBook {
     /// sign-in, to GitHub only: never through the relay.
     func rest(_ method: String, _ path: String, query: [URLQueryItem] = [], body: [String: Any]? = nil) async throws -> Data {
         guard let token else { throw GitHubError(message: "Sign in to GitHub in skil.li's Settings → GitHub first.") }
-        return try await client.rest(method, path, query: query, body: body, token: token)
+        // Encoded here: the JSON object stays on this actor.
+        let data = try body.map { try JSONSerialization.data(withJSONObject: $0) }
+        return try await client.rest(method, path, query: query, body: data, token: token)
     }
 
     /// After a native write: the relay rereads GitHub (its copy is for all

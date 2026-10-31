@@ -78,7 +78,7 @@ final class GitHubWorkflows {
             throw Failure(message: "Started, but GitHub showed no new run of \(dispatch.workflow) within \(findFor.components.seconds) s: "
                           + "\(dispatch.runsPage.absoluteString)")
         }
-        var progress = WorkflowProgress(run: Self.named(run, dispatch.repository))
+        var progress = WorkflowProgress(run: run.named(dispatch.repository))
         followed.append(progress)
         approved[run.id] = []
         progress = await read(progress, in: book)
@@ -97,7 +97,7 @@ final class GitHubWorkflows {
         guard let run = GitHubWorkflowAnswers.run(try await book.rest("GET", "repos/\(repository)/actions/runs/\(id)")) else {
             throw Failure(message: "GitHub did not give run \(id) of \(repository).")
         }
-        return try await details(WorkflowProgress(run: Self.named(run, repository)), in: book)
+        return try await details(WorkflowProgress(run: run.named(repository)), in: book)
     }
 
     /// Cancel Run, from its menu: GitHub stops it; the next read says so.
@@ -165,7 +165,7 @@ final class GitHubWorkflows {
             throw Failure(message: "GitHub did not give the run.")
         }
         var next = progress
-        next.run = Self.named(run, progress.run.repository)
+        next.run = run.named(progress.run.repository)
         next.jobs = GitHubWorkflowAnswers.jobs(try await book.rest("GET", "\(repo)/actions/runs/\(run.id)/jobs",
                                                                    query: [URLQueryItem(name: "filter", value: "latest")]))
         if run.state == .succeeded, next.release == nil {
@@ -224,13 +224,5 @@ final class GitHubWorkflows {
             throw Failure(message: "GitHub did not say who is signed in.")
         }
         return login
-    }
-
-    /// A run's answer names its repository; one that does not keeps the
-    /// one it was asked of.
-    private static func named(_ run: WorkflowRun, _ repository: String) -> WorkflowRun {
-        guard run.repository.isEmpty else { return run }
-        return WorkflowRun(id: run.id, repository: repository, title: run.title, number: run.number, state: run.state, url: run.url,
-                           createdAt: run.createdAt, startedAt: run.startedAt, actor: run.actor, event: run.event)
     }
 }

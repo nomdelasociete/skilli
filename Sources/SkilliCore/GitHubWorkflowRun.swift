@@ -156,6 +156,14 @@ public struct WorkflowRun: Equatable, Sendable {
     public let actor: String?
     public let event: String?
 
+    /// The same run, its repository `repository` when GitHub's answer did
+    /// not name one.
+    public func named(_ repository: String) -> WorkflowRun {
+        guard self.repository.isEmpty else { return self }
+        return WorkflowRun(id: id, repository: repository, title: title, number: number, state: state, url: url,
+                           createdAt: createdAt, startedAt: startedAt, actor: actor, event: event)
+    }
+
     /// skil.li's name for a run, to read it again: its page on GitHub.
     public static func parse(link: String) -> (repository: String, id: Int)? {
         let text = link.trimmingCharacters(in: .whitespacesAndNewlines)
