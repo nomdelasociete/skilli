@@ -6702,12 +6702,12 @@ final class SelfTest {
     /// A GitHub workflow started from a link and followed
     /// (docs/github-workflow-runs.md), against a stand-in, never the user's
     /// account: the link asks in the card (esc starts nothing), ↩ starts
-    /// it, the run is found without its id in GitHub's answer, its
-    /// environment approved once, the menu bar item counts the steps and
+    /// it, the run GitHub's answer names is followed, its environment
+    /// approved once, the menu bar item counts the steps and
     /// lists them, goes when it ends; the end card names the release and ↩
     /// opens it; the tools read the run and refuse a wrong repository.
     private func githubWorkflowRun() async {
-        let name = "GitHub workflow: a link asks (esc: nothing), starts, finds the run, approves once, the menu bar counts steps, the end card opens the release; tools"
+        let name = "GitHub workflow: a link asks (esc: nothing), starts, follows the run named, approves once, the menu bar counts steps, the end card opens the release; tools"
         let stand = WorkflowStandIn()
         guard let server = LoopbackServer(handler: { stand.answer($0) }), let port = await server.port() else {
             record(name, false, "no stand-in server", nil)
@@ -6726,7 +6726,6 @@ final class SelfTest {
         }
         let workflows = GitHubWorkflows(github: { book })
         workflows.interval = .milliseconds(400)
-        workflows.findFor = .seconds(6)
         let indicator = WorkflowIndicator()
         var labels: [String] = []
         var stepLines: [String] = []
@@ -31131,8 +31130,7 @@ private final class PressCounter: NSObject {
 /// a token), the inbox's GraphQL answer, the notifications (304 once asked
 /// with their Last-Modified), merging and marking read, recorded.
 /// GitHub as a workflow run sees it (`githubWorkflowRun`): a dispatch
-/// answered without the run's id (204), the run found in the workflow's
-/// list, waiting for its `release` environment until approved, then one
+/// answered with its run's id, as GitHub does, the run waiting for its `release` environment until approved, then one
 /// step further at each read, then a release published.
 private final class WorkflowStandIn: @unchecked Sendable {
     static let runURL = "https://github.com/nomdelasociete/skilli/actions/runs/501"
@@ -31174,11 +31172,7 @@ private final class WorkflowStandIn: @unchecked Sendable {
             let inputs = (body["inputs"] as? [String: String] ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
             dispatchedList.append(([body["ref"] as? String ?? "?"] + inputs).joined(separator: " "))
             createdAt = .now
-            return LoopbackServer.Response(status: 204)
-        case ("GET", "\(repo)/actions/workflows/release.yml/runs"):
-            let older = run(id: 400, status: "completed", conclusion: "success", created: createdAt.addingTimeInterval(-86_400), actor: "selftest-user")
-            let other = run(id: 450, status: "queued", conclusion: nil, created: createdAt, actor: "someone-else")
-            return .json(["workflow_runs": dispatchedList.isEmpty ? [older] : [other, run(), older]])
+            return .json(["workflow_run_id": 501, "run_url": base + "\(repo)/actions/runs/501", "html_url": Self.runURL])
         case ("GET", "\(repo)/actions/runs/501"):
             if !approvedList.isEmpty { reads += 1 }
             return .json(run())
