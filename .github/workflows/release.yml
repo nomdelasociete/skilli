@@ -64,6 +64,10 @@ jobs:
       - name: Unit tests
         run: swift test
       - name: Release build, unsigned, with the next patch's version
+        # The runner's bash is 3.2: a failed `[[ ]]` does not stop a step
+        # there, and `| tail` hid xcodebuild's failure (a build that did not
+        # compile passed, 2026-10-31). Each check fails the step itself.
+        shell: bash --noprofile --norc -euo pipefail {0}
         run: |
           # The version a patch release would take, as release does.
           version="$(script/release/version.sh patch)"
@@ -75,13 +79,18 @@ jobs:
             CODE_SIGNING_ALLOWED=NO SKILLI_KLIPY_KEY=check-build MARKETING_VERSION="$version" \
             build | tail -n 5
           app="$RUNNER_TEMP/DerivedData/Build/Products/Release/Skilli.app"
-          echo "Built $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist") ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist"))"
+          built="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+          echo "Built $built ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist"))"
           # The version passed is the one the app says.
-          [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" == "$version" ]]
+          [[ "$built" == "$version" ]] || { echo "The app says $built, not $version." >&2; exit 1; }
           # The key reaches the app as a release's would.
-          [[ "$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$app/Contents/Info.plist")" == check-build ]]
-          # The self-tests and their test data never ship.
-          ! strings "$app/Contents/MacOS/Skilli" | grep -q 'SELFTEST'
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$app/Contents/Info.plist")" == check-build ]] \
+            || { echo "SkilliKlipyKey did not reach the app." >&2; exit 1; }
+          # The self-tests and their test data never ship (grep reads it
+          # whole: `-q` would cut strings off, a failure under pipefail).
+          if strings "$app/Contents/MacOS/Skilli" | grep 'SELFTEST' >/dev/null; then
+            echo "This build contains the self-tests." >&2; exit 1
+          fi
 
   release:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
