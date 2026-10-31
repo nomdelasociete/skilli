@@ -20,11 +20,9 @@ final class GitHubWorkflows {
     /// A run ended: the end card.
     var onFinished: ((WorkflowProgress) -> Void)?
 
-    /// Self-test hooks: how often a run is read (6 times less while every
-    /// run only waits), how long a started run is
-    /// looked for when GitHub's answer does not name it.
+    /// Self-test hook: how often a run is read (6 times less while every
+    /// run only waits).
     var interval: Duration = .seconds(5)
-    var findFor: Duration = .seconds(30)
 
     private let github: () -> GitHubBook?
     /// Environments approved, by run: each once.
@@ -55,28 +53,35 @@ final class GitHubWorkflows {
             }
             ref = branch
         }
-        let since = Date.now
+        // `return_run_details`: GitHub then answers with the run's id (200);
+        // without it, 204 and nothing (changelog, 2026-02-19).
         let answer = try await book.rest("POST", "\(repo)/actions/workflows/\(dispatch.workflow)/dispatches",
-                                         body: ["ref": ref, "inputs": dispatch.inputs])
+                                         body: ["ref": ref, "inputs": dispatch.inputs, "return_run_details": true])
         Log.actions.notice("GitHub: started \(dispatch.workflow, privacy: .public) on \(dispatch.repository, privacy: .private)")
-        var run: WorkflowRun?
-        if let id = GitHubWorkflowAnswers.dispatchedRunID(answer) {
-            run = GitHubWorkflowAnswers.run(try await book.rest("GET", "\(repo)/actions/runs/\(id)"))
-        } else {
-            let login = try await self.login(book)
-            let deadline = ContinuousClock.now + findFor
-            while run == nil, ContinuousClock.now < deadline {
-                try await Task.sleep(for: .seconds(2))
-                let list = try await book.rest("GET", "\(repo)/actions/workflows/\(dispatch.workflow)/runs",
-                                               query: [URLQueryItem(name: "event", value: "workflow_dispatch"),
-                                                       URLQueryItem(name: "branch", value: ref),
-                                                       URLQueryItem(name: "per_page", value: "10")])
-                run = GitHubWorkflowAnswers.dispatchedRun(in: list, by: login, since: since)
+        // Only the run GitHub names in its answer is followed and approved:
+        // a run picked from the list by time could be another one this
+        // user started, approved without being asked.
+        guard let id = GitHubWorkflowAnswers.dispatchedRunID(answer) else {
+            throw Failure(message: "Started, but GitHub did not say which run: nothing is followed or approved. "
+                          + "\(dispatch.runsPage.absoluteString)")
+        }
+        // Started now, whatever the read says: three tries, then where it is,
+        // so a failed read is never taken for a start that did not happen
+        // (and started again).
+        var found: WorkflowRun?
+        var why = "GitHub did not give the run."
+        for attempt in 1...3 where found == nil {
+            if attempt > 1 { try? await Task.sleep(for: .seconds(2)) }
+            do {
+                found = GitHubWorkflowAnswers.run(try await book.rest("GET", "\(repo)/actions/runs/\(id)"))
+            } catch {
+                why = error.localizedDescription
             }
         }
-        guard let run else {
-            throw Failure(message: "Started, but GitHub showed no new run of \(dispatch.workflow) within \(findFor.components.seconds) s: "
-                          + "\(dispatch.runsPage.absoluteString)")
+        guard let run = found else {
+            let page = GitHubWorkflowAnswers.dispatchedRunPage(answer) ?? dispatch.runsPage
+            throw Failure(message: "Started, but its run could not be read (\(why)): it is not followed or approved. "
+                          + "Do not start it again: \(page.absoluteString)")
         }
         var progress = WorkflowProgress(run: run.named(dispatch.repository))
         followed.append(progress)
@@ -216,15 +221,5 @@ final class GitHubWorkflows {
             throw Failure(message: "GitHub is not connected. The user signs in with GitHub in skil.li's Settings → GitHub.")
         }
         return book
-    }
-
-    /// Who started it, to find the run: the login read with the pull
-    /// requests, else GitHub's `/user`.
-    private func login(_ book: GitHubBook) async throws -> String {
-        if let login = book.login { return login }
-        guard let login = GitHubWorkflowAnswers.login(try await book.rest("GET", "user")) else {
-            throw Failure(message: "GitHub did not say who is signed in.")
-        }
-        return login
     }
 }

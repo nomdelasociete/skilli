@@ -203,6 +203,12 @@ public enum GitHubWorkflowAnswers {
         dictionary(data)?["workflow_run_id"] as? Int
     }
 
+    /// The run's page in that answer, to say where it is when it cannot be
+    /// read.
+    public static func dispatchedRunPage(_ data: Data) -> URL? {
+        (dictionary(data)?["html_url"] as? String).flatMap(URL.init(string:))
+    }
+
     public static func run(_ data: Data) -> WorkflowRun? {
         dictionary(data).flatMap(run(from:))
     }
@@ -216,18 +222,6 @@ public enum GitHubWorkflowAnswers {
                            state: WorkflowState(status: object["status"] as? String, conclusion: object["conclusion"] as? String),
                            url: url, createdAt: created, startedAt: date(object["run_started_at"]),
                            actor: (object["actor"] as? [String: Any])?["login"] as? String, event: object["event"] as? String)
-    }
-
-    /// The run a dispatch made, when GitHub's answer did not name it: the
-    /// newest `workflow_dispatch` run of that workflow by this user,
-    /// created since the dispatch (GitHub's clock may be a few seconds
-    /// behind this Mac's).
-    public static func dispatchedRun(in data: Data, by login: String, since: Date) -> WorkflowRun? {
-        let runs = (dictionary(data)?["workflow_runs"] as? [[String: Any]] ?? []).compactMap(run(from:))
-        return runs.filter {
-            $0.event == "workflow_dispatch" && $0.actor?.caseInsensitiveCompare(login) == .orderedSame
-                && $0.createdAt >= since.addingTimeInterval(-10)
-        }.max { $0.createdAt < $1.createdAt }
     }
 
     public static func jobs(_ data: Data) -> [WorkflowJob] {
@@ -274,11 +268,6 @@ public enum GitHubWorkflowAnswers {
             let name = (object["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? tag
             return WorkflowRelease(tag: tag, name: name, url: url, publishedAt: published)
         }.max { $0.publishedAt < $1.publishedAt }
-    }
-
-    /// GitHub's login in `GET /user`.
-    public static func login(_ data: Data) -> String? {
-        dictionary(data)?["login"] as? String
     }
 }
 

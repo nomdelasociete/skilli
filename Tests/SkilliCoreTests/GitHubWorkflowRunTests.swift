@@ -96,18 +96,14 @@ final class GitHubWorkflowRunTests: XCTestCase {
         XCTAssertEqual(WorkflowState(status: "completed", conclusion: "startup_failure"), .failed)
     }
 
-    func testTheDispatchedRunIsThisUsersNewOne() {
-        let since = try! Date("2026-10-30T10:00:00Z", strategy: .iso8601)
-        let list = json(["workflow_runs": [
-            runObject(id: 1, status: "completed", conclusion: "success", created: "2026-10-29T10:00:00Z"),
-            runObject(id: 2, status: "queued", created: "2026-10-30T10:00:03Z", actor: "someone-else"),
-            runObject(id: 3, status: "queued", created: "2026-10-30T10:00:04Z", event: "push"),
-            runObject(id: 4, status: "queued", created: "2026-10-30T10:00:02Z", actor: "Maintainer")
-        ]])
-        XCTAssertEqual(GitHubWorkflowAnswers.dispatchedRun(in: list, by: "maintainer", since: since)?.id, 4)
-        XCTAssertNil(GitHubWorkflowAnswers.dispatchedRun(in: list, by: "nobody", since: since))
+    func testOnlyTheRunGitHubNamesIsFollowed() {
         XCTAssertEqual(GitHubWorkflowAnswers.dispatchedRunID(json(["workflow_run_id": 77, "html_url": "x"])), 77)
+        XCTAssertEqual(GitHubWorkflowAnswers.dispatchedRunPage(json(["workflow_run_id": 77, "html_url": "https://github.com/a/b/actions/runs/77"]))?
+            .absoluteString, "https://github.com/a/b/actions/runs/77")
+        // No id (an empty 204, another answer): no run, never one guessed.
         XCTAssertNil(GitHubWorkflowAnswers.dispatchedRunID(Data()))
+        XCTAssertNil(GitHubWorkflowAnswers.dispatchedRunID(json(["html_url": "x"])))
+        XCTAssertEqual(GitHubWorkflowAnswers.run(json(runObject(status: "queued")))?.id, 42)
     }
 
     func testOnlyTheEnvironmentsThisUserMayApprove() {

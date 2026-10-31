@@ -75,9 +75,13 @@ Two changes, one per side:
      GitHub; before "Build, notarize, publish" ends nothing is public.
      After it, a release is out: the next release replaces it (the feed
      holds one release).
-   - The run cannot be found after the start (GitHub answered without its
-     id and no new run appeared within 30 s): the card says so with the
-     workflow's runs page; nothing is followed.
+   - GitHub's answer to the start does not name its run (it does when
+     asked, `return_run_details`): the card says so with the workflow's runs page; nothing is
+     followed or approved. A run is never picked from the list by time:
+     it could be another one this user started, approved unasked.
+   - Started, but its run cannot be read (three tries): the card says it
+     started, with its link, and not to start it again; it is not followed
+     or approved.
    - The user may not approve the environment: the run is followed as
      "Waiting for approval", with Open on GitHub for whoever can.
    - skil.li quits during the run: the run goes on, on GitHub; the menu
@@ -147,7 +151,7 @@ covers each one):
 
 | Step | GitHub's API |
 | --- | --- |
-| Start | `POST /repos/{repo}/actions/workflows/{workflow}/dispatches` (`ref`, `inputs`); its answer's `workflow_run_id`, else the newest `workflow_dispatch` run of that workflow by this user created since |
+| Start | `POST /repos/{repo}/actions/workflows/{workflow}/dispatches` (`ref`, `inputs`, `return_run_details: true`); the run its answer names (`workflow_run_id`), never one guessed |
 | Approve | `GET …/actions/runs/{id}/pending_deployments`; `POST` the same with the environments the user `current_user_can_approve`, `approved` |
 | Follow | `GET …/actions/runs/{id}` and `…/runs/{id}/jobs?filter=latest`: every 5 s while it runs, every 30 s while it only waits (an approval only someone else can give, a runner) |
 | End | `GET /repos/{repo}/releases?per_page=5`: a release published since the run started is "the release it made" |
