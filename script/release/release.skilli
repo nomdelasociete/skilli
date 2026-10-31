@@ -1,0 +1,35 @@
+#!/bin/sh
+# @skilli.schemaVersion 1
+# @skilli.title Release skil.li
+# @skilli.mode compact
+# @skilli.packageName skil.li
+# @skilli.icon 📦
+# @skilli.description Starts skil.li's release on GitHub and follows it in the menu bar
+# @skilli.argument1 { "type": "dropdown", "placeholder": "Release", "data": [{ "title": "Patch (fixes)", "value": "patch" }, { "title": "Minor (new features)", "value": "minor" }, { "title": "Critical patch (shown at once, cannot be skipped)", "value": "critical" }] }
+#
+# skil.li's release in one step (docs/github-workflow-runs.md): the
+# workflow .github/workflows/release.yml on main, its version the last
+# release's raised by one patch or one minor. skil.li asks in its card
+# before it starts (what it publishes reaches every user), approves the
+# `release` environment with that answer, shows each step in the menu bar
+# and says at the end where the release is, or which step failed.
+#
+# Add it once: double-click this file (skil.li → Settings → Skillies, Add).
+# Needs skil.li signed in with GitHub (Settings → GitHub), as someone who
+# may run the workflow and approve its environment.
+#
+# Copyright (c) 2026 skil.li contributors. GPL-3.0, as skil.li.
+set -eu
+case "${1:-}" in
+  patch) inputs='{"bump":"patch","critical":false}' ;;
+  minor) inputs='{"bump":"minor","critical":false}' ;;
+  critical) inputs='{"bump":"patch","critical":true}' ;;
+  *) echo "Pick Patch, Minor or Critical patch."; exit 2 ;;
+esac
+if said=$("$SKILLI_CLI" call run_github_workflow repo=nomdelasociete/skilli workflow=release.yml ref=main inputs="$inputs" 2>&1); then
+  # The first line says it started; the menu bar follows it from here.
+  printf '%s\n' "$said" | sed -n 1p
+else
+  printf '%s\n' "$said" | sed -n 1p
+  exit 1
+fi

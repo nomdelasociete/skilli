@@ -209,6 +209,8 @@ final class SkilliTools {
     var reminders: ReminderBook?
     /// The user's GitHub (Settings → GitHub).
     var github: GitHubBook?
+    /// The workflows started from skil.li (run_github_workflow).
+    var workflows: GitHubWorkflows?
     /// skil.li actions (CleanShot, text case) run like a shortcut would.
     var performAction: ((SkilliAction) -> Void)?
     /// An app added (create_app_link): the launcher's rows follow.
@@ -250,6 +252,22 @@ final class SkilliTools {
     /// in the card, naming the recording; no Always, no right or mode makes
     /// them silent (`ToolSettings.asksEveryTime`).
     nonisolated static let recordingWords: Set<String> = ["get_transcript", "recording_followup"]
+
+    /// Starting a GitHub workflow publishes what it publishes (a release
+    /// to every user of an app): asked every time, no Always.
+    nonisolated static let startsWorkflow = "run_github_workflow"
+
+    /// run_github_workflow's arguments read: why not, before anything is
+    /// asked. `inputs` as JSON text (`$SKILLI_CLI call`), or as the object
+    /// an agent may send instead.
+    nonisolated static func workflowDispatch(_ arguments: [String: Any]) throws -> WorkflowDispatch {
+        var inputs = arguments["inputs"] as? String ?? ""
+        if let object = arguments["inputs"] as? [String: Any], let data = try? JSONSerialization.data(withJSONObject: object) {
+            inputs = String(decoding: data, as: UTF8.self)
+        }
+        return try WorkflowDispatch(repository: arguments["repo"] as? String ?? "", workflow: arguments["workflow"] as? String ?? "",
+                                    ref: arguments["ref"] as? String, inputs: WorkflowDispatch.inputs(fromJSON: inputs))
+    }
 
     nonisolated static let askUser = "ask_user"
     nonisolated static let approve = "approve"
@@ -636,6 +654,17 @@ final class SkilliTools {
                        description: "Marks read every notification list_github_notifications gives for the same query (all of them without one). Only when the user asked for it.",
                        group: .github, risk: .harmless,
                        parameters: [.init(name: "query", description: "Words in the title or the repository.", isRequired: false)]),
+        ToolDefinition(name: "run_github_workflow", title: "Start a GitHub workflow",
+                       description: "Starts a GitHub Actions workflow that has workflow_dispatch (a release, a deploy) with its inputs, approves its environment when the user may approve it, then skil.li follows it in the menu bar and says how it ended. Asked in the card every time. Answers once the run started, with its link; get_github_workflow_run reads it later. Only when the user asked for it.",
+                       group: .github, risk: .changes,
+                       parameters: [.init(name: "repo", description: "owner/name: \"nomdelasociete/skilli\"."),
+                                    .init(name: "workflow", description: "Its file in .github/workflows (\"release.yml\"), or its id."),
+                                    .init(name: "ref", description: "The branch or tag it runs on; its default branch when left out.", isRequired: false),
+                                    .init(name: "inputs", description: "Its inputs as one JSON object: {\"bump\":\"patch\",\"critical\":false}.", isRequired: false)]),
+        ToolDefinition(name: "get_github_workflow_run", title: "Read a GitHub workflow run",
+                       description: "A workflow run's state: waiting, queued, running (on which step), succeeded, failed (where) or cancelled; each job and step; the release it published. By its link, as run_github_workflow gives it.",
+                       group: .github, risk: .read,
+                       parameters: [.init(name: "run", description: "Its link: https://github.com/owner/name/actions/runs/123.")]),
         ToolDefinition(name: "search_contacts", title: "Search your contacts",
                        description: "Finds the user's contacts by anything known of them: name, nickname, company, job, department, email, phone, city or address, related people (\"la femme de Paul\"), websites. Returns the best matches with their details, best first. Use it for \"who is…\" and before writing to someone.",
                        group: .contacts, risk: .read,
@@ -744,6 +773,7 @@ final class SkilliTools {
     /// name ("button “Desktop & Dock” in System Settings"), never its id.
     func cardSummary(of definition: ToolDefinition, arguments: [String: Any]) -> String {
         if Self.recordingWords.contains(definition.name) { return recordingSummary(definition, arguments: arguments) }
+        if definition.name == Self.startsWorkflow, let dispatch = try? Self.workflowDispatch(arguments) { return dispatch.asked }
         guard ["press_ui", "set_ui_value"].contains(definition.name), let id = arguments["id"] as? String,
               let element = ui.describe(id) else {
             return Self.summary(of: definition, arguments: arguments)
@@ -1428,6 +1458,21 @@ final class SkilliTools {
                 throw Failure(message: "GitHub is not connected. The user signs in with GitHub in skil.li's Settings → GitHub.")
             }
             return try await githubTool(name, arguments: arguments, in: github, text: text)
+
+        case "run_github_workflow", "get_github_workflow_run":
+            guard let workflows else { throw Failure(message: "GitHub workflows are not available.") }
+            do {
+                if name == "get_github_workflow_run" { return try await workflows.state(of: try text("run")).report }
+                let dispatch = try Self.workflowDispatch(arguments)
+                let progress = try await workflows.start(dispatch)
+                return "Started. skil.li follows it in the menu bar and says how it ended.\n" + progress.report
+            } catch let error as WorkflowDispatch.Invalid {
+                throw Failure(message: error.message)
+            } catch let error as GitHubWorkflows.Failure {
+                throw Failure(message: error.message)
+            } catch let error as GitHubError {
+                throw Failure(message: error.message)
+            }
 
         case "search_contacts":
             guard let contacts else { throw Failure(message: "Contacts are not available.") }

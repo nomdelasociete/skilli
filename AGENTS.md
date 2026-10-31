@@ -240,8 +240,11 @@ To release: the `release` skill (`.claude/skills/release`). What it runs,
 `script/release/publish.sh` from a clean checkout of main (2026-10-18:
 "distributed from our website and ideally from brew"). It runs on GitHub's
 Macs (2026-10-19: not the developer's Mac, and the Mac mini is for other apps'
-tests): `.github/workflows/release.yml`, started by hand (`gh workflow run
-release.yml`), on the `xcode-27` runner (macOS 27, Xcode 27.1, free for a
+tests): `.github/workflows/release.yml`, started by the maintainer from
+skil.li (the "Release skil.li" skillie, `script/release/release.skilli`:
+Patch, Minor or Critical patch; the run followed in the menu bar,
+docs/github-workflow-runs.md) or by hand (`gh workflow run release.yml -f
+bump=patch`), on the `xcode-27` runner (macOS 27, Xcode 27.1, free for a
 public repository), in the `release` environment: the maintainer approves each run,
 `main` only, and every credential is there (secrets `DEVELOPER_ID_P12` and
 its password, `NOTARY_API_KEY`, `SPARKLE_ED_PRIVATE_KEY`,
@@ -254,6 +257,14 @@ so a release from a Mac still works. A pull request that touches the release
 (the workflow, `script/release/`, `project.yml`, `Config/`) is built there
 unsigned, its unit tests run.
 
+0. The version (2026-10-30: no bump pull request any more): the newest
+   release tag `v<version>-<build>` raised by the run's `bump` (patch,
+   minor), or `project.yml`'s `MARKETING_VERSION` when higher (a floor:
+   raised in a pull request only to jump, to 1.0.0):
+   `script/release/version.sh`, passed to the archive as
+   `MARKETING_VERSION`. `publish.sh patch|minor` fetches the tags first
+   and stops before building when the feed already has the build number.
+   Development builds say the newest tag's version too (`stamp_build.sh`).
 1. `build.sh`: a Release archive signed with **Developer ID Application:
    NOM DE LA SOCIETE (JSFMAD28GS)** (manual signing, `Config/ExportOptions.plist`),
    universal, Hardened Runtime; the build number is the commit count + 900

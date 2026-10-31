@@ -228,7 +228,7 @@ final class PrivacyMapTests: XCTestCase {
     }
 
     func testGitHubAndYours() {
-        XCTAssertEqual(ids(.github, everything), ["github", "relay"])
+        XCTAssertEqual(ids(.github, everything), ["github", "githubWorkflows", "relay"])
         XCTAssertEqual(section(.github, everything).status, "Signed in as @camille")
         XCTAssertEqual(section(.github, everything).rows.last?.note, "relay.example.com")
         XCTAssertEqual(ids(.yours, everything), ["servers", "webhooks", "agents"])
@@ -332,28 +332,30 @@ final class PrivacyMapTests: XCTestCase {
         signedIn.githubLogin = "camille"
         XCTAssertEqual(PrivacyMap.line(for: "github", signedIn)?.text,
                        "GitHub gets your sign-in with each read, every minute while the strip or “pr” shows, and what you do there: merge, "
-                           + "update a branch, mark read.")
+                           + "update a branch, mark read, a workflow you start, then its run read every 5 s until it ends.")
         XCTAssertEqual(PrivacyMap.line(for: "github", everything)?.text,
                        "GitHub gets your sign-in with each read, every minute while the strip or “pr” shows, and what you do there: merge, "
-                           + "update a branch, mark read; relay.example.com gets only its own token, never your GitHub sign-in.")
+                           + "update a branch, mark read, a workflow you start, then its run read every 5 s until it ends; relay.example.com gets only its own token, never your GitHub sign-in.")
     }
 
     func testServerSyncSaysGitHubGetsTheSignInOnlyForActions() {
         var setup = everything
         setup.githubServerSync = true
         XCTAssertEqual(PrivacyMap.line(for: "github", setup)?.text,
-                       "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read) and to check which "
+                       "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read, a workflow you start, "
+                           + "then its run read every 5 s until it ends) and to check which "
                            + "account this Mac uses for the relay; relay.example.com reads "
                            + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.")
-        XCTAssertEqual(ids(.github, setup), ["githubActions", "serverSync"])
-        XCTAssertEqual(ids(.github, everything), ["github", "relay"])
+        XCTAssertEqual(ids(.github, setup), ["githubActions", "githubWorkflows", "serverSync"])
+        XCTAssertEqual(ids(.github, everything), ["github", "githubWorkflows", "relay"])
         // This Mac's relay access gone, server sync still on: said all the same.
         setup.relayHost = nil
         XCTAssertEqual(PrivacyMap.line(for: "github", setup)?.text,
-                       "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read) and to check which "
+                       "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read, a workflow you start, "
+                           + "then its run read every 5 s until it ends) and to check which "
                            + "account this Mac uses for the relay; the relay reads "
                            + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.")
-        XCTAssertEqual(ids(.github, setup), ["githubActions", "serverSync"])
+        XCTAssertEqual(ids(.github, setup), ["githubActions", "githubWorkflows", "serverSync"])
     }
 
     func testBackupSaysWhereBackupsGoAndWhoSyncsThem() {

@@ -39,6 +39,7 @@ choices, the measures. Each one starts with its status and date.
 | [meeting-recorder-views.md](meeting-recorder-views.md) | The recorder's windows, cards and menus |
 | [github-single-sign-in.md](github-single-sign-in.md) | One GitHub sign-in instead of three |
 | [github-sign-in-without-app.md](github-sign-in-without-app.md) | GitHub sign-in and server sync without the GitHub App |
+| [github-workflow-runs.md](github-workflow-runs.md) | Start a GitHub workflow, follow it; releases without a bump pull request |
 | [currency-conversion.md](currency-conversion.md) | Currencies in the calculator, at the day's rates |
 | [file-search.md](file-search.md) | Search Files that finds your files, not your dependencies' |
 

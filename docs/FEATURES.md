@@ -545,6 +545,13 @@ what waits for you.
   browser, and keeps one copy for all your Macs; this Mac only acts
   (merge, update a branch, mark read). A relay that cannot answer is
   said, never read around. Turn it off on one Mac, or delete it for all.
+- **Workflow runs**: a workflow with `workflow_dispatch` (a release, a
+  deploy) started from a skillie, a `skilli://github/workflow` link or an
+  agent (`run_github_workflow`), asked in the card every time; that answer
+  approves its environment when you may. A box in the menu bar shows the
+  step it is on ("3/7"), its menu every job and step, Open on GitHub,
+  Cancel Run; a card says at the end where the release is, or which step
+  failed (docs/github-workflow-runs.md).
 
 Settings: GitHub (sign in) · Show under the search field · Live updates
 from · Live updates token · Server sync.

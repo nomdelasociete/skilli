@@ -446,7 +446,7 @@ final class SelfTest {
         }
         if scope == .github {
             window.center()
-            return await finish(after: [githubInbox, relayTokenRemovalUndoes])
+            return await finish(after: [githubInbox, githubWorkflowRun, relayTokenRemovalUndoes])
         }
         if scope == .toolrights {
             return await finish(after: [
@@ -5265,6 +5265,7 @@ final class SelfTest {
         await rightsSessionLaunches()
         await rightsHelperChoice()
         await githubInbox()
+        await githubWorkflowRun()
         await siCommandWithoutSelectionInserts()
         await siCommandEditorCompletesVariables()
         await siCommandShortcutsRecordedInEditor()
@@ -6695,6 +6696,109 @@ final class SelfTest {
                    + "signed out: no strip \(noStripSignedOut), Return → Settings \(toSettings); strip \(strip) (“\(stripText)”); "
                    + "pr \(listed) (\(shown)); Return opens \(openedPR); ⇥ \(offered) (\(options)), asked again \(askedAgain), not before \(notYet), merged \(merged); "
                    + "⌘⌫ read \(markedRead); all read \(allOffered) \(allRead) (\(allOptions), \(stand.read), “\(lastRead)”, “\(noneLeft)”); tools \(toolsOK) (“\(blocked.prefix(80))”, “\(notes.prefix(60))”)",
+               nil)
+    }
+
+    /// A GitHub workflow started from a link and followed
+    /// (docs/github-workflow-runs.md), against a stand-in, never the user's
+    /// account: the link asks in the card (esc starts nothing), ↩ starts
+    /// it, the run is found without its id in GitHub's answer, its
+    /// environment approved once, the menu bar item counts the steps and
+    /// lists them, goes when it ends; the end card names the release and ↩
+    /// opens it; the tools read the run and refuse a wrong repository.
+    private func githubWorkflowRun() async {
+        let name = "GitHub workflow: a link asks (esc: nothing), starts, finds the run, approves once, the menu bar counts steps, the end card opens the release; tools"
+        let stand = WorkflowStandIn()
+        guard let server = LoopbackServer(handler: { stand.answer($0) }), let port = await server.port() else {
+            record(name, false, "no stand-in server", nil)
+            return
+        }
+        defer { server.stop() }
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        stand.setBase(base.absoluteString)
+        let book = GitHubBook(endpoints: GitHubEndpoints(api: base, web: base), keychainPrefix: "selftest-gh-wf-", clientID: { "selftest-client" })
+        book.openURL = { _ in }
+        defer { book.signOut() }
+        book.signIn()
+        guard await waitUntil(timeout: 10, { book.isSignedIn }) != nil, let links = context.links else {
+            record(name, false, "not signed in to the stand-in, or no link runner", nil)
+            return
+        }
+        let workflows = GitHubWorkflows(github: { book })
+        workflows.interval = .milliseconds(400)
+        workflows.findFor = .seconds(6)
+        let indicator = WorkflowIndicator()
+        var labels: [String] = []
+        var stepLines: [String] = []
+        workflows.onChange = { [unowned workflows] in
+            indicator.update(workflows.followed, problems: workflows.problems)
+            if let shown = indicator.shown, labels.last != shown { labels.append(shown) }
+            if indicator.shown == "2/3" { stepLines = indicator.lines }
+        }
+        let actions = context.aiActions
+        let popover = actions.popover
+        workflows.onFinished = { progress in Task { await actions.presentWorkflowEnd(progress) } }
+        let tools = context.tools.tools
+        let saved = (tools.workflows, links.startWorkflow, actions.openURL, actions.userPresenceOverride)
+        var opened: [String] = []
+        tools.workflows = workflows
+        links.startWorkflow = { try await workflows.start($0) }
+        actions.openURL = { opened.append($0.absoluteString) }
+        actions.userPresenceOverride = true
+        defer {
+            tools.workflows = saved.0
+            links.startWorkflow = saved.1
+            actions.openURL = saved.2
+            actions.userPresenceOverride = saved.3
+            indicator.update([], problems: [:])
+        }
+        guard let dispatch = try? WorkflowDispatch(repository: "nomdelasociete/skilli", workflow: "release.yml", ref: "main",
+                                                   inputs: ["bump": "patch", "critical": "false"]) else { return }
+        let link = SkilliLink.workflow(dispatch).url
+
+        // esc: nothing starts.
+        guard await focusTestWindow() else { return }
+        let declining = Task { await links.openNow(link) }
+        let askedFirst = await waitUntil(timeout: 3) { popover.isVisible && popover.shownText.contains("release.yml on nomdelasociete/skilli main") } != nil
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        await declining.value
+        let declined = stand.dispatched.isEmpty && links.log.last == "declined workflow release.yml"
+
+        // ↩: started, found, approved, followed.
+        guard await focusTestWindow() else { return }
+        let opening = Task { await links.openNow(link) }
+        let asked = await waitUntil(timeout: 3) {
+            popover.isVisible && popover.shownText.contains("release.yml on nomdelasociete/skilli main") && popover.shownText.contains("bump: patch · critical: false")
+        } != nil
+        let askedText = popover.shownText
+        await saveScreenshot(of: popover.window, as: "card-workflow-ask.png")
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        await opening.value
+        let started = stand.dispatched == ["main bump=patch critical=false"]
+        let approved = await waitUntil(timeout: 10) { stand.approved == [[7]] } != nil
+        let counted = await waitUntil(timeout: 15) { labels.contains("2/3") && indicator.shown == nil } != nil
+        let ended = await waitUntil(timeout: 15) { popover.isVisible && popover.shownTitle == "skil.li 0.3.2 (1570) published" } != nil
+        let endText = popover.shownText
+        let endHints = popover.shownHints
+        await saveScreenshot(of: popover.window, as: "card-workflow-end.png")
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let openedRelease = await waitUntil(timeout: 2) { opened == [WorkflowStandIn.releaseURL] && !popover.isVisible } != nil
+
+        // The tools: the run read by its link; a wrong repository refused
+        // before anything is asked or sent.
+        let read = (try? await tools.call("get_github_workflow_run", arguments: ["run": WorkflowStandIn.runURL],
+                                          run: nil)) ?? "failed"
+        let refused = (try? await tools.call("run_github_workflow", arguments: ["repo": "skilli", "workflow": "release.yml"], run: nil)) == nil
+            && stand.dispatched.count == 1
+        let everyTime = ToolSettings.asksEveryTime(SkilliTools.startsWorkflow)
+        let readOK = read.hasPrefix("Release patch #12 · done\n\(WorkflowStandIn.runURL)\nRelease: skil.li 0.3.2 (1570)")
+        let linesOK = stepLines == ["Release patch #12 · Complete job", "release", "Set up job", "Build, notarize, publish", "Complete job",
+                                    "Open on GitHub", "Cancel Run"]
+        record(name, askedFirst && declined && asked && started && approved && counted && linesOK && ended && openedRelease && readOK && refused && everyTime,
+               "esc: asked \(askedFirst), nothing started \(declined); ↩: asked \(asked) (“\(askedText.prefix(120))”), started \(started) (\(stand.dispatched)), "
+                   + "approved once \(approved) (\(stand.approved)); menu bar \(labels), gone at the end \(counted); menu at 2/3 \(linesOK) (\(stepLines)); "
+                   + "end card \(ended) (“\(endText.prefix(100))”, \(endHints)), ↩ opens the release \(openedRelease) (\(opened)); "
+                   + "get \(readOK) (“\(read.prefix(120))”); a wrong repository refused \(refused); asked every time \(everyTime)",
                nil)
     }
 
@@ -31026,6 +31130,102 @@ private final class PressCounter: NSObject {
 /// A stand-in GitHub for the self-test: the device flow (pending once, then
 /// a token), the inbox's GraphQL answer, the notifications (304 once asked
 /// with their Last-Modified), merging and marking read, recorded.
+/// GitHub as a workflow run sees it (`githubWorkflowRun`): a dispatch
+/// answered without the run's id (204), the run found in the workflow's
+/// list, waiting for its `release` environment until approved, then one
+/// step further at each read, then a release published.
+private final class WorkflowStandIn: @unchecked Sendable {
+    static let runURL = "https://github.com/nomdelasociete/skilli/actions/runs/501"
+    static let releaseURL = "https://github.com/nomdelasociete/skilli/releases/tag/v0.3.2-1570"
+    private let lock = NSLock()
+    private var base = ""
+    private var dispatchedList: [String] = []
+    private var approvedList: [[Int]] = []
+    private var createdAt = Date.now
+    /// Reads of the run since it was approved.
+    private var reads = 0
+
+    var dispatched: [String] { lock.withLock { dispatchedList } }
+    var approved: [[Int]] { lock.withLock { approvedList } }
+
+    func setBase(_ value: String) { lock.withLock { base = value } }
+
+    func answer(_ request: LoopbackServer.Request) -> LoopbackServer.Response {
+        lock.withLock { respond(request) }
+    }
+
+    private func respond(_ request: LoopbackServer.Request) -> LoopbackServer.Response {
+        let path = request.target.split(separator: "?").first.map(String.init) ?? request.target
+        let repo = "/repos/nomdelasociete/skilli"
+        switch (request.method, path) {
+        case ("POST", "/login/device/code"):
+            return .json(["device_code": "dc-wf", "user_code": "WFLO-WRUN", "verification_uri": base + "/login/device", "expires_in": 900, "interval": 1])
+        case ("POST", "/login/oauth/access_token"):
+            return .json(["access_token": "selftest-wf-token", "token_type": "bearer", "scope": "repo"])
+        default:
+            break
+        }
+        guard request.headers["authorization"] == "Bearer selftest-wf-token" else { return .json(["message": "Bad credentials"], status: 401) }
+        switch (request.method, path) {
+        case ("GET", "/user"):
+            return .json(["login": "selftest-user"])
+        case ("POST", "\(repo)/actions/workflows/release.yml/dispatches"):
+            let body = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
+            let inputs = (body["inputs"] as? [String: String] ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+            dispatchedList.append(([body["ref"] as? String ?? "?"] + inputs).joined(separator: " "))
+            createdAt = .now
+            return LoopbackServer.Response(status: 204)
+        case ("GET", "\(repo)/actions/workflows/release.yml/runs"):
+            let older = run(id: 400, status: "completed", conclusion: "success", created: createdAt.addingTimeInterval(-86_400), actor: "selftest-user")
+            let other = run(id: 450, status: "queued", conclusion: nil, created: createdAt, actor: "someone-else")
+            return .json(["workflow_runs": dispatchedList.isEmpty ? [older] : [other, run(), older]])
+        case ("GET", "\(repo)/actions/runs/501"):
+            if !approvedList.isEmpty { reads += 1 }
+            return .json(run())
+        case ("GET", "\(repo)/actions/runs/501/jobs"):
+            let steps = ["Set up job", "Build, notarize, publish", "Complete job"].enumerated().map { index, name -> [String: Any] in
+                let done = approvedList.isEmpty ? false : index < reads
+                let running = !approvedList.isEmpty && index == reads
+                return ["number": index + 1, "name": name, "status": done ? "completed" : running ? "in_progress" : "queued",
+                        "conclusion": done ? "success" : NSNull()]
+            }
+            let skipped: [String: Any] = ["id": 1, "name": "check", "status": "completed", "conclusion": "skipped", "steps": [],
+                                          "html_url": Self.runURL + "/job/1"]
+            let release: [String: Any] = ["id": 2, "name": "release", "status": approvedList.isEmpty ? "waiting" : reads >= 3 ? "completed" : "in_progress",
+                                          "conclusion": reads >= 3 ? "success" : NSNull(), "steps": approvedList.isEmpty ? [] : steps,
+                                          "html_url": Self.runURL + "/job/2"]
+            return .json(["jobs": [skipped, release]])
+        case ("GET", "\(repo)/actions/runs/501/pending_deployments"):
+            return .json(approvedList.isEmpty ? [["environment": ["id": 7, "name": "release"], "current_user_can_approve": true]] : [])
+        case ("POST", "\(repo)/actions/runs/501/pending_deployments"):
+            let body = (try? JSONSerialization.jsonObject(with: request.body)) as? [String: Any] ?? [:]
+            guard body["state"] as? String == "approved" else { return .json(["message": "Bad state"], status: 422) }
+            approvedList.append(body["environment_ids"] as? [Int] ?? [])
+            return .json([])
+        case ("GET", "\(repo)/releases"):
+            return .json([["tag_name": "v0.3.2-1570", "name": "skil.li 0.3.2 (1570)", "draft": false, "html_url": Self.releaseURL,
+                           "published_at": Date.now.ISO8601Format()],
+                          ["tag_name": "v0.3.1-1557", "name": "skil.li 0.3.1 (1557)", "draft": false,
+                           "html_url": "https://github.com/nomdelasociete/skilli/releases/tag/v0.3.1-1557", "published_at": "2026-10-29T18:56:51Z"]])
+        default:
+            return .json(["message": "Not Found"], status: 404)
+        }
+    }
+
+    /// Run 501, as it stands now.
+    private func run() -> [String: Any] {
+        let status = approvedList.isEmpty ? "waiting" : reads >= 3 ? "completed" : "in_progress"
+        return run(id: 501, status: status, conclusion: reads >= 3 ? "success" : nil, created: createdAt, actor: "selftest-user")
+    }
+
+    private func run(id: Int, status: String, conclusion: String?, created: Date, actor: String) -> [String: Any] {
+        ["id": id, "display_title": "Release patch", "run_number": id == 501 ? 12 : 11, "status": status, "conclusion": conclusion ?? NSNull(),
+         "html_url": "https://github.com/nomdelasociete/skilli/actions/runs/\(id)", "created_at": created.ISO8601Format(),
+         "run_started_at": created.ISO8601Format(), "event": "workflow_dispatch", "actor": ["login": actor],
+         "repository": ["full_name": "nomdelasociete/skilli"]]
+    }
+}
+
 private final class GitHubStandIn: @unchecked Sendable {
     private let lock = NSLock()
     private var base = ""

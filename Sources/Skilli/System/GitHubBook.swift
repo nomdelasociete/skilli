@@ -109,6 +109,16 @@ actor GitHubClient {
         _ = try await send(Self.request(endpoints.api.appendingPathComponent("notifications/threads/\(id)"), "PATCH", token: token))
     }
 
+    /// A REST call of the workflow runs (`GitHubWorkflows`): `path` after
+    /// the API's root, its query in `query`; GitHub's answer when it is 2xx.
+    func rest(_ method: String, _ path: String, query: [URLQueryItem] = [], body: Data? = nil, token: String) async throws -> Data {
+        var components = URLComponents(url: endpoints.api.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty { components.queryItems = query }
+        var request = Self.request(components.url!, method, token: token)
+        request.httpBody = body
+        return try await send(request).data
+    }
+
     // MARK: Signing in (GitHub's device flow)
 
     func startSignIn(clientID: String) async throws -> GitHubDeviceCode {
@@ -784,6 +794,15 @@ final class GitHubBook {
         guard let token else { throw GitHubError(message: "Sign in to GitHub in skil.li's Settings first.") }
         try await client.updateBranch(pullRequest, token: token)
         readAfterWrite()
+    }
+
+    /// A workflow run's request (`GitHubWorkflows`), with this Mac's own
+    /// sign-in, to GitHub only: never through the relay.
+    func rest(_ method: String, _ path: String, query: [URLQueryItem] = [], body: [String: Any]? = nil) async throws -> Data {
+        guard let token else { throw GitHubError(message: "Sign in to GitHub in skil.li's Settings → GitHub first.") }
+        // Encoded here: the JSON object stays on this actor.
+        let data = try body.map { try JSONSerialization.data(withJSONObject: $0) }
+        return try await client.rest(method, path, query: query, body: data, token: token)
     }
 
     /// After a native write: the relay rereads GitHub (its copy is for all

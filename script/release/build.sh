@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # The Developer ID build: archived from a clean checkout (its build number is
 # the commit count), signed with the team's Developer ID, the update feed
-# and Sparkle's public key in it. Out: dist/release/export.noindex/Skilli.app.
+# and Sparkle's public key in it; its version SKILLI_MARKETING_VERSION
+# (publish.sh, from script/release/version.sh), else project.yml's.
+# Out: dist/release/export.noindex/Skilli.app.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd "$ROOT_DIR"
@@ -31,6 +33,12 @@ if [[ -z "$klipy_key" ]]; then
   echo "No Klipy key (SKILLI_KLIPY_KEY, or this Mac's daily skil.li): this build searches only GIFs on the Mac." >&2
 fi
 
+version=()
+if [[ -n "${SKILLI_MARKETING_VERSION:-}" ]]; then
+  [[ "$SKILLI_MARKETING_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "SKILLI_MARKETING_VERSION is not x.y.z." >&2; exit 2; }
+  version=(MARKETING_VERSION="$SKILLI_MARKETING_VERSION")
+fi
+
 rm -rf "$DIST/Skilli.xcarchive" "$DIST/export" "$DIST/export.noindex"
 mkdir -p "$DIST"
 xcodebuild \
@@ -40,6 +48,7 @@ xcodebuild \
   -derivedDataPath "$DIST/DerivedData" \
   CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_IDENTITY="Developer ID Application" \
   SKILLI_UPDATE_FEED_URL="$FEED_URL" SKILLI_SPARKLE_PUBLIC_ED_KEY="$public_key" SKILLI_KLIPY_KEY="$klipy_key" \
+  ${version[@]+"${version[@]}"} \
   archive | tail -n 3
 xcodebuild -exportArchive -archivePath "$DIST/Skilli.xcarchive" -exportPath "$DIST/export.noindex" \
   -exportOptionsPlist "$ROOT_DIR/Config/ExportOptions.plist" | tail -n 2
@@ -50,4 +59,7 @@ if strings "$APP/Contents/MacOS/Skilli" | grep -q 'SELFTEST'; then
   echo "This build contains the self-tests: not a release." >&2; exit 2
 fi
 [[ "$(plist_value "$APP" SUFeedURL)" == "$FEED_URL" ]] || { echo "SUFeedURL missing in the build" >&2; exit 2; }
+if [[ -n "${SKILLI_MARKETING_VERSION:-}" && "$(plist_value "$APP" CFBundleShortVersionString)" != "$SKILLI_MARKETING_VERSION" ]]; then
+  echo "The build says $(plist_value "$APP" CFBundleShortVersionString), not $SKILLI_MARKETING_VERSION." >&2; exit 2
+fi
 echo "Built skil.li $(plist_value "$APP" CFBundleShortVersionString) ($(plist_value "$APP" CFBundleVersion)): $APP"

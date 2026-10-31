@@ -1,18 +1,31 @@
 # skil.li's release, built on GitHub's Macs instead of the developer's Mac or the Mac mini:
 # the same scripts (script/release/publish.sh), Xcode 27, every credential
 # from the `release` environment, which waits for the maintainer's approval and takes
-# only `main`. Started by hand: Actions → Release → Run workflow, or
-# `gh workflow run release.yml`; `-f critical=true` makes it a critical
-# update (script/release/appcast.sh). The secrets are set once with
+# only `main`. Started from skil.li (the "Release skil.li" skillie,
+# script/release/release.skilli), Actions → Release → Run workflow, or
+# `gh workflow run release.yml -f bump=patch`. Its version is the newest
+# release tag raised by `bump` (script/release/version.sh): no pull request
+# raises it first. `critical` makes it a critical update
+# (script/release/appcast.sh). The secrets are set once with
 # script/release/ci-secrets.sh.
 #
 # A pull request that changes the release itself is built here too, unsigned
 # and with no secret, so a broken toolchain is seen before a release needs it.
 name: Release
+# skil.li's menu bar item and GitHub's list show which release this is.
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+      && format('Release {0}{1}', inputs.bump, inputs.critical && ', critical' || '')
+      || 'Release check' }}
 
 on:
   workflow_dispatch:
     inputs:
+      bump:
+        description: Version raised from the last release
+        type: choice
+        options: [patch, minor]
+        default: patch
       critical:
         description: Critical update (shown at once, cannot be skipped)
         type: boolean
@@ -21,6 +34,7 @@ on:
     paths:
       - .github/workflows/release.yml
       - script/release/**
+      - script/stamp_build.sh
       - project.yml
       - Config/**
 
@@ -49,19 +63,34 @@ jobs:
           brew install xcodegen
       - name: Unit tests
         run: swift test
-      - name: Release build, unsigned
+      - name: Release build, unsigned, with the next patch's version
+        # The runner's bash is 3.2: a failed `[[ ]]` does not stop a step
+        # there, and `| tail` hid xcodebuild's failure (a build that did not
+        # compile passed, 2026-10-31). Each check fails the step itself.
+        shell: bash --noprofile --norc -euo pipefail {0}
         run: |
+          # The version a patch release would take, as release does.
+          version="$(script/release/version.sh patch)"
+          latest="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n 1)"
+          echo "Last release ${latest:-none}; a patch would be $version"
           xcodegen generate
           xcodebuild -project Skilli.xcodeproj -scheme Skilli -configuration Release \
             -destination "generic/platform=macOS" -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            CODE_SIGNING_ALLOWED=NO SKILLI_KLIPY_KEY=check-build \
+            CODE_SIGNING_ALLOWED=NO SKILLI_KLIPY_KEY=check-build MARKETING_VERSION="$version" \
             build | tail -n 5
           app="$RUNNER_TEMP/DerivedData/Build/Products/Release/Skilli.app"
-          echo "Built $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist") ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist"))"
+          built="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+          echo "Built $built ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist"))"
+          # The version passed is the one the app says.
+          [[ "$built" == "$version" ]] || { echo "The app says $built, not $version." >&2; exit 1; }
           # The key reaches the app as a release's would.
-          [[ "$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$app/Contents/Info.plist")" == check-build ]]
-          # The self-tests and their test data never ship.
-          ! strings "$app/Contents/MacOS/Skilli" | grep -q 'SELFTEST'
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$app/Contents/Info.plist")" == check-build ]] \
+            || { echo "SkilliKlipyKey did not reach the app." >&2; exit 1; }
+          # The self-tests and their test data never ship (grep reads it
+          # whole: `-q` would cut strings off, a failure under pipefail).
+          if strings "$app/Contents/MacOS/Skilli" | grep 'SELFTEST' >/dev/null; then
+            echo "This build contains the self-tests." >&2; exit 1
+          fi
 
   release:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
@@ -115,10 +144,11 @@ jobs:
           SKILLI_NOTARY_KEY_ID: ${{ vars.NOTARY_KEY_ID }}
           SKILLI_NOTARY_ISSUER: ${{ vars.NOTARY_ISSUER_ID }}
           SKILLI_CRITICAL_UPDATE: ${{ inputs.critical }}
+          BUMP: ${{ inputs.bump }}
         run: |
           export SKILLI_NOTARY_KEY_FILE="$RUNNER_TEMP/notary.p8"
           export SKILLI_SPARKLE_KEY_FILE="$RUNNER_TEMP/sparkle.key"
-          script/release/publish.sh
+          script/release/publish.sh "$BUMP"
       - name: Forget the credentials
         if: always()
         run: |

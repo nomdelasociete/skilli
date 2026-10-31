@@ -326,6 +326,33 @@ said=$("$SKILLI_CLI" call run_shortcut name="Morning Routine" input="$1")  # wai
 - The first time a shortcut hands its result back, Shortcuts itself asks
   ("Allow … to produce 1 text item?"); the call waits for that answer too.
 
+## Start a GitHub workflow and follow it
+
+A workflow with `workflow_dispatch` (a release, a deploy) started with its
+inputs, with the user's GitHub sign-in in skil.li (Settings → GitHub). The
+card asks every time, naming the workflow and its inputs; that answer also
+approves the run's environment when GitHub says the user may approve it.
+Then a box in the menu bar shows the step it is on, its menu every job and
+step, and a card says at the end where the release is, or which step
+failed:
+
+```bash
+"$SKILLI_CLI" call run_github_workflow repo=nomdelasociete/skilli workflow=release.yml ref=main \
+  inputs='{"bump":"patch","critical":false}'
+# Started. skil.li follows it in the menu bar and says how it ended.
+# Release patch #12 · queued
+# https://github.com/nomdelasociete/skilli/actions/runs/123
+"$SKILLI_CLI" call get_github_workflow_run run=https://github.com/nomdelasociete/skilli/actions/runs/123
+open "skilli://github/workflow?repo=nomdelasociete/skilli&workflow=release.yml&ref=main&bump=patch"  # every other item is an input
+```
+
+The call answers once the run started (it does not wait the run out:
+120 s is a skillie's whole time); exit 1 when the card was declined, the
+workflow or an input is wrong, or GitHub refused (its message on the first
+line of standard error). skil.li's own release is one:
+[`script/release/release.skilli`](../script/release/release.skilli),
+"Release skil.li", with Patch, Minor and Critical patch.
+
 ## Install
 
 Double-click a `.skilli` file: skil.li opens Settings → Skillies and shows

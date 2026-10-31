@@ -159,6 +159,8 @@ final class SkilliLinkTests: XCTestCase {
                 XCTFail("no Catalog entry is a “do it here”: \(entry.id)")
             case .record, .recording, .recordingSource, .importRecording, .openRecording, .recordingFollowUp, .renameRecording:
                 XCTFail("Record Meeting's and Import Recording's links are their entries': \(entry.id)")
+            case .workflow:
+                XCTFail("no Catalog entry starts a GitHub workflow: \(entry.id)")
             }
         }
         XCTAssertEqual(SkilliLink.link(for: FeatureCatalog.entries(input).first { $0.id == "quicklink:\(google.id.uuidString)" }!,
