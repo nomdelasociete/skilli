@@ -79,6 +79,9 @@ Two changes, one per side:
      asked, `return_run_details`): the card says so with the workflow's runs page; nothing is
      followed or approved. A run is never picked from the list by time:
      it could be another one this user started, approved unasked.
+   - Started, but its run cannot be read (three tries): the card says it
+     started, with its link, and not to start it again; it is not followed
+     or approved.
    - The user may not approve the environment: the run is followed as
      "Waiting for approval", with Open on GitHub for whoever can.
    - skil.li quits during the run: the run goes on, on GitHub; the menu

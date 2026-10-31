@@ -203,6 +203,12 @@ public enum GitHubWorkflowAnswers {
         dictionary(data)?["workflow_run_id"] as? Int
     }
 
+    /// The run's page in that answer, to say where it is when it cannot be
+    /// read.
+    public static func dispatchedRunPage(_ data: Data) -> URL? {
+        (dictionary(data)?["html_url"] as? String).flatMap(URL.init(string:))
+    }
+
     public static func run(_ data: Data) -> WorkflowRun? {
         dictionary(data).flatMap(run(from:))
     }

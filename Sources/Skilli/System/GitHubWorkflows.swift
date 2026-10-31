@@ -61,10 +61,22 @@ final class GitHubWorkflows {
         // Only the run GitHub names in its answer is followed and approved:
         // a run picked from the list by time could be another one this
         // user started, approved without being asked.
-        guard let id = GitHubWorkflowAnswers.dispatchedRunID(answer),
-              let run = GitHubWorkflowAnswers.run(try await book.rest("GET", "\(repo)/actions/runs/\(id)")) else {
+        guard let id = GitHubWorkflowAnswers.dispatchedRunID(answer) else {
             throw Failure(message: "Started, but GitHub did not say which run: nothing is followed or approved. "
                           + "\(dispatch.runsPage.absoluteString)")
+        }
+        // Started now, whatever the read says: three tries, then where it is,
+        // so a failed read is never taken for a start that did not happen
+        // (and started again).
+        var found: WorkflowRun?
+        for attempt in 1...3 where found == nil {
+            if attempt > 1 { try? await Task.sleep(for: .seconds(2)) }
+            found = (try? await book.rest("GET", "\(repo)/actions/runs/\(id)")).flatMap(GitHubWorkflowAnswers.run)
+        }
+        guard let run = found else {
+            let page = GitHubWorkflowAnswers.dispatchedRunPage(answer) ?? dispatch.runsPage
+            throw Failure(message: "Started, but GitHub did not answer about the run: it is not followed or approved. "
+                          + "Do not start it again: \(page.absoluteString)")
         }
         var progress = WorkflowProgress(run: run.named(dispatch.repository))
         followed.append(progress)

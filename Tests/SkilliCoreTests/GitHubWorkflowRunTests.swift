@@ -98,6 +98,8 @@ final class GitHubWorkflowRunTests: XCTestCase {
 
     func testOnlyTheRunGitHubNamesIsFollowed() {
         XCTAssertEqual(GitHubWorkflowAnswers.dispatchedRunID(json(["workflow_run_id": 77, "html_url": "x"])), 77)
+        XCTAssertEqual(GitHubWorkflowAnswers.dispatchedRunPage(json(["workflow_run_id": 77, "html_url": "https://github.com/a/b/actions/runs/77"]))?
+            .absoluteString, "https://github.com/a/b/actions/runs/77")
         // No id (an empty 204, another answer): no run, never one guessed.
         XCTAssertNil(GitHubWorkflowAnswers.dispatchedRunID(Data()))
         XCTAssertNil(GitHubWorkflowAnswers.dispatchedRunID(json(["html_url": "x"])))
