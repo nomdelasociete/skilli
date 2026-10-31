@@ -77,6 +77,10 @@ final class LinkRunner {
     /// allowed, on that folder.
     var recordingNamed: (String) -> (id: String, shown: String)? = { _ in nil }
     var followUpRecording: (MeetingFollowUp.Action, String, String?) -> Void = { _, _, _ in }
+    /// A GitHub workflow started and followed, once allowed.
+    var startWorkflow: (WorkflowDispatch) async throws -> WorkflowProgress = { _ in
+        throw GitHubWorkflows.Failure(message: "GitHub workflows are not available.")
+    }
     /// A recording renamed, by its folder's name: once allowed.
     var renameRecording: (String, String) -> Void = { _, _ in }
     /// Who the recording's words go to ("Claude").
@@ -175,6 +179,26 @@ final class LinkRunner {
             await askThenFollowUp(action, recording: recording, question: question)
         case .renameRecording(let recording, let title):
             await askThenRename(recording, to: title)
+        case .workflow(let dispatch):
+            await askThenStart(dispatch)
+        }
+    }
+
+    /// A link starting a GitHub workflow (docs/github-workflow-runs.md):
+    /// asked every time, the workflow and its inputs named, never trusted;
+    /// the card that started it says why it did not start.
+    private func askThenStart(_ dispatch: WorkflowDispatch) async {
+        log.append("asked workflow \(dispatch.workflow)")
+        guard await approve("Start a GitHub workflow", "\(dispatch.asked) \(Self.fromALink)", false) != .deny else {
+            log.append("declined workflow \(dispatch.workflow)")
+            return
+        }
+        log.append("did workflow \(dispatch.workflow)")
+        guard !dryRun else { return }
+        do {
+            _ = try await startWorkflow(dispatch)
+        } catch {
+            notify(error.localizedDescription)
         }
     }
 

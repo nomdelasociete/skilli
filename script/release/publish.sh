@@ -3,20 +3,38 @@
 # feed, then a GitHub release of this repository (DMG, zip,
 # appcast; skil.li.dmg and appcast.xml under stable names for
 # skil.li/download and skil.li/appcast.xml) and the Homebrew cask updated.
-# Refuses a build number the feed already has.
+# The version is the last release's raised by one patch or one minor
+# (script/release/version.sh). Refuses a build number the feed already has,
+# before building.
+#
+#   script/release/publish.sh patch|minor
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd "$ROOT_DIR"
+
+bump="${1:-}"
+[[ "$bump" == patch || "$bump" == minor ]] || { echo "Usage: script/release/publish.sh patch|minor" >&2; exit 2; }
+# Every release tag, so the version follows the newest one.
+git fetch --quiet --tags origin
+SKILLI_MARKETING_VERSION="$("$ROOT_DIR/script/release/version.sh" "$bump")"
+export SKILLI_MARKETING_VERSION
+# The build number as stamp_build.sh makes it (the commit count + 900).
+expected=$(( $(git rev-list --count HEAD) + 900 ))
+published="$(curl -fsSL "$FEED_URL" 2>/dev/null | perl -ne 'if (m{<sparkle:version>([0-9]+)</sparkle:version>}) { print "$1\n"; exit }' || true)"
+refuse_published() {
+  if [[ "$published" =~ ^[0-9]+$ && "$1" -le "$published" ]]; then
+    echo "The feed already has build $published; this is $1. Commit, then release again." >&2
+    exit 2
+  fi
+}
+refuse_published "$expected"
+echo "Releasing skil.li $SKILLI_MARKETING_VERSION ($expected), $bump"
 
 "$ROOT_DIR/script/release/build.sh"
 version="$(plist_value "$APP" CFBundleShortVersionString)"
 build="$(plist_value "$APP" CFBundleVersion)"
 tag="v$version-$build"
-published="$(curl -fsSL "$FEED_URL" 2>/dev/null | perl -ne 'if (m{<sparkle:version>([0-9]+)</sparkle:version>}) { print "$1\n"; exit }' || true)"
-if [[ "$published" =~ ^[0-9]+$ && "$build" -le "$published" ]]; then
-  echo "The feed already has build $published; this is $build. Commit, then release again." >&2
-  exit 2
-fi
+refuse_published "$build"
 "$ROOT_DIR/script/release/package.sh"
 "$ROOT_DIR/script/release/appcast.sh"
 

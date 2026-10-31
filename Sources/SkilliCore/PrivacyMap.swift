@@ -234,6 +234,13 @@ public enum PrivacyMap {
         sends: "Your sign-in with what you do there: merge, update a branch, mark read; and to check which account this Mac uses for the relay.",
         when: "When you do it, and once per relay token for the check; pull requests and notifications are read by the relay (Server sync).",
         pane: "github")
+    /// A GitHub workflow started from skil.li and followed (GitHubWorkflows,
+    /// docs/github-workflow-runs.md): this Mac's own sign-in, never the relay.
+    public static let githubWorkflows = Flow(
+        "githubWorkflows", "Workflow runs",
+        sends: "Your sign-in with the workflow you start and its inputs, the approval of its environment, then the reads of that run: its jobs and steps, the release it made.",
+        when: "When you start one (asked every time), then every 5 s while it runs (30 s while it waits) until it ends.",
+        pane: "github")
     /// Settings → GitHub → Server sync: the relay reads GitHub for the
     /// user's Macs (`GitHubServerInbox`, `RelayInbox`).
     public static let serverSync = Flow(
@@ -307,7 +314,7 @@ public enum PrivacyMap {
 
     /// Every flow, once.
     public static let all: [Flow] = [ask, commands, followUps, mail, fieldWords, plannedSteps, meetings, agent, scheduled, continueIn, rightsHelp]
-        + deciding + [fallback, imagesCopied, imagesFolder, linkPreviews, github, githubActions, serverSync, relay, gifs, betterTranscription, exchangeRates, servers,
+        + deciding + [fallback, imagesCopied, imagesFolder, linkPreviews, github, githubActions, githubWorkflows, serverSync, relay, gifs, betterTranscription, exchangeRates, servers,
                       webhooks, agents, places, speedTest]
 
     /// Said once, above the list: the promise, then what it means.
@@ -472,6 +479,7 @@ public enum PrivacyMap {
         case .github:
             if setup.githubLogin != nil {
                 rows.append(Row(setup.githubServerSync ? githubActions : github))
+                rows.append(Row(githubWorkflows))
                 // Server sync on: said even when this Mac's relay access is gone.
                 if setup.githubServerSync { rows.append(Row(serverSync, note: setup.relayHost)) }
                 else if let host = setup.relayHost { rows.append(Row(relay, note: host)) }

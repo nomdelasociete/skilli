@@ -2057,25 +2057,7 @@ extension AIActionController: ToolPresenter {
     /// in the last two seconds. Waits as long as it takes: never lost.
     func presentScheduled(_ scheduled: ScheduledAsk, answer: String, failed: Bool, status: String, by answerer: ScheduledAnswerer?,
                           steps: [String] = []) async {
-        while true {
-            while popover.isVisible || servesOutsideAgent || launcherIsOpen?() == true {
-                try? await Task.sleep(for: .milliseconds(500))
-            }
-            if userPresenceOverride == false {
-                try? await Task.sleep(for: .milliseconds(300))
-                continue
-            }
-            if userPresenceOverride == nil, Self.userIsAway() {
-                await Self.untilTheUserIsBack()
-                continue
-            }
-            if userPresenceOverride == nil, Self.secondsSinceLastKey() < 2 {
-                try? await Task.sleep(for: .seconds(1))
-                continue
-            }
-            if popover.isVisible || servesOutsideAgent || launcherIsOpen?() == true { continue }
-            break
-        }
+        await untilTheUserIsFree()
         task = nil
         placement = launcherSpot.map { .launcher($0()) } ?? nearSelection()
         output = .card
@@ -2101,6 +2083,56 @@ extension AIActionController: ToolPresenter {
         popover.continueHint = handoffTarget.map { ("In \($0.title)", "⌘↩") }
         popover.finish(original: "", result: answer, status: status, output: .card, followUp: followUp != nil)
         Log.actions.notice("Scheduled answer shown: \(scheduled.schedule.spoken, privacy: .public)")
+    }
+
+    /// A GitHub workflow started from skil.li ended
+    /// (docs/github-workflow-runs.md): said once, when the user is free, as
+    /// a scheduled answer is. ↩ opens the release it published, else the
+    /// failed job's log, else the run; esc closes.
+    func presentWorkflowEnd(_ progress: WorkflowProgress) async {
+        await untilTheUserIsFree()
+        task = nil
+        placement = launcherSpot.map { .launcher($0()) } ?? nearSelection()
+        output = .card
+        let (title, text) = progress.ending
+        result = text
+        popover.show(title: title, at: placement, symbol: "shippingbox")
+        installOutsideClickMonitor()
+        popover.continueHint = nil
+        let open = switch progress.run.state {
+        case .succeeded: progress.release == nil ? "Open Run" : "Open Release"
+        case .failed: "Open Log"
+        default: "Open Run"
+        }
+        popover.finish(original: "", result: text, status: "", output: .card, hints: [(open, "↩"), ("Close", "esc")])
+        let link = progress.endLink
+        pendingConfirmed = { [weak self] in self?.openURL(link) }
+        Log.actions.notice("Workflow end shown: \(progress.run.state.rawValue, privacy: .public)")
+    }
+
+    /// Until the card is free, the launcher closed, the screen on and
+    /// unlocked, no key typed in the last two seconds: what comes out of
+    /// sight waits for the user, never lost.
+    private func untilTheUserIsFree() async {
+        while true {
+            while popover.isVisible || servesOutsideAgent || launcherIsOpen?() == true {
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            if userPresenceOverride == false {
+                try? await Task.sleep(for: .milliseconds(300))
+                continue
+            }
+            if userPresenceOverride == nil, Self.userIsAway() {
+                await Self.untilTheUserIsBack()
+                continue
+            }
+            if userPresenceOverride == nil, Self.secondsSinceLastKey() < 2 {
+                try? await Task.sleep(for: .seconds(1))
+                continue
+            }
+            if popover.isVisible || servesOutsideAgent || launcherIsOpen?() == true { continue }
+            return
+        }
     }
 
     /// A reminder's action picked in the launcher's ⌘K list ("Pick a

@@ -64,7 +64,8 @@ has, never `list_tool_rights` or `set_tool_rights`):
   a change.
 - Changes to skil.li's own settings ask every time; so do `get_transcript`
   and `recording_followup`, naming the recording (its words leave the
-  Mac): no Always, no right or mode makes them silent.
+  Mac), and `run_github_workflow` (what it publishes stays published): no
+  Always, no right or mode makes them silent.
 - What sends, deletes or pays is asked again during a `do_in_app` step.
 - `@skilli.needsConfirmation` replaces none of these: it asks once, before
   the whole script.
@@ -180,6 +181,8 @@ page: add a line here when you add a tool. -->
 | `update_pull_request_branch` | Updates a pull request's branch. | `pull_request` |
 | `mark_github_notification_read` | Marks a notification read. light | `id` |
 | `mark_all_github_notifications_read` | Marks read every notification `list_github_notifications` gives for the same query. light | `query?` |
+| `run_github_workflow` | Starts a GitHub Actions workflow with `workflow_dispatch` (a release, a deploy), approves its environment when you may, then follows it in the menu bar and says how it ended; asked every time, the workflow and its inputs named. Answers once the run started, with its link. | `repo` (owner/name), `workflow` (its file, `release.yml`), `ref?` (its default branch), `inputs?` (one JSON object) |
+| `get_github_workflow_run` | A workflow run's state, each job and step, the release it published. reads | `run` (its link) |
 
 ### The Mac
 
@@ -277,6 +280,7 @@ Each change asks in the card, every time.
 | `skilli://record/open?recording=…&at=…` | A recording's window (by its id or title), playing from `at` seconds. |
 | `skilli://record/summary?recording=…`, `…/chapters`, `…/actions`, `…/recap`, `…/ask?question=…` | What its window's ⌘K does with your SI; asked every time, the recording named, no Always. |
 | `skilli://record/rename?recording=…&title=…` | Renames a recording, its folder too; asked every time, both named. |
+| `skilli://github/workflow?repo=…&workflow=…&ref=…&<input>=…` | Starts a GitHub workflow as `run_github_workflow` does; every other item is one of its inputs; asked every time, no Always. |
 | `skilli://skillies/import?url=…` | Shows a skillie from the web before Add. |
 | `skilli://apps/import?url=…` | Shows an app file before Add. |
 

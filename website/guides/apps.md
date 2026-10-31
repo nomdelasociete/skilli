@@ -62,3 +62,15 @@ Your pull requests and notifications in the launcher: type `pr`.
 Sign in once in **Settings → GitHub**: skil.li opens GitHub in your
 browser with a code to confirm. Live updates and **Server sync** (one
 copy of your inbox for all your Macs, off by default) are set there too.
+
+### Start a workflow and follow it
+
+A GitHub Actions workflow you start by hand (a release, a deploy) can be
+started from skil.li: a skillie, a `skilli://github/workflow` link or
+your agent. skil.li asks once in its card, naming the workflow and what
+it is given; your ↩ also approves its environment when you may. Then a
+box in the menu bar shows the step it is on: click it for every step,
+**Open on GitHub** or **Cancel Run**. A card says at the end where the
+release is, or which step failed. How to write the skillie:
+[Skillies, links and agents](skillies.md) and the
+[collection's recipe](https://github.com/nomdelasociete/skilli/blob/main/skillies/README.md#start-a-github-workflow-and-follow-it).

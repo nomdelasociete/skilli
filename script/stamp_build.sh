@@ -15,6 +15,11 @@ commit=$(git rev-parse --short HEAD 2>/dev/null) || commit=unknown
 git diff --quiet HEAD 2>/dev/null || commit="$commit+"
 built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $count" "$plist"
+# The version: the newest release tag's, or MARKETING_VERSION when higher
+# (a release passes its own): project.yml's is only a floor
+# (script/release/version.sh).
+version=$(/bin/bash "$SRCROOT/script/release/version.sh" current 2>/dev/null) \
+    && /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$plist"
 for pair in "SkilliCommit:$commit" "SkilliBuildDate:$built"; do
     key=${pair%%:*}
     value=${pair#*:}

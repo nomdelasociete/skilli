@@ -15,6 +15,7 @@ import Foundation
 ///     skilli://record/import?file=/Users/me/Call.m4a  Import Recording's panel, on that file (imported on ↩)
 ///     skilli://record/open?recording=2026-10-22%2014.00%20Weekly%20sync&at=724  a recording's window, playing from there
 ///     skilli://record/summary?recording=Weekly%20sync  its summary, chapters, actions, recap, ask?question=… (asked first)
+///     skilli://github/workflow?repo=owner/name&workflow=release.yml&ref=main&bump=patch  a workflow started, its other items its inputs (asked first)
 ///
 /// `skilli://commands/import` stays `CommandLink`'s.
 public enum SkilliLink: Equatable, Sendable {
@@ -57,6 +58,9 @@ public enum SkilliLink: Equatable, Sendable {
     /// A recording renamed (its folder's name or title), its folder too:
     /// asked in the card every time.
     case renameRecording(String, title: String)
+    /// A GitHub Actions workflow started and followed
+    /// (docs/github-workflow-runs.md): asked in the card every time.
+    case workflow(WorkflowDispatch)
 
     public enum RecordingControl: String, CaseIterable, Sendable {
         case pause, resume, stop
@@ -151,6 +155,13 @@ public enum SkilliLink: Equatable, Sendable {
             components.percentEncodedPath = "/rename"
             items.append(URLQueryItem(name: "recording", value: recording))
             items.append(URLQueryItem(name: "title", value: title))
+        case .workflow(let dispatch):
+            components.host = "github"
+            components.percentEncodedPath = "/workflow"
+            items.append(URLQueryItem(name: "repo", value: dispatch.repository))
+            items.append(URLQueryItem(name: "workflow", value: dispatch.workflow))
+            if let ref = dispatch.ref { items.append(URLQueryItem(name: "ref", value: ref)) }
+            items += dispatch.inputs.keys.sorted().map { URLQueryItem(name: $0, value: dispatch.inputs[$0]) }
         }
         if !items.isEmpty {
             // `+`, `&`, `=` and `#` encoded too: pages read `+` as a space.
@@ -218,6 +229,17 @@ public enum SkilliLink: Equatable, Sendable {
             }
             return RecordingControl(rawValue: target.lowercased()).map(Self.recording)
         }
+        if host == "github" {
+            // Every item but these three is an input; one given twice is no link.
+            guard target.lowercased() == "workflow" else { return nil }
+            func value(_ name: String) -> String { items.first { $0.name == name }?.value ?? "" }
+            var inputs: [String: String] = [:]
+            for item in items where !Self.workflowItems.contains(item.name) {
+                guard inputs[item.name] == nil else { return nil }
+                inputs[item.name] = item.value ?? ""
+            }
+            return (try? WorkflowDispatch(repository: value("repo"), workflow: value("workflow"), ref: value("ref"), inputs: inputs)).map(Self.workflow)
+        }
         guard !target.isEmpty else { return nil }
         switch host {
         case "run":
@@ -233,6 +255,9 @@ public enum SkilliLink: Equatable, Sendable {
             return nil
         }
     }
+
+    /// A workflow link's own items; the others are its inputs.
+    static let workflowItems: Set<String> = ["repo", "workflow", "ref"]
 
     /// Percent-encodes all but letters, digits, `-`, `_`, `~` and `keeping`.
     static func encode(_ text: String, keeping: String) -> String {

@@ -229,11 +229,12 @@ final class ToolSettings {
         save()
     }
 
-    /// A change to skil.li's own settings, or a recording's words handed
-    /// over (`SkilliTools.recordingWords`): it asks every time, whatever its
+    /// A change to skil.li's own settings, a recording's words handed
+    /// over (`SkilliTools.recordingWords`), or a GitHub workflow started
+    /// (`SkilliTools.startsWorkflow`): it asks every time, whatever its
     /// right (Block aside) or the mode, and offers no Always.
     nonisolated static func asksEveryTime(_ tool: String) -> Bool {
-        SettingsTable.Tool.changes.contains(tool) || SkilliTools.recordingWords.contains(tool)
+        SettingsTable.Tool.changes.contains(tool) || SkilliTools.recordingWords.contains(tool) || tool == SkilliTools.startsWorkflow
     }
 
     // MARK: - Servers' tools

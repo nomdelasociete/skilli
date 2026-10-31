@@ -249,6 +249,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if case .selftest = mode { return GitHubBook(keychainPrefix: "selftest-") }
         return GitHubBook()
     }()
+    /// The GitHub workflows started from skil.li (docs/github-workflow-runs.md):
+    /// followed in the menu bar, said in the card when they end.
+    private lazy var workflows: GitHubWorkflows = {
+        let workflows = GitHubWorkflows(github: { [weak self] in self?.githubBook })
+        workflows.onChange = { [weak self, unowned workflows] in
+            self?.workflowIndicator.update(workflows.followed, problems: workflows.problems)
+        }
+        workflows.onFinished = { [weak self] progress in
+            Task { await self?.aiActions.presentWorkflowEnd(progress) }
+        }
+        return workflows
+    }()
+    private lazy var workflowIndicator: WorkflowIndicator = {
+        let indicator = WorkflowIndicator()
+        indicator.cancel = { [weak self] id in self?.workflows.cancel(id) }
+        return indicator
+    }()
     /// Today's reminders in the menu bar.
     private lazy var reminderWatch = ReminderWatch(reminders: reminderBook, preferences: preferences)
     /// The next meeting in the menu bar, joined or offered as it starts.
@@ -616,6 +633,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.recorderCenter.rename(folder, to: title)
         }
         runner.recordingWriter = { [weak self] in self?.ai.defaultModel.provider.title ?? WritingProvider.claude.title }
+        runner.startWorkflow = { [weak self] dispatch in
+            guard let self else { throw GitHubWorkflows.Failure(message: "skil.li is quitting.") }
+            return try await self.workflows.start(dispatch)
+        }
         runner.recordingTitle = { [weak self] in
             guard let recorder = self?.madeRecorderCenter?.recorder, recorder.isRecording else { return nil }
             return recorder.title
@@ -1180,6 +1201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reminderBook.onChange = { [weak self] in self?.reminderWatch.refresh() }
         reminderWatch.onOpenReminders = { [weak self] in self?.launcher.openReminders() }
         toolServer.tools.github = githubBook
+        toolServer.tools.workflows = workflows
         launcher.github = githubBook
         aiActions.github = githubBook
         launcher.showsGitHubStrip = { [preferences] in preferences.githubUnderSearch }
