@@ -31130,7 +31130,8 @@ private final class PressCounter: NSObject {
 /// a token), the inbox's GraphQL answer, the notifications (304 once asked
 /// with their Last-Modified), merging and marking read, recorded.
 /// GitHub as a workflow run sees it (`githubWorkflowRun`): a dispatch
-/// answered with its run's id, as GitHub does, the run waiting for its `release` environment until approved, then one
+/// answered with its run's id when it asks for it (204 otherwise, as
+/// GitHub), the run waiting for its `release` environment until approved, then one
 /// step further at each read, then a release published.
 private final class WorkflowStandIn: @unchecked Sendable {
     static let runURL = "https://github.com/nomdelasociete/skilli/actions/runs/501"
@@ -31172,6 +31173,8 @@ private final class WorkflowStandIn: @unchecked Sendable {
             let inputs = (body["inputs"] as? [String: String] ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
             dispatchedList.append(([body["ref"] as? String ?? "?"] + inputs).joined(separator: " "))
             createdAt = .now
+            // As GitHub: the run's id only when asked for it.
+            guard body["return_run_details"] as? Bool == true else { return LoopbackServer.Response(status: 204) }
             return .json(["workflow_run_id": 501, "run_url": base + "\(repo)/actions/runs/501", "html_url": Self.runURL])
         case ("GET", "\(repo)/actions/runs/501"):
             if !approvedList.isEmpty { reads += 1 }

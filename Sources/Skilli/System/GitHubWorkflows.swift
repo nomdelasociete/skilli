@@ -53,8 +53,10 @@ final class GitHubWorkflows {
             }
             ref = branch
         }
+        // `return_run_details`: GitHub then answers with the run's id (200);
+        // without it, 204 and nothing (changelog, 2026-02-19).
         let answer = try await book.rest("POST", "\(repo)/actions/workflows/\(dispatch.workflow)/dispatches",
-                                         body: ["ref": ref, "inputs": dispatch.inputs])
+                                         body: ["ref": ref, "inputs": dispatch.inputs, "return_run_details": true])
         Log.actions.notice("GitHub: started \(dispatch.workflow, privacy: .public) on \(dispatch.repository, privacy: .private)")
         // Only the run GitHub names in its answer is followed and approved:
         // a run picked from the list by time could be another one this

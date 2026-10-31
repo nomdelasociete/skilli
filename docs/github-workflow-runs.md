@@ -75,8 +75,8 @@ Two changes, one per side:
      GitHub; before "Build, notarize, publish" ends nothing is public.
      After it, a release is out: the next release replaces it (the feed
      holds one release).
-   - GitHub's answer to the start does not name its run (it always does
-     today): the card says so with the workflow's runs page; nothing is
+   - GitHub's answer to the start does not name its run (it does when
+     asked, `return_run_details`): the card says so with the workflow's runs page; nothing is
      followed or approved. A run is never picked from the list by time:
      it could be another one this user started, approved unasked.
    - The user may not approve the environment: the run is followed as
@@ -148,7 +148,7 @@ covers each one):
 
 | Step | GitHub's API |
 | --- | --- |
-| Start | `POST /repos/{repo}/actions/workflows/{workflow}/dispatches` (`ref`, `inputs`); the run its answer names (`workflow_run_id`), never one guessed |
+| Start | `POST /repos/{repo}/actions/workflows/{workflow}/dispatches` (`ref`, `inputs`, `return_run_details: true`); the run its answer names (`workflow_run_id`), never one guessed |
 | Approve | `GET …/actions/runs/{id}/pending_deployments`; `POST` the same with the environments the user `current_user_can_approve`, `approved` |
 | Follow | `GET …/actions/runs/{id}` and `…/runs/{id}/jobs?filter=latest`: every 5 s while it runs, every 30 s while it only waits (an approval only someone else can give, a runner) |
 | End | `GET /repos/{repo}/releases?per_page=5`: a release published since the run started is "the release it made" |
