@@ -24,9 +24,11 @@ higher() { printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n
 
 latest=""
 while IFS= read -r tag; do
-  version="${tag#v}"
-  version="${version%%-*}"
-  [[ "$version" =~ $semver ]] || continue
+  # Only a release's own tag, v<version>-<build>: never a v0.5.0-rc.1. A
+  # draft (a failed upload, run again) has no tag until it is published,
+  # so its retry takes the same version and finds it.
+  [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-[0-9]+$ ]] || continue
+  version="${BASH_REMATCH[1]}"
   latest="$(higher "${latest:-$version}" "$version")"
 done < <(git -C "$ROOT_DIR" tag --list 'v[0-9]*' 2>/dev/null)
 

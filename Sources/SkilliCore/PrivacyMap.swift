@@ -871,13 +871,14 @@ public enum PrivacyMap {
             return PaneLine(text: "Nothing leaves this Mac: you are not signed in to GitHub.", more: "privacy")
         }
         if setup.githubServerSync {
-            return PaneLine(text: "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read) and to check which "
+            return PaneLine(text: "GitHub gets your sign-in only for what you do there (merge, update a branch, mark read, a workflow you start, "
+                            + "then its run read every 5 s until it ends) and to check which "
                             + "account this Mac uses for the relay; \(setup.relayHost ?? "the relay") reads "
                             + "your pull requests and notifications on GitHub with its own authorization and keeps one copy for your Macs.",
                             more: "privacy")
         }
         var text = "GitHub gets your sign-in with each read, every minute while the strip or “pr” shows, and what you do there: merge, "
-            + "update a branch, mark read"
+            + "update a branch, mark read, a workflow you start, then its run read every 5 s until it ends"
         if let host = setup.relayHost { text += "; \(host) gets only its own token, never your GitHub sign-in" }
         return PaneLine(text: text + ".", more: "privacy")
     }

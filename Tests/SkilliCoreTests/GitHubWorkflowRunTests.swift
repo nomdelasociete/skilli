@@ -42,7 +42,7 @@ final class GitHubWorkflowRunTests: XCTestCase {
         XCTAssertTrue(dispatch.asked.contains("approved too when you may approve it"))
         XCTAssertNil(try WorkflowDispatch(repository: "a/b", workflow: "ci.yml", ref: "").ref)
         for (repository, workflow, ref) in [("skilli", "release.yml", "main"), ("a/b/c", "release.yml", "main"), ("a/b", "../x.yml", "main"),
-                                            ("a/b", "release.yml", "main..x"), ("a/b", "release.yml", "-x y"), ("a/b", "", "main")] {
+                                            ("a/b", "release.yml", "main..x"), ("a/.", "release.yml", "main"), ("a/..", "release.yml", "main"), ("a/b", "release.yml", "-x y"), ("a/b", "", "main")] {
             XCTAssertThrowsError(try WorkflowDispatch(repository: repository, workflow: workflow, ref: ref), "\(repository) \(workflow) \(ref)")
         }
         XCTAssertThrowsError(try WorkflowDispatch(repository: "a/b", workflow: "x.yml", inputs: ["a b": "1"]))
@@ -139,6 +139,8 @@ final class GitHubWorkflowRunTests: XCTestCase {
         XCTAssertEqual(WorkflowRun.parse(link: " https://github.com/a/b/actions/runs/9/job/1 ")?.repository, "a/b")
         XCTAssertNil(WorkflowRun.parse(link: "https://example.com/a/b/actions/runs/9"))
         XCTAssertNil(WorkflowRun.parse(link: "123"))
+        XCTAssertNil(WorkflowRun.parse(link: "https://github.com/a/../actions/runs/9"))
+        XCTAssertNil(WorkflowRun.parse(link: "https://github.com/a/./actions/runs/9"))
     }
 
     // MARK: What it says

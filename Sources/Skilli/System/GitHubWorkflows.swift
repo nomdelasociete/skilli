@@ -168,8 +168,10 @@ final class GitHubWorkflows {
         next.run = run.named(progress.run.repository)
         next.jobs = GitHubWorkflowAnswers.jobs(try await book.rest("GET", "\(repo)/actions/runs/\(run.id)/jobs",
                                                                    query: [URLQueryItem(name: "filter", value: "latest")]))
-        if run.state == .succeeded, next.release == nil {
-            let releases = try await book.rest("GET", "\(repo)/releases", query: [URLQueryItem(name: "per_page", value: "5")])
+        // The release only adds a link to the end card: one not read never
+        // keeps a finished run followed.
+        if run.state == .succeeded, next.release == nil,
+           let releases = try? await book.rest("GET", "\(repo)/releases", query: [URLQueryItem(name: "per_page", value: "5")]) {
             next.release = GitHubWorkflowAnswers.release(in: releases, since: run.startedAt ?? run.createdAt)
         }
         return next

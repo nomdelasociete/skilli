@@ -26,7 +26,7 @@ public struct WorkflowDispatch: Equatable, Sendable {
         let repository = repository.trimmingCharacters(in: .whitespacesAndNewlines)
         let workflow = workflow.trimmingCharacters(in: .whitespacesAndNewlines)
         let ref = ref?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard repository.wholeMatch(of: /[A-Za-z0-9\-]+\/[A-Za-z0-9._\-]+/) != nil, !repository.hasSuffix("/..") else {
+        guard repository.wholeMatch(of: /[A-Za-z0-9\-]+\/[A-Za-z0-9._\-]+/) != nil, Self.isName(repository) else {
             throw Invalid(message: "“\(repository)” is not a repository: owner/name, as in nomdelasociete/skilli.")
         }
         guard workflow.wholeMatch(of: /[A-Za-z0-9._\-]+/) != nil, workflow != "..", workflow != "." else {
@@ -45,6 +45,13 @@ public struct WorkflowDispatch: Equatable, Sendable {
         self.workflow = workflow
         self.ref = (ref?.isEmpty ?? true) ? nil : ref
         self.inputs = inputs
+    }
+
+    /// "owner/name" whose name is not `.` or `..`: a path GitHub's URLs
+    /// could fold into another repository's.
+    static func isName(_ repository: String) -> Bool {
+        let name = repository.split(separator: "/").last ?? ""
+        return name != "." && name != ".."
     }
 
     /// The inputs a tool is given, as one JSON object: text, true/false
@@ -168,7 +175,7 @@ public struct WorkflowRun: Equatable, Sendable {
     public static func parse(link: String) -> (repository: String, id: Int)? {
         let text = link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let match = text.wholeMatch(of: /https:\/\/github\.com\/([A-Za-z0-9\-]+\/[A-Za-z0-9._\-]+)\/actions\/runs\/([0-9]+)(\/.*)?/),
-              let id = Int(match.output.2) else { return nil }
+              let id = Int(match.output.2), WorkflowDispatch.isName(String(match.output.1)) else { return nil }
         return (String(match.output.1), id)
     }
 }
