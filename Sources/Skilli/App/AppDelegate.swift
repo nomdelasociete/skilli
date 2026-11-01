@@ -977,6 +977,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         launcher.recordingProvider = { [weak self] in self?.ai.defaultModel.provider.title ?? WritingProvider.claude.title }
         toolServer.tools.recorder = { [weak self] in self?.recorderCenter }
+        toolServer.tools.updateSkilli = { [weak self] in self?.checkSkilliForUpdates() ?? SoftwareUpdate.unavailable }
         aiActions.startTimer = { [weak self] request in self?.startTimer(request) ?? UUID() }
         aiActions.cancelTimer = { [timers] id in timers.cancel(id) }
         timers.onDone = { [weak self] timer in
@@ -1970,6 +1971,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updates?.checkForUpdates()
     }
 
+    /// The launcher's Check for Updates, a link's and update_app's on
+    /// skil.li: Sparkle's own window, or why this build has none.
+    private func checkSkilliForUpdates() -> String {
+        guard let updates else { return SoftwareUpdate.unavailable }
+        updates.checkForUpdates()
+        return "Checking for a newer skil.li: its window says what it finds."
+    }
+
     @objc func showSettings(_ sender: Any?) {
         settings.show()
     }
@@ -1992,6 +2001,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let url = try await backup.backUpNow()
                 return "Backed up to \(BackupPane.shown(url.deletingLastPathComponent()))."
             }
+        case .checkForUpdates:
+            // Sparkle's window says the rest; a build without one says so here.
+            let said = checkSkilliForUpdates()
+            if updates == nil { aiActions.notify(said, caller: "Updates", run: nil, seconds: 6) }
         case .newWindowLayout:
             layoutEditor.capture(name: "")
         case .newEmptyWindowLayout:

@@ -14,8 +14,9 @@ brew install --cask nomdelasociete/tap/skilli
 ```
 
 It is signed and notarized by Apple, and it keeps itself up to date (to
-check now: **Check for Updates…** in the menu bar's skil.li menu). It is
-free and open source; there is no account to create.
+check now: type "update" in the launcher, or **Check for Updates…** in
+the menu bar's skil.li menu). It is free and open source; there is no
+account to create.
 
 ## 2. The welcome
 

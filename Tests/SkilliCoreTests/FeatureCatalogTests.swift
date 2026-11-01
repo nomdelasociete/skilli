@@ -237,6 +237,12 @@ final class FeatureCatalogTests: XCTestCase {
         XCTAssertEqual(best("new command"), .newCommand)
         XCTAssertEqual(best("nouvelle commande"), .newCommand)
         XCTAssertEqual(best("snippets"), .searchSnippets)
+        // skil.li's own updater, in both languages.
+        XCTAssertEqual(best("update"), .checkForUpdates)
+        XCTAssertEqual(best("check for updates"), .checkForUpdates)
+        XCTAssertEqual(best("mise à jour"), .checkForUpdates)
+        XCTAssertEqual(best("mettre à jour skil.li"), .checkForUpdates)
+        XCTAssertEqual(best("mettre à jour"), .homebrew, "its packages, as before")
     }
 
     // MARK: - Off (Settings → Catalog)

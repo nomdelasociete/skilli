@@ -508,6 +508,7 @@ public enum FeatureCatalog {
             command(.catalog, .skilli, "Lists everything skil.li does, and how to reach it"),
             command(.welcome, .skilli, "Shows the first launch's welcome again: the Hyper Key, the launcher, your SI"),
             command(.backUpNow, .skilli, "Saves your settings and files to the folder of Settings → Backup"),
+            command(.checkForUpdates, .skilli, "Looks for a newer skil.li now and installs it"),
             command(.resetLauncherPosition, .skilli, "Puts the launcher back in the middle of the screen"),
             command(.quit, .skilli, "Quits skil.li; its shortcuts stop until you open it again")
         ]

@@ -215,6 +215,8 @@ final class SkilliTools {
     var performAction: ((SkilliAction) -> Void)?
     /// An app added (create_app_link): the launcher's rows follow.
     var appsChanged: (() -> Void)?
+    /// skil.li's own updater (update_app on skil.li): what it says.
+    var updateSkilli: (() -> String)?
     /// Finds an installed app by name ("Notes", "Calculatrice").
     var findApp: ((String) -> URL?)?
     /// Installed apps whose name is close to a text, best first.
@@ -359,7 +361,7 @@ final class SkilliTools {
         // Read again where agents get it (`live`): the apps' files change.
         runActionDefinition(apps: []),
         ToolDefinition(name: "update_app", title: "Update an app",
-                       description: "Updates an app the right way: its own “Check for Updates…” menu item, else the App Store's Updates page, else Homebrew (brew upgrade --cask). Without a name: the app in front.",
+                       description: "Updates an app the right way: its own “Check for Updates…” menu item, else the App Store's Updates page, else Homebrew (brew upgrade --cask). Without a name: the app in front. skil.li itself: its own updater.",
                        group: .apps, risk: .changes,
                        parameters: [.init(name: "name", description: "The app; empty for the one in front.", isRequired: false)]),
         ToolDefinition(name: "send_message", title: "Send a message",
@@ -1637,6 +1639,8 @@ final class SkilliTools {
 
     /// Its own update menu item, else the App Store, else Homebrew.
     private func updateApp(_ name: String?, run: AgentContext?) async throws -> String {
+        // "skil.li", "Skilli": its app may be named neither way where it is installed.
+        if let name, let updateSkilli, name.lowercased().filter(\.isLetter) == "skilli" { return updateSkilli() }
         let url: URL
         if let name, !name.isEmpty {
             guard let found = findApp?(name) else { throw Failure(message: "No app called “\(name)” is installed. Call list_apps.") }
@@ -1648,6 +1652,9 @@ final class SkilliTools {
         }
         let appName = FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
         let bundleID = Bundle(url: url)?.bundleIdentifier ?? ""
+        // skil.li itself: its own updater, never its menu read from here
+        // (that deadlocks) nor Homebrew (a download from skil.li has no cask).
+        if bundleID == Bundle.main.bundleIdentifier, let updateSkilli { return updateSkilli() }
 
         // 1. The app's own "Check for Updates…" (Sparkle and most others);
         // its menu exists only while it runs.
