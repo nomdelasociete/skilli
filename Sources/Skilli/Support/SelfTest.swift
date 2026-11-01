@@ -21855,6 +21855,7 @@ final class SelfTest {
     /// build is made from source: both say it has no updater.
     private func updatesFromTheLauncherAndAsk() async {
         let name = "Updates: “update” in the launcher runs Check for Updates; update_app on skil.li asks skil.li's own updater"
+        guard !aborted else { return }
         let launcher = context.launcher
         let asked = (try? await context.tools.tools.call("update_app", arguments: ["name": "skil.li"], run: nil)) ?? "failed"
         var top = "not opened"
@@ -21872,7 +21873,9 @@ final class SelfTest {
             }
             await closeLauncher()
         }
-        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        // Its card, only while the test window still has the focus: a key
+        // sent after the focus was lost would land in another app.
+        if !aborted, context.aiActions.popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
         record(name, asked == SoftwareUpdate.unavailable && said,
                "update_app skil.li → “\(asked)”; “update” → top row “\(top)”, the card said it\(said ? "" : " not")", nil)
     }

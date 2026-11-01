@@ -57,8 +57,10 @@ Ready as soon as you log in, in the glass you like.
 - **Quit skil.li**: its shortcuts stop until you open it again.
 - **Check for Updates**: looks for a newer skil.li now and installs it
   (it also checks by itself once a day, and installs what it found when
-  skil.li quits). Also in the menu bar, and as "update skil.li" to your
-  SI. A build made from source has no updater and says so.
+  skil.li quits). Type "update" or "mise à jour" in the launcher, choose
+  Check for Updates… in the menu bar (a downloaded skil.li only), or ask
+  your SI to "update skil.li". A build made from source has no updater
+  and says so.
 - **Welcome to skil.li**: the first launch's welcome, a minute of doing:
   Accessibility turned on with a guide at System Settings' switch, Caps
   Lock held to feel the Hyper Key, the launcher's keys chosen (⌘Space
