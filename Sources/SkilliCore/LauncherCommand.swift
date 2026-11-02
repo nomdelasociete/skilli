@@ -69,6 +69,9 @@ public struct LauncherCommand: Sendable {
         case resetLauncherPosition
         /// A backup now, to the folder chosen in Settings → Backup.
         case backUpNow
+        /// skil.li's own updater checks now (the menu bar's Check for
+        /// Updates…); a build made from source has none and says so.
+        case checkForUpdates
         /// Turns the launcher into the Catalog, everything skil.li does
         /// ("?").
         case catalog
@@ -282,6 +285,14 @@ public struct LauncherCommand: Sendable {
             title: "Back Up skil.li Now",
             symbol: "clock.arrow.circlepath",
             keywords: ["backup", "back up", "export settings", "sauvegarde", "sauvegarder", "exporter les réglages", "copie de sécurité"]
+        ),
+        LauncherCommand(
+            id: .checkForUpdates,
+            title: "Check for Updates",
+            symbol: "arrow.down.circle",
+            // Not "mettre à jour": Homebrew's (its packages).
+            keywords: ["update", "updates", "update skil.li", "new version", "latest version", "mise à jour", "mises à jour",
+                       "mettre à jour skil.li", "nouvelle version", "dernière version"]
         ),
         LauncherCommand(
             id: .catalog,

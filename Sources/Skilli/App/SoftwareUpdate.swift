@@ -24,6 +24,9 @@ final class SoftwareUpdate: NSObject, SPUStandardUserDriverDelegate {
 
     var canCheck: Bool { controller?.updater.canCheckForUpdates ?? false }
 
+    /// What a check says in a build made from source (no feed, no updater).
+    static let unavailable = "This skil.li is built from source: it has no updater and updates when it is built again."
+
     /// skil.li has no Dock icon: its update window comes forward first.
     func checkForUpdates() {
         NSApp.activate(ignoringOtherApps: true)

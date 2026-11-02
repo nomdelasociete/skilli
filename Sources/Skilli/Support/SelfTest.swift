@@ -5326,6 +5326,7 @@ final class SelfTest {
         await launcherPreviewsTheSelection()
         await askOffersRoutesWhenUnsure()
         await recipesAnswerClearly()
+        await updatesFromTheLauncherAndAsk()
         await setupComesBackInFront()
         await reopenAfterSystemSettings()
         await macCommandsUseRealAPIs()
@@ -21846,6 +21847,37 @@ final class SelfTest {
         }
         record(name, update.contains("part of macOS") && refused.contains("Slack and Discord"),
                "update_app Finder → “\(update)”; send_message Teams → “\(refused)”", nil)
+    }
+
+    /// skil.li's own update: "update" in the launcher names Check for
+    /// Updates first and runs it; update_app on skil.li asks skil.li's own
+    /// updater, never its menu (a deadlock) nor Homebrew. The self-test's
+    /// build is made from source: both say it has no updater.
+    private func updatesFromTheLauncherAndAsk() async {
+        let name = "Updates: “update” in the launcher runs Check for Updates; update_app on skil.li asks skil.li's own updater"
+        guard !aborted else { return }
+        let launcher = context.launcher
+        let asked = (try? await context.tools.tools.call("update_app", arguments: ["name": "skil.li"], run: nil)) ?? "failed"
+        var top = "not opened"
+        var said = false
+        if await openLauncher() {
+            for character in "update" { await pressKey(character) }
+            let listed = await waitUntil(timeout: 1) { launcher.topResultName == "Check for Updates" } != nil
+            top = launcher.topResultName ?? "nothing"
+            // Never press Return on something else: it would launch it.
+            await pressKey(nil, code: CGKeyCode(listed ? kVK_Return : kVK_Escape))
+            if listed {
+                said = await waitUntil(timeout: 2) {
+                    self.context.aiActions.popover.isVisible && self.context.aiActions.popover.shownText == SoftwareUpdate.unavailable
+                } != nil
+            }
+            await closeLauncher()
+        }
+        // Its card, only while the test window still has the focus: a key
+        // sent after the focus was lost would land in another app.
+        if !aborted, context.aiActions.popover.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+        record(name, asked == SoftwareUpdate.unavailable && said,
+               "update_app skil.li → “\(asked)”; “update” → top row “\(top)”, the card said it\(said ? "" : " not")", nil)
     }
 
     /// The real router on the user's own decision keys (read only): what
