@@ -339,6 +339,29 @@ final class LauncherController: NSObject {
     /// Settings panes, skillies, quicklinks, layouts, snippets, the user's
     /// commands): the empty field shows them at once, from memory.
     private var pinnedFound: [String: LauncherItem] = [:]
+    /// The app the launcher opened over (never skil.li itself): what is
+    /// run from it is learned for it (`QueryLearning` places), and the
+    /// empty field shows what is run there most.
+    private struct ShownApp {
+        let id: String
+        let name: String
+        let path: String?
+        let running: NSRunningApplication
+    }
+    private var shownApp: ShownApp?
+    /// Items run most over `shownApp` that the last catalog read found
+    /// (skillies, quicklinks, layouts, snippets, Mac commands…), as
+    /// `pinnedFound`: the empty field shows them from memory.
+    private var placeFound: [String: LauncherItem] = [:]
+    /// Menu items run most over `shownApp`, read through Accessibility
+    /// once the panel is up (`loadPlaceMenus`).
+    private var placeMenus: [LauncherItem] = []
+    private var placeMenuTask: Task<Void, Never>?
+    /// The rows the empty field shows for `shownApp`: their accessory
+    /// says where ("Command · in Figma").
+    private var placeShown: Set<String> = []
+    /// What the empty field shows for the app it opened over, at most.
+    private static let placeRows = 3
     /// What ↑ brings back in the empty field: the searches acted on.
     let recentSearches: RecentSearchStore
     /// The recent search ↑ put in the field, while it is left as it is.
@@ -807,6 +830,11 @@ final class LauncherController: NSObject {
         offAsShown = nil
         missingAsShown = nil
         calendarAsShown = nil
+        // The panel never activates skil.li: the app in front is the one
+        // the user was in.
+        shownApp = Self.appInFront()
+        placeMenus = []
+        placeMenuTask?.cancel()
         // Read again for this show, once the panel is up: the first key
         // does not wait for it. Words kept are found again first with the
         // last read (nothing read on the show path), then it is read anew.
@@ -842,6 +870,7 @@ final class LauncherController: NSObject {
 
         installOutsideClickMonitor()
         showSelectionPreview(from: focused)
+        loadPlaceMenus()
         // Off the show path: once the panel is up.
         DispatchQueue.main.async { [weak self] in self?.countAwakeDown() }
         if onOpened != nil {
@@ -1196,6 +1225,7 @@ final class LauncherController: NSObject {
         }
         catalog = made
         refreshPinned(from: made)
+        refreshPlaces(from: made)
         return made
     }
 
@@ -1356,19 +1386,26 @@ final class LauncherController: NSObject {
             }
         } else if query.isEmpty {
             let apps = index.search("", usage: usage, limit: Layout.resultLimit).map(LauncherItem.app)
-            // What the user pinned first, in the order pinned (⌘K → Pin).
+            // What the user pinned first, in the order pinned (⌘K → Pin),
+            // then what they run most from the app it opened over.
             let pinned = pinnedItems()
-            results = pinned.isEmpty ? apps : Array(LauncherPins.first(pinned, then: apps, id: \.learningID).prefix(Layout.resultLimit))
+            let here = placeItems(excluding: Set(pinned.map(\.learningID)))
+            placeShown = Set(here.map(\.learningID))
+            let first = pinned + here
+            results = first.isEmpty ? apps : Array(LauncherPins.first(first, then: apps, id: \.learningID).prefix(Layout.resultLimit))
             // The meeting about to start (or just started): first, ↩ joins.
             if FeatureCatalog.shows(row: "event", off: off), let meeting = calendar?.meetingNow() { results.insert(.event(meeting), at: 0) }
             // A price selected where the launcher opened: converted, first.
             if let selected = selectedPrice(off: off) { results.insert(.calculation(selected), at: 0) }
         } else {
             // Fuzzy score + usage + what was picked before for this text,
-            // and a boost for what the user pinned.
+            // a boost for what the user pinned, a smaller one for what they
+            // run from the app it opened over.
             let pinned = pinsNow.ids
+            let place = shownApp?.id
             func boost(_ id: String) -> Int {
                 learning.boost(query: text, item: id) + (pinned.isEmpty || !pinned.contains(id) ? 0 : LauncherPins.boost)
+                    + (place.map { learning.placeBoost(item: id, in: $0) } ?? 0)
             }
             var scored: [(item: LauncherItem, score: Int)] = index.scored(query, usage: usage).map {
                 (.app($0.entry), $0.score + boost(LauncherItem.app($0.entry).learningID))
@@ -1460,6 +1497,34 @@ final class LauncherController: NSObject {
                 if let item = resolve(learnedID: learned.item) {
                     scored.append((item, learned.boost))
                 }
+            }
+            // Nothing found as typed: one slip of the fingers undone
+            // ("wahtsapp", "whqtsapp", "safaari"), on the names only
+            // (`FuzzyTypos`). Never on a key that finds something.
+            if scored.isEmpty, paneQuery == nil {
+                let typos = FuzzyTypos(query)
+                if !typos.isEmpty {
+                    scored += index.typoScored(typos, usage: usage).map { (.app($0.entry), $0.score + boost(LauncherItem.app($0.entry).learningID)) }
+                    for command in catalog.commands {
+                        if let score = LauncherRank.typoScore(typos, names: command.candidates.prefix(1), keywords: command.candidates.dropFirst()) {
+                            let item = LauncherItem.command(command)
+                            scored.append((item, score + boost(item.learningID)))
+                        }
+                    }
+                    for entry in catalog.entries where entry.nameCount > 0 {
+                        guard let score = LauncherRank.typoScore(typos, names: entry.candidates.prefix(entry.nameCount)) else { continue }
+                        var item = entry.item
+                        if case .script(let command, _) = item, command.mode == .inline { item = .script(command, inline: scriptInline?(command)) }
+                        scored.append((item, score + boost(item.learningID)))
+                    }
+                    for command in catalog.siCommands {
+                        if let score = LauncherRank.typoScore(typos, names: command.candidates.prefix(1)) {
+                            let item = LauncherItem.siCommand(command)
+                            scored.append((item, score + boost(item.learningID)))
+                        }
+                    }
+                }
+                laps.lap("typos")
             }
             // Even scores: a device's output before its microphone ("airpods":
             // where the sound plays is what is asked for most), then the
@@ -2517,6 +2582,107 @@ final class LauncherController: NSObject {
         }
     }
 
+    /// The app in front, unless it is skil.li (Settings, a recording's
+    /// window): nothing is learned for skil.li itself.
+    private static func appInFront() -> ShownApp? {
+        guard let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != getpid(),
+              let id = app.bundleIdentifier else { return nil }
+        return ShownApp(id: id, name: app.localizedName ?? id, path: app.bundleURL?.path, running: app)
+    }
+
+    /// A pick learned for what was typed (for the app in front: every run,
+    /// in `launch`).
+    private func learn(_ query: String, _ picked: LauncherItem) {
+        if !query.trimmingCharacters(in: .whitespaces).isEmpty { learning.record(query: query, item: picked.learningID) }
+    }
+
+    /// Run from a launcher opened over an app: learned for that app, when
+    /// the empty field can show it again (an app, a command, a skillie, a
+    /// quicklink, a layout, a snippet, a menu item…; not a contact or a
+    /// file).
+    private func learnPlace(_ picked: LauncherItem) {
+        guard let app = shownApp else { return }
+        let id = picked.learningID
+        guard Self.placePrefixes.contains(where: id.hasPrefix) else { return }
+        learning.record(item: id, in: app.id)
+    }
+
+    private static let placePrefixes = ["app:", "cmd:", "system:", "si:", "script:", "quicklink:", "layout:", "snippet:", "menu:"]
+
+    /// The empty field's rows for the app it opened over: what is run
+    /// there most, `placeRows` at most, that app itself and `shown` left
+    /// out. Apps and built-in commands looked up at once, menu items once
+    /// read (`loadPlaceMenus`), the rest as the last catalog read found
+    /// them (`placeFound`): nothing read on the show path.
+    private func placeItems(excluding shown: Set<String>) -> [LauncherItem] {
+        guard let app = shownApp else { return [] }
+        var items: [LauncherItem] = []
+        for id in learning.placeItems(in: app.id) where items.count < Self.placeRows {
+            guard !shown.contains(id), FeatureCatalog.shows(row: id, off: off) else { continue }
+            if let path = app.path, id == "app:\(path)" { continue }
+            let item: LauncherItem? = if id.hasPrefix("app:") || id.hasPrefix("cmd:") {
+                resolve(learnedID: id)
+            } else if id.hasPrefix("menu:") {
+                placeMenus.first { $0.learningID == id }
+            } else if case .script(let command, _) = placeFound[id], command.mode == .inline {
+                .script(command, inline: scriptInline?(command))
+            } else {
+                placeFound[id]
+            }
+            if let item { items.append(item) }
+        }
+        return items
+    }
+
+    /// After each catalog read (once the panel is up): the items run most
+    /// over the app in front that it holds; the empty field drawn again if
+    /// what it shows changed.
+    private func refreshPlaces(from made: Catalog) {
+        let wanted = Set((shownApp.map { learning.placeItems(in: $0.id) } ?? []).filter { id in
+            !id.hasPrefix("app:") && !id.hasPrefix("cmd:") && !id.hasPrefix("menu:")
+        })
+        guard !wanted.isEmpty || !placeFound.isEmpty else { return }
+        var found: [String: LauncherItem] = [:]
+        for entry in made.entries where wanted.contains(entry.item.learningID) { found[entry.item.learningID] = entry.item }
+        for command in made.siCommands {
+            let item = LauncherItem.siCommand(command)
+            if wanted.contains(item.learningID) { found[item.learningID] = item }
+        }
+        let changed = found.mapValues(\.title) != placeFound.mapValues(\.title)
+        placeFound = found
+        if changed, panel.isVisible, mode == nil, searchField.stringValue.isEmpty, tableView.selectedRow <= 0 {
+            updateResults(query: "")
+        }
+    }
+
+    /// The menu items run most over the app in front, read through
+    /// Accessibility once the panel is up and off the main thread (an app
+    /// slow to answer holds only this, 1.5 s at most); then the empty
+    /// field drawn again. Only for an app with such a habit.
+    private func loadPlaceMenus() {
+        guard let app = shownApp else { return }
+        let wanted = Set(learning.placeItems(in: app.id).filter { $0.hasPrefix("menu:") })
+        guard !wanted.isEmpty else { return }
+        let pid = app.running.processIdentifier
+        placeMenuTask = Task { [weak self] in
+            let items = await Task.detached { MenuReader.items(pid: pid).filter(\.isEnabled) }.value
+            guard let self, !Task.isCancelled, self.panel.isVisible, self.shownApp?.id == app.id else { return }
+            var rows: [LauncherItem] = []
+            for (index, item) in items.enumerated() {
+                let entry = MenuSearch.Entry(index: index, title: item.components.last ?? item.path,
+                                             parents: Array(item.components.dropLast()), shortcut: item.shortcut)
+                let row = LauncherItem.menuItem(entry, item)
+                if wanted.contains(row.learningID), !rows.contains(where: { $0.learningID == row.learningID }) { rows.append(row) }
+            }
+            self.placeMenus = rows
+            // Its icon on the rows, as in Search Menu Items.
+            if self.mode == nil { self.menuApp = app.running }
+            if !rows.isEmpty, self.mode == nil, self.searchField.stringValue.isEmpty, self.tableView.selectedRow <= 0 {
+                self.updateResults(query: "")
+            }
+        }
+    }
+
     private func resolve(learnedID: String) -> LauncherItem? {
         if learnedID.hasPrefix("app:") {
             return index.entry(path: String(learnedID.dropFirst(4))).map(LauncherItem.app)
@@ -2942,6 +3108,13 @@ final class LauncherController: NSObject {
     /// What Return does on `picked`: the row `row`, or the row a Catalog
     /// entry stands for.
     private func launch(_ picked: LauncherItem, row: Int, flags: NSEvent.ModifierFlags) {
+        // Every run counts for the app in front, a mode opened or a
+        // skillie too: they return before the rest is learned.
+        if case .script(let command, _) = picked, !command.arguments.isEmpty {
+            // Counted once its arguments are all given: not when left.
+        } else {
+            learnPlace(picked)
+        }
         if case .setup(let permission) = picked {
             hide()
             onSetup?(permission)
@@ -3043,6 +3216,7 @@ final class LauncherController: NSObject {
                 input.values.append(text)
             }
             if input.values.count == input.command.arguments.count {
+                learnPlace(.script(input.command, inline: nil))
                 hide()
                 onRunScript?(input.command, input.values)
             } else {
@@ -3086,7 +3260,7 @@ final class LauncherController: NSObject {
             return
         }
         if case .pullRequest(let pullRequest) = picked {
-            learning.record(query: query, item: picked.learningID)
+            learn(query, picked)
             hide()
             if flags.contains(.command) {
                 NSPasteboard.general.clearContents()
@@ -3125,7 +3299,7 @@ final class LauncherController: NSObject {
             return
         }
         if case .command(let command) = picked, command.id == .copyAvailability {
-            learning.record(query: query, item: picked.learningID)
+            learn(query, picked)
             hide()
             onShowAgenda?(.availability)
             return
@@ -3136,7 +3310,7 @@ final class LauncherController: NSObject {
             return
         }
         if case .event(let event) = picked {
-            if !query.trimmingCharacters(in: .whitespaces).isEmpty { learning.record(query: query, item: picked.learningID) }
+            learn(query, picked)
             hide()
             if flags.contains(.command) {
                 calendar?.openInCalendar(event)
@@ -3148,7 +3322,7 @@ final class LauncherController: NSObject {
             return
         }
         if case .contact(let match) = picked {
-            if !query.trimmingCharacters(in: .whitespaces).isEmpty { learning.record(query: query, item: picked.learningID) }
+            learn(query, picked)
             hide()
             if flags.contains(.command) {
                 ContactBook.openInContacts(match.record.id)
@@ -3178,7 +3352,7 @@ final class LauncherController: NSObject {
             return
         }
         if case .layout(let layout) = picked {
-            if !query.trimmingCharacters(in: .whitespaces).isEmpty { learning.record(query: query, item: picked.learningID) }
+            learn(query, picked)
             hide()
             onLayout?(layout)
             return
@@ -3198,7 +3372,7 @@ final class LauncherController: NSObject {
                 updateResults(query: searchField.stringValue)
                 return
             }
-            if !query.trimmingCharacters(in: .whitespaces).isEmpty { learning.record(query: query, item: picked.learningID) }
+            learn(query, picked)
             hide()
             if let url = link.address(for: wanted) { onOpenURL?(url) }
             return
@@ -3275,9 +3449,7 @@ final class LauncherController: NSObject {
             return
         }
         if case .snippet(let snippet) = picked {
-            if !query.trimmingCharacters(in: .whitespaces).isEmpty {
-                learning.record(query: query, item: picked.learningID)
-            }
+            learn(query, picked)
             // Hide first: it goes to the app that was in front.
             hide()
             onSnippet?(snippet, flags.contains(.command))
@@ -3289,10 +3461,10 @@ final class LauncherController: NSObject {
             onClip?(item, flags.contains(.command) ? .copy : flags.contains(.shift) ? .pastePlain : .paste)
             return
         }
-        if !query.trimmingCharacters(in: .whitespaces).isEmpty, case .ask = picked {
+        if case .ask = picked {
             // Asking is not a pick to learn.
-        } else if !query.trimmingCharacters(in: .whitespaces).isEmpty {
-            learning.record(query: query, item: picked.learningID)
+        } else {
+            learn(query, picked)
         }
         let entry: AppIndex.Entry
         switch picked {
@@ -4465,6 +4637,7 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             // the preview says the alias, the name needs the room.
             cell.setAlias(beside == nil ? aliasByID[id] : nil)
             cell.setPinned(mode == nil && pinsNow.ids.contains(id))
+            cell.setPlace(mode == nil && searchField.stringValue.isEmpty && placeShown.contains(id) ? shownApp?.name : nil)
             cell.setTrailingKeycap(mode == .snippets ? Self.keywordCap(results[row]) : nil)
             cell.setMaybe(row == snippetMaybeRow)
         }

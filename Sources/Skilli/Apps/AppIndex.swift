@@ -118,6 +118,14 @@ final class AppIndex {
         return scored
     }
 
+    /// Apps a query mistyped once names (`FuzzyTypos`), with the same usage
+    /// boost; asked only when the query as typed finds nothing.
+    func typoScored(_ typos: FuzzyTypos, usage: UsageStore) -> [(entry: Entry, score: Int)] {
+        entries.compactMap { entry in
+            LauncherRank.typoScore(typos, names: entry.candidates[...]).map { (entry, $0 + usage.boost(for: entry.url)) }
+        }
+    }
+
     func entry(path: String) -> Entry? {
         byPath[path]
     }

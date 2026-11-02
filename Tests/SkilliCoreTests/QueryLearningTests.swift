@@ -80,4 +80,73 @@ final class QueryLearningTests: XCTestCase {
         let decoded = try JSONDecoder().decode(QueryLearning.self, from: JSONEncoder().encode(learning))
         XCTAssertEqual(decoded, learning)
     }
+
+    /// Where: three runs from Figma make a habit there, not elsewhere.
+    func testPlaceItemsNeedAHabitInThatApp() {
+        var learning = QueryLearning()
+        let figma = "com.figma.Desktop"
+        let day = 86_400.0
+        // A week apart: the earlier ones have faded a little.
+        learning.record(item: "layout:design", in: figma, at: start)
+        learning.record(item: "layout:design", in: figma, at: start + 7 * day)
+        XCTAssertEqual(learning.placeItems(in: figma, at: start + 7 * day), [])
+        learning.record(item: "layout:design", in: figma, at: start + 14 * day)
+        for hour in 0..<4 { learning.record(item: "cmd:searchMenus", in: figma, at: start + 14 * day + Double(hour) * 3_600) }
+        let now = start + 14 * day + 4 * 3_600
+        XCTAssertEqual(learning.placeItems(in: figma, at: now), ["cmd:searchMenus", "layout:design"])
+        XCTAssertEqual(learning.placeItems(in: "com.apple.Safari", at: now), [])
+        // Typed picks are not touched.
+        XCTAssertTrue(learning.hits.isEmpty)
+    }
+
+    func testPlaceItemsFade() {
+        var learning = QueryLearning(halfLife: 100)
+        for second in 0..<3 { learning.record(item: "cmd:quit", in: "com.example.App", at: start + Double(second)) }
+        XCTAssertEqual(learning.placeItems(in: "com.example.App", at: start + 2), ["cmd:quit"])
+        XCTAssertEqual(learning.placeItems(in: "com.example.App", at: start + 102), [])
+    }
+
+    /// Less than a name typed whole or one pick for the text.
+    func testPlaceBoostStaysUnderTypedLearning() {
+        var learning = QueryLearning()
+        for _ in 0..<20 { learning.record(item: "app:/Applications/Simulator.app", in: "com.apple.dt.Xcode", at: start) }
+        let boost = learning.placeBoost(item: "app:/Applications/Simulator.app", in: "com.apple.dt.Xcode", at: start)
+        XCTAssertGreaterThan(boost, 0)
+        XCTAssertLessThan(boost, LauncherPins.boost)
+        XCTAssertLessThan(boost, LauncherRank.namedBoost)
+        XCTAssertLessThan(boost, Int(QueryLearning.pointsPerBit))
+        XCTAssertEqual(learning.placeBoost(item: "app:/Applications/Simulator.app", in: "com.apple.Safari", at: start), 0)
+    }
+
+    func testPlacesStayBounded() {
+        var learning = QueryLearning()
+        for i in 0..<(QueryLearning.maxPerPlace + 5) {
+            learning.record(item: "item\(i)", in: "com.example.App", at: start + Double(i))
+        }
+        XCTAssertEqual(learning.places["com.example.App"]?.count, QueryLearning.maxPerPlace)
+        for i in 0..<(QueryLearning.maxPlaces + 3) {
+            learning.record(item: "cmd:quit", in: "com.example.App\(i)", at: start + 100 + Double(i))
+        }
+        XCTAssertEqual(learning.places.count, QueryLearning.maxPlaces)
+    }
+
+    func testForgetRemovesItemFromPlaces() {
+        var learning = QueryLearning()
+        learning.record(item: "safari", in: "com.example.App", at: start)
+        learning.forget(item: "safari")
+        XCTAssertTrue(learning.places.isEmpty)
+    }
+
+    func testPlacesRoundTripAndOldFilesStillRead() throws {
+        var learning = QueryLearning()
+        learning.record(query: "saf", item: "safari", at: start)
+        learning.record(item: "safari", in: "com.example.App", at: start)
+        let decoded = try JSONDecoder().decode(QueryLearning.self, from: JSONEncoder().encode(learning))
+        XCTAssertEqual(decoded, learning)
+        // learning.json from before places: no "places" key.
+        let old = #"{"halfLife":2592000,"hits":{"saf":{"safari":{"weight":1,"updated":800000000}}}}"#
+        let read = try JSONDecoder().decode(QueryLearning.self, from: Data(old.utf8))
+        XCTAssertTrue(read.places.isEmpty)
+        XCTAssertGreaterThan(read.boost(query: "saf", item: "safari", at: start), 0)
+    }
 }

@@ -362,6 +362,7 @@
 		EB52A594F6AB6043C83F41B8 /* BindingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 516D2305BCD384C1B18505BF /* BindingEngine.swift */; };
 		EB92036247D263C575167E61 /* WindowLayoutPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 317E96EAAA576BE78F116A8D /* WindowLayoutPlan.swift */; };
 		EB9E662103C00F099B86527C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EF76F7F3AC8409A4383BE1D8 /* Assets.xcassets */; };
+		EC55C694E38799B4F822D261 /* FuzzyTypos.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EEEFC0F600C3ABE74E726C4 /* FuzzyTypos.swift */; };
 		ECC20E984AB5DC55C4A0D2A4 /* KeyRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 133FC9BC883F7262C3BBED4E /* KeyRouter.swift */; };
 		ED9C0CB6DAFDF86412160C9F /* SettingsGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126B66C597E40BC762F52717 /* SettingsGuide.swift */; };
 		EF57CABE4DB96AF9CD8AC985 /* MCPBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EC77A723BFC0D74871EF2B /* MCPBridge.swift */; };
@@ -607,6 +608,7 @@
 		6D7065DCDC6AF3DF83F61233 /* SettingsReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsReport.swift; sourceTree = "<group>"; };
 		6DFAFFF8E51ADA4D23735148 /* GlassCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCheck.swift; sourceTree = "<group>"; };
 		6EA41B2539B0CABC91D045C0 /* AXWait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXWait.swift; sourceTree = "<group>"; };
+		6EEEFC0F600C3ABE74E726C4 /* FuzzyTypos.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzyTypos.swift; sourceTree = "<group>"; };
 		6F2F9C4183D4F4976FB8F004 /* LinkedApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedApp.swift; sourceTree = "<group>"; };
 		6F33750B9B584ADF8EBD2278 /* SettingsUndo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUndo.swift; sourceTree = "<group>"; };
 		6F378531C6E04EA9CEE16A81 /* Transcriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Transcriber.swift; sourceTree = "<group>"; };
@@ -899,6 +901,7 @@
 				14027BC3129BE30DD1B43EFF /* FileRanking.swift */,
 				4EA51B92C127D5758C086CEF /* FormProfile.swift */,
 				D0DF5D9C8356B74689D65260 /* FuzzyMatcher.swift */,
+				6EEEFC0F600C3ABE74E726C4 /* FuzzyTypos.swift */,
 				B5A35E54F69A3211F500FFD3 /* GIFSearch.swift */,
 				CDC65C623EC3B08106698073 /* GitHubInbox.swift */,
 				2C2318642465DC00FF0DA4A5 /* GitHubNotifications.swift */,
@@ -1683,6 +1686,7 @@
 				3B5DB7747BEC97F65B409B57 /* FileRanking.swift in Sources */,
 				831213E51CAF1973EBB80352 /* FormProfile.swift in Sources */,
 				A1103836F2CD56F9D38AAF8E /* FuzzyMatcher.swift in Sources */,
+				EC55C694E38799B4F822D261 /* FuzzyTypos.swift in Sources */,
 				1D7729B502A98EB7ECDA647C /* GIFSearch.swift in Sources */,
 				9AE0DA9CE17B385FDA0547EF /* GitHubInbox.swift in Sources */,
 				D0C5CDF1F43A67CB441E2C13 /* GitHubNotifications.swift in Sources */,
