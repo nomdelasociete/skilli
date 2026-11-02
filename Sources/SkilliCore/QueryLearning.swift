@@ -25,8 +25,10 @@ public struct QueryLearning: Codable, Sendable, Equatable {
     public static let maxPlaces = 200
     public static let maxPerPlace = 40
     /// Picks in an app, faded, before the empty launcher shows the item
-    /// there: once or twice is chance, three times a habit.
-    public static let placeWeight = 3.0
+    /// there: once or twice is chance, three times a habit. Under 3: the
+    /// earlier picks have faded a little by the third (three a week apart
+    /// weigh 2.57); two never reach it.
+    public static let placeWeight = 2.5
     /// A place's picks count a third of the text's while typing, and at
     /// most `maxPlaceBoost`: "sl" in Xcode leans to Simulator once it is
     /// run there, never past a pin, a name typed whole

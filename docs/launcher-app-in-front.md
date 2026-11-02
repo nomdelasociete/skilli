@@ -36,7 +36,8 @@ skil.li (the Speed section).
    ("wahtsapp", "safaari"), where the launcher found nothing.
 2. **The path**: the launcher's first rows, ↩ or ↓↩. Nothing new to find.
 3. **Hint, not push**: rows in the list the user already looks at; nothing
-   moves until three runs from that app make a habit. The row says why
+   moves until three runs from that app make a habit (`placeWeight` 2.5:
+   the earlier runs have faded a little by the third). The row says why
    ("Application · in Figma"), once per row, no badge.
 4. **Deterministic**: the user's own runs, counted per app on this Mac
    (bundle id → item, faded with the learning's 30-day half-life). No AI,

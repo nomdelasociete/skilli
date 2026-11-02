@@ -2590,11 +2590,10 @@ final class LauncherController: NSObject {
         return ShownApp(id: id, name: app.localizedName ?? id, path: app.bundleURL?.path, running: app)
     }
 
-    /// A pick learned: for what was typed, and for the app the launcher
-    /// opened over.
+    /// A pick learned for what was typed (for the app in front: every run,
+    /// in `launch`).
     private func learn(_ query: String, _ picked: LauncherItem) {
         if !query.trimmingCharacters(in: .whitespaces).isEmpty { learning.record(query: query, item: picked.learningID) }
-        learnPlace(picked)
     }
 
     /// Run from a launcher opened over an app: learned for that app, when
@@ -3109,6 +3108,9 @@ final class LauncherController: NSObject {
     /// What Return does on `picked`: the row `row`, or the row a Catalog
     /// entry stands for.
     private func launch(_ picked: LauncherItem, row: Int, flags: NSEvent.ModifierFlags) {
+        // Every run counts for the app in front, a mode opened or a
+        // skillie too: they return before the rest is learned.
+        learnPlace(picked)
         if case .setup(let permission) = picked {
             hide()
             onSetup?(permission)
@@ -3415,9 +3417,6 @@ final class LauncherController: NSObject {
         }
         if case .menuItem(_, let item) = picked {
             let app = NSWorkspace.shared.frontmostApplication?.localizedName ?? "The app"
-            // Learned for this app only: a menu item's place is no name to
-            // find by typing at the root.
-            learnPlace(picked)
             hide()
             // Pressed once the launcher is gone and out of this key's
             // handling, as Ask does: an app slow to answer Accessibility

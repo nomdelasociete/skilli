@@ -14,8 +14,8 @@ name typed whole beats everything.
 
 It also learns where you are. Run something three times from the same
 app (a layout from Figma, a snippet from Mail, a menu item) and the
-empty launcher shows it first over that app, saying so: "Command · in
-Figma". Unused for a month, it fades.
+empty launcher shows it among its first rows over that app, after your
+pins, saying so: "Command · in Figma". Unused for a month, it fades.
 
 - **↩** does what the selected row does. The footer names it: "Open ↩",
   "Paste ↩", "Join ↩".

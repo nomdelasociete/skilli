@@ -85,22 +85,25 @@ final class QueryLearningTests: XCTestCase {
     func testPlaceItemsNeedAHabitInThatApp() {
         var learning = QueryLearning()
         let figma = "com.figma.Desktop"
+        let day = 86_400.0
+        // A week apart: the earlier ones have faded a little.
         learning.record(item: "layout:design", in: figma, at: start)
-        learning.record(item: "layout:design", in: figma, at: start)
-        XCTAssertEqual(learning.placeItems(in: figma, at: start), [])
-        learning.record(item: "layout:design", in: figma, at: start)
-        for _ in 0..<4 { learning.record(item: "cmd:searchMenus", in: figma, at: start) }
-        XCTAssertEqual(learning.placeItems(in: figma, at: start), ["cmd:searchMenus", "layout:design"])
-        XCTAssertEqual(learning.placeItems(in: "com.apple.Safari", at: start), [])
+        learning.record(item: "layout:design", in: figma, at: start + 7 * day)
+        XCTAssertEqual(learning.placeItems(in: figma, at: start + 7 * day), [])
+        learning.record(item: "layout:design", in: figma, at: start + 14 * day)
+        for hour in 0..<4 { learning.record(item: "cmd:searchMenus", in: figma, at: start + 14 * day + Double(hour) * 3_600) }
+        let now = start + 14 * day + 4 * 3_600
+        XCTAssertEqual(learning.placeItems(in: figma, at: now), ["cmd:searchMenus", "layout:design"])
+        XCTAssertEqual(learning.placeItems(in: "com.apple.Safari", at: now), [])
         // Typed picks are not touched.
         XCTAssertTrue(learning.hits.isEmpty)
     }
 
     func testPlaceItemsFade() {
         var learning = QueryLearning(halfLife: 100)
-        for _ in 0..<3 { learning.record(item: "cmd:quit", in: "com.example.App", at: start) }
-        XCTAssertEqual(learning.placeItems(in: "com.example.App", at: start), ["cmd:quit"])
-        XCTAssertEqual(learning.placeItems(in: "com.example.App", at: start + 100), [])
+        for second in 0..<3 { learning.record(item: "cmd:quit", in: "com.example.App", at: start + Double(second)) }
+        XCTAssertEqual(learning.placeItems(in: "com.example.App", at: start + 2), ["cmd:quit"])
+        XCTAssertEqual(learning.placeItems(in: "com.example.App", at: start + 102), [])
     }
 
     /// Less than a name typed whole or one pick for the text.

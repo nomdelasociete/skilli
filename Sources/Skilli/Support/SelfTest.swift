@@ -4945,8 +4945,11 @@ final class SelfTest {
         }
         var calculator = FileManager.default.displayName(atPath: url.path)
         if calculator.hasSuffix(".app") { calculator.removeLast(4) }
-        // "calcualtor", "calculteet": two letters swapped in its first word.
-        var letters = Array(calculator.lowercased().split(separator: " ").first.map(String.init) ?? calculator.lowercased())
+        // "calcualtor", "calculteet": two letters swapped in its first word;
+        // a name too short for typos ("计算器"): the app's file name, the
+        // localized title still the one expected first.
+        let word = calculator.lowercased().split(separator: " ").first.map(String.init) ?? calculator.lowercased()
+        var letters = Array(word.count >= FuzzyTypos.minLength ? word : url.deletingPathExtension().lastPathComponent.lowercased())
         let middle = letters.count / 2
         letters.swapAt(middle, middle + 1)
         let typed = String(letters.prefix(FuzzyTypos.maxLength))

@@ -966,7 +966,8 @@ starts from it.
 - Places (`QueryLearning.places`, docs/launcher-app-in-front.md): every
   run from a launcher opened over an app (not skil.li) counts for that
   app's bundle id, typed or not, for rows the empty field can show again
-  (`LauncherController.placePrefixes`). Three runs (faded) and the empty
+  (`LauncherController.placePrefixes`), counted in `launch` before any
+mode or skillie returns. Three runs (faded, `placeWeight` 2.5) and the empty
   field shows it after the pins, three rows at most, "· in <app>"; typed,
   a third of its points, at most `maxPlaceBoost` (15): under a pin, a name
   typed whole and one pick for the text. Nothing new on the show path but
