@@ -1,8 +1,8 @@
 # The launcher and the app in front; names mistyped
 
-Status: built 2026-11-02, branch `claude/peeklight-nanolight-inspiration-1cf772`.
-Unit-tested; the self-test (`remote rootsearch`: `emptyFieldLearnsTheAppInFront`,
-`namesFoundMistyped`) not yet run on the test Mac.
+Status: shipped 2026-11-02 (PR #112). Unit-tested; the self-tests
+(`remote rootsearch`: `emptyFieldLearnsTheAppInFront`, `namesFoundMistyped`)
+pass on the test Mac, twice.
 
 Asked after looking at two other launchers, Peekalight (peekalight.com) and
 Nanolight (github.com/justrach/nanolight): "they seem better at giving
@@ -90,5 +90,8 @@ skil.li (the Speed section).
   the third letter doubled), 269 slips that find nothing as typed: the name
   meant is first (alone, or tied with names sharing the corrected word, as
   every "Search …" row for "serach") 269 times.
-- Worst key, 12 letters over 2,000 names, Debug build: 14 ms. Release on
-  the test Mac (`remote speed`, the `typos` lap): not measured yet.
+- Worst key, 12 letters over 2,000 names, Debug build: 14 ms.
+- Release on the test Mac (`remote speed`, 330 keys over its apps and 3,200
+  contacts): p95 4.0 ms (bound 8), median 1.0 ms. The `typos` lap is 71 µs
+  a key on average (over every key, those that matched included); the
+  slowest key (22.8 ms, "ma") is the rows, not the typos.
