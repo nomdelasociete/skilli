@@ -1,8 +1,9 @@
 # The launcher and the app in front; names mistyped
 
-Status: shipped 2026-11-02 (PR #112). Unit-tested; the self-tests
-(`remote rootsearch`: `emptyFieldLearnsTheAppInFront`, `namesFoundMistyped`)
-pass on the test Mac, twice.
+Status: shipped 2026-11-02 (PR #112). Unit tests: `QueryLearningTests`
+(places) and `FuzzyTyposTests`. Self-tests in the app (`remote rootsearch`:
+`emptyFieldLearnsTheAppInFront`, `namesFoundMistyped`) pass on the test Mac,
+twice.
 
 Asked after looking at two other launchers, Peekalight (peekalight.com) and
 Nanolight (github.com/justrach/nanolight): "they seem better at giving
