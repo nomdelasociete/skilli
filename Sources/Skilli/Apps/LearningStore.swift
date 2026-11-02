@@ -35,6 +35,21 @@ final class LearningStore {
         scheduleSave()
     }
 
+    /// `item` run from a launcher opened over `app` (its bundle id).
+    func record(item: String, in app: String) {
+        learning.record(item: item, in: app, at: .now)
+        scheduleSave()
+    }
+
+    /// What is run most from a launcher opened over `app`.
+    func placeItems(in app: String) -> [String] {
+        learning.placeItems(in: app, at: .now)
+    }
+
+    func placeBoost(item: String, in app: String) -> Int {
+        learning.placeBoost(item: item, in: app, at: .now)
+    }
+
     func boost(query: String, item: String) -> Int {
         learning.boost(query: query, item: item, at: .now)
     }

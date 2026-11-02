@@ -637,6 +637,8 @@ final class SelfTest {
                 takeFocus,
                 recentSearchesComeBack,
                 pinsComeFirst,
+                emptyFieldLearnsTheAppInFront,
+                namesFoundMistyped,
                 startsAgainAfterAWhile,
                 opensOnTheChosenScreen,
                 launcherSettingsShown,
@@ -4851,6 +4853,115 @@ final class SelfTest {
     /// field, in that order, each with its pin; ⌘K → Unpin on Chess; the
     /// pinned Calculator ranks as high or higher for "cal"; a pin whose app
     /// is gone is not shown and dropped; the Catalog's ⌘K offers Pin.
+    /// The launcher opened over TextEdit, Calculator run from it three
+    /// times: the empty field then shows it first there, "· in TextEdit";
+    /// opened over skil.li's own window, never so.
+    private func emptyFieldLearnsTheAppInFront() async {
+        let name = "Root search: what is run from an app comes first in the empty launcher over that app, saying so; not over another"
+        let launcher = context.launcher
+        let preferences = context.preferences
+        let (savedPins, savedReset) = (preferences.launcherPins, preferences.launcherReset)
+        preferences.launcherPins = []
+        preferences.launcherReset = .immediately
+        defer {
+            preferences.launcherPins = savedPins
+            preferences.launcherReset = savedReset
+        }
+        let textEditID = "com.apple.TextEdit"
+        let calculatorID = "com.apple.calculator"
+        guard let textEditURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: textEditID),
+              let calculatorURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: calculatorID) else {
+            record(name, false, "TextEdit or Calculator not installed", nil)
+            return
+        }
+        // "Calculette" on a French Mac.
+        var calculator = FileManager.default.displayName(atPath: calculatorURL.path)
+        if calculator.hasSuffix(".app") { calculator.removeLast(4) }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-place-\(getpid()).txt")
+        try? "place check".write(to: file, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: file) }
+        window.center()
+        guard await focusTestWindow() else { return }
+        let textEditWasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: textEditID).isEmpty
+        let calculatorWasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: calculatorID).isEmpty
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        guard let pid = (try? await NSWorkspace.shared.open([file], withApplicationAt: textEditURL, configuration: configuration))?.processIdentifier else {
+            record(name, false, "TextEdit did not open the file", nil)
+            return
+        }
+        /// TextEdit in front again (Calculator took the front).
+        func textEditInFront() async -> Bool {
+            Self.makeFrontmost(pid: pid)
+            return await waitUntil(timeout: 5) { NSWorkspace.shared.frontmostApplication?.bundleIdentifier == textEditID } != nil
+        }
+        var runs = 0
+        for _ in 0..<3 {
+            guard await textEditInFront(), ensureFrontmost(textEditID, before: "the launcher") else { break }
+            _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+            guard await waitUntil(timeout: 1, { launcher.isVisible }) != nil else { break }
+            for character in "calc" { await pressKey(character) }
+            guard await waitUntil(timeout: 2, { launcher.selectedResultTitle == calculator }) != nil else { break }
+            await pressKey(nil, code: CGKeyCode(kVK_Return))
+            guard await waitUntil(timeout: 5, { NSWorkspace.shared.frontmostApplication?.bundleIdentifier == calculatorID }) != nil else { break }
+            runs += 1
+        }
+        var first: String?
+        var note: String?
+        if runs == 3, await textEditInFront(), ensureFrontmost(textEditID, before: "the empty launcher") {
+            _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+            _ = await waitUntil(timeout: 2) { launcher.resultTitles.first == calculator }
+            first = launcher.resultTitles.first
+            note = launcher.accessoryShown(row: 0)?.text
+            await captureLauncherBothWays(as: "launcher-place")
+            await closeLauncher()
+        }
+        // Over skil.li's own window: nothing learned there.
+        var elsewhere: String?
+        if await focusTestWindow(), await openLauncher() {
+            elsewhere = launcher.resultTitles.firstIndex(of: calculator).flatMap { launcher.accessoryShown(row: $0)?.text } ?? "(not shown)"
+            await closeLauncher()
+        }
+        if !calculatorWasRunning {
+            for app in NSRunningApplication.runningApplications(withBundleIdentifier: calculatorID) { app.terminate() }
+        }
+        if await textEditInFront() { await cleanUp(bundleID: textEditID, wasRunning: textEditWasRunning) }
+        let textEditName = NSRunningApplication(processIdentifier: pid)?.localizedName ?? "TextEdit"
+        let said = note?.hasSuffix("in \(textEditName)") == true || note?.hasSuffix("in TextEdit") == true
+        let passed = runs == 3 && first == calculator && said && elsewhere.map { !$0.contains(" in ") } == true
+        record(name, passed,
+               "\(calculator) run from TextEdit \(runs)×; empty field over TextEdit: first \(first ?? "nothing"), “\(note ?? "")”; "
+                   + "over skil.li: “\(elsewhere ?? "not opened")”; launcher-place-light/-dark.png",
+               nil)
+    }
+
+    /// One slip of the fingers in an app's name, nothing else found: the
+    /// app first all the same.
+    private func namesFoundMistyped() async {
+        let name = "Root search: an app's name with two letters swapped finds it first when nothing matches as typed"
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.calculator") else {
+            record(name, false, "Calculator not installed", nil)
+            return
+        }
+        var calculator = FileManager.default.displayName(atPath: url.path)
+        if calculator.hasSuffix(".app") { calculator.removeLast(4) }
+        // "calcualtor", "calculteet": two letters swapped in its first word.
+        var letters = Array(calculator.lowercased().split(separator: " ").first.map(String.init) ?? calculator.lowercased())
+        let middle = letters.count / 2
+        letters.swapAt(middle, middle + 1)
+        let typed = String(letters.prefix(FuzzyTypos.maxLength))
+        let launcher = context.launcher
+        var first: String?
+        if await focusTestWindow(), await openLauncher() {
+            for character in typed { await pressKey(character) }
+            _ = await waitUntil(timeout: 2) { launcher.resultTitles.first == calculator }
+            first = launcher.resultTitles.first
+            await captureLauncherBothWays(as: "launcher-typo")
+            await closeLauncher()
+        }
+        record(name, first == calculator, "“\(typed)”: first \(first ?? "nothing"); launcher-typo-light/-dark.png", nil)
+    }
+
     private func pinsComeFirst() async {
         let name = "Root search: ⌘K → Pin puts apps first in the empty launcher with a pin, in the order pinned; boosted when typed; Unpin; pins of apps gone dropped; Pin in the Catalog's ⌘K"
         let launcher = context.launcher

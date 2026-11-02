@@ -139,15 +139,33 @@ final class ResultCellView: NSTableCellView {
     /// is left as it is: nothing set, laid out or drawn again.
     func configure(title: String, accessory: String, icon: NSImage) {
         if self.icon.image !== icon { self.icon.image = icon }
-        guard title != shownTitle || accessory != self.accessory.text else { return }
+        guard title != shownTitle || accessory != shownAccessory else { return }
         shownTitle = title
+        shownAccessory = accessory
         self.title.stringValue = title
-        if accessory != self.accessory.text { self.accessory.text = accessory }
+        showAccessory()
         layoutLabels()
     }
 
     /// The title as last set (no round trip through the label).
     private var shownTitle = ""
+    /// The accessory as last set, before `place`.
+    private var shownAccessory = ""
+    /// The empty launcher's rows for the app it opened over: the accessory
+    /// says where ("Command · in Figma").
+    private(set) var place: String?
+
+    func setPlace(_ app: String?) {
+        guard app != place else { return }
+        place = app
+        showAccessory()
+        layoutLabels()
+    }
+
+    private func showAccessory() {
+        let text = place.map { shownAccessory.isEmpty ? "In \($0)" : "\(shownAccessory) · in \($0)" } ?? shownAccessory
+        if text != accessory.text { accessory.text = text }
+    }
 
     override func layout() {
         super.layout()

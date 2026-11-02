@@ -162,7 +162,13 @@ Settings: Back up to · How often · Keep · Back Up Now · Backups.
 The search panel you open from anywhere. ✦Space.
 
 - **Apps, commands and everything below**, by a fuzzy search that learns
-  what you pick; a name typed whole comes first.
+  what you pick; a name typed whole comes first. A name mistyped once
+  (two letters swapped, a key's neighbour, a letter too many) is found
+  when nothing matches as typed.
+- **What you run from the app in front**: three times from an app, and the
+  empty field shows it first there ("Command · in Figma"), up to three
+  rows: apps, commands, skillies, quicklinks, layouts, snippets, menu
+  items.
 - **Recent searches** with ↑ in the empty field; **Pin** a row from ⌘K
   to keep it first.
 - **⌘K Actions** on every row: what the row can do, Copy Link, Set

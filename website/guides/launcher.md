@@ -12,6 +12,11 @@ Type a few letters. The search forgives typos and learns what you pick:
 the result you chose last time for the same letters comes first, and a
 name typed whole beats everything.
 
+It also learns where you are. Run something three times from the same
+app (a layout from Figma, a snippet from Mail, a menu item) and the
+empty launcher shows it first over that app, saying so: "Command · in
+Figma". Unused for a month, it fades.
+
 - **↩** does what the selected row does. The footer names it: "Open ↩",
   "Paste ↩", "Join ↩".
 - **⌘↩** does its second action (for a file: show it in Finder).
