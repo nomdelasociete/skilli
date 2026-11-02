@@ -3110,7 +3110,11 @@ final class LauncherController: NSObject {
     private func launch(_ picked: LauncherItem, row: Int, flags: NSEvent.ModifierFlags) {
         // Every run counts for the app in front, a mode opened or a
         // skillie too: they return before the rest is learned.
-        learnPlace(picked)
+        if case .script(let command, _) = picked, !command.arguments.isEmpty {
+            // Counted once its arguments are all given: not when left.
+        } else {
+            learnPlace(picked)
+        }
         if case .setup(let permission) = picked {
             hide()
             onSetup?(permission)
@@ -3212,6 +3216,7 @@ final class LauncherController: NSObject {
                 input.values.append(text)
             }
             if input.values.count == input.command.arguments.count {
+                learnPlace(.script(input.command, inline: nil))
                 hide()
                 onRunScript?(input.command, input.values)
             } else {
