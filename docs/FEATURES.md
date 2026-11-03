@@ -322,8 +322,7 @@ Settings: Search GIFs' shortcut · Klipy key (Your Own).
 <!-- pane: windows -->
 ## Windows
 
-Where your windows go, the layouts you saved, and the apps you stopped
-using.
+Where your windows go, and the layouts you saved.
 
 - **Window places** (✦W then a key, the launcher, Ask): **Left Half**,
   **Right Half**, **Top Half**, **Bottom Half** (again: ⅔, then ⅓),
@@ -346,15 +345,12 @@ using.
   where you usually put them** (off by default) does the same for a
   window as it opens. How both work: the [Windows guide](../website/guides/windows.md).
 - **Switch Window**: see Launcher.
-- **Auto Quit**: quits the apps you stopped using after a delay you
-  choose; never the front app, unsaved work, sound or a call.
 
 Settings: Space between windows (with a preview) · Arrange Windows:
 Learn where you put windows · Place new windows where you usually put
 them · Forget What skil.li Learned · Layouts ·
 Never place · Always leave out of layouts · Monitors ignored when plugged
-in · Displays never arranged when plugged in · Apps You Stopped Using: Quit apps you stopped using · Unused for ·
-Never quit.
+in · Displays never arranged when plugged in.
 
 ### Windows that go where you put them
 
@@ -394,7 +390,24 @@ pause") or a shortcut. Irreversible ones ask first.
   rings with a card), **Pick a Color** (copies its hex), **System Info**
   (battery, disk, memory, Wi-Fi, IP, uptime), **Clean Keyboard** (every
   key off for a minute to wipe it).
-- **Auto Quit**: see Windows.
+- **Auto Quit**: see Auto Quit.
+
+<!-- pane: autoQuit -->
+## Auto Quit
+
+The apps you leave open for nothing, quit for you: only the ones you list,
+each after its own delay.
+
+- **Auto Quit**: off by default. On, each app listed is quit once it has
+  not been in front for its own time (15 minutes to a day, or any time
+  typed from 5 minutes to 7 days: “90 min”, “3 h”, “2 days”). An app not
+  listed is never quit. Never the app in front, unsaved work or a question
+  open, sound or a call, or an app still working; with a deciding key,
+  Jev reads the windows' titles first. One that does not quit is said.
+  Without Accessibility nothing goes.
+
+Settings: Quit apps you stopped using · Apps to quit (each app with its
+delay; Add an App…).
 
 <!-- pane: calendar -->
 ## Calendar

@@ -10,7 +10,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let layout = KeyboardLayout()
     private let overlay = LeaderOverlay()
     private let remapper = HyperKeyRemapper()
-    private let preferences = Preferences()
+    /// The self-test's settings are a copy of the user's, in a suite of its
+    /// own: changed and put back by each check, they never reach the real
+    /// ones, even when a run is killed before it puts them back (2026-11-02:
+    /// a killed run left Auto Quit on, and the test Mac's app quit apps).
+    private let preferences: Preferences
     private let shortcuts: ShortcutStore
     private let learning: LearningStore
     /// What ↑ brings back in the launcher; the self-test and the benchmark
@@ -477,7 +481,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         return MeetingCard.RecordOffer(label: reading.recordLabel, line: line)
     }
-    /// Settings → Windows → Quit apps you stopped using.
+    /// Settings → Auto Quit: the apps listed, each after its own delay.
     private lazy var autoQuitter: AutoQuitter = {
         let quitter = AutoQuitter(preferences: preferences)
         quitter.decisionKeys = { [ai] in AskRouter.keys(ai) }
@@ -687,6 +691,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             recentSearches = RecentSearchStore(fileURL: RecentSearchStore.defaultFileURL)
             toolSettings = ToolSettings(fileURL: ToolSettings.defaultFileURL)
             toolSocketPath = MCPSocketServer.defaultPath
+            preferences = Preferences()
         case .selftest:
             // Never touch the user's shortcuts, prompts or what skil.li learned.
             let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())")
@@ -696,6 +701,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             recentSearches = RecentSearchStore(fileURL: nil)
             toolSettings = ToolSettings(fileURL: scratch.appendingPathComponent("tools.json"), keychainPrefix: "selftest-")
             toolSocketPath = scratch.appendingPathComponent("mcp.sock").path
+            preferences = Preferences(defaults: Self.selfTestDefaults())
         case .benchmark:
             PromptLibrary.shared = PromptLibrary(folder: nil)
             shortcuts = ShortcutStore(fileURL: nil)
@@ -703,8 +709,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             recentSearches = RecentSearchStore(fileURL: nil)
             toolSettings = ToolSettings(fileURL: nil)
             toolSocketPath = nil
+            preferences = Preferences()
         }
         super.init()
+    }
+
+    private static var selfTestSuite: String { "skilli-selftest-preferences-\(getpid())" }
+
+    /// The user's defaults copied into the self-test's own suite. The suites
+    /// runs killed before their end left behind (their process gone) are
+    /// dropped first.
+    private static func selfTestDefaults() -> UserDefaults {
+        let folder = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("Preferences", isDirectory: true)
+        for file in (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [] where file.hasPrefix("skilli-selftest-") && file.hasSuffix(".plist") {
+            let suite = String(file.dropLast(".plist".count))
+            if let pid = suite.split(separator: "-").last.flatMap({ pid_t($0) }), pid != getpid(), kill(pid, 0) == 0 { continue }
+            UserDefaults.standard.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: folder.appendingPathComponent(file))
+        }
+        // Only the app's own bundle id or the global domain give nil.
+        let defaults = UserDefaults(suiteName: selfTestSuite)!
+        let real = Bundle.main.bundleIdentifier.flatMap { UserDefaults.standard.persistentDomain(forName: $0) } ?? [:]
+        defaults.setPersistentDomain(real, forName: selfTestSuite)
+        return defaults
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -1371,6 +1398,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         englishTyping.launcherClosed()
         ai.subscription.dropSpare()
         toolServer.stop()
+        if case .selftest = mode { UserDefaults.standard.removePersistentDomain(forName: Self.selfTestSuite) }
     }
 
     /// skil.li's MCP server, for Act commands and any agent (`Skilli mcp`).

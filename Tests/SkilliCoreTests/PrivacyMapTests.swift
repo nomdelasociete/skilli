@@ -43,7 +43,7 @@ final class PrivacyMapTests: XCTestCase {
         XCTAssertEqual(Set(PrivacyMap.all.map(\.id)).count, PrivacyMap.all.count, "ids are unique")
         XCTAssertEqual(Set(PrivacyMap.all.map(\.title)).count, PrivacyMap.all.count, "titles are unique")
         // The panes rows may point to (`SettingsPane` raw values).
-        let panes: Set<String> = ["ask", "commands", "tools", "aiAccounts", "clipboard", "snippets", "emoji", "gifs", "launcher", "github", "reminders", "windows",
+        let panes: Set<String> = ["ask", "commands", "tools", "aiAccounts", "clipboard", "snippets", "emoji", "gifs", "launcher", "github", "reminders", "windows", "autoQuit",
                                    "recorder", "catalog"]
         for flow in PrivacyMap.all {
             XCTAssertFalse(flow.sends.isEmpty, flow.title)
@@ -516,9 +516,9 @@ final class PrivacyMapTests: XCTestCase {
         XCTAssertEqual(PrivacyMap.line(for: "emoji", PrivacyMap.Setup())?.text, stays)
     }
 
-    /// Calendar, Reminders and Windows say what leaves the Mac from them,
-    /// from the same flows as Settings → Privacy. Windows sends nothing
-    /// while Quit apps you stopped using is off: the only flow living there.
+    /// Calendar, Reminders, Windows and Auto Quit say what leaves the Mac
+    /// from them, from the same flows as Settings → Privacy. Windows sends
+    /// nothing; Auto Quit nothing while it is off.
     func testCalendarRemindersAndWindowsSayWhatLeaves() {
         // Ask reads what is said about them with the decision model: the
         // request and the calendars' or lists' names go there.
@@ -530,16 +530,17 @@ final class PrivacyMapTests: XCTestCase {
                        "To Apple: the address you type, to find it on Apple Maps; for a reminder at home or at work with no place saved, "
                            + "your card's Home or Work address, once. When you add a place, or a reminder at home or at work with none saved. "
                            + "When you ask about your reminders, your request and your lists' names go to TypeSafe Jev to read it.")
-        XCTAssertEqual(PrivacyMap.all.filter { $0.pane == "windows" }.map(\.id), ["autoQuit"])
-        XCTAssertEqual(PrivacyMap.line(for: "windows", everything)?.text.hasPrefix("Nothing"), true, "Auto Quit is off")
+        XCTAssertEqual(PrivacyMap.all.filter { $0.pane == "autoQuit" }.map(\.id), ["autoQuit"])
+        XCTAssertEqual(PrivacyMap.all.filter { $0.pane == "windows" }.map(\.id), [])
+        XCTAssertEqual(PrivacyMap.line(for: "autoQuit", everything)?.text.hasPrefix("Nothing"), true, "Auto Quit is off")
         var autoQuit = everything
         autoQuit.autoQuit = true
-        XCTAssertEqual(PrivacyMap.line(for: "windows", autoQuit)?.text.hasPrefix("To TypeSafe Jev, for Quit apps you stopped using: "
-            + PrivacyMap.sentence(PrivacyMap.autoQuit)), true, PrivacyMap.line(for: "windows", autoQuit)?.text ?? "")
+        XCTAssertEqual(PrivacyMap.line(for: "autoQuit", autoQuit)?.text, "To TypeSafe Jev, for Quit apps you stopped using: " + PrivacyMap.sentence(PrivacyMap.autoQuit))
+        XCTAssertEqual(PrivacyMap.line(for: "windows", autoQuit)?.text.hasPrefix("Nothing"), true, "Windows sends nothing, Auto Quit on or off")
         XCTAssertTrue(PrivacyMap.line(for: "aiAccounts", autoQuit)?.text.contains("the apps Auto Quit may quit") == true,
                       PrivacyMap.line(for: "aiAccounts", autoQuit)?.text ?? "")
         var noKey = PrivacyMap.Setup()
         noKey.autoQuit = true
-        XCTAssertEqual(PrivacyMap.line(for: "windows", noKey)?.text.hasPrefix("Nothing"), true, "no deciding key: decided here")
+        XCTAssertEqual(PrivacyMap.line(for: "autoQuit", noKey)?.text.hasPrefix("Nothing"), true, "no deciding key: decided here")
     }
 }

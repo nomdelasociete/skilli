@@ -3697,12 +3697,17 @@ re-investigating.
   for F-keys as a keyboard sends them). Turned off in System Settings →
   Keyboard → Keyboard Shortcuts → Mission Control: said, not worked
   around. `selftest keyboard` checks the test window moves aside and back.
-- Auto Quit (`AutoQuit` in SkilliCore, `AutoQuitter`; Settings → Windows →
-  Quit apps you stopped using, off by default; Unused for 30 min, 1 h
-  (default), 2 h, 4 h; Never quit, a list of apps): an app not in front
-  for that long is quit without a word (`terminate`: it may save); one
-  still open 10 s later is said. Never the app in front, skil.li, Finder
-  or macOS's own faces; never one with unsaved work (`AXEdited` on a
+- Auto Quit (`AutoQuit` in SkilliCore, `AutoQuitter`; Settings → Auto
+  Quit, its own pane; off by default, a new setting stays off until the
+  user turns it on): only the apps listed (`autoQuitApps`, each with its
+  own delay: 15 min to 1 day offered, any time typed from 5 min to 7
+  days, `AutoQuit.minutes(from:)`) are quit; an app not listed never is,
+  however long it goes unused (2026-11-03: quitting every app but a few
+  quit a VPN and Docker on the test Mac). The settings from before (one
+  delay, Never quit) start again off, nothing listed. A listed app not in
+  front for its delay is quit without a word (`terminate`: it may save);
+  one still open 10 s later is said. Never the app in front, skil.li,
+  Finder or macOS's own faces; never one with unsaved work (`AXEdited` on a
   window's close button: AppKit says it there) or a modal window or sheet
   open (a dialog subrole alone says nothing: Calculator's main window is
   one), one CoreAudio says plays or records (its process
@@ -3710,10 +3715,12 @@ re-investigating.
   over 2 s. Without Accessibility nothing goes. With a deciding key, Jev
   (else Decisions) gets each one's name and windows' titles in one request
   and keeps it under 70 % "safe" (a call, a download, a command running);
-  `PrivacyMap.autoQuit`. One timer for when the next app is due, set again
-  on NSWorkspace's activate, deactivate, launch and terminate and on
-  settings. `selftest calc` decides as a dry run (Chess "unused" 2 h; the
-  test form with unsaved work: `Skilli testform <state> edited`).
+  `PrivacyMap.autoQuit`. One timer for when the next listed app is due,
+  set again on NSWorkspace's activate, deactivate, launch and terminate
+  and on settings. Tools: `autoQuitApps` takes "Arc: 2 hours".
+  `selftest calc` decides as a dry run (Calculator listed, "unused" 2 h,
+  then not listed: left alone; the test form with unsaved work: `Skilli
+  testform <state> edited`; off by default and the old settings off again).
 - Raycast imports (`RaycastImport` in SkilliCore): **no button in the
   app since 2026-10-15** (not tried for real yet; bring them back
   only when the maintainer asks). The code stays, covered by `selftest imports`.

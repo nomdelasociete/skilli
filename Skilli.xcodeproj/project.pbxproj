@@ -311,6 +311,7 @@
 		CBAFA5BE3CC36D3776FBFD26 /* SearchNarrowing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0A5338C5E10B0F81C2D977 /* SearchNarrowing.swift */; };
 		CC37162DDE0BFD3B34653CF7 /* MCPServerImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C705923EE4CFF8A97B7BCC /* MCPServerImporter.swift */; };
 		CC7C2D4B082AD7F5C12DE109 /* MenuBarSkillies.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DF855C181119E9A4FFA2AC /* MenuBarSkillies.swift */; };
+		CD0299A0846918DE969EB614 /* AutoQuitPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = B23670F757221D3C183612DA /* AutoQuitPane.swift */; };
 		CD5EE21A12FA15B98B37EC53 /* AddShortcutSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D07CDB42AF7CA9B447FB64 /* AddShortcutSheet.swift */; };
 		CE2C31E6575DD75556295640 /* SkillieEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1652A2C8726A9428E6EDCBA2 /* SkillieEnvironment.swift */; };
 		CF69A0117B0FFEAC560382A1 /* MeetingFollowUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FC2DCFD5F3A0C7F5B65178B /* MeetingFollowUp.swift */; };
@@ -713,6 +714,7 @@
 		AF91D64C6E06D80F6EA699B5 /* BrowserHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserHistory.swift; sourceTree = "<group>"; };
 		B027C956EBA7D0BC36224F02 /* WindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManager.swift; sourceTree = "<group>"; };
 		B089D94BFED8D8872EFE597C /* PictureTrackWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PictureTrackWriter.swift; sourceTree = "<group>"; };
+		B23670F757221D3C183612DA /* AutoQuitPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoQuitPane.swift; sourceTree = "<group>"; };
 		B50C5D5CE27307D006CE5F16 /* SettingsSkill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSkill.swift; sourceTree = "<group>"; };
 		B5A35E54F69A3211F500FFD3 /* GIFSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFSearch.swift; sourceTree = "<group>"; };
 		B5C84E87B826384FE9FC6322 /* AppsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppsPane.swift; sourceTree = "<group>"; };
@@ -1153,6 +1155,7 @@
 				B5C84E87B826384FE9FC6322 /* AppsPane.swift */,
 				3C2C45D756E6D828ED4D1D65 /* AskPane.swift */,
 				9DD8A95FF0986A24770B7574 /* AskScheduleSections.swift */,
+				B23670F757221D3C183612DA /* AutoQuitPane.swift */,
 				F233373F6CA7DAA6A2157812 /* BackupPane.swift */,
 				6769184126A983619C3AA5EE /* BrandHeader.swift */,
 				440537415FFB3A8D4D237298 /* CatalogPane.swift */,
@@ -1812,6 +1815,7 @@
 				89495F4725B6A1992F55F679 /* AskScheduleSections.swift in Sources */,
 				22BE183A10837002DA7F0985 /* AskScheduler.swift in Sources */,
 				BAC24DB971ABBF73B69721E0 /* AudioDevices.swift in Sources */,
+				CD0299A0846918DE969EB614 /* AutoQuitPane.swift in Sources */,
 				41B438C862A536845B37B341 /* AutoQuitter.swift in Sources */,
 				3CE1A5A3FE2A813CA92DDA87 /* AutomationAccess.swift in Sources */,
 				E52F3EDED3DDA75717E4F414 /* AwakeChipView.swift in Sources */,

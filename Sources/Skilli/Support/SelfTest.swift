@@ -83,7 +83,7 @@ final class SelfTest {
         let reminderWatch: ReminderWatch
         /// A meeting alert in the middle of the screen.
         let meetingCard: MeetingCard
-        /// Settings → Windows → Quit apps you stopped using.
+        /// Settings → Auto Quit: the apps listed, each after its own delay.
         let autoQuitter: AutoQuitter
         /// Backups of the self-test's own scratch folder and settings.
         let backup: BackupCenter
@@ -15312,21 +15312,19 @@ final class SelfTest {
     /// deciding key is there); a window holding unsaved work (the test
     /// form, another process) keeps its app.
     private func autoQuitKeepsWhatIsInUse() async {
-        let name = "Auto Quit: an app unused past the delay would go (dry run); a window with unsaved work keeps its app; the app in front and skil.li never"
+        let name = "Auto Quit: a listed app unused past its delay would go (dry run), the same app not listed never; a window with unsaved work keeps its app; the app in front and skil.li never; off by default, the old settings off again"
         let quitter = context.autoQuitter
         let preferences = context.preferences
-        let saved = (preferences.autoQuit, preferences.autoQuitMinutes, preferences.autoQuitNever)
+        let saved = (preferences.autoQuit, preferences.autoQuitApps)
+        // Calculator: one plain window, idle once open; listed for an hour.
+        let bundleID = "com.apple.calculator"
         quitter.dryRun = true
-        preferences.autoQuitMinutes = 60
-        preferences.autoQuitNever = []
+        preferences.autoQuitApps = [AutoQuit.Rule(bundleID: bundleID, minutes: 60)]
         defer {
             quitter.dryRun = false
             preferences.autoQuit = saved.0
-            preferences.autoQuitMinutes = saved.1
-            preferences.autoQuitNever = saved.2
+            preferences.autoQuitApps = saved.1
         }
-        // Calculator: one plain window, idle once open.
-        let bundleID = "com.apple.calculator"
         let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
@@ -15343,9 +15341,13 @@ final class SelfTest {
         quitter.pretendUnused(app.processIdentifier, since: Date.now.addingTimeInterval(-2 * 3_600))
         _ = await focusTestWindow()
         await quitter.check()
-        quitter.pretendUnused(app.processIdentifier, since: nil)
         let wouldQuit = quitter.lastQuit.contains(appName)
         let keptWhy = quitter.lastKept.first { $0.name == appName }?.why
+        // Off the list, the same app unused as long is never looked at.
+        preferences.autoQuitApps = []
+        await quitter.check()
+        let unlistedStays = !quitter.lastQuit.contains(appName) && !quitter.lastKept.contains { $0.name == appName }
+        quitter.pretendUnused(app.processIdentifier, since: nil)
         let decided = wouldQuit || keptWhy?.hasPrefix("Jev") == true
         let stillOpen = !app.isTerminated
         let selfKept = !quitter.lastQuit.contains { $0 == "skil.li" || $0 == "Finder" }
@@ -15375,10 +15377,23 @@ final class SelfTest {
             process.terminate()
         }
         _ = await focusTestWindow()
-        record(name, decided && stillOpen && selfKept && keepsUnsaved,
-               "\(appName) unused 2 h: would quit \(wouldQuit)\(keptWhy.map { ", kept: \($0)" } ?? "")\(calculatorWindows), still open (dry run) \(stillOpen); "
+
+        // Off on a new Mac; the settings from before per-app delays (on,
+        // one delay for every app) start again off, nothing listed.
+        let suite = "skilli-selftest-autoquit-\(getpid())"
+        let fresh = UserDefaults(suiteName: suite)
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+        let offByDefault = fresh.map { Preferences(defaults: $0).autoQuit == false } ?? false
+        fresh?.set(true, forKey: "Preferences.autoQuit")
+        fresh?.set(240, forKey: "Preferences.autoQuitMinutes")
+        fresh?.set(["com.example.vpn"], forKey: "Preferences.autoQuitNever")
+        let migrated = fresh.map { Preferences(defaults: $0) }
+        let oldOff = migrated?.autoQuit == false && migrated?.autoQuitApps.isEmpty == true && fresh?.object(forKey: "Preferences.autoQuitMinutes") == nil
+
+        record(name, decided && unlistedStays && stillOpen && selfKept && keepsUnsaved && offByDefault && oldOff,
+               "\(appName) listed, unused 2 h: would quit \(wouldQuit)\(keptWhy.map { ", kept: \($0)" } ?? "")\(calculatorWindows), not listed, left alone \(unlistedStays); still open (dry run) \(stillOpen); "
                    + "skil.li and Finder never: \(selfKept); quit \(quitter.lastQuit), kept \(quitter.lastKept.map { "\($0.name): \($0.why)" }); "
-                   + "a window with unsaved work: “\(unsaved)”", nil)
+                   + "a window with unsaved work: “\(unsaved)”; off by default \(offByDefault), the old settings start again off \(oldOff)", nil)
     }
 
     /// What Accessibility says of a process's first window and its close
@@ -23659,15 +23674,16 @@ final class SelfTest {
         let directory = context.snapshotDirectory
         let preferences = context.preferences
         let savedAlerts = preferences.agendaAlerts
-        let savedAutoQuit = (preferences.autoQuit, preferences.autoQuitNever)
+        let savedAutoQuit = (preferences.autoQuit, preferences.autoQuitApps)
         preferences.agendaAlerts = [MeetingAlert(minutes: 0, style: .card), MeetingAlert(minutes: 5, style: .dark)]
-        // Auto Quit shown on (its delay, an app never quit, what leaves the Mac).
+        // Auto Quit shown on (what leaves the Mac, Accessibility when
+        // missing), two apps listed, one with a delay typed.
         preferences.autoQuit = true
-        preferences.autoQuitNever = ["com.apple.TextEdit"]
+        preferences.autoQuitApps = [AutoQuit.Rule(bundleID: "com.apple.TextEdit", minutes: 120), AutoQuit.Rule(bundleID: "com.apple.Preview", minutes: 90)]
         defer {
             preferences.agendaAlerts = savedAlerts
             preferences.autoQuit = savedAutoQuit.0
-            preferences.autoQuitNever = savedAutoQuit.1
+            preferences.autoQuitApps = savedAutoQuit.1
         }
         var overflowing: [String] = []
         for pane in SettingsPane.allCases {
