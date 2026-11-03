@@ -4999,11 +4999,18 @@ final class SelfTest {
         let gone = await waitUntil(timeout: 1) {
             !launcher.rowNumbersShown && launcher.shownTrailingKeycaps.prefix(2).allSatisfy { $0 == nil }
         } != nil
+        // Past the rows shown: said in the footer, nothing run.
+        let rowsShown = launcher.resultTitles.count
+        await pressHolding(.maskCommand, keys: [CGKeyCode(kVK_ANSI_9)])
+        let saidNone = await waitUntil(timeout: 1) {
+            launcher.isVisible && launcher.shownNote?.hasPrefix("No row 9") == true && self.textView.string.isEmpty
+        } != nil
+        let none = rowsShown >= 9 || saidNone
         await pressHolding(.maskCommand, keys: [CGKeyCode(kVK_ANSI_2)])
         let pasted = await waitUntil(timeout: 2) { self.textView.string == "0x100" } != nil
         if launcher.isVisible { await closeLauncher() }
-        record(name, answered && quietOnTap && shown && gone && pasted,
-               "rows [\(rows)]: \(answered); quick ⌘ shows nothing: \(quietOnTap); held: \(caps): \(shown); released, gone: \(gone); ⌘2 pasted “\(textView.string)”: \(pasted); launcher-row-numbers.png", nil)
+        record(name, answered && quietOnTap && shown && gone && none && pasted,
+               "rows [\(rows)]: \(answered); quick ⌘ shows nothing: \(quietOnTap); held: \(caps): \(shown); released, gone: \(gone); ⌘9 over \(rowsShown) rows says so: \(none); ⌘2 pasted “\(textView.string)”: \(pasted); launcher-row-numbers.png", nil)
     }
 
     private func pinsComeFirst() async {

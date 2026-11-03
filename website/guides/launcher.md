@@ -23,7 +23,8 @@ pins, saying so: "Command · in Figma". Unused for a month, it fades.
 - **↑ ↓** or **⌃N ⌃P** move. **↑** in the empty field brings back your
   recent searches.
 - **⌘1** to **⌘9** open the first nine rows shown, as ↩ on them. Hold ⌘
-  a moment to see each row's number.
+  a moment to see each row's number. Not in the Catalog (`?`), whose
+  rows show their own keys, nor in the emoji and GIF grids.
 - **⌘C** copies the row's value (a file's path, a color's hex, a result).
 - **esc** steps back: out of a mode, then closes.
 

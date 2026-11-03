@@ -870,6 +870,9 @@ final class LauncherController: NSObject {
 
         installOutsideClickMonitor()
         installCommandMonitors()
+        // ⌘ already held as it opens (⌘Space): the numbers come as if
+        // pressed now.
+        modifiersChanged(NSEvent.modifierFlags)
         showSelectionPreview(from: focused)
         loadPlaceMenus()
         // Off the show path: once the panel is up.
@@ -1082,9 +1085,14 @@ final class LauncherController: NSObject {
         }
     }
 
+    /// Each row on screen its number, the others what they show without
+    /// (a snippet's keyword); again after a scroll or new results, so a
+    /// keycap always names the row its key opens.
     private func showRowNumbers() {
-        for (index, row) in numberedRows().enumerated() {
-            (tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView)?.setTrailingKeycap("⌘\(index + 1)")
+        let numbered = numberedRows()
+        for row in results.indices {
+            guard let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView else { continue }
+            cell.setTrailingKeycap(numbered.firstIndex(of: row).map { "⌘\($0 + 1)" } ?? trailingCap(row))
         }
         rowNumbersShown = true
     }
@@ -3861,6 +3869,7 @@ final class LauncherController: NSObject {
     /// The header above the list names the group at its top, as the rows
     /// scroll: a group's own name still in sight names it itself.
     @objc private func listScrolled() {
+        if rowNumbersShown { showRowNumbers() }
         guard mode == .catalog else { return }
         var row = tableView.row(at: NSPoint(x: 1, y: tableView.visibleRect.minY + 0.5))
         if results.indices.contains(row), case .catalogHeader = results[row] { row -= 1 }
@@ -4768,6 +4777,8 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
     /// the rows added or gone change. `reloadData` threw every row away
     /// and built them again: most of a key's time.
     fileprivate func showRows() {
+        // Results come while ⌘ is held: the numbers follow the new rows.
+        defer { if rowNumbersShown { showRowNumbers() } }
         // The Catalog's group names change rows' heights and kinds: never
         // animated there (the table slides and fades them by default).
         let headers = mode == .catalog && results.contains { if case .catalogHeader = $0 { true } else { false } }

@@ -51,8 +51,11 @@ public enum Calculator {
     static func arithmetic(_ text: String, locale: Locale) -> [Result] {
         var parser = Parser(text: text, decimalComma: usesDecimalComma(text, locale: locale))
         guard let value = parser.parse(), value.isFinite, parser.sawOperation else { return [] }
-        let display = format(value, locale: locale, grouping: true)
-        let decimal = Result(display: display, copy: format(value, locale: locale, grouping: false), detail: text)
+        var decimal = Result(display: format(value, locale: locale, grouping: true), copy: format(value, locale: locale, grouping: false), detail: text)
+        // "0x1FFFFFFFFFFFFF": every digit, never rounded nor scientific.
+        if parser.sawBase, let exact = Base.decimal.format(value) {
+            decimal = Result(display: Int64(value).formatted(.number.grouping(.automatic).locale(locale)), copy: exact, detail: text)
+        }
         // "0xff" alone: 255, not its own echo.
         guard parser.sawHex, let hex = Base.hex.format(value), hex.lowercased() != text.lowercased() else { return [decimal] }
         return [decimal, Result(display: hex, copy: hex, detail: "\(text) → hex")]
@@ -92,9 +95,12 @@ public enum Calculator {
             }
         }
 
-        /// Nil for a fraction or past what a Double holds exactly (2^53).
+        /// 2^53: the whole numbers a Double holds exactly go up to it.
+        static let exactLimit: UInt64 = 1 << 53
+
+        /// Nil for a fraction or past what a Double holds exactly.
         func format(_ value: Double) -> String? {
-            guard value.isFinite, value == value.rounded(), value.magnitude <= 9_007_199_254_740_992 else { return nil }
+            guard value.isFinite, value == value.rounded(), value.magnitude <= Double(Self.exactLimit) else { return nil }
             let digits = String(Int64(value.magnitude), radix: radix, uppercase: true)
             return (value < 0 ? "-" : "") + prefix + digits
         }
@@ -109,10 +115,33 @@ public enum Calculator {
             guard let base = Base.allCases.first(where: { $0.names.contains(target) }) else { continue }
             let source = String(text[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
             var parser = Parser(text: source, decimalComma: usesDecimalComma(source, locale: locale))
-            guard let value = parser.parse(), let written = base.format(value) else { return nil }
+            guard !typesPastExact(source), let value = parser.parse(), let written = base.format(value) else { return nil }
             return Result(display: written, copy: written, detail: "\(source) → \(base.names[0])")
         }
         return nil
+    }
+
+    /// A whole number typed past 2^53 ("9007199254740993"): its Double is
+    /// already rounded, the check after would pass a neighbour. Numbers
+    /// in another base are the parser's (`tooBig`).
+    static func typesPastExact(_ text: String) -> Bool {
+        let characters = Array(text.lowercased())
+        var index = 0
+        while index < characters.count {
+            if characters[index] == "0", index + 1 < characters.count, "xbo".contains(characters[index + 1]) {
+                index += 2
+                while index < characters.count, characters[index].isHexDigit { index += 1 }
+                continue
+            }
+            guard characters[index].isASCII, characters[index].isNumber else {
+                index += 1
+                continue
+            }
+            let start = index
+            while index < characters.count, characters[index].isASCII, characters[index].isNumber { index += 1 }
+            if (UInt64(String(characters[start..<index])) ?? .max) > Base.exactLimit { return true }
+        }
+        return false
     }
 
     /// "12,5" is a decimal in French; "1,234.5" groups in English.
@@ -138,6 +167,12 @@ public enum Calculator {
         var sawOperation = false
         /// A number written in hex ("0xff"): the answer comes in hex too.
         var sawHex = false
+        /// A number in another base ("0xff", "0b1010"): the answer is a
+        /// whole number, written out exactly.
+        var sawBase = false
+        /// A base's number too big to be exact (past 2^53): no answer,
+        /// never "0x999…" read as 0 × 999….
+        var tooBig = false
         /// Reads amounts of money ("120 € + 30 $") when set; nil, a currency
         /// is not a number.
         var money: MoneyTerms?
@@ -157,7 +192,7 @@ public enum Calculator {
         }
 
         mutating func parseValue() -> Value? {
-            guard let value = expression() else { return nil }
+            guard let value = expression(), !tooBig else { return nil }
             skipSpaces()
             return index == characters.count ? value : nil
         }
@@ -254,7 +289,7 @@ public enum Calculator {
                 index += 1
                 return inner
             }
-            if character == "0", let literal = baseLiteral() { return literal }
+            if character == "0", let literal = baseLiteral() { return currencyAfter(literal) }
             if character.isNumber || character == "." || character == "," { return number().flatMap { currencyAfter($0) } }
             if money != nil, let code = currencyBefore() {
                 // "€49", "$1,299".
@@ -302,9 +337,14 @@ public enum Calculator {
             default: return nil
             }
             let digits = characters[(index + 2)...].prefix { $0.isASCII && $0.hexDigitValue.map { $0 < radix } == true }
-            guard !digits.isEmpty, let number = Int64(String(digits), radix: radix) else { return nil }
+            guard !digits.isEmpty else { return nil }
+            guard let number = Int64(String(digits), radix: radix), number.magnitude <= Base.exactLimit else {
+                tooBig = true
+                return nil
+            }
             index += 2 + digits.count
             sawOperation = true
+            sawBase = true
             if radix == 16 { sawHex = true }
             return Value(number: Double(number))
         }

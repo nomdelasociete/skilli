@@ -35,6 +35,16 @@ final class CalculatorTests: XCTestCase {
         XCTAssertNil(value("0b2"))
     }
 
+    func testBigNumbersInABaseAreExactOrNothing() {
+        XCTAssertEqual(value("0x1FFFFFFFFFFFFF"), "9007199254740991", "every digit, not 9.0071993E15")
+        XCTAssertEqual(value("0x20000000000000"), "9007199254740992")
+        XCTAssertNil(value("0x20000000000001"), "past 2^53: not exact")
+        XCTAssertNil(value("0x99999999999999999999"), "past Int64: never 0 × 999…")
+        XCTAssertEqual(value("9007199254740992 in hex"), "0x20000000000000")
+        XCTAssertNil(value("9007199254740993 in hex"), "rounded by a Double before the check")
+        XCTAssertNil(value("123456789012345678901 in hex"))
+    }
+
     func testWrittenWithHexAnswersInHexToo() {
         let answers = Calculator.answers("0xff + 1", locale: english)
         XCTAssertEqual(answers.map(\.copy), ["256", "0x100"])
