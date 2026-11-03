@@ -51,14 +51,16 @@ public enum Calculator {
     static func arithmetic(_ text: String, locale: Locale) -> [Result] {
         var parser = Parser(text: text, decimalComma: usesDecimalComma(text, locale: locale))
         guard let value = parser.parse(), value.isFinite, parser.sawOperation else { return [] }
-        var decimal = Result(display: format(value, locale: locale, grouping: true), copy: format(value, locale: locale, grouping: false), detail: text)
+        let decimal = Result(display: format(value, locale: locale, grouping: true), copy: format(value, locale: locale, grouping: false), detail: text)
+        // Exact only when no operation on the way was rounded
+        // ("0x20000000000000 + 1") and every number typed is held exactly.
+        guard parser.sawBase, !parser.inexact,
+              !typesPastExact(text, decimalComma: parser.decimalComma), let exact = Base.decimal.format(value) else { return [decimal] }
         // "0x1FFFFFFFFFFFFF": every digit, never rounded nor scientific.
-        if parser.sawBase, let exact = Base.decimal.format(value) {
-            decimal = Result(display: Int64(value).formatted(.number.grouping(.automatic).locale(locale)), copy: exact, detail: text)
-        }
+        let whole = Result(display: Int64(value).formatted(.number.grouping(.automatic).locale(locale)), copy: exact, detail: text)
         // "0xff" alone: 255, not its own echo.
-        guard parser.sawHex, let hex = Base.hex.format(value), hex.lowercased() != text.lowercased() else { return [decimal] }
-        return [decimal, Result(display: hex, copy: hex, detail: "\(text) → hex")]
+        guard parser.sawHex, let hex = Base.hex.format(value), hex.lowercased() != text.lowercased() else { return [whole] }
+        return [whole, Result(display: hex, copy: hex, detail: "\(text) → hex")]
     }
 
     // MARK: - Bases
@@ -115,16 +117,21 @@ public enum Calculator {
             guard let base = Base.allCases.first(where: { $0.names.contains(target) }) else { continue }
             let source = String(text[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
             var parser = Parser(text: source, decimalComma: usesDecimalComma(source, locale: locale))
-            guard !typesPastExact(source), let value = parser.parse(), let written = base.format(value) else { return nil }
+            guard !typesPastExact(source, decimalComma: parser.decimalComma), let value = parser.parse(), !parser.inexact,
+                  let written = base.format(value) else { return nil }
             return Result(display: written, copy: written, detail: "\(source) → \(base.names[0])")
         }
         return nil
     }
 
-    /// A whole number typed past 2^53 ("9007199254740993"): its Double is
-    /// already rounded, the check after would pass a neighbour. Numbers
-    /// in another base are the parser's (`tooBig`).
-    static func typesPastExact(_ text: String) -> Bool {
+    /// A number typed that a Double cannot hold exactly: a whole number
+    /// past 2^53 ("9007199254740993", "9 007 199 254 740 993") or more
+    /// than 15 significant digits with a fraction ("1.0000000000000001").
+    /// Its Double is already rounded: a check after would pass a
+    /// neighbour. Read as `Parser.number` reads it (groups of three after
+    /// a space, the locale's separators); numbers in another base are the
+    /// parser's (`tooBig`).
+    static func typesPastExact(_ text: String, decimalComma: Bool) -> Bool {
         let characters = Array(text.lowercased())
         var index = 0
         while index < characters.count {
@@ -137,9 +144,30 @@ public enum Calculator {
                 index += 1
                 continue
             }
-            let start = index
-            while index < characters.count, characters[index].isASCII, characters[index].isNumber { index += 1 }
-            if (UInt64(String(characters[start..<index])) ?? .max) > Base.exactLimit { return true }
+            var number = ""
+            while index < characters.count {
+                let character = characters[index]
+                if character == " " {
+                    let next = characters[(index + 1)...].prefix { $0.isASCII && $0.isNumber }
+                    guard next.count == 3 else { break }
+                } else if character.isASCII && character.isNumber || character == "." || character == "," {
+                    number.append(character)
+                } else {
+                    break
+                }
+                index += 1
+            }
+            let normalized = decimalComma
+                ? number.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: ".")
+                : number.replacingOccurrences(of: ",", with: "")
+            let parts = normalized.split(separator: ".", omittingEmptySubsequences: false)
+            let whole = parts[0].drop { $0 == "0" }
+            let fraction = parts.count > 1 ? parts[1].reversed().drop { $0 == "0" } : []
+            if fraction.isEmpty {
+                if (UInt64(String(whole)) ?? .max) > Base.exactLimit, !whole.isEmpty { return true }
+            } else if whole.count + fraction.count > 15 {
+                return true
+            }
         }
         return false
     }
@@ -173,6 +201,31 @@ public enum Calculator {
         /// A base's number too big to be exact (past 2^53): no answer,
         /// never "0x999…" read as 0 × 999….
         var tooBig = false
+        /// An operation on the way was rounded ("0x20000000000000 + 1"):
+        /// the answer is not exact, even when what follows brings it back
+        /// under 2^53.
+        var inexact = false
+
+        /// a + b, noting a rounding: the sum less one gives back the other.
+        private mutating func sum(_ a: Double, _ b: Double) -> Double {
+            let result = a + b
+            if result.isFinite, result - a != b || result - b != a { inexact = true }
+            return result
+        }
+
+        /// a × b, noting a rounding: the fused residual a × b − result is 0.
+        private mutating func product(_ a: Double, _ b: Double) -> Double {
+            let result = a * b
+            if result.isFinite, (-result).addingProduct(a, b) != 0 { inexact = true }
+            return result
+        }
+
+        /// a ÷ b, noting a rounding: result × b − a is 0.
+        private mutating func quotient(_ a: Double, _ b: Double) -> Double {
+            let result = a / b
+            if result.isFinite, (-a).addingProduct(result, b) != 0 { inexact = true }
+            return result
+        }
         /// Reads amounts of money ("120 € + 30 $") when set; nil, a currency
         /// is not a number.
         var money: MoneyTerms?
@@ -214,8 +267,8 @@ public enum Calculator {
                 guard let right = term() else { return nil }
                 sawOperation = true
                 // "85 + 20%" is 85 and its 20 %.
-                let amount = right.isPercent ? left.number * right.number : right.number
-                left = Value(number: op == "+" ? left.number + amount : left.number - amount, currency: left.currency ?? right.currency)
+                let amount = right.isPercent ? product(left.number, right.number) : right.number
+                left = Value(number: sum(left.number, op == "+" ? amount : -amount), currency: left.currency ?? right.currency)
             }
         }
 
@@ -237,12 +290,12 @@ public enum Calculator {
                         guard left.currency == nil || right.currency == nil else { return nil }
                         currency = left.currency ?? right.currency
                     }
-                    left = Value(number: op == "/" ? left.number / right.number : left.number * right.number, currency: currency)
+                    left = Value(number: op == "/" ? quotient(left.number, right.number) : product(left.number, right.number), currency: currency)
                 } else if matchWord(["of", "de", "du", "des", "sur"]) {
                     // "20 % de 85": a percentage of something.
                     guard left.isPercent, let right = power() else { return nil }
                     sawOperation = true
-                    left = Value(number: left.number * right.number, currency: right.currency)
+                    left = Value(number: product(left.number, right.number), currency: right.currency)
                 } else {
                     return left
                 }
@@ -256,7 +309,9 @@ public enum Calculator {
             index += 1
             guard let exponent = power(), base.currency == nil, exponent.currency == nil else { return nil }
             sawOperation = true
-            return Value(number: Foundation.pow(base.number, exponent.number))
+            let result = Foundation.pow(base.number, exponent.number)
+            if result.magnitude > Double(Base.exactLimit) { inexact = true }
+            return Value(number: result)
         }
 
         private mutating func unary() -> Value? {

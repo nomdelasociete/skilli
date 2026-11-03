@@ -1023,6 +1023,8 @@ final class LauncherController: NSObject {
     private var rowNumbersTask: Task<Void, Never>?
     /// Self-test hook: the rows show ⌘1–⌘9.
     private(set) var rowNumbersShown = false
+    /// Self-test hook: how many rows ⌘1–⌘9 reach now.
+    var numberedRowCount: Int { numberedRows().count }
 
     /// 1 for ⌘1 … 9 for ⌘9; nil for any other key.
     static func rowNumber(_ event: NSEvent) -> Int? {
@@ -1938,6 +1940,9 @@ final class LauncherController: NSObject {
         // The selected row's own keys (the selection may not have moved).
         updateFooter()
         showEmojiGrid()
+        // From a grid back to a list while ⌘ is held: the rows numbered
+        // once the grid is gone (none while it showed).
+        if rowNumbersShown { showRowNumbers() }
         updatePreview()
         laps.lap("list")
         lastSearchLaps = laps
@@ -3094,6 +3099,8 @@ final class LauncherController: NSObject {
             self.results = self.killRows(kill, entries: entries)
             self.emptyState.isHidden = !self.results.isEmpty
             self.tableView.reloadData()
+            // ⌘ held while the processes came: their rows keep their numbers.
+            if self.rowNumbersShown { self.showRowNumbers() }
             if !self.results.isEmpty {
                 self.tableView.selectRowIndexes(IndexSet(integer: min(max(selected, 0), self.results.count - 1)), byExtendingSelection: false)
             }

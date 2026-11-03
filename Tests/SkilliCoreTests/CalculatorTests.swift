@@ -43,6 +43,23 @@ final class CalculatorTests: XCTestCase {
         XCTAssertEqual(value("9007199254740992 in hex"), "0x20000000000000")
         XCTAssertNil(value("9007199254740993 in hex"), "rounded by a Double before the check")
         XCTAssertNil(value("123456789012345678901 in hex"))
+        // Grouped as typed, read whole.
+        XCTAssertNil(value("9 007 199 254 740 993 in hex"))
+        XCTAssertEqual(value("9 007 199 254 740 992 in hex"), "0x20000000000000")
+        // A fraction a Double rounds to a whole number.
+        XCTAssertNil(value("1.0000000000000001 in hex"))
+        XCTAssertEqual(value("2.5 * 2 in hex"), "0x5")
+    }
+
+    /// Past 2^53 on the way, the answer was rounded: no exact digits, no
+    /// hex, even when what follows brings it back under.
+    func testRoundedOnTheWayIsNotExact() {
+        let past = Calculator.answers("0x20000000000000 + 1", locale: english)
+        XCTAssertEqual(past.count, 1)
+        XCTAssertNotEqual(past.first?.copy, "9007199254740992")
+        XCTAssertEqual(Calculator.answers("(0x20000000000000 + 1) - 1", locale: english).count, 1)
+        XCTAssertNotEqual(value("(0x20000000000000 + 1) - 1"), "9007199254740991")
+        XCTAssertEqual(Calculator.answers("0x1FFFFFFFFFFFFF + 1", locale: english).map(\.copy), ["9007199254740992", "0x20000000000000"])
     }
 
     func testWrittenWithHexAnswersInHexToo() {
