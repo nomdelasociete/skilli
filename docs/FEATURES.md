@@ -173,6 +173,8 @@ The search panel you open from anywhere. ✦Space.
   to keep it first.
 - **⌘K Actions** on every row: what the row can do, Copy Link, Set
   Alias…, Set Shortcut…, Pin; ⌘↩ the second action; ⌃N / ⌃P move.
+- **⌘1–⌘9** open the rows shown, as ↩ on them; hold ⌘ to see their
+  numbers.
 - **The same keys everywhere**: the footer names the selected row's ↩
   ("Paste ↩", "Join ↩", "Quit ↩"), ⇥ where it does something, and ⌘K;
   ⌘C copies the row's value (its name when it has nothing else), silently;
@@ -200,7 +202,8 @@ The search panel you open from anywhere. ✦Space.
 - **Homebrew** (`brew`): search, install, upgrade, uninstall formulae and
   casks; Upgrade All.
 - **Calculator**: math as typed (French decimals, percentages), units,
-  time in a city; ↩ pastes the result in your app, ⌘↩ or ⌘C copies it.
+  time in a city, hex, binary and octal ("0xff + 1", "255 in hex"); ↩
+  pastes the result in your app, ⌘↩ or ⌘C copies it.
 - **Convert Currencies**: "800 TRY" (to your currency), "800 TRY in €",
   "49 £ en dollars", "100 usd in eur, gbp", "120 € + 30 $", "49 $ * 12",
   answered as you type at the

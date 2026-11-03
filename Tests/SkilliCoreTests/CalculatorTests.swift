@@ -23,6 +23,67 @@ final class CalculatorTests: XCTestCase {
         XCTAssertEqual(value("2 * pi"), "6.28318531")
     }
 
+    func testNumbersInHexBinaryAndOctal() {
+        XCTAssertEqual(value("0xff"), "255", "alone, an answer")
+        XCTAssertEqual(value("0xFF + 1"), "256")
+        XCTAssertEqual(value("0b1010 * 2"), "20")
+        XCTAssertEqual(value("0o17"), "15")
+        XCTAssertEqual(value("0x10", french), "16", "not 0 × 10")
+        XCTAssertEqual(value("0 x 10"), "0", "spaced, still multiplies")
+        XCTAssertEqual(value("0.5 * 2"), "1")
+        XCTAssertNil(value("0xg"))
+        XCTAssertNil(value("0b2"))
+    }
+
+    func testBigNumbersInABaseAreExactOrNothing() {
+        XCTAssertEqual(value("0x1FFFFFFFFFFFFF"), "9007199254740991", "every digit, not 9.0071993E15")
+        XCTAssertEqual(value("0x20000000000000"), "9007199254740992")
+        XCTAssertNil(value("0x20000000000001"), "past 2^53: not exact")
+        XCTAssertNil(value("0x99999999999999999999"), "past Int64: never 0 × 999…")
+        XCTAssertEqual(value("9007199254740992 in hex"), "0x20000000000000")
+        XCTAssertNil(value("9007199254740993 in hex"), "rounded by a Double before the check")
+        XCTAssertNil(value("123456789012345678901 in hex"))
+        // Grouped as typed, read whole.
+        XCTAssertNil(value("9 007 199 254 740 993 in hex"))
+        XCTAssertEqual(value("9 007 199 254 740 992 in hex"), "0x20000000000000")
+        // A fraction a Double rounds to a whole number.
+        XCTAssertNil(value("1.0000000000000001 in hex"))
+        XCTAssertEqual(value("2.5 * 2 in hex"), "0x5")
+    }
+
+    /// Past 2^53 on the way, the answer was rounded: no exact digits, no
+    /// hex, even when what follows brings it back under.
+    func testRoundedOnTheWayIsNotExact() {
+        let past = Calculator.answers("0x20000000000000 + 1", locale: english)
+        XCTAssertEqual(past.count, 1)
+        XCTAssertNotEqual(past.first?.copy, "9007199254740992")
+        XCTAssertEqual(Calculator.answers("(0x20000000000000 + 1) - 1", locale: english).count, 1)
+        XCTAssertNotEqual(value("(0x20000000000000 + 1) - 1"), "9007199254740991")
+        XCTAssertEqual(Calculator.answers("0x1FFFFFFFFFFFFF + 1", locale: english).map(\.copy), ["9007199254740992", "0x20000000000000"])
+    }
+
+    func testWrittenWithHexAnswersInHexToo() {
+        let answers = Calculator.answers("0xff + 1", locale: english)
+        XCTAssertEqual(answers.map(\.copy), ["256", "0x100"])
+        XCTAssertEqual(Calculator.answers("0xff", locale: english).map(\.copy), ["255"], "no echo of what was typed")
+        XCTAssertEqual(Calculator.answers("0xff / 2", locale: english).map(\.copy), ["127.5"], "a fraction has no hex")
+        XCTAssertEqual(Calculator.answers("12 + 1", locale: english).map(\.copy), ["13"])
+    }
+
+    func testIntoABase() {
+        XCTAssertEqual(value("255 in hex"), "0xFF")
+        XCTAssertEqual(value("4096 en binaire", french), "0b1000000000000")
+        XCTAssertEqual(value("0xff to dec"), "255")
+        XCTAssertEqual(value("0b1010 → hexa"), "0xA")
+        XCTAssertEqual(value("8 * 8 in octal"), "0o100")
+        XCTAssertEqual(value("-255 in hex"), "-0xFF")
+        XCTAssertNil(value("2.5 in hex"))
+        XCTAssertNil(value("1e300 in hex"))
+        XCTAssertEqual(Calculator.evaluate("255 in hex", locale: english)?.detail, "255 → hex")
+        // Units still convert.
+        XCTAssertNotNil(value("10 km in miles"))
+    }
+
     func testFrenchNumbersAndThousands() {
         XCTAssertEqual(value("12,5 × 4", french), "50")
         XCTAssertEqual(value("1 234,5 + 0,5", french), "1235")

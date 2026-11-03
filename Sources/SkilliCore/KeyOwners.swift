@@ -96,7 +96,16 @@ public enum LauncherKeys {
         own("cmd+x", "Cut"),
         own("cmd+v", "Paste"),
         own("cmd+a", "Select All"),
-        own("cmd+z", "Undo")
+        own("cmd+z", "Undo"),
+        own("cmd+1", "Open Row 1"),
+        own("cmd+2", "Open Row 2"),
+        own("cmd+3", "Open Row 3"),
+        own("cmd+4", "Open Row 4"),
+        own("cmd+5", "Open Row 5"),
+        own("cmd+6", "Open Row 6"),
+        own("cmd+7", "Open Row 7"),
+        own("cmd+8", "Open Row 8"),
+        own("cmd+9", "Open Row 9")
     ]
 
     public static let openSettingsName = "Open Settings"

@@ -904,7 +904,7 @@ starts from it.
   the settings tools): refused when the keys equal or start another of
   skil.li's shortcuts, or when their first key belongs to a `KeyOwner`
   (SkilliCore): the launcher's own keys while open (`LauncherKeys`: ⌘K
-  Actions, ⌘↩, ⌘C, ⇧⌘C, ⌘⌫, ⌃N, ⌃P, ⌘W, ⌘X/V/A/Z, and its Open Settings
+  Actions, ⌘↩, ⌘C, ⇧⌘C, ⌘⌫, ⌃N, ⌃P, ⌘W, ⌘X/V/A/Z, ⌘1–⌘9, and its Open Settings
   key), since the bindings run before the launcher; or macOS's shortcuts
   on now (`SystemShortcuts`: `com.apple.symbolichotkeys`
   `AppleSymbolicHotKeys` read afresh each time, named and defaulted from
@@ -998,6 +998,14 @@ mode or skillie returns. Three runs (faded, `placeWeight` 2.5) and the empty
   the field). These keys work without opening the list; ⌘C copies the
   field's text instead when some is selected. The list shows each
   action's key; the others have none.
+- ⌘1–⌘9 (docs/launcher-row-numbers-hex.md) do ↩ on the Nth row shown,
+  read by the number row's key codes (AZERTY's ⌘& is ⌘1):
+  `LauncherController.numberedRows`, rows at least half visible drawn by
+  `ResultCellView` (not the Catalog's, not a grid). ⌘ held alone 0.3 s
+  shows ⌘1… as each row's trailing keycap, the accessory moving before
+  it; any key, another modifier or the release hides them (flagsChanged
+  monitors, global and local, installed once the panel is up). They are
+  in `LauncherKeys`: a shortcut may not take them.
 - In the list: typing filters (each word starts a word of the title: "co
   ph"), arrows move, ↩ runs, an action's key runs it, esc or ⌘K go back to
   the results, a click beside it closes it. ⌃N and ⌃P move as ↓ and ↑,
@@ -3579,7 +3587,11 @@ re-investigating.
   Foundation's Measurement with exact coefficients where it rounds
   ("10 km en miles", "32 °F to °C", "1,5 Go en Mo", "100 km/h in mph",
   "3 jours en heures"); the time elsewhere ("heure à Tokyo", "time in New
-  York"). ↩ types the result (without grouping) in the app in front, like
+  York"); hex, binary and octal (docs/launcher-row-numbers-hex.md):
+  `0x…`/`0b…`/`0o…` literals, alone an answer ("0x10" is 16, "0 x 10"
+  still multiplies), written with hex a second answer in hex, "in hex /
+  bin / oct / dec" (`Calculator.Base`, integers within 2^53, tried
+  before units). ↩ types the result (without grouping) in the app in front, like
   a clip, a snippet or an emoji (D4, 2026-10-17); ⌘↩ and ⌘C copy it,
   nothing said. ⌘K: Paste Result ↩, Copy Result ⌘↩. A lone number or a
   word is not a calculation. `selftest calc` (`launcherCalculates`): the
