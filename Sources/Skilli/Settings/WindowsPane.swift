@@ -4,10 +4,10 @@ import SwiftUI
 
 /// Settings → Windows, the Settings rules in order: how to reach it (✦W,
 /// "save layout"), Accessibility only while it is missing, the settings
-/// that matter (the space between windows with its preview, the apps you
-/// stopped using quit), the layouts,
+/// that matter (the space between windows with its preview), the layouts,
 /// grouped by the displays they are made for, what leaves the Mac
-/// (nothing), and what is rarely changed under Advanced, closed.
+/// (nothing), and what is rarely changed under Advanced, closed. Auto Quit
+/// has its own pane.
 struct WindowsPane: View {
     @Bindable var preferences: Preferences
     let context: SettingsContext
@@ -50,8 +50,6 @@ struct WindowsPane: View {
             }
 
             ArrangeSection(preferences: preferences, context: context)
-
-            AutoQuitSection(preferences: preferences, context: context)
 
             Section {
                 HStack {
@@ -363,46 +361,3 @@ private struct ArrangeSection: View {
     }
 }
 
-/// Auto Quit: off by default; on, how long an app goes unused before it is
-/// quit, and the apps never quit (+ and −).
-private struct AutoQuitSection: View {
-    @Bindable var preferences: Preferences
-    let context: SettingsContext
-
-    var body: some View {
-        Section {
-            Toggle("Quit apps you stopped using", isOn: $preferences.autoQuit)
-                .settingAnchor("autoQuit")
-            if preferences.autoQuit {
-                Picker("Unused for", selection: $preferences.autoQuitMinutes) {
-                    ForEach(AutoQuit.delays, id: \.self) { Text(AutoQuit.spoken(minutes: $0)).tag($0) }
-                }
-                .settingAnchor("autoQuitMinutes")
-                if !preferences.autoQuitNever.isEmpty {
-                    LabelDetail("Never quit", "These stay open however long you leave them.")
-                }
-                ForEach(preferences.autoQuitNever, id: \.self) { bundleID in
-                    ExcludedAppRow(bundleID: bundleID, help: "Quit this app too when you stop using it") {
-                        preferences.autoQuitNever.removeAll { $0 == bundleID }
-                    }
-                }
-                Button("Never Quit an App…") {
-                    guard let url = context.chooseApp(), let bundleID = Bundle(url: url)?.bundleIdentifier,
-                          !preferences.autoQuitNever.contains(bundleID) else { return }
-                    preferences.autoQuitNever.append(bundleID)
-                }
-                .settingAnchor("autoQuitNever")
-            }
-        } header: {
-            Text("Apps You Stopped Using")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .settingAnchor("section.appsStoppedUsing")
-        } footer: {
-            if preferences.autoQuit {
-                Text("Quit without a word once unused that long; one that does not quit is said. Never the app in front, one with unsaved work or a question open, one playing sound or in a call, or one still working.")
-            } else {
-                Text("Frees memory: the apps you have not used for a while are quit for you.")
-            }
-        }
-    }
-}

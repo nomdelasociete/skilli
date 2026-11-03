@@ -42,10 +42,11 @@ an hour.
 
 ## Apps you stopped using
 
-**Auto Quit** (Settings → Windows → *Apps You Stopped Using*) quits apps
-you have not used for a while, after a delay you choose. Never the app in
-front, never one with unsaved work, playing sound or in a call. Add apps
-to *Never quit* to keep them open.
+**Auto Quit** (Settings → Auto Quit, off until you turn it on) quits only
+the apps you list, each once you have not used it for its own time: pick
+one (15 minutes to a day) or type any other ("90 min", "3 h", "2 days").
+An app not listed is never quit. Never the app in front, never one with
+unsaved work, playing sound or in a call, or still working.
 
 ## Running apps
 

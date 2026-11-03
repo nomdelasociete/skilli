@@ -181,12 +181,12 @@ public enum PrivacyMap {
         sends: "What the agent looks for, and the names of the window's controls.",
         when: "When an agent asks skil.li to find a button or a field.",
         pane: "tools")
-    // AutoQuitter.judge (Settings → Windows → Quit apps you stopped using).
+    // AutoQuitter.judge (Settings → Auto Quit → Quit apps you stopped using).
     public static let autoQuit = Flow(
         "autoQuit", "Quitting apps you stopped using",
         sends: "The names of the apps about to be quit and their windows' titles, to tell one still busy (a call, a download, a command running).",
-        when: "When an app has gone unused for the time you set, with Quit apps you stopped using on.",
-        pane: "windows", toggle: "Quit apps you stopped using")
+        when: "When an app you listed has gone unused for the time you set for it, with Quit apps you stopped using on.",
+        pane: "autoQuit", toggle: "Quit apps you stopped using")
     // MCPService.ruled, RuleJudge: before an agent's tool runs, while the
     // user has rules (Settings → Ask → Your Rules).
     public static let rules = Flow(
@@ -382,7 +382,7 @@ public enum PrivacyMap {
         public var gifSearch = true
         /// Convert Currencies on (Settings → Catalog).
         public var currencyRates = true
-        /// Settings → Windows → Quit apps you stopped using (off by default).
+        /// Settings → Auto Quit → Quit apps you stopped using (off by default).
         public var autoQuit = false
         /// The folder whose new images are tagged.
         public var imageFolder = ""
@@ -619,6 +619,7 @@ public enum PrivacyMap {
         case "emoji": emojiLine(setup)
         case "gifs": gifsLine(setup)
         case "windows": windowsLine(setup)
+        case "autoQuit": autoQuitLine(setup)
         case "launcher": launcherLine(setup)
         case "skillies": skilliesLine(setup)
         case "recorder": recorderLine(setup)
@@ -856,12 +857,18 @@ public enum PrivacyMap {
     }
 
     /// Windows: windows move and layouts stay on this Mac (a link a layout
-    /// opens is the browser's to load); Quit apps you stopped using, when
-    /// on with a deciding key, asks it first (`autoQuit`).
+    /// opens is the browser's to load).
     static func windowsLine(_ setup: Setup) -> PaneLine {
-        let local = "Windows move and layouts are kept on this Mac. A link a layout opens is loaded by your browser."
-        guard setup.autoQuit, let decider = decider(setup) else { return PaneLine(text: "Nothing: " + local.prefix(1).lowercased() + local.dropFirst(), more: "privacy") }
-        return PaneLine(text: "To \(spoken(decider)), for Quit apps you stopped using: " + sentence(autoQuit) + " " + local, more: "privacy")
+        PaneLine(text: "Nothing: windows move and layouts are kept on this Mac. A link a layout opens is loaded by your browser.", more: "privacy")
+    }
+
+    /// Auto Quit: when on with a deciding key, it asks it first (`autoQuit`);
+    /// else nothing leaves the Mac.
+    static func autoQuitLine(_ setup: Setup) -> PaneLine {
+        guard setup.autoQuit, let decider = decider(setup) else {
+            return PaneLine(text: "Nothing: which apps go is decided on this Mac, from when you last used them.", more: "privacy")
+        }
+        return PaneLine(text: "To \(spoken(decider)), for Quit apps you stopped using: " + sentence(autoQuit), more: "privacy")
     }
 
     /// GitHub: the sign-in with each read and what is done there

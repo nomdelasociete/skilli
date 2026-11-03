@@ -3,10 +3,11 @@ import ApplicationServices
 import CoreAudio
 import SkilliCore
 
-/// Auto Quit (Settings → Windows → Quit apps you stopped using): an app not
-/// in front for the time set is quit, without a word (what is seen done is
-/// not said); one that does not go is said. `AutoQuit` (SkilliCore) picks
-/// who may go; here what only the live Mac tells keeps an app: a window
+/// Auto Quit (Settings → Auto Quit): each app the user listed, once not in
+/// front for its own delay, is quit without a word (what is seen done is
+/// not said); one that does not go is said. An app not listed never goes.
+/// `AutoQuit` (SkilliCore) picks who may go; here what only the live Mac
+/// tells keeps an app: a window
 /// with unsaved work or a question open (Accessibility), sound or the
 /// microphone in use (CoreAudio's processes), work going on (its CPU). Then,
 /// with a deciding key, Jev reads each one's name and windows' titles: a
@@ -79,13 +80,17 @@ final class AutoQuitter {
         }
     }
 
-    private var delay: TimeInterval { TimeInterval(max(preferences.autoQuitMinutes, 1) * 60) }
+    /// The listed apps' delays, by bundle id.
+    private var rules: [String: Int] {
+        Dictionary(preferences.autoQuitApps.map { ($0.bundleID, $0.minutes) }, uniquingKeysWith: { first, _ in first })
+    }
 
-    /// One timer, for when the next app reaches the delay; none while off.
+    /// One timer, for when the next listed app reaches its delay; none
+    /// while off.
     func schedule() {
         timer?.invalidate()
         timer = nil
-        guard preferences.autoQuit, let next = AutoQuit.nextCheck(apps(), now: .now, delay: delay, never: Set(preferences.autoQuitNever)) else { return }
+        guard preferences.autoQuit, let next = AutoQuit.nextCheck(apps(), now: .now, rules: rules) else { return }
         let timer = Timer(fire: next, interval: 0, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
                 Task { await self?.check() }
@@ -104,7 +109,7 @@ final class AutoQuitter {
             checking = false
             schedule()
         }
-        let due = AutoQuit.candidates(apps(), now: .now, delay: delay, never: Set(preferences.autoQuitNever))
+        let due = AutoQuit.candidates(apps(), now: .now, rules: rules)
         lastQuit = []
         lastKept = []
         guard !due.isEmpty else { return }
@@ -124,7 +129,7 @@ final class AutoQuitter {
             }
         }
         safe = await judge(safe)
-        // Kept for being in use counts as used: looked at again after a
+        // Kept for being in use counts as used: looked at again after its
         // whole delay, not every minute.
         let going = Set(safe.map(\.app.pid))
         for app in due where !going.contains(app.pid) { lastUsed[app.pid] = .now }

@@ -1,11 +1,11 @@
 import Foundation
 
-/// Auto Quit (Settings → Windows): the apps the user stopped using, quit
-/// after a delay. This part decides who may go, from what the app reads
-/// (when each app was last in front, which is in front now); the app then
-/// checks what only a live Mac tells (unsaved work, sound in use, busy) and,
-/// with a deciding key, asks Jev whether each one is safe to quit from its
-/// windows' titles.
+/// Auto Quit (Settings → Auto Quit): the apps the user listed, each quit
+/// once unused for its own delay; an app not listed is never quit. This
+/// part decides who may go, from what the app reads (when each app was last
+/// in front, which is in front now); the app then checks what only a live
+/// Mac tells (unsaved work, sound in use, busy) and, with a deciding key,
+/// asks Jev whether each one is safe to quit from its windows' titles.
 public enum AutoQuit {
     /// An open app with a Dock icon, as the app reads it.
     public struct App: Equatable, Sendable {
@@ -26,17 +26,93 @@ public enum AutoQuit {
         }
     }
 
-    /// The delays offered, in minutes; one hour by default.
-    public static let delays = [30, 60, 120, 240]
-    public static let defaultDelay = 60
+    /// One app the user listed and how long it may go unused, in minutes.
+    public struct Rule: Codable, Equatable, Hashable, Sendable {
+        public let bundleID: String
+        public var minutes: Int
 
-    /// "30 minutes", "1 hour", "2 hours".
-    public static func spoken(minutes: Int) -> String {
-        minutes < 60 ? "\(minutes) minutes" : minutes == 60 ? "1 hour" : "\(minutes / 60) hours"
+        public init(bundleID: String, minutes: Int) {
+            self.bundleID = bundleID
+            self.minutes = AutoQuit.clamped(minutes)
+        }
     }
 
-    /// Never quit, whatever the list says: skil.li, Finder, macOS's own
-    /// faces.
+    /// The delays the pane offers first, in minutes; any other in `range`
+    /// is typed (Custom…).
+    public static let delays = [15, 30, 60, 120, 240, 480, 1_440]
+    /// A new app's delay: one hour.
+    public static let defaultDelay = 60
+    /// From 5 minutes to a week.
+    public static let range = 5...10_080
+
+    public static func clamped(_ minutes: Int) -> Int {
+        min(max(minutes, range.lowerBound), range.upperBound)
+    }
+
+    /// "30 minutes", "1 hour", "2 hours", "1 hour 30 minutes", "1 day".
+    public static func spoken(minutes: Int) -> String {
+        func unit(_ count: Int, _ word: String) -> String { "\(count) \(word)\(count == 1 ? "" : "s")" }
+        if minutes >= 1_440, minutes % 1_440 == 0 { return unit(minutes / 1_440, "day") }
+        if minutes < 60 { return unit(minutes, "minute") }
+        let hours = unit(minutes / 60, "hour")
+        return minutes % 60 == 0 ? hours : hours + " " + unit(minutes % 60, "minute")
+    }
+
+    /// A delay as typed: "90", "90 min", "2 h", "1h30", "1.5 hours",
+    /// "2 jours"; a bare number is minutes. Nil when it says none, or one
+    /// out of `range`.
+    public static func minutes(from text: String) -> Int? {
+        let folded = text.lowercased().replacingOccurrences(of: ",", with: ".")
+        var total = 0.0
+        var found = false
+        var number = ""
+        var word = ""
+        func flush() {
+            guard let value = Double(number) else { return }
+            let unit: Double = word.hasPrefix("d") || word.hasPrefix("j") ? 1_440 : word.hasPrefix("h") ? 60 : 1
+            total += value * unit
+            found = true
+            number = ""
+            word = ""
+        }
+        for character in folded + " " {
+            if character.isNumber || (character == "." && !number.isEmpty && word.isEmpty) {
+                // "1h30": the hours end, the bare number after is minutes.
+                if !word.isEmpty { flush() }
+                number.append(character)
+            } else if character.isLetter {
+                guard !number.isEmpty else { continue }
+                word.append(character)
+            } else if !word.isEmpty {
+                flush()
+            }
+        }
+        flush()
+        let minutes = Int(total.rounded())
+        return found && range.contains(minutes) ? minutes : nil
+    }
+
+    /// A list item as tools read it: "Arc: 2 hours".
+    public static func item(name: String, minutes: Int) -> String {
+        "\(name): \(spoken(minutes: minutes))"
+    }
+
+    /// A list item as tools write it: the app, then its delay after ":",
+    /// "," or " after " ("Arc: 2 h", "Docker Desktop, 90 min"); without a
+    /// delay, `defaultDelay`. Nil minutes: a delay was given but is not one.
+    public static func parseItem(_ text: String) -> (app: String, minutes: Int?) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        for separator in [" after ", ":", ","] {
+            guard let range = trimmed.range(of: separator, options: [.backwards, .caseInsensitive]) else { continue }
+            let app = trimmed[..<range.lowerBound].trimmingCharacters(in: .whitespaces)
+            let delay = String(trimmed[range.upperBound...])
+            guard !app.isEmpty, delay.contains(where: \.isNumber) else { continue }
+            return (app, minutes(from: delay))
+        }
+        return (trimmed, defaultDelay)
+    }
+
+    /// Never quit, even listed: skil.li, Finder, macOS's own faces.
     public static let protected: Set<String> = [
         "com.nomdelasociete.Skilli", "com.apple.finder", "com.apple.dock", "com.apple.loginwindow", "com.apple.systemuiserver",
         "com.apple.controlcenter", "com.apple.notificationcenterui", "com.apple.Spotlight", "com.apple.WindowManager",
@@ -50,22 +126,28 @@ public enum AutoQuit {
     /// export, a build, a download): it stays.
     public static let busyShare = 0.05
 
-    /// The apps that went unused for `delay` seconds and may be quit:
-    /// never the one in front, a protected one or one the user keeps
-    /// (`never`, bundle ids). The longest unused first.
-    public static func candidates(_ apps: [App], now: Date, delay: TimeInterval, never: Set<String>) -> [App] {
+    /// The listed apps (`rules`: bundle id → minutes) that went unused for
+    /// their delay and may be quit: never one not listed, the one in front
+    /// or a protected one. The longest unused first.
+    public static func candidates(_ apps: [App], now: Date, rules: [String: Int]) -> [App] {
         apps.filter { app in
-            !app.isFront && !protected.contains(app.bundleID) && !never.contains(app.bundleID) && now.timeIntervalSince(app.lastUsed) >= delay
+            guard let minutes = waiting(app, rules) else { return false }
+            return now.timeIntervalSince(app.lastUsed) >= TimeInterval(minutes * 60)
         }
         .sorted { $0.lastUsed < $1.lastUsed }
     }
 
-    /// When to look again: the moment the next app reaches the delay (a
-    /// minute at least from now); nil when no app can.
-    public static func nextCheck(_ apps: [App], now: Date, delay: TimeInterval, never: Set<String>) -> Date? {
-        let waiting = apps.filter { !$0.isFront && !protected.contains($0.bundleID) && !never.contains($0.bundleID) }
-        guard let due = waiting.map({ $0.lastUsed.addingTimeInterval(delay) }).min() else { return nil }
-        return max(due, now.addingTimeInterval(60))
+    /// When to look again: the moment the next listed app reaches its delay
+    /// (a minute at least from now); nil when none can.
+    public static func nextCheck(_ apps: [App], now: Date, rules: [String: Int]) -> Date? {
+        let due = apps.compactMap { app in waiting(app, rules).map { app.lastUsed.addingTimeInterval(TimeInterval($0 * 60)) } }.min()
+        return due.map { max($0, now.addingTimeInterval(60)) }
+    }
+
+    /// Its delay, when it is listed, not in front and not protected.
+    private static func waiting(_ app: App, _ rules: [String: Int]) -> Int? {
+        guard !app.isFront, !protected.contains(app.bundleID), let minutes = rules[app.bundleID] else { return nil }
+        return clamped(minutes)
     }
 
     /// Busy: it used at least `busyShare` of a core over the time measured.
