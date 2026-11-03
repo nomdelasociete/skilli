@@ -33,6 +33,7 @@ public enum Calculator {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 200 else { return [] }
         if let zone = timeIn(trimmed, now: now, locale: locale) { return [zone] }
+        if let based = baseConversion(trimmed, locale: locale) { return [based] }
         if let converted = conversion(trimmed, locale: locale) { return [converted] }
         if let currency {
             // "120 € + 30 $" before "800 TRY": a calculation with money in it.
@@ -41,16 +42,77 @@ public enum Calculator {
             let money = currencies(trimmed, locale: locale, now: now, context: currency)
             if !money.isEmpty { return money }
         }
-        return arithmetic(trimmed, locale: locale).map { [$0] } ?? []
+        return arithmetic(trimmed, locale: locale)
     }
 
     // MARK: - Arithmetic
 
-    static func arithmetic(_ text: String, locale: Locale) -> Result? {
+    /// The answer; written with hex ("0xff + 1"), the same in hex second.
+    static func arithmetic(_ text: String, locale: Locale) -> [Result] {
         var parser = Parser(text: text, decimalComma: usesDecimalComma(text, locale: locale))
-        guard let value = parser.parse(), value.isFinite, parser.sawOperation else { return nil }
+        guard let value = parser.parse(), value.isFinite, parser.sawOperation else { return [] }
         let display = format(value, locale: locale, grouping: true)
-        return Result(display: display, copy: format(value, locale: locale, grouping: false), detail: text)
+        let decimal = Result(display: display, copy: format(value, locale: locale, grouping: false), detail: text)
+        // "0xff" alone: 255, not its own echo.
+        guard parser.sawHex, let hex = Base.hex.format(value), hex.lowercased() != text.lowercased() else { return [decimal] }
+        return [decimal, Result(display: hex, copy: hex, detail: "\(text) → hex")]
+    }
+
+    // MARK: - Bases
+
+    /// How a whole number is written: "0xFF", "0b1010", "0o17", "255".
+    enum Base: CaseIterable {
+        case hex, binary, octal, decimal
+
+        /// The words after "in" or "en" that ask for it.
+        var names: [String] {
+            switch self {
+            case .hex: ["hex", "hexa", "hexadecimal", "hexadécimal"]
+            case .binary: ["bin", "binary", "binaire"]
+            case .octal: ["oct", "octal"]
+            case .decimal: ["dec", "decimal", "décimal"]
+            }
+        }
+
+        var radix: Int {
+            switch self {
+            case .hex: 16
+            case .binary: 2
+            case .octal: 8
+            case .decimal: 10
+            }
+        }
+
+        var prefix: String {
+            switch self {
+            case .hex: "0x"
+            case .binary: "0b"
+            case .octal: "0o"
+            case .decimal: ""
+            }
+        }
+
+        /// Nil for a fraction or past what a Double holds exactly (2^53).
+        func format(_ value: Double) -> String? {
+            guard value.isFinite, value == value.rounded(), value.magnitude <= 9_007_199_254_740_992 else { return nil }
+            let digits = String(Int64(value.magnitude), radix: radix, uppercase: true)
+            return (value < 0 ? "-" : "") + prefix + digits
+        }
+    }
+
+    /// "255 in hex", "0xff en binaire", "0b1010 → dec".
+    static func baseConversion(_ text: String, locale: Locale) -> Result? {
+        let lower = text.lowercased()
+        for separator in [" in ", " to ", " en ", " into ", " → ", " -> "] {
+            guard let range = lower.range(of: separator, options: .backwards) else { continue }
+            let target = lower[range.upperBound...].trimmingCharacters(in: .whitespaces)
+            guard let base = Base.allCases.first(where: { $0.names.contains(target) }) else { continue }
+            let source = String(text[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+            var parser = Parser(text: source, decimalComma: usesDecimalComma(source, locale: locale))
+            guard let value = parser.parse(), let written = base.format(value) else { return nil }
+            return Result(display: written, copy: written, detail: "\(source) → \(base.names[0])")
+        }
+        return nil
     }
 
     /// "12,5" is a decimal in French; "1,234.5" groups in English.
@@ -74,6 +136,8 @@ public enum Calculator {
         var index = 0
         /// A lone number is not a calculation.
         var sawOperation = false
+        /// A number written in hex ("0xff"): the answer comes in hex too.
+        var sawHex = false
         /// Reads amounts of money ("120 € + 30 $") when set; nil, a currency
         /// is not a number.
         var money: MoneyTerms?
@@ -190,6 +254,7 @@ public enum Calculator {
                 index += 1
                 return inner
             }
+            if character == "0", let literal = baseLiteral() { return literal }
             if character.isNumber || character == "." || character == "," { return number().flatMap { currencyAfter($0) } }
             if money != nil, let code = currencyBefore() {
                 // "€49", "$1,299".
@@ -221,6 +286,27 @@ public enum Calculator {
                 ? text.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: ".")
                 : text.replacingOccurrences(of: ",", with: "")
             return Double(normalized).map { Value(number: $0) }
+        }
+
+        /// "0xff", "0b1010", "0o17": a whole number in another base, read
+        /// as an answer even alone. Nil, nothing read, when "0" is not
+        /// followed by a base's letter and one of its digits ("0 x 10"
+        /// multiplies).
+        private mutating func baseLiteral() -> Value? {
+            guard index + 2 < characters.count else { return nil }
+            let radix: Int
+            switch characters[index + 1] {
+            case "x": radix = 16
+            case "b": radix = 2
+            case "o": radix = 8
+            default: return nil
+            }
+            let digits = characters[(index + 2)...].prefix { $0.isASCII && $0.hexDigitValue.map { $0 < radix } == true }
+            guard !digits.isEmpty, let number = Int64(String(digits), radix: radix) else { return nil }
+            index += 2 + digits.count
+            sawOperation = true
+            if radix == 16 { sawHex = true }
+            return Value(number: Double(number))
         }
 
         private mutating func function() -> Value? {

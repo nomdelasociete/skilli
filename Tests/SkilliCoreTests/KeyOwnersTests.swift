@@ -166,7 +166,8 @@ final class KeyOwnersTests: XCTestCase {
     }
 
     func testLauncherKeysAreRealChordsWithAModifier() throws {
-        XCTAssertEqual(LauncherKeys.all.count, 12)
+        XCTAssertEqual(LauncherKeys.all.count, 21)
+        XCTAssertEqual(LauncherKeys.all.first { $0.chord == (try? self.chord("cmd+3")) }?.refusal, "Used by the launcher: Open Row 3.")
         XCTAssertEqual(Set(LauncherKeys.all.map(\.chord)).count, LauncherKeys.all.count, "each once")
         for owner in LauncherKeys.all {
             XCTAssertNotEqual(owner.chord.key, .named(.escape), "\(owner.name): its spec did not parse")

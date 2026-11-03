@@ -43,6 +43,7 @@ choices, the measures. Each one starts with its status and date.
 | [currency-conversion.md](currency-conversion.md) | Currencies in the calculator, at the day's rates |
 | [file-search.md](file-search.md) | Search Files that finds your files, not your dependencies' |
 | [launcher-app-in-front.md](launcher-app-in-front.md) | The empty launcher learns the app in front; names mistyped found |
+| [launcher-row-numbers-hex.md](launcher-row-numbers-hex.md) | ⌘1–⌘9 open a row; the calculator reads hex |
 
 ## Plans, reviews and lab notes
 

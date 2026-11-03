@@ -639,6 +639,7 @@ final class SelfTest {
                 pinsComeFirst,
                 emptyFieldLearnsTheAppInFront,
                 namesFoundMistyped,
+                commandNumbersOpenRows,
                 startsAgainAfterAWhile,
                 opensOnTheChosenScreen,
                 launcherSettingsShown,
@@ -4963,6 +4964,46 @@ final class SelfTest {
             await closeLauncher()
         }
         record(name, first == calculator, "“\(typed)”: first \(first ?? "nothing"); launcher-typo-light/-dark.png", nil)
+    }
+
+    /// "0xff + 1": 256, then 0x100 (written with hex). ⌘ held alone shows
+    /// ⌘1, ⌘2 on the rows, gone on release; a quick ⌘ shows nothing; ⌘2
+    /// pastes the second row here, as ↩ on it.
+    private func commandNumbersOpenRows() async {
+        let name = "Root search: ⌘ held shows ⌘1–⌘9 on the rows (not a quick ⌘), ⌘2 does the second row's ↩; “0xff + 1” answers 256 and 0x100"
+        let launcher = context.launcher
+        guard await focusTestWindow() else { return }
+        window.makeFirstResponder(textView)
+        textView.string = ""
+        guard await openLauncher() else {
+            record(name, false, "the launcher did not open", nil)
+            return
+        }
+        for character in "0xff + 1" { await pressKey(character) }
+        let answered = await waitUntil(timeout: 1) { Array(launcher.resultTitles.prefix(2)) == ["256", "0x100"] } != nil
+        let rows = launcher.resultTitles.prefix(2).joined(separator: ", ")
+        // A quick ⌘, as before ⌘C: nothing shown.
+        postKey(CGKeyCode(kVK_Command), down: true, flags: .maskCommand)
+        await pause(80)
+        postKey(CGKeyCode(kVK_Command), down: false)
+        await pause(450)
+        let quietOnTap = !launcher.rowNumbersShown
+        // Held: the numbers, then gone on release.
+        postKey(CGKeyCode(kVK_Command), down: true, flags: .maskCommand)
+        let shown = await waitUntil(timeout: 1) {
+            launcher.rowNumbersShown && Array(launcher.shownTrailingKeycaps.prefix(2)) == ["⌘1", "⌘2"]
+        } != nil
+        let caps = launcher.shownTrailingKeycaps.prefix(3).map { $0 ?? "–" }.joined(separator: " ")
+        await captureLauncher(as: "launcher-row-numbers.png")
+        postKey(CGKeyCode(kVK_Command), down: false)
+        let gone = await waitUntil(timeout: 1) {
+            !launcher.rowNumbersShown && launcher.shownTrailingKeycaps.prefix(2).allSatisfy { $0 == nil }
+        } != nil
+        await pressHolding(.maskCommand, keys: [CGKeyCode(kVK_ANSI_2)])
+        let pasted = await waitUntil(timeout: 2) { self.textView.string == "0x100" } != nil
+        if launcher.isVisible { await closeLauncher() }
+        record(name, answered && quietOnTap && shown && gone && pasted,
+               "rows [\(rows)]: \(answered); quick ⌘ shows nothing: \(quietOnTap); held: \(caps): \(shown); released, gone: \(gone); ⌘2 pasted “\(textView.string)”: \(pasted); launcher-row-numbers.png", nil)
     }
 
     private func pinsComeFirst() async {

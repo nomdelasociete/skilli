@@ -22,6 +22,8 @@ pins, saying so: "Command · in Figma". Unused for a month, it fades.
 - **⌘↩** does its second action (for a file: show it in Finder).
 - **↑ ↓** or **⌃N ⌃P** move. **↑** in the empty field brings back your
   recent searches.
+- **⌘1** to **⌘9** open the first nine rows shown, as ↩ on them. Hold ⌘
+  a moment to see each row's number.
 - **⌘C** copies the row's value (a file's path, a color's hex, a result).
 - **esc** steps back: out of a mode, then closes.
 
@@ -78,8 +80,9 @@ key (see [Your SI and privacy](privacy.md)).
 
 Some things need no prefix at all:
 
-- **Math and units**: `12% of 840`, `5 km in miles`, `time in Tokyo`. ↩
-  pastes the result in your app, ⌘↩ copies it.
+- **Math and units**: `12% of 840`, `5 km in miles`, `time in Tokyo`,
+  `0xff + 1`, `255 in hex`, `4096 in binary`. ↩ pastes the result in
+  your app, ⌘↩ copies it.
 - **Currencies**: `800 TRY` (in your currency), `100 usd in €`,
   `49 £ en dollars`, `120 € + 30 $`, `49 $ * 12`, answered as you type
   at the day's central-bank

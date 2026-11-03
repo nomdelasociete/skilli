@@ -174,15 +174,18 @@ final class ResultCellView: NSTableCellView {
 
     /// The title takes what the accessory leaves: 440 pt beside it in the
     /// full list, the whole row in the narrow one beside a preview but
-    /// for a keycap at its right edge.
+    /// for a keycap at its right edge, the accessory before it (⌘1–⌘9).
     private func layoutLabels() {
-        let accessoryWidth: CGFloat = accessory.stringValue.isEmpty ? 0 : 156
-        accessory.frame = NSRect(x: bounds.width - 24 - accessoryWidth, y: 15, width: accessoryWidth, height: 16)
-        var titleEnd = accessoryWidth > 0 ? accessory.frame.minX - 14 : bounds.width - 16
+        var right = bounds.width - 24
+        var titleEnd = bounds.width - 16
         if let trailingCap, trailingText != nil {
-            trailingCap.frame.origin = NSPoint(x: bounds.width - 24 - trailingCap.frame.width, y: (bounds.height - trailingCap.frame.height) / 2)
-            titleEnd = min(titleEnd, trailingCap.frame.minX - 12)
+            trailingCap.frame.origin = NSPoint(x: right - trailingCap.frame.width, y: (bounds.height - trailingCap.frame.height) / 2)
+            right = trailingCap.frame.minX - 12
+            titleEnd = right
         }
+        let accessoryWidth: CGFloat = accessory.stringValue.isEmpty ? 0 : 156
+        accessory.frame = NSRect(x: right - accessoryWidth, y: 15, width: accessoryWidth, height: 16)
+        if accessoryWidth > 0 { titleEnd = accessory.frame.minX - 14 }
         // Right after the title's text, where Raycast shows its alias: the
         // pin, then the alias.
         let pinWidth = isPinned ? Self.pinSize : 0

@@ -23,6 +23,40 @@ final class CalculatorTests: XCTestCase {
         XCTAssertEqual(value("2 * pi"), "6.28318531")
     }
 
+    func testNumbersInHexBinaryAndOctal() {
+        XCTAssertEqual(value("0xff"), "255", "alone, an answer")
+        XCTAssertEqual(value("0xFF + 1"), "256")
+        XCTAssertEqual(value("0b1010 * 2"), "20")
+        XCTAssertEqual(value("0o17"), "15")
+        XCTAssertEqual(value("0x10", french), "16", "not 0 × 10")
+        XCTAssertEqual(value("0 x 10"), "0", "spaced, still multiplies")
+        XCTAssertEqual(value("0.5 * 2"), "1")
+        XCTAssertNil(value("0xg"))
+        XCTAssertNil(value("0b2"))
+    }
+
+    func testWrittenWithHexAnswersInHexToo() {
+        let answers = Calculator.answers("0xff + 1", locale: english)
+        XCTAssertEqual(answers.map(\.copy), ["256", "0x100"])
+        XCTAssertEqual(Calculator.answers("0xff", locale: english).map(\.copy), ["255"], "no echo of what was typed")
+        XCTAssertEqual(Calculator.answers("0xff / 2", locale: english).map(\.copy), ["127.5"], "a fraction has no hex")
+        XCTAssertEqual(Calculator.answers("12 + 1", locale: english).map(\.copy), ["13"])
+    }
+
+    func testIntoABase() {
+        XCTAssertEqual(value("255 in hex"), "0xFF")
+        XCTAssertEqual(value("4096 en binaire", french), "0b1000000000000")
+        XCTAssertEqual(value("0xff to dec"), "255")
+        XCTAssertEqual(value("0b1010 → hexa"), "0xA")
+        XCTAssertEqual(value("8 * 8 in octal"), "0o100")
+        XCTAssertEqual(value("-255 in hex"), "-0xFF")
+        XCTAssertNil(value("2.5 in hex"))
+        XCTAssertNil(value("1e300 in hex"))
+        XCTAssertEqual(Calculator.evaluate("255 in hex", locale: english)?.detail, "255 → hex")
+        // Units still convert.
+        XCTAssertNotNil(value("10 km in miles"))
+    }
+
     func testFrenchNumbersAndThousands() {
         XCTAssertEqual(value("12,5 × 4", french), "50")
         XCTAssertEqual(value("1 234,5 + 0,5", french), "1235")

@@ -869,6 +869,7 @@ final class LauncherController: NSObject {
         let end = ContinuousClock.now
 
         installOutsideClickMonitor()
+        installCommandMonitors()
         showSelectionPreview(from: focused)
         loadPlaceMenus()
         // Off the show path: once the panel is up.
@@ -960,6 +961,9 @@ final class LauncherController: NSObject {
             NSEvent.removeMonitor(outsideClickMonitor)
             self.outsideClickMonitor = nil
         }
+        hideRowNumbers()
+        commandMonitors.forEach(NSEvent.removeMonitor)
+        commandMonitors = []
     }
 
     // MARK: - Starts again empty
@@ -1004,6 +1008,103 @@ final class LauncherController: NSObject {
         tableView.scrollRowToVisible(row)
     }
 
+    // MARK: - ⌘1–⌘9
+
+    /// The number row's keys by their place: AZERTY's ⌘& is ⌘1.
+    private static let numberKeys = [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5,
+                                     kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9]
+    /// ⌘ held alone this long before the rows show their numbers: a quick
+    /// ⌘C or ⌘K never shows them.
+    private static let rowNumbersDelay = Duration.milliseconds(300)
+    private var commandMonitors: [Any] = []
+    private var rowNumbersTask: Task<Void, Never>?
+    /// Self-test hook: the rows show ⌘1–⌘9.
+    private(set) var rowNumbersShown = false
+
+    /// 1 for ⌘1 … 9 for ⌘9; nil for any other key.
+    static func rowNumber(_ event: NSEvent) -> Int? {
+        guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command else { return nil }
+        return numberKeys.firstIndex(of: Int(event.keyCode)).map { $0 + 1 }
+    }
+
+    /// The rows ⌘1–⌘9 open, top to bottom: a search's rows on screen (at
+    /// least half shown), not the Catalog's (their keys are there) nor a
+    /// grid's.
+    private func numberedRows() -> [Int] {
+        guard !isShowingEmojiGrid, !isShowingGIFGrid else { return [] }
+        let visible = tableView.visibleRect
+        let range = tableView.rows(in: visible)
+        let rows = (range.location..<range.location + range.length).filter { row in
+            let middle = tableView.rect(ofRow: row).midY
+            return middle >= visible.minY && middle <= visible.maxY
+                && tableView.view(atColumn: 0, row: row, makeIfNecessary: false) is ResultCellView
+        }
+        return Array(rows.prefix(9))
+    }
+
+    private func openRow(_ number: Int) {
+        let rows = numberedRows()
+        guard rows.indices.contains(number - 1) else {
+            say("No row \(number) to open: ⌘1–⌘9 open the rows shown.")
+            return
+        }
+        tableView.selectRowIndexes(IndexSet(integer: rows[number - 1]), byExtendingSelection: false)
+        launchSelected(flags: [])
+    }
+
+    /// ⌘ alone, held, shows the rows' numbers; any other modifier, or
+    /// letting go, hides them. Global: the panel leaves the app in front
+    /// active, which gets the flags; local: over skil.li's own windows.
+    private func installCommandMonitors() {
+        guard commandMonitors.isEmpty else { return }
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: { [weak self] event in
+            let flags = event.modifierFlags
+            MainActor.assumeIsolated { self?.modifiersChanged(flags) }
+        }) {
+            commandMonitors.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged, handler: { [weak self] event in
+            let flags = event.modifierFlags
+            MainActor.assumeIsolated { self?.modifiersChanged(flags) }
+            return event
+        }) {
+            commandMonitors.append(local)
+        }
+    }
+
+    private func modifiersChanged(_ flags: NSEvent.ModifierFlags) {
+        hideRowNumbers()
+        guard flags.intersection([.command, .shift, .option, .control]) == .command, panel.isVisible, actionPanel.isHidden else { return }
+        rowNumbersTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.rowNumbersDelay)
+            guard !Task.isCancelled else { return }
+            self?.showRowNumbers()
+        }
+    }
+
+    private func showRowNumbers() {
+        for (index, row) in numberedRows().enumerated() {
+            (tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView)?.setTrailingKeycap("⌘\(index + 1)")
+        }
+        rowNumbersShown = true
+    }
+
+    /// Back to what the rows showed there (a snippet's keyword).
+    private func hideRowNumbers() {
+        rowNumbersTask?.cancel()
+        rowNumbersTask = nil
+        guard rowNumbersShown else { return }
+        rowNumbersShown = false
+        for row in results.indices {
+            (tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView)?.setTrailingKeycap(trailingCap(row))
+        }
+    }
+
+    /// The keycap a row shows at its right edge: a snippet's keyword.
+    private func trailingCap(_ row: Int) -> String? {
+        mode == .snippets ? Self.keywordCap(results[row]) : nil
+    }
+
     private func installOutsideClickMonitor() {
         guard outsideClickMonitor == nil else { return }
         // Global monitors only see events for other apps, so any click here
@@ -1023,6 +1124,8 @@ final class LauncherController: NSObject {
         guard let typed = NSEvent(cgEvent: event), typed.type == .keyDown else { return true }
         // A line said for the last key goes with the next one.
         clearNote()
+        // ⌘ was for a key (⌘C, ⌘K): the rows' numbers are not shown.
+        hideRowNumbers()
         // Typing in English: ⌘ and ⌃ keys as the user's own layout reads them.
         let keyEvent = chordEvent?(typed) ?? typed
         // ⌘K's list takes every key while it is open; ⌘K opens it.
@@ -1043,6 +1146,11 @@ final class LauncherController: NSObject {
         if keyEvent.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
            keyEvent.charactersIgnoringModifiers?.lowercased() == "k" {
             showActions()
+            return true
+        }
+        // ⌘1–⌘9: the row of that number on screen, as ↩ on it.
+        if let number = Self.rowNumber(typed) {
+            openRow(number)
             return true
         }
         // Return (36) or Enter (76) with its modifiers: ⇧ and ⌘ change what
@@ -4638,7 +4746,7 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             cell.setAlias(beside == nil ? aliasByID[id] : nil)
             cell.setPinned(mode == nil && pinsNow.ids.contains(id))
             cell.setPlace(mode == nil && searchField.stringValue.isEmpty && placeShown.contains(id) ? shownApp?.name : nil)
-            cell.setTrailingKeycap(mode == .snippets ? Self.keywordCap(results[row]) : nil)
+            cell.setTrailingKeycap(trailingCap(row))
             cell.setMaybe(row == snippetMaybeRow)
         }
         return true
