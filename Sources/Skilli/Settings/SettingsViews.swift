@@ -101,6 +101,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     case emoji
     case gifs
     case windows
+    case autoQuit
     case calendar
     case recorder
     case reminders
@@ -119,7 +120,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     /// Settings. Every pane is in exactly one, in `allCases`' order.
     static let blocks: [[SettingsPane]] = [
         [.general, .keys, .privacy, .backup],
-        [.launcher, .clipboard, .snippets, .emoji, .gifs, .windows],
+        [.launcher, .clipboard, .snippets, .emoji, .gifs, .windows, .autoQuit],
         [.calendar, .recorder, .reminders, .github, .apps, .yourDetails],
         [.ask, .commands, .tools, .skillies, .aiAccounts],
         [.catalog, .about]
@@ -139,6 +140,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .emoji: "Emoji"
         case .gifs: "GIFs"
         case .windows: "Windows"
+        case .autoQuit: "Auto Quit"
         case .calendar: "Calendar"
         case .recorder: "Recorder"
         case .reminders: "Reminders"
@@ -166,7 +168,8 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .snippets: "Text you type often, from a keyword or the launcher."
         case .emoji: "Every emoji, by its name or by how you feel, typed where you are."
         case .gifs: "A GIF where you are, animated: from Klipy, or from the ones on this Mac."
-        case .windows: "Where your windows go, the layouts you saved, and the apps you stopped using."
+        case .windows: "Where your windows go, and the layouts you saved."
+        case .autoQuit: "The apps you leave open for nothing, quit for you: only the ones you list, each after its own delay."
         case .calendar: "Your next meeting, one key away, in the launcher and the menu bar."
         case .recorder: "Your meetings recorded on this Mac, both sides, then written out."
         case .reminders: "What you have to do, said in one sentence."
@@ -195,6 +198,8 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .emoji: "face.smiling.inverse"
         case .gifs: "photo.on.rectangle.angled"
         case .windows: "macwindow.on.rectangle"
+        // The Catalog's Auto Quit entry.
+        case .autoQuit: "moon.zzz.fill"
         case .calendar: "calendar"
         case .recorder: "record.circle.fill"
         case .reminders: "checklist"
@@ -225,6 +230,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         // The launcher's GIFs chip is mint.
         case .gifs: .mint
         case .windows: .teal
+        case .autoQuit: .indigo
         case .calendar: .red
         // The red dot of a recording in the menu bar.
         case .recorder: .pink
@@ -324,6 +330,7 @@ struct SettingsRootView: View {
             case .emoji: EmojiPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .gifs: GIFsPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .windows: WindowsPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
+            case .autoQuit: AutoQuitPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .calendar: AgendaPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .recorder: RecorderPane(preferences: preferences, context: context, open: { navigation.pane = $0 })
             case .reminders: RemindersPane(preferences: preferences, context: context, open: { navigation.pane = $0 })

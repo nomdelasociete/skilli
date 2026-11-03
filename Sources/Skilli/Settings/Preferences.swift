@@ -142,6 +142,8 @@ final class Preferences {
         static let ignoredMonitors = "Preferences.ignoredMonitors"
         static let neverArrangeDisplays = "Preferences.neverArrangeDisplays"
         static let autoQuit = "Preferences.autoQuit"
+        static let autoQuitApps = "Preferences.autoQuitApps"
+        /// Until 2026-11-03: one delay for every app, and the apps never quit.
         static let autoQuitMinutes = "Preferences.autoQuitMinutes"
         static let autoQuitNever = "Preferences.autoQuitNever"
         static let windowLearning = "Preferences.windowLearning"
@@ -375,18 +377,14 @@ final class Preferences {
 
     /// The choices Settings → Windows offers, in points.
     static let windowGaps = [0, 4, 8, 12, 16]
-    /// Auto Quit: the apps not used for `autoQuitMinutes` are quit, the
-    /// ones in `autoQuitNever` (bundle ids) never. Off by default.
+    /// Auto Quit: off by default; on, each app in `autoQuitApps` is quit
+    /// once unused for its own delay, and no other app ever.
     var autoQuit: Bool {
         didSet { save(autoQuit, Key.autoQuit) }
     }
 
-    var autoQuitMinutes: Int {
-        didSet { save(autoQuitMinutes, Key.autoQuitMinutes) }
-    }
-
-    var autoQuitNever: [String] {
-        didSet { save(autoQuitNever, Key.autoQuitNever) }
+    var autoQuitApps: [AutoQuit.Rule] {
+        didSet { save((try? JSONEncoder().encode(autoQuitApps)) ?? Data(), Key.autoQuitApps) }
     }
 
     /// Learn where you put windows (Arrange Windows): on by default.
@@ -741,9 +739,16 @@ final class Preferences {
         imageTagsFolderPath = defaults.string(forKey: Key.imageTagsFolderPath) ?? ""
         windowLayoutIgnoredApps = defaults.stringArray(forKey: Key.windowLayoutIgnoredApps) ?? []
         windowGap = defaults.object(forKey: Key.windowGap) as? Int ?? 0
+        // Until 2026-11-03 Auto Quit quit every app but a few after one
+        // delay: those settings say nothing of which apps to quit now, so
+        // it starts again off, with no app listed.
+        if defaults.object(forKey: Key.autoQuitMinutes) != nil || defaults.object(forKey: Key.autoQuitNever) != nil {
+            defaults.removeObject(forKey: Key.autoQuitMinutes)
+            defaults.removeObject(forKey: Key.autoQuitNever)
+            defaults.set(false, forKey: Key.autoQuit)
+        }
         autoQuit = defaults.bool(forKey: Key.autoQuit)
-        autoQuitMinutes = defaults.object(forKey: Key.autoQuitMinutes) as? Int ?? AutoQuit.defaultDelay
-        autoQuitNever = defaults.stringArray(forKey: Key.autoQuitNever) ?? []
+        autoQuitApps = defaults.data(forKey: Key.autoQuitApps).flatMap { try? JSONDecoder().decode([AutoQuit.Rule].self, from: $0) } ?? []
         windowLearning = defaults.object(forKey: Key.windowLearning) as? Bool ?? true
         windowNeverPlace = defaults.stringArray(forKey: Key.windowNeverPlace) ?? []
         usualPlaces = defaults.bool(forKey: Key.usualPlaces)

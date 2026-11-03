@@ -865,6 +865,46 @@ final class SettingTools {
         return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
     }
 
+    /// Auto Quit's apps, each with its delay ("Arc: 2 hours"): one added
+    /// with a delay, or 1 hour; one already listed gets the new delay.
+    private func autoQuitApps() -> Binding {
+        var binding = Binding(get: { [unowned self] in
+            .list(self.preferences.autoQuitApps.map { AutoQuit.item(name: Self.appName($0.bundleID), minutes: $0.minutes) })
+        })
+        binding.add = { [unowned self] text in
+            let (app, minutes) = AutoQuit.parseItem(text)
+            guard let minutes else { throw Failure("Not a delay Auto Quit takes: from 5 minutes to 7 days, “Arc: 2 hours”.") }
+            let bundleID: String
+            if NSWorkspace.shared.urlForApplication(withBundleIdentifier: app) != nil {
+                bundleID = app
+            } else if let url = self.findApp(app), let id = Bundle(url: url)?.bundleIdentifier {
+                bundleID = id
+            } else {
+                throw Failure("No app named “\(app)” on this Mac.")
+            }
+            let item = AutoQuit.item(name: Self.appName(bundleID), minutes: minutes)
+            if self.preferences.autoQuitApps.contains(AutoQuit.Rule(bundleID: bundleID, minutes: minutes)) { return ListChange(item: item, unchanged: true) }
+            return ListChange(item: item) { [unowned self] in
+                if let index = self.preferences.autoQuitApps.firstIndex(where: { $0.bundleID == bundleID }) {
+                    self.preferences.autoQuitApps[index].minutes = minutes
+                } else {
+                    self.preferences.autoQuitApps.append(AutoQuit.Rule(bundleID: bundleID, minutes: minutes))
+                }
+            }
+        }
+        binding.remove = { [unowned self] text in
+            let name = AutoQuit.parseItem(text).app
+            let wanted = Self.folded(name)
+            guard let rule = self.preferences.autoQuitApps.first(where: { $0.bundleID == name || Self.folded(Self.appName($0.bundleID)) == wanted }) else {
+                throw Failure("“\(name)” is not in the list. Now: \(self.preferences.autoQuitApps.map { Self.appName($0.bundleID) }.joined(separator: ", ")).")
+            }
+            return ListChange(item: Self.appName(rule.bundleID)) { [unowned self] in
+                self.preferences.autoQuitApps.removeAll { $0.bundleID == rule.bundleID }
+            }
+        }
+        return binding
+    }
+
     /// Apps left out, by bundle id, as the pane's Add App… keeps them.
     private func apps(_ path: ReferenceWritableKeyPath<Preferences, [String]>) -> Binding {
         var binding = Binding(get: { [unowned self] in .list(self.preferences[keyPath: path].map(Self.appName)) })
@@ -998,9 +1038,6 @@ final class SettingTools {
 
         // Windows
         bindings["windowGap"] = number(\.windowGap)
-        bindings["autoQuit"] = toggle(\.autoQuit)
-        bindings["autoQuitMinutes"] = number(\.autoQuitMinutes)
-        bindings["autoQuitNever"] = apps(\.autoQuitNever)
         bindings["windowLearning"] = toggle(\.windowLearning)
         bindings["usualPlaces"] = toggle(\.usualPlaces)
         bindings["windowNeverPlace"] = apps(\.windowNeverPlace)
@@ -1034,6 +1071,10 @@ final class SettingTools {
         }
         bindings["neverArrangeDisplays"] = neverArranged
         bindings["windowLayouts"] = Binding(get: { [unowned self] in .list(self.windowLayouts()) })
+
+        // Auto Quit
+        bindings["autoQuit"] = toggle(\.autoQuit)
+        bindings["autoQuitApps"] = autoQuitApps()
 
         // Calendar
         bindings["agendaLauncherMinutes"] = number(\.agendaLauncherMinutes)

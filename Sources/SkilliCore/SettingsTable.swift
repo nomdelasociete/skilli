@@ -133,8 +133,8 @@ public enum SettingsTable {
     }
 
     /// The panes, by id, in the sidebar's order (`SettingsPane`).
-    public static let panes = ["general", "keys", "privacy", "backup", "launcher", "clipboard", "snippets", "emoji", "gifs", "windows", "calendar",
-                               "recorder", "reminders", "github", "apps", "yourDetails", "ask", "commands", "tools", "skillies", "aiAccounts", "catalog",
+    public static let panes = ["general", "keys", "privacy", "backup", "launcher", "clipboard", "snippets", "emoji", "gifs", "windows", "autoQuit",
+                               "calendar", "recorder", "reminders", "github", "apps", "yourDetails", "ask", "commands", "tools", "skillies", "aiAccounts", "catalog",
                                "about"]
 
     /// `Preferences` properties no pane shows, and why.
@@ -276,13 +276,6 @@ public enum SettingsTable {
                 note: "Off by default. On, an app opened gets its first window put where the user put it the last times (at least 3, most of the weight, the last 3 there), only before they touch it; an app reopening several windows is left as it is. Needs Learn where you put windows."),
         setting("windows", "windowNeverPlace", "Never place", .list(item: "an app, by its name or bundle id", adds: true),
                 note: "Arrange Windows leaves these apps' windows where they are, and learns nothing more from them; what it learned before stays until Forget What skil.li Learned, used again if the app leaves this list."),
-        setting("windows", "autoQuit", "Quit apps you stopped using", .toggle,
-                note: "Off by default. Never the app in front, one with unsaved work, sound or a call going on, or one busy; with a deciding key, Jev reads the windows' titles first."),
-        setting("windows", "autoQuitMinutes", "Unused for",
-                .choice(AutoQuit.delays.map { SettingOption(String($0), AutoQuit.spoken(minutes: $0)) }),
-                note: "Shown when Quit apps you stopped using is on: how long an app goes unused before it is quit."),
-        setting("windows", "autoQuitNever", "Never quit", .list(item: "an app, by its name or bundle id", adds: true),
-                note: "Shown when Quit apps you stopped using is on."),
         setting("windows", "windowLayoutIgnoredApps", "Always leave out of layouts", .list(item: "an app, by its name or bundle id", adds: true)),
         setting("windows", "neverArrangeDisplays", "Displays never arranged when plugged in", .list(item: "a set of displays, by their names", adds: false),
                 note: "Added from the question a display asks when it is plugged in (Never Arrange on These Displays): Arrange as Usual is not offered with them; tools only take one off."),
@@ -291,6 +284,13 @@ public enum SettingsTable {
         setting("windows", "windowLayouts", "Layouts", .list(item: "a saved window layout", adds: false),
                 access: .paneOnly("Layouts are looked over in the layout editor before they are saved; agents save and apply them with save_window_layout and apply_window_layout."),
                 preference: .some(nil)),
+
+        // Auto Quit
+        setting("autoQuit", "autoQuit", "Quit apps you stopped using", .toggle,
+                note: "Off by default. On, only the apps listed are quit, each once unused for its own delay; never the app in front, one with unsaved work, sound or a call going on, or one busy; with a deciding key, Jev reads the windows' titles first."),
+        setting("autoQuit", "autoQuitApps", "Apps to quit",
+                .list(item: "an app and how long it may go unused, “Arc: 2 hours” (5 minutes to 7 days; 1 hour when none is said); an app already listed gets the new delay", adds: true),
+                note: "Shown whether Auto Quit is on or off; only these apps are ever quit."),
 
         // Calendar
         setting("calendar", "agendaMenuBar", "Next meeting in the menu bar",
