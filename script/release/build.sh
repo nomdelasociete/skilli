@@ -23,14 +23,17 @@ fi
 
 # Klipy's key stays out of the repository and the keychain: from the environment
 # (GitHub Actions), else from this Mac's own skil.li (`daily`), which has it.
-# Without one, Search GIFs finds only the GIFs on the Mac until a user adds theirs.
+# No release without it: Search GIFs would find only the GIFs on the Mac
+# (0.3.2 shipped so, unnoticed behind a warning).
+# A key of spaces counts as none (skil.li trims it, GIFLibrary.bundledKey).
 klipy_key="${SKILLI_KLIPY_KEY:-}"
-if [[ -z "$klipy_key" && -f "$KLIPY_KEY_APP/Contents/Info.plist" ]]; then
+if [[ -z "${klipy_key//[[:space:]]/}" && -f "$KLIPY_KEY_APP/Contents/Info.plist" ]]; then
   # PlistBuddy prints its errors on stdout: kept only when it succeeds.
   klipy_key="$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$KLIPY_KEY_APP/Contents/Info.plist" 2>/dev/null)" || klipy_key=""
 fi
-if [[ -z "$klipy_key" ]]; then
-  echo "No Klipy key (SKILLI_KLIPY_KEY, or this Mac's daily skil.li): this build searches only GIFs on the Mac." >&2
+if [[ -z "${klipy_key//[[:space:]]/}" ]]; then
+  echo "No Klipy key: SKILLI_KLIPY_KEY, or SKILLI_KLIPY_KEY_APP / this Mac's daily skil.li with SkilliKlipyKey in its Info.plist. A release without it searches only GIFs on the Mac." >&2
+  exit 2
 fi
 
 version=()
@@ -54,6 +57,8 @@ xcodebuild -exportArchive -archivePath "$DIST/Skilli.xcarchive" -exportPath "$DI
   -exportOptionsPlist "$ROOT_DIR/Config/ExportOptions.plist" | tail -n 2
 
 codesign --verify --deep --strict --verbose=1 "$APP"
+# Search GIFs online: the key made it into the app.
+[[ "$(plist_value "$APP" SkilliKlipyKey)" == "$klipy_key" ]] || { echo "The Klipy key did not reach the app: not a release." >&2; exit 2; }
 # The self-tests and their test data never ship (SelfTest.swift needs SKILLI_SELFTEST).
 if strings "$APP/Contents/MacOS/Skilli" | grep -q 'SELFTEST'; then
   echo "This build contains the self-tests: not a release." >&2; exit 2

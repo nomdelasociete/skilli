@@ -16,10 +16,17 @@ cd "$ROOT_DIR"
 # Extra arguments are build settings ("NAME=value"). SKILLI_TEAM signs with
 # another Apple team (a contributor's own) instead of the project's.
 # SKILLI_KLIPY_KEY puts skil.li's Klipy key in this build, as a release has
-# it (Search GIFs then asks Klipy with no setting); without it, none.
+# it (Search GIFs then asks Klipy with no setting). Without it, a Release
+# build keeps the key of the Release build already here: the benchmark and
+# the Release self-tests rebuild the same bundle as `daily`, and one built
+# without the key lost it for good (0.3.2 shipped without it).
 build_app() {
   local configuration="$1"
   shift
+  local klipy_key="${SKILLI_KLIPY_KEY:-}"
+  if ! has_key "$klipy_key" && [[ "$configuration" == Release ]]; then
+    klipy_key="$(klipy_key_in "$(app_bundle Release)")"
+  fi
   xcodegen generate --spec project.yml --use-cache >/dev/null
   xcodebuild \
     -quiet \
@@ -29,8 +36,20 @@ build_app() {
     -destination "platform=macOS,arch=arm64" \
     -derivedDataPath "$DERIVED_DATA" \
     ${SKILLI_TEAM:+DEVELOPMENT_TEAM="$SKILLI_TEAM"} \
-    ${SKILLI_KLIPY_KEY:+SKILLI_KLIPY_KEY="$SKILLI_KLIPY_KEY"} \
+    ${klipy_key:+SKILLI_KLIPY_KEY="$klipy_key"} \
     build "$@"
+}
+
+# A key that is more than spaces: skil.li trims it (GIFLibrary.bundledKey).
+has_key() { [[ -n "${1//[[:space:]]/}" ]]; }
+
+# The Klipy key inside a built skil.li, or nothing. PlistBuddy prints its
+# errors on stdout: kept only when it succeeds.
+klipy_key_in() {
+  local key
+  [[ -f "$1/Contents/Info.plist" ]] || return 0
+  key="$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$1/Contents/Info.plist" 2>/dev/null)" || return 0
+  printf '%s' "$key"
 }
 
 # The self-tests are compiled only with SKILLI_SELFTEST: Debug has it
@@ -156,10 +175,13 @@ case "$MODE" in
     # The developer's own skil.li, as fast as shipped: Release, with the
     # dev traces kept (SKILLI_TRACE) to diagnose from this Mac's logs.
     # skil.li's Klipy key carries over from the build already here (none in
-    # the repository, none in the keychain); the first came from SKILLI_KLIPY_KEY.
-    if [[ -z "${SKILLI_KLIPY_KEY:-}" && -f "$(app_bundle Release)/Contents/Info.plist" ]]; then
-      # PlistBuddy prints its errors on stdout: kept only when it succeeds.
-      SKILLI_KLIPY_KEY="$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$(app_bundle Release)/Contents/Info.plist" 2>/dev/null)" || SKILLI_KLIPY_KEY=""
+    # the repository, none in the keychain; build_app); the first came from
+    # SKILLI_KLIPY_KEY. Never a daily without it: Search GIFs would find
+    # only the GIFs on the Mac, and the next release could take that.
+    no_klipy="No Klipy key for daily: SKILLI_KLIPY_KEY=<key> ./script/build_and_run.sh daily (a release's Info.plist has it, SkilliKlipyKey), or SKILLI_NO_KLIPY=1 to build anyway (without a key, Search GIFs finds only the GIFs on the Mac)."
+    if ! has_key "${SKILLI_KLIPY_KEY:-}" && ! has_key "$(klipy_key_in "$(app_bundle Release)")" && [[ "${SKILLI_NO_KLIPY:-}" != 1 ]]; then
+      echo "$no_klipy" >&2
+      exit 2
     fi
     # Signed as a release is (script/release/build.sh): macOS ties
     # Accessibility, Screen Recording and the other grants to the signature,
@@ -175,6 +197,11 @@ case "$MODE" in
       echo "No Developer ID for team $daily_team in this keychain: daily signed Apple Development, so its permissions are not the downloaded skil.li's." >&2
     fi
     build_app Release 'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) SKILLI_TRACE' ${signing[@]+"${signing[@]}"}
+    # Checked in what was built, before the running skil.li is replaced.
+    if ! has_key "$(klipy_key_in "$(app_bundle Release)")" && [[ "${SKILLI_NO_KLIPY:-}" != 1 ]]; then
+      echo "The build has no Klipy key. $no_klipy" >&2
+      exit 2
+    fi
     stop_app
     launch_bundle "$(app_bundle Release)"
     ;;
