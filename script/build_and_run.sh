@@ -196,8 +196,9 @@ case "$MODE" in
     # dev traces kept (SKILLI_TRACE) to diagnose from this Mac's logs.
     # skil.li's Klipy key carries over from the build already here, else
     # from this Mac's skil.li (none in the repository, none in the keychain;
-    # build_app); the first came from SKILLI_KLIPY_KEY. Never a daily without it: Search GIFs would find
-    # only the GIFs on the Mac, and the next release could take that.
+    # build_app); the first came from SKILLI_KLIPY_KEY. Never a daily
+    # without it: Search GIFs would find only the GIFs on the Mac, and the
+    # next release could take that.
     no_klipy="No Klipy key for daily: SKILLI_KLIPY_KEY=<key> ./script/build_and_run.sh daily (a release's Info.plist has it, SkilliKlipyKey), or SKILLI_NO_KLIPY=1 to build anyway (without a key, Search GIFs finds only the GIFs on the Mac)."
     if ! has_key "${SKILLI_KLIPY_KEY:-}" && ! has_key "$(known_klipy_key)" && [[ "${SKILLI_NO_KLIPY:-}" != 1 ]]; then
       echo "$no_klipy" >&2
