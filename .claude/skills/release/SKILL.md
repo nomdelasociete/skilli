@@ -34,7 +34,7 @@ Started with `gh`, the run waits for the maintainer's approval (the `release` en
 - "No Developer ID Application identity": `DEVELOPER_ID_P12` or its password is wrong; the maintainer runs `ci-secrets.sh` again.
 - A notarization `Invalid`: the log's submission id, then `xcrun notarytool log <id> --key <.p8> --key-id <id> --issuer <issuer>` on a Mac that has the key, or the keychain profile `dsmn-notary`; fix, commit, run again.
 - "Upload failed 3 times": the draft release waits on GitHub, unseen; run it again, it uploads to that draft and publishes it.
-- "No Klipy key": `SKILLI_KLIPY_KEY` is missing from the environment; the build goes on, but its Search GIFs finds only GIFs on the Mac. `ci-secrets.sh … --klipy` asks for it.
+- "No Klipy key": `SKILLI_KLIPY_KEY` is missing from the environment, and on a Mac from `SKILLI_KLIPY_KEY_APP` or its `daily` skil.li; the build stops (a release without it finds only GIFs on the Mac, as 0.3.2 did). `ci-secrets.sh … --klipy` asks for it; on a Mac, `SKILLI_KLIPY_KEY_APP=<an earlier release's Skilli.app>`.
 - GitHub's Macs unavailable: `./script/release/publish.sh patch` (or `minor`) from a clean main on a Mac still works, every credential from the login keychain (as before 2026-10-19) except the Klipy key, taken from that Mac's own `daily` skil.li; only with the maintainer's go-ahead.
 
 ## 3. Check what users get
