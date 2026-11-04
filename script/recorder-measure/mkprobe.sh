@@ -12,7 +12,7 @@ ROOT=$(cd "$K/../.." && pwd)
 for v in A B; do
   P=$K/work/probe/$v/SkilliRecorderProbe.app
   rm -rf "$K/work/probe/$v"; mkdir -p "$K/work/probe/$v"
-  cp -R "$ROOT/DerivedData/Build/Products/Debug/Skilli.app" "$P"
+  cp -R "$ROOT/DerivedData.noindex/Build/Products/Debug/Skilli.app" "$P"
   mv "$P/Contents/MacOS/Skilli" "$P/Contents/MacOS/SkilliRecorderProbe"
   plutil -replace CFBundleExecutable -string SkilliRecorderProbe "$P/Contents/Info.plist"
   [ $v = B ] && plutil -insert NSAudioCaptureUsageDescription -string "skil.li records the call's sound (the other side) when you record a meeting; it stays on this Mac." "$P/Contents/Info.plist"

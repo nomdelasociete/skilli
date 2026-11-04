@@ -22,7 +22,7 @@ if [[ -z "$public_key" ]]; then
 fi
 
 # Klipy's key stays out of the repository and the keychain: from the environment
-# (GitHub Actions), else from this Mac's own skil.li (`daily`), which has it.
+# (GitHub Actions), else from this Mac's own skil.li (/Applications), which has it.
 # No release without it: Search GIFs would find only the GIFs on the Mac
 # (0.3.2 shipped so, unnoticed behind a warning).
 # A key of spaces counts as none (skil.li trims it, GIFLibrary.bundledKey).
@@ -32,7 +32,7 @@ if [[ -z "${klipy_key//[[:space:]]/}" && -f "$KLIPY_KEY_APP/Contents/Info.plist"
   klipy_key="$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$KLIPY_KEY_APP/Contents/Info.plist" 2>/dev/null)" || klipy_key=""
 fi
 if [[ -z "${klipy_key//[[:space:]]/}" ]]; then
-  echo "No Klipy key: SKILLI_KLIPY_KEY, or SKILLI_KLIPY_KEY_APP / this Mac's daily skil.li with SkilliKlipyKey in its Info.plist. A release without it searches only GIFs on the Mac." >&2
+  echo "No Klipy key: SKILLI_KLIPY_KEY, or SKILLI_KLIPY_KEY_APP / this Mac's skil.li (/Applications) with SkilliKlipyKey in its Info.plist. A release without it searches only GIFs on the Mac." >&2
   exit 2
 fi
 
