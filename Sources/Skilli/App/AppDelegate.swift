@@ -130,11 +130,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The welcome, when it shows (its live steps).
     private var shownWelcome: WelcomeModel? { madeSetup && setup.isVisible ? setup.model : nil }
 
-    /// The welcome from its first step, or `step`, with Caps Lock as it is now.
+    /// The welcome from its first step, or `step`, with Caps Lock as it is
+    /// now. Accessibility lost: on its step, whatever it was asked to open on.
     private func showWelcome(at step: WelcomeModel.Step = .welcome) {
         setup.model.hyperKey = remapper.welcomeState
         let lost = SetupWindowController.accessLost(workedOnce: preferences.accessibilityWorkedOnce, trusted: Permissions.isAccessibilityTrusted)
-        setup.show(at: step, accessLost: lost)
+        setup.show(at: lost && step == .welcome ? .accessibility : step, accessLost: lost)
     }
     /// What the user copies, on this Mac. The self-test keeps its own;
     /// the benchmark none.

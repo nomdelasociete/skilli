@@ -53,7 +53,7 @@ scheme, menu search, contacts). macOS only.
 ./script/build_and_run.sh selftest clipboard # no keys: store, search, OCR (safe while the Mac is in use)
 ./script/build_and_run.sh run         # build + open
 ./script/build_and_run.sh restart     # quit gracefully, rebuild, reopen
-./script/build_and_run.sh daily       # the developer's own skil.li: Release, signed Developer ID as a release, dev traces kept (SKILLI_TRACE)
+./script/build_and_run.sh daily       # the developer's own skil.li: Release, signed Developer ID as a release (Apple Development, with a warning, without the team's Developer ID in the keychain), dev traces kept (SKILLI_TRACE)
 CONFIGURATION=Release ./script/build_and_run.sh remote speed # typing speed, key by key, as shipped
 ./script/build_and_run.sh --telemetry # open + stream os_log for the bundle
 script/ai_bench.py                    # latency/tokens of the AI engines on the user's plans (spends tokens)
