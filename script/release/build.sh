@@ -25,12 +25,12 @@ fi
 # (GitHub Actions), else from this Mac's own skil.li (`daily`), which has it.
 # No release without it: Search GIFs would find only the GIFs on the Mac
 # (0.3.2 shipped so, unnoticed behind a warning).
+# A key of spaces counts as none (skil.li trims it, GIFLibrary.bundledKey).
 klipy_key="${SKILLI_KLIPY_KEY:-}"
-if [[ -z "$klipy_key" && -f "$KLIPY_KEY_APP/Contents/Info.plist" ]]; then
+if [[ -z "${klipy_key//[[:space:]]/}" && -f "$KLIPY_KEY_APP/Contents/Info.plist" ]]; then
   # PlistBuddy prints its errors on stdout: kept only when it succeeds.
   klipy_key="$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$KLIPY_KEY_APP/Contents/Info.plist" 2>/dev/null)" || klipy_key=""
 fi
-# More than spaces: skil.li trims it (GIFLibrary.bundledKey).
 if [[ -z "${klipy_key//[[:space:]]/}" ]]; then
   echo "No Klipy key: SKILLI_KLIPY_KEY, or SKILLI_KLIPY_KEY_APP / this Mac's daily skil.li with SkilliKlipyKey in its Info.plist. A release without it searches only GIFs on the Mac." >&2
   exit 2
