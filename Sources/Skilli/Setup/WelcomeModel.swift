@@ -119,9 +119,14 @@ final class WelcomeModel {
 
     var position: Int { steps.firstIndex(of: step) ?? 0 }
 
+    /// Accessibility worked on this Mac and is gone: the step says it was
+    /// lost, and how to replace a switch macOS still shows on.
+    private(set) var accessLost = false
+
     /// Opens on `step` (the menu bar's Set Up skil.li… opens on Accessibility).
-    func start(at step: Step = .welcome) {
+    func start(at step: Step = .welcome, accessLost: Bool = false) {
         self.step = step
+        self.accessLost = accessLost
         direction = 1
         leftWithoutAccessibility = false
         hyperFelt = false

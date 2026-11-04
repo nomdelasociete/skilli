@@ -161,7 +161,20 @@ case "$MODE" in
       # PlistBuddy prints its errors on stdout: kept only when it succeeds.
       SKILLI_KLIPY_KEY="$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$(app_bundle Release)/Contents/Info.plist" 2>/dev/null)" || SKILLI_KLIPY_KEY=""
     fi
-    build_app Release 'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) SKILLI_TRACE'
+    # Signed as a release is (script/release/build.sh): macOS ties
+    # Accessibility, Screen Recording and the other grants to the signature,
+    # so a daily signed differently loses them to the downloaded skil.li and
+    # back. Apple Development only without the team's Developer ID here.
+    signing=()
+    daily_team="${SKILLI_TEAM:-JSFMAD28GS}"
+    # Read whole first: `grep -q` quitting early fails the pipe (pipefail).
+    identities="$(security find-identity -v -p codesigning)"
+    if [[ "$identities" == *"Developer ID Application: "*"($daily_team)"* ]]; then
+      signing=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Developer ID Application")
+    else
+      echo "No Developer ID for team $daily_team in this keychain: daily signed Apple Development, so its permissions are not the downloaded skil.li's." >&2
+    fi
+    build_app Release 'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) SKILLI_TRACE' ${signing[@]+"${signing[@]}"}
     stop_app
     launch_bundle "$(app_bundle Release)"
     ;;

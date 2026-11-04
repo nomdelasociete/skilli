@@ -133,7 +133,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The welcome from its first step, or `step`, with Caps Lock as it is now.
     private func showWelcome(at step: WelcomeModel.Step = .welcome) {
         setup.model.hyperKey = remapper.welcomeState
-        setup.show(at: step)
+        let lost = SetupWindowController.accessLost(workedOnce: preferences.accessibilityWorkedOnce, trusted: Permissions.isAccessibilityTrusted)
+        setup.show(at: step, accessLost: lost)
     }
     /// What the user copies, on this Mac. The self-test keeps its own;
     /// the benchmark none.
@@ -1959,6 +1960,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if router.start() {
             tapRetryTimer?.invalidate()
             tapRetryTimer = nil
+            if !preferences.accessibilityWorkedOnce, case .normal = mode { preferences.accessibilityWorkedOnce = true }
             Log.input.notice("Event tap running")
             rebuildStatusMenu()
             if case .selftest(let outputPath, let scope) = mode {
@@ -1975,8 +1977,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Permissions.requestInputMonitoring()
             } else if case .normal = mode {
                 // The setup window explains, then asks (its Allow button):
-                // only before it was ever closed (D7: closed means later).
-                if SetupWindowController.showsByItself(closedOnce: preferences.didCompleteSetup), !setup.isVisible { showWelcome() }
+                // only before it was ever closed (D7: closed means later)...
+                if SetupWindowController.showsByItself(closedOnce: preferences.didCompleteSetup) {
+                    if !setup.isVisible { showWelcome() }
+                } else if SetupWindowController.accessLost(workedOnce: preferences.accessibilityWorkedOnce, trusted: false) {
+                    // ...or when it worked on this Mac and is gone: never
+                    // a silent shortcut. Once per launch, on its step.
+                    Log.input.error("Accessibility lost: it worked on this Mac before")
+                    if !setup.isVisible { showWelcome(at: .accessibility) }
+                }
             } else {
                 Permissions.requestAccessibility()
             }
