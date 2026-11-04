@@ -123,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.preferences.didCompleteSetup = true
             self?.rebuildStatusMenu()
         }
+        setup.model.onAccessibilityOn = { [weak self] in self?.permissionsChanged() }
         return setup
     }()
     /// The welcome was made: only then do keys and the launcher report to it.
@@ -132,9 +133,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The welcome from its first step, or `step`, with Caps Lock as it is
     /// now. Accessibility lost: on its step, whatever it was asked to open on.
-    private func showWelcome(at step: WelcomeModel.Step = .welcome) {
+    /// `lost`: known by the caller (a tap that could not be made again),
+    /// else read from Accessibility now.
+    private func showWelcome(at step: WelcomeModel.Step = .welcome, lost known: Bool? = nil) {
         setup.model.hyperKey = remapper.welcomeState
-        let lost = SetupWindowController.accessLost(workedOnce: preferences.accessibilityWorkedOnce, trusted: Permissions.isAccessibilityTrusted)
+        let lost = known ?? SetupWindowController.accessLost(workedOnce: preferences.accessibilityWorkedOnce, trusted: Permissions.isAccessibilityTrusted)
         setup.show(at: lost && step == .welcome ? .accessibility : step, accessLost: lost)
     }
     /// What the user copies, on this Mac. The self-test keeps its own;
@@ -666,8 +669,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     /// "Shortcuts paused…" in the status menu while Secure Input is on.
     private var secureInputItem: NSMenuItem?
-    private var tapRetryTimer: Timer?
     private var didPromptForAccessibility = false
+    /// tccd's changes watched (`Permissions.watchChanges`), from the first
+    /// start of the key tap.
+    private var watchesPermissions = false
     private var signalSource: DispatchSourceSignal?
     private var selfTestStarted = false
 
@@ -1958,9 +1963,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startEventTap() {
         guard let router else { return }
+        if !watchesPermissions {
+            watchesPermissions = true
+            Permissions.watchChanges { [weak self] in self?.permissionsChanged() }
+            router.onAccessLost = { [weak self] in self?.accessibilityLost() }
+        }
         if router.start() {
-            tapRetryTimer?.invalidate()
-            tapRetryTimer = nil
             if !preferences.accessibilityWorkedOnce, case .normal = mode { preferences.accessibilityWorkedOnce = true }
             Log.input.notice("Event tap running")
             rebuildStatusMenu()
@@ -1985,21 +1993,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     // ...or when it worked on this Mac and is gone: never
                     // a silent shortcut. Once per launch, on its step.
                     Log.input.error("Accessibility lost: it worked on this Mac before")
-                    if !setup.isVisible { showWelcome(at: .accessibility) }
+                    if !setup.isVisible { showWelcome(at: .accessibility, lost: true) }
                 }
             } else {
                 Permissions.requestAccessibility()
             }
         }
 
-        guard tapRetryTimer == nil else { return }
+        // No polling: tccd's next change starts it (`permissionsChanged`).
         Log.input.notice("Event tap unavailable; waiting for permission")
-        tapRetryTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.startEventTap()
-            }
-        }
         rebuildStatusMenu()
+    }
+
+    /// tccd wrote a change (any app, any service): the key tap follows
+    /// Accessibility, asked to WindowServer (`EventTap.isPermitted`), not
+    /// to `AXIsProcessTrusted`'s cache.
+    private func permissionsChanged() {
+        guard let router else { return }
+        if EventTap.isPermitted() {
+            guard !router.isRunning else { return }
+            // A tap macOS disabled is made again, not reused.
+            router.stop()
+            startEventTap()
+        } else if router.isInstalled {
+            accessibilityLost()
+        }
+    }
+
+    /// Accessibility taken back while the key tap ran: the tap goes at once
+    /// (left in place, it can hang every app's keyboard and mouse), and the
+    /// setup window says so, on its step. Never silent.
+    private func accessibilityLost() {
+        guard let router, router.isInstalled else { return }
+        router.stop()
+        Log.input.error("Accessibility lost while the key tap ran; tap stopped")
+        rebuildStatusMenu()
+        if case .normal = mode, !setup.isVisible { showWelcome(at: .accessibility, lost: true) }
     }
 
     // MARK: - Settings

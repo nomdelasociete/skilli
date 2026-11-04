@@ -96,6 +96,9 @@ final class WelcomeModel {
     var onFinish: (() -> Void)?
     /// Asked to show the guide at System Settings' switch.
     var onGrantAccessibility: (() -> Void)?
+    /// Accessibility seen on while the window shows: the key tap starts
+    /// even if tccd's notice did not come.
+    var onAccessibilityOn: (() -> Void)?
 
     init(permissions: PermissionCenter, ai: AIStore, preferences: Preferences) {
         self.permissions = permissions
@@ -189,6 +192,7 @@ final class WelcomeModel {
     /// The switch turned on while the step shows: a beat to see it lock,
     /// then on by itself.
     func accessibilityChanged() {
+        if accessibilityOn { onAccessibilityOn?() }
         guard step == .accessibility, accessibilityOn, advancesByItself else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(0.7))

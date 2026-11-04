@@ -432,6 +432,7 @@ final class SelfTest {
             return await finish(after: [
                 drawWelcome,
                 setupAsksOnlyForTwo,
+                keyTapFollowsAccessibility,
                 welcomeLiveSteps,
                 settingsGuideFollowsTheWindow,
                 reopenAfterSystemSettings
@@ -14201,6 +14202,25 @@ final class SelfTest {
                    + "by itself at first launch \(byItself.first), after closing \(byItself.again); "
                    + "lost after working \(lost.gone), never worked \(lost.neverWorked), on \(lost.on); Set Up offered while missing \(offered.missing), "
                    + "no key tap \(offered.noTap), all on \(offered.on)", nil)
+    }
+
+    /// Accessibility is read from WindowServer (a tap made and dropped),
+    /// not `AXIsProcessTrusted`'s cache; a tap stopped when it goes is gone
+    /// and can be made again when it comes back. Taking the permission
+    /// back is not done here: it would change the test Mac's own grants
+    /// (the probe's nil without Accessibility was checked over SSH).
+    private func keyTapFollowsAccessibility() {
+        let name = "Key tap follows Accessibility: read from WindowServer; a tap stopped is gone and is made again"
+        let permitted = EventTap.isPermitted()
+        let tap = EventTap { _, _ in .pass }
+        let started = tap.start()
+        let running = tap.isRunning && tap.isInstalled
+        tap.stop()
+        let gone = !tap.isRunning && !tap.isInstalled
+        let again = tap.start() && tap.isRunning
+        tap.stop()
+        record(name, permitted && started && running && gone && again,
+               "permitted: \(permitted); started: \(started), running: \(running); after stop gone: \(gone); made again: \(again)", nil)
     }
 
     // MARK: - Voice
