@@ -291,7 +291,18 @@ The one step that only shows: its title says so ("Try it: …").
 ## After the welcome
 
 - It never opens by itself again (`Preferences.didCompleteSetup`, set on
-  Start, Later or ✕).
+  Start, Later or ✕), with one exception: Accessibility **lost**. Once the
+  key tap ran on this Mac (`Preferences.accessibilityWorkedOnce`), a
+  launch without Accessibility opens it by itself on step 2, once per
+  launch: "skil.li lost its switch." A lost permission is never silent
+  (the "permissions that silently break after an update" above). The usual
+  cause: macOS keeps the switch of a copy signed differently on and refuses
+  this one, so the waiting line says how to replace it (select, −, then +).
+  Taken back while skil.li runs, the same: the key tap is removed at once
+  (left in place, a tap without Accessibility can hang every app's keyboard
+  and mouse), then the window opens. No polling: skil.li follows tccd's
+  `com.apple.tcc.access.changed` notice and asks WindowServer (a tap made
+  and dropped), not `AXIsProcessTrusted`'s cache.
 - It reopens on request:
   - **Welcome to skil.li** in the launcher and the Catalog;
   - **Show Welcome…** in Settings → General, where today's "Set Up

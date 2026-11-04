@@ -96,6 +96,9 @@ final class WelcomeModel {
     var onFinish: (() -> Void)?
     /// Asked to show the guide at System Settings' switch.
     var onGrantAccessibility: (() -> Void)?
+    /// Accessibility seen on while the window shows: the key tap starts
+    /// even if tccd's notice did not come.
+    var onAccessibilityOn: (() -> Void)?
 
     init(permissions: PermissionCenter, ai: AIStore, preferences: Preferences) {
         self.permissions = permissions
@@ -119,9 +122,14 @@ final class WelcomeModel {
 
     var position: Int { steps.firstIndex(of: step) ?? 0 }
 
+    /// Accessibility worked on this Mac and is gone: the step says it was
+    /// lost, and how to replace a switch macOS still shows on.
+    private(set) var accessLost = false
+
     /// Opens on `step` (the menu bar's Set Up skil.li… opens on Accessibility).
-    func start(at step: Step = .welcome) {
+    func start(at step: Step = .welcome, accessLost: Bool = false) {
         self.step = step
+        self.accessLost = accessLost
         direction = 1
         leftWithoutAccessibility = false
         hyperFelt = false
@@ -184,6 +192,7 @@ final class WelcomeModel {
     /// The switch turned on while the step shows: a beat to see it lock,
     /// then on by itself.
     func accessibilityChanged() {
+        if accessibilityOn { onAccessibilityOn?() }
         guard step == .accessibility, accessibilityOn, advancesByItself else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(0.7))

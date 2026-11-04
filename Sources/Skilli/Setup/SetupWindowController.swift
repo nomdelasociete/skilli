@@ -23,6 +23,11 @@ final class SetupWindowController: NSObject, NSWindowDelegate {
     /// on its own.
     static func showsByItself(closedOnce: Bool) -> Bool { !closedOnce }
 
+    /// Accessibility worked on this Mac and is gone: lost, not put off
+    /// (D7's "later" does not cover it). macOS keeps the switch of a copy
+    /// signed differently on, and refuses this one: never silent.
+    static func accessLost(workedOnce: Bool, trusted: Bool) -> Bool { workedOnce && !trusted }
+
     /// Set Up skil.li… offered (menu bar, Settings → General) while the
     /// key tap cannot run or Accessibility is off.
     static func isOffered(tapRunning: Bool, ready: Bool) -> Bool { !tapRunning || !ready }
@@ -52,12 +57,12 @@ final class SetupWindowController: NSObject, NSWindowDelegate {
     var shownGuide: SettingsGuide { guide }
 
     /// From the first step, or `step` (Set Up skil.li… opens on
-    /// Accessibility).
-    func show(at step: WelcomeModel.Step = .welcome) {
+    /// Accessibility); `accessLost`: it worked before and is gone.
+    func show(at step: WelcomeModel.Step = .welcome, accessLost: Bool = false) {
         let window = self.window ?? makeWindow()
         self.window = window
         permissions.startWatching([.accessibility])
-        model.start(at: step)
+        model.start(at: step, accessLost: accessLost)
         model.isActive = true
         watchFlags()
         window.center()

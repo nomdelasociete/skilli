@@ -100,7 +100,10 @@ struct WelcomeView: View {
     private var title: String {
         switch model.step {
         case .welcome: "Let’s set up skil.li."
-        case .accessibility: model.accessibilityOn ? "skil.li works in every app." : "One switch, and skil.li works in every app."
+        case .accessibility:
+            if model.accessibilityOn { "skil.li works in every app." }
+            else if model.accessLost { "skil.li lost its switch." }
+            else { "One switch, and skil.li works in every app." }
         case .hyperKey:
             switch model.hyperKey {
             case .custom: "Your Hyper Key"
@@ -127,9 +130,11 @@ struct WelcomeView: View {
             if model.accessibilityOn {
                 Text("Its keys work everywhere, and it can read and replace the text you select.")
             } else if model.permissions.state(.accessibility) == .notAsked {
-                Text("It lets skil.li hear its keys, and read and replace the text you select. Nothing leaves your Mac for it.")
+                Text(model.accessLost
+                     ? "macOS no longer lets skil.li hear its keys, so its shortcuts do nothing. Often after an update: macOS kept the switch of the copy before."
+                     : "It lets skil.li hear its keys, and read and replace the text you select. Nothing leaves your Mac for it.")
             } else {
-                Text("In the list that opened, turn on skil.li. This moves on by itself.")
+                Text("In the list that opened, turn on skil.li. Already on? Select it, click −, then + and choose skil.li. This moves on by itself.")
             }
         case .hyperKey:
             switch model.hyperKey {

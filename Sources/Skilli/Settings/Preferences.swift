@@ -117,6 +117,7 @@ final class Preferences {
         static let voiceLanguage = "Preferences.voiceLanguage"
         static let askUsesClaudeCodeSkills = "Preferences.askUsesClaudeCodeSkills"
         static let didCompleteSetup = "Preferences.didCompleteSetup"
+        static let accessibilityWorkedOnce = "Preferences.accessibilityWorkedOnce"
         static let recorderConsentShown = "Preferences.recorderConsentShown"
         static let recorderCardHintShown = "Preferences.recorderCardHintShown"
         static let recorderMeetingCard = "Preferences.recorderMeetingCard"
@@ -257,6 +258,13 @@ final class Preferences {
     /// opens by itself (D7), only from Set Up skil.li….
     var didCompleteSetup: Bool {
         didSet { save(didCompleteSetup, Key.didCompleteSetup) }
+    }
+
+    /// The key tap ran once on this Mac: Accessibility missing after that
+    /// was lost (an update signed differently, the switch turned off), not
+    /// put off, and the setup window says so by itself.
+    var accessibilityWorkedOnce: Bool {
+        didSet { save(accessibilityWorkedOnce, Key.accessibilityWorkedOnce) }
     }
 
     /// The Record card said once that the others in a call must agree to
@@ -717,6 +725,7 @@ final class Preferences {
         voiceLanguage = defaults.string(forKey: Key.voiceLanguage) ?? ""
         askUsesClaudeCodeSkills = defaults.bool(forKey: Key.askUsesClaudeCodeSkills)
         didCompleteSetup = defaults.bool(forKey: Key.didCompleteSetup)
+        accessibilityWorkedOnce = defaults.bool(forKey: Key.accessibilityWorkedOnce)
         recorderConsentShown = defaults.bool(forKey: Key.recorderConsentShown)
         recorderCardHintShown = defaults.bool(forKey: Key.recorderCardHintShown)
         recorderMeetingCard = defaults.object(forKey: Key.recorderMeetingCard) as? Bool ?? true
@@ -818,7 +827,7 @@ final class Preferences {
     /// Keys a backup leaves out: this Mac's own state (setup done with its
     /// permissions, its screens, where the launcher sits on them, where
     /// backups go).
-    static let machineKeys: Set<String> = [Key.didCompleteSetup, Key.ignoredMonitors, Key.neverArrangeDisplays, Key.launcherPlace, Key.backupFolder, Key.imageTagsFolderPath,
+    static let machineKeys: Set<String> = [Key.didCompleteSetup, Key.accessibilityWorkedOnce, Key.ignoredMonitors, Key.neverArrangeDisplays, Key.launcherPlace, Key.backupFolder, Key.imageTagsFolderPath,
                                            Key.recorderFolderPath, Key.githubServerSync]
 
     private func save(_ value: Any, _ key: String) {

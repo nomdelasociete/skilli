@@ -432,6 +432,7 @@ final class SelfTest {
             return await finish(after: [
                 drawWelcome,
                 setupAsksOnlyForTwo,
+                keyTapFollowsAccessibility,
                 welcomeLiveSteps,
                 settingsGuideFollowsTheWindow,
                 reopenAfterSystemSettings
@@ -14100,6 +14101,9 @@ final class SelfTest {
             ("accessibility-first", .accessibility, .notAsked, { _ in }),
             ("accessibility-waiting", .accessibility, .waiting, { _ in }),
             ("accessibility-on", .accessibility, .granted, { _ in }),
+            // Worked on this Mac, gone (an update signed differently).
+            ("accessibility-lost", .accessibility, .notAsked, { _ in }),
+            ("accessibility-lost-waiting", .accessibility, .waiting, { _ in }),
             ("hyper-idle", .hyperKey, .granted, { $0.hyperKey = .own }),
             ("hyper-held", .hyperKey, .granted, { $0.hyperKey = .own; $0.freeze(hyperHeld: true, hyperFelt: true) }),
             ("hyper-shared", .hyperKey, .granted, { $0.hyperKey = .shared; $0.freeze(hyperFelt: true) }),
@@ -14121,7 +14125,7 @@ final class SelfTest {
         var written: [String] = []
         for state in states {
             freeze(state.accessibility)
-            model.start(at: state.step)
+            model.start(at: state.step, accessLost: state.file.hasPrefix("accessibility-lost"))
             model.hyperKey = .own
             state.apply(model)
             defer { context.shortcuts.cancelRecording() }
@@ -14179,19 +14183,44 @@ final class SelfTest {
     /// once, the window never opens by itself; Set Up skil.li… is offered
     /// while Accessibility or the key tap is missing.
     private func setupAsksOnlyForTwo() {
-        let name = "Setup asks only for Accessibility and your SI; the rest where first needed; closed once, it never opens by itself"
+        let name = "Setup asks only for Accessibility and your SI; the rest where first needed; closed once, it opens by itself only when Accessibility was lost"
         let inSetup = Permission.allCases.filter(\.showsInSetup)
         let elsewhere = Permission.allCases.filter { $0 != .accessibility }.map { "\($0.rawValue): \($0.askedFrom)" }
         let routed = Permission.accessibility.askedFrom == .setup && Permission.fullDiskAccess.askedFrom == .privacyPane
             && Permission.allCases.filter { ![.accessibility, .fullDiskAccess].contains($0) }.allSatisfy { $0.askedFrom == .inPlace }
         let byItself = (first: SetupWindowController.showsByItself(closedOnce: false), again: SetupWindowController.showsByItself(closedOnce: true))
+        // Lost (worked on this Mac, gone) is not "later": it opens by itself.
+        let lost = (gone: SetupWindowController.accessLost(workedOnce: true, trusted: false),
+                    neverWorked: SetupWindowController.accessLost(workedOnce: false, trusted: false),
+                    on: SetupWindowController.accessLost(workedOnce: true, trusted: true))
         let offered = (missing: SetupWindowController.isOffered(tapRunning: false, ready: false),
                        noTap: SetupWindowController.isOffered(tapRunning: false, ready: true),
                        on: SetupWindowController.isOffered(tapRunning: true, ready: true))
-        record(name, inSetup == [.accessibility] && routed && byItself.first && !byItself.again && offered.missing && offered.noTap && !offered.on,
+        record(name, inSetup == [.accessibility] && routed && byItself.first && !byItself.again && lost.gone && !lost.neverWorked && !lost.on
+                   && offered.missing && offered.noTap && !offered.on,
                "in the window: \(inSetup.map(\.rawValue)) and your SI; elsewhere: \(elsewhere.joined(separator: ", ")); "
-                   + "by itself at first launch \(byItself.first), after closing \(byItself.again); Set Up offered while missing \(offered.missing), "
+                   + "by itself at first launch \(byItself.first), after closing \(byItself.again); "
+                   + "lost after working \(lost.gone), never worked \(lost.neverWorked), on \(lost.on); Set Up offered while missing \(offered.missing), "
                    + "no key tap \(offered.noTap), all on \(offered.on)", nil)
+    }
+
+    /// Accessibility is read from WindowServer (a tap made and dropped),
+    /// not `AXIsProcessTrusted`'s cache; a tap stopped when it goes is gone
+    /// and can be made again when it comes back. Taking the permission
+    /// back is not done here: it would change the test Mac's own grants
+    /// (the probe's nil without Accessibility was checked over SSH).
+    private func keyTapFollowsAccessibility() {
+        let name = "Key tap follows Accessibility: read from WindowServer; a tap stopped is gone and is made again"
+        let permitted = EventTap.isPermitted()
+        let tap = EventTap { _, _ in .pass }
+        let started = tap.start()
+        let running = tap.isRunning && tap.isInstalled
+        tap.stop()
+        let gone = !tap.isRunning && !tap.isInstalled
+        let again = tap.start() && tap.isRunning
+        tap.stop()
+        record(name, permitted && started && running && gone && again,
+               "permitted: \(permitted); started: \(started), running: \(running); after stop gone: \(gone); made again: \(again)", nil)
     }
 
     // MARK: - Voice

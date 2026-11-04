@@ -40,8 +40,25 @@ final class KeyRouter {
         tap.start()
     }
 
+    /// The key tap removed (Accessibility gone): nothing swallowed after.
+    func stop() {
+        tap.stop()
+        swallowedKeyCodes.removeAll()
+    }
+
+    /// Accessibility gone while the tap ran (`EventTap.onAccessLost`).
+    var onAccessLost: (() -> Void)? {
+        get { tap.onAccessLost }
+        set { tap.onAccessLost = newValue }
+    }
+
     var isRunning: Bool {
         tap.isRunning
+    }
+
+    /// Made and not stopped (`EventTap.isInstalled`).
+    var isInstalled: Bool {
+        tap.isInstalled
     }
 
     /// Trigger keys our tap has actually seen. When another Hyper tool's tap
