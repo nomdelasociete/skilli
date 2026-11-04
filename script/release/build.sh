@@ -30,7 +30,8 @@ if [[ -z "$klipy_key" && -f "$KLIPY_KEY_APP/Contents/Info.plist" ]]; then
   # PlistBuddy prints its errors on stdout: kept only when it succeeds.
   klipy_key="$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$KLIPY_KEY_APP/Contents/Info.plist" 2>/dev/null)" || klipy_key=""
 fi
-if [[ -z "$klipy_key" ]]; then
+# More than spaces: skil.li trims it (GIFLibrary.bundledKey).
+if [[ -z "${klipy_key//[[:space:]]/}" ]]; then
   echo "No Klipy key: SKILLI_KLIPY_KEY, or SKILLI_KLIPY_KEY_APP / this Mac's daily skil.li with SkilliKlipyKey in its Info.plist. A release without it searches only GIFs on the Mac." >&2
   exit 2
 fi

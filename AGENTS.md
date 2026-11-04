@@ -3571,7 +3571,8 @@ re-investigating.
   `release` environment's secret on GitHub Actions; on a Mac, the key
   inside its own `daily` skil.li, which every Release build there carries
   over; never in the repository nor the keychain, 2026-10-19; Info.plist
-  `SkilliKlipyKey`; a release and `daily` stop without it, 2026-11-04);
+  `SkilliKlipyKey`; a release stops without it, and `daily` too unless
+  `SKILLI_NO_KLIPY=1`, 2026-11-04);
   none: only the GIFs on this Mac, the grid says so.
   Settings → GIFs (`GIFsPane`): the shortcut, the prefix, where Klipy's
   GIFs come from, Advanced: Your Klipy key (Remove at once, ⌘Z saves it

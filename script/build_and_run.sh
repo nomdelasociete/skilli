@@ -24,7 +24,7 @@ build_app() {
   local configuration="$1"
   shift
   local klipy_key="${SKILLI_KLIPY_KEY:-}"
-  if [[ -z "$klipy_key" && "$configuration" == Release ]]; then
+  if ! has_key "$klipy_key" && [[ "$configuration" == Release ]]; then
     klipy_key="$(klipy_key_in "$(app_bundle Release)")"
   fi
   xcodegen generate --spec project.yml --use-cache >/dev/null
@@ -39,6 +39,9 @@ build_app() {
     ${klipy_key:+SKILLI_KLIPY_KEY="$klipy_key"} \
     build "$@"
 }
+
+# A key that is more than spaces: skil.li trims it (GIFLibrary.bundledKey).
+has_key() { [[ -n "${1//[[:space:]]/}" ]]; }
 
 # The Klipy key inside a built skil.li, or nothing. PlistBuddy prints its
 # errors on stdout: kept only when it succeeds.
@@ -175,8 +178,8 @@ case "$MODE" in
     # the repository, none in the keychain; build_app); the first came from
     # SKILLI_KLIPY_KEY. Never a daily without it: Search GIFs would find
     # only the GIFs on the Mac, and the next release could take that.
-    no_klipy="No Klipy key for daily: SKILLI_KLIPY_KEY=<key> ./script/build_and_run.sh daily (a release's Info.plist has it, SkilliKlipyKey), or SKILLI_NO_KLIPY=1 to build without Search GIFs online."
-    if [[ -z "${SKILLI_KLIPY_KEY:-}" && -z "$(klipy_key_in "$(app_bundle Release)")" && "${SKILLI_NO_KLIPY:-}" != 1 ]]; then
+    no_klipy="No Klipy key for daily: SKILLI_KLIPY_KEY=<key> ./script/build_and_run.sh daily (a release's Info.plist has it, SkilliKlipyKey), or SKILLI_NO_KLIPY=1 to build anyway (without a key, Search GIFs finds only the GIFs on the Mac)."
+    if ! has_key "${SKILLI_KLIPY_KEY:-}" && ! has_key "$(klipy_key_in "$(app_bundle Release)")" && [[ "${SKILLI_NO_KLIPY:-}" != 1 ]]; then
       echo "$no_klipy" >&2
       exit 2
     fi
@@ -195,7 +198,7 @@ case "$MODE" in
     fi
     build_app Release 'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) SKILLI_TRACE' ${signing[@]+"${signing[@]}"}
     # Checked in what was built, before the running skil.li is replaced.
-    if [[ -z "$(klipy_key_in "$(app_bundle Release)")" && "${SKILLI_NO_KLIPY:-}" != 1 ]]; then
+    if ! has_key "$(klipy_key_in "$(app_bundle Release)")" && [[ "${SKILLI_NO_KLIPY:-}" != 1 ]]; then
       echo "The build has no Klipy key. $no_klipy" >&2
       exit 2
     fi
