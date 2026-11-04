@@ -31,7 +31,9 @@ DMGBUILD_VERSION="1.6.7"
 
 sparkle_tool() {
   local name="$1" match
-  for root in "$ROOT_DIR/DerivedData.noindex" "$DIST/DerivedData" "$HOME/Library/Developer/Xcode/DerivedData"; do
+  # The checkout's DerivedData too: keys.sh and ci-secrets.sh build nothing,
+  # so it may not have moved to DerivedData.noindex yet.
+  for root in "$ROOT_DIR/DerivedData.noindex" "$ROOT_DIR/DerivedData" "$DIST/DerivedData" "$HOME/Library/Developer/Xcode/DerivedData"; do
     [[ -d "$root" ]] || continue
     match="$(find "$root" -type f -path "*artifacts/sparkle/Sparkle/bin/$name" -perm -111 2>/dev/null | head -n 1)"
     if [[ -n "$match" ]]; then printf '%s\n' "$match"; return 0; fi

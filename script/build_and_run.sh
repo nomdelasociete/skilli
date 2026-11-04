@@ -64,10 +64,12 @@ klipy_key_in() {
   printf '%s' "$key"
 }
 
-# The Klipy key of the Release build here, else of this Mac's skil.li.
+# The Klipy key of the Release build here (or in a DerivedData left beside
+# it), else of this Mac's skil.li.
 known_klipy_key() {
   local key
   key="$(klipy_key_in "$(app_bundle Release)")"
+  has_key "$key" || key="$(klipy_key_in "$ROOT_DIR/DerivedData/Build/Products/Release/$PROCESS_NAME.app")"
   has_key "$key" || key="$(klipy_key_in "$OWN_APP")"
   printf '%s' "$key"
 }
