@@ -140,6 +140,7 @@ public enum SettingsTable {
     /// `Preferences` properties no pane shows, and why.
     public static let notInPanes: [String: String] = [
         "didCompleteSetup": "The setup window's own state: closed once (Done, Later or ✕), it no longer opens by itself.",
+        "accessibilityWorkedOnce": "This Mac's own state: the key tap ran once, so Accessibility missing later was lost and the setup window says so by itself.",
         "recorderConsentShown": "The Record card's own state: it said once that the others in a call must agree to be recorded.",
         "recorderCardHintShown": "The meeting card's own state: its first Record ⌘R said once what it does (taught once, then quiet).",
         "recorderBetterHintShown": "The recording's window's own state: it said once what Better transcription does (taught once, then quiet).",
