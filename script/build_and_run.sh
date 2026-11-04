@@ -8,24 +8,36 @@ BUNDLE_ID="com.nomdelasociete.Skilli"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DERIVED_DATA="$ROOT_DIR/DerivedData"
+# In a .noindex folder: Spotlight would list every built copy as an app,
+# beside the user's own (four skil.li in Spotlight, the old one opened). The
+# folder it had before moves there once, its packages with it.
+DERIVED_DATA="$ROOT_DIR/DerivedData.noindex"
 PROJECT="$ROOT_DIR/Skilli.xcodeproj"
+# This Mac's own skil.li: a release, where its Klipy key is.
+OWN_APP="/Applications/$PROCESS_NAME.app"
 
 cd "$ROOT_DIR"
+if [[ -d "$ROOT_DIR/DerivedData" && ! -e "$DERIVED_DATA" ]]; then
+  mv "$ROOT_DIR/DerivedData" "$DERIVED_DATA"
+  # It names the packages' binaries by the old path; read again, they stay
+  # (whisper's 65 MB is not fetched again).
+  rm -f "$DERIVED_DATA/SourcePackages/workspace-state.json"
+fi
 
 # Extra arguments are build settings ("NAME=value"). SKILLI_TEAM signs with
 # another Apple team (a contributor's own) instead of the project's.
 # SKILLI_KLIPY_KEY puts skil.li's Klipy key in this build, as a release has
 # it (Search GIFs then asks Klipy with no setting). Without it, a Release
-# build keeps the key of the Release build already here: the benchmark and
-# the Release self-tests rebuild the same bundle as `daily`, and one built
-# without the key lost it for good (0.3.2 shipped without it).
+# build keeps the key of the Release build already here, else takes the one
+# of this Mac's skil.li: the benchmark and the Release self-tests rebuild
+# the same bundle as `daily`, and one built without the key lost it for
+# good (0.3.2 shipped without it).
 build_app() {
   local configuration="$1"
   shift
   local klipy_key="${SKILLI_KLIPY_KEY:-}"
   if ! has_key "$klipy_key" && [[ "$configuration" == Release ]]; then
-    klipy_key="$(klipy_key_in "$(app_bundle Release)")"
+    klipy_key="$(known_klipy_key)"
   fi
   xcodegen generate --spec project.yml --use-cache >/dev/null
   xcodebuild \
@@ -49,6 +61,16 @@ klipy_key_in() {
   local key
   [[ -f "$1/Contents/Info.plist" ]] || return 0
   key="$(/usr/libexec/PlistBuddy -c 'Print :SkilliKlipyKey' "$1/Contents/Info.plist" 2>/dev/null)" || return 0
+  printf '%s' "$key"
+}
+
+# The Klipy key of the Release build here (or in a DerivedData left beside
+# it), else of this Mac's skil.li.
+known_klipy_key() {
+  local key
+  key="$(klipy_key_in "$(app_bundle Release)")"
+  has_key "$key" || key="$(klipy_key_in "$ROOT_DIR/DerivedData/Build/Products/Release/$PROCESS_NAME.app")"
+  has_key "$key" || key="$(klipy_key_in "$OWN_APP")"
   printf '%s' "$key"
 }
 
@@ -174,12 +196,13 @@ case "$MODE" in
   daily)
     # The developer's own skil.li, as fast as shipped: Release, with the
     # dev traces kept (SKILLI_TRACE) to diagnose from this Mac's logs.
-    # skil.li's Klipy key carries over from the build already here (none in
-    # the repository, none in the keychain; build_app); the first came from
-    # SKILLI_KLIPY_KEY. Never a daily without it: Search GIFs would find
-    # only the GIFs on the Mac, and the next release could take that.
+    # skil.li's Klipy key carries over from the build already here, else
+    # from this Mac's skil.li (none in the repository, none in the keychain;
+    # build_app); the first came from SKILLI_KLIPY_KEY. Never a daily
+    # without it: Search GIFs would find only the GIFs on the Mac, and the
+    # next release could take that.
     no_klipy="No Klipy key for daily: SKILLI_KLIPY_KEY=<key> ./script/build_and_run.sh daily (a release's Info.plist has it, SkilliKlipyKey), or SKILLI_NO_KLIPY=1 to build anyway (without a key, Search GIFs finds only the GIFs on the Mac)."
-    if ! has_key "${SKILLI_KLIPY_KEY:-}" && ! has_key "$(klipy_key_in "$(app_bundle Release)")" && [[ "${SKILLI_NO_KLIPY:-}" != 1 ]]; then
+    if ! has_key "${SKILLI_KLIPY_KEY:-}" && ! has_key "$(known_klipy_key)" && [[ "${SKILLI_NO_KLIPY:-}" != 1 ]]; then
       echo "$no_klipy" >&2
       exit 2
     fi

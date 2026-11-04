@@ -55,6 +55,7 @@ scheme, menu search, contacts). macOS only.
 ./script/build_and_run.sh restart     # quit gracefully, rebuild, reopen
 ./script/build_and_run.sh daily       # the developer's own skil.li: Release, signed Developer ID as a release (Apple Development, with a warning, without the team's Developer ID in the keychain), dev traces kept (SKILLI_TRACE)
 CONFIGURATION=Release ./script/build_and_run.sh remote speed # typing speed, key by key, as shipped
+# Built copies go in DerivedData.noindex: Spotlight lists only the skil.li in /Applications.
 ./script/build_and_run.sh --telemetry # open + stream os_log for the bundle
 script/ai_bench.py                    # latency/tokens of the AI engines on the user's plans (spends tokens)
 ```
@@ -252,7 +253,7 @@ its password, `NOTARY_API_KEY`, `SPARKLE_ED_PRIVATE_KEY`,
 `NOTARY_ISSUER_ID`, `SKILLI_SPARKLE_PUBLIC_ED_KEY`), put once by
 `script/release/ci-secrets.sh`. The scripts read each credential from the
 environment first, else from this Mac's login keychain as before (the
-Klipy key aside: from the Mac's own `daily` skil.li, never the keychain),
+Klipy key aside: from the Mac's own skil.li in /Applications, never the keychain),
 so a release from a Mac still works. A pull request that touches the release
 (the workflow, `script/release/`, `project.yml`, `Config/`) is built there
 unsigned, its unit tests run.
@@ -3569,8 +3570,8 @@ re-investigating.
   kept in memory: never the Keychain on a key), else skil.li's, put in the
   Release build by `script/release/build.sh` (`SKILLI_KLIPY_KEY`: the
   `release` environment's secret on GitHub Actions; on a Mac, the key
-  inside its own `daily` skil.li, which every Release build there carries
-  over; never in the repository nor the keychain, 2026-10-19; Info.plist
+  inside its own skil.li in /Applications, which every Release build there
+  carries over; never in the repository nor the keychain, 2026-10-19; Info.plist
   `SkilliKlipyKey`; a release stops without it, and `daily` too unless
   `SKILLI_NO_KLIPY=1`, 2026-11-04);
   none: only the GIFs on this Mac, the grid says so.

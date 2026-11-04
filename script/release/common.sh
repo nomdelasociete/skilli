@@ -18,10 +18,10 @@ NOTARY_PROFILE="${SKILLI_NOTARY_PROFILE:-dsmn-notary}"
 SPARKLE_KEY_ACCOUNT="${SKILLI_SPARKLE_KEY_ACCOUNT:-nomdelasociete-skilli}"
 FEED_URL="${SKILLI_UPDATE_FEED_URL:-https://skil.li/appcast.xml}"
 # skil.li's Klipy key (Search GIFs): SKILLI_KLIPY_KEY, else the one inside this
-# Mac's own skil.li (`./script/build_and_run.sh daily` carries it over).
+# Mac's own skil.li, the release in /Applications.
 # The Homebrew tap is written with SKILLI_TAP_TOKEN when set (a token for that
 # repository only), else with gh's own sign-in.
-KLIPY_KEY_APP="${SKILLI_KLIPY_KEY_APP:-$ROOT_DIR/DerivedData/Build/Products/Release/Skilli.app}"
+KLIPY_KEY_APP="${SKILLI_KLIPY_KEY_APP:-/Applications/Skilli.app}"
 # Public files: this repository's GitHub releases; skil.li/download and
 # skil.li/appcast.xml redirect to the latest one's.
 RELEASES_REPO="${SKILLI_RELEASES_REPO:-nomdelasociete/skilli}"
@@ -31,7 +31,9 @@ DMGBUILD_VERSION="1.6.7"
 
 sparkle_tool() {
   local name="$1" match
-  for root in "$ROOT_DIR/DerivedData" "$DIST/DerivedData" "$HOME/Library/Developer/Xcode/DerivedData"; do
+  # The checkout's DerivedData too: keys.sh and ci-secrets.sh build nothing,
+  # so it may not have moved to DerivedData.noindex yet.
+  for root in "$ROOT_DIR/DerivedData.noindex" "$ROOT_DIR/DerivedData" "$DIST/DerivedData" "$HOME/Library/Developer/Xcode/DerivedData"; do
     [[ -d "$root" ]] || continue
     match="$(find "$root" -type f -path "*artifacts/sparkle/Sparkle/bin/$name" -perm -111 2>/dev/null | head -n 1)"
     if [[ -n "$match" ]]; then printf '%s\n' "$match"; return 0; fi
