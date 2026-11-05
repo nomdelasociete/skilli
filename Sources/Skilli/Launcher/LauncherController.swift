@@ -1039,7 +1039,7 @@ final class LauncherController: NSObject {
 
     /// 1 for ⌘1 … 9 for ⌘9; nil for any other key.
     static func rowNumber(_ event: NSEvent) -> Int? {
-        guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command else { return nil }
+        guard event.modifierFlags.intersection([.command, .shift, .option, .control, .function]) == .command else { return nil }
         return numberKeys.firstIndex(of: Int(event.keyCode)).map { $0 + 1 }
     }
 
