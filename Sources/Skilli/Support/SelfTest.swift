@@ -4324,6 +4324,17 @@ final class SelfTest {
     private func openLauncher() async -> Bool {
         if context.launcher.isVisible { await closeLauncher() }
         guard await focusTestWindow() else { return false }
+        let timeouts = context.router.tapTimeouts
+        _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+        if await waitUntil(timeout: 1, { self.context.launcher.isVisible }) != nil { return true }
+        // Sent once more when something else took it, said in the log:
+        // macOS disabled the tap meanwhile (✦Space went past it), or
+        // skil.li stopped being the active app (the launcher closes as it
+        // loses the keys).
+        let timedOut = context.router.tapTimeouts > timeouts
+        let lostFocus = !NSApp.isActive
+        guard timedOut || lostFocus, await focusTestWindow() else { return false }
+        Log.actions.notice("SELFTEST ✦Space sent again: \(timedOut ? "the event tap timed out under the first" : "skil.li was no longer active", privacy: .public)")
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
         return await waitUntil(timeout: 1) { self.context.launcher.isVisible } != nil
     }
@@ -13443,12 +13454,12 @@ final class SelfTest {
     }
 
     /// ⌘K on a snippet, a quicklink and a command found in the launcher by
-    /// name, with keys: Edit … opens its pane with the editor on that one
-    /// (esc there changes nothing); Delete Snippet goes at once, ⌘Z in the
-    /// card puts it back; a skillie's row offers Edit Skillie, skil.li's
-    /// own commands no Delete.
+    /// name, with keys, then on their entries in the "?": Edit … opens its
+    /// pane with the editor on that one (esc there changes nothing); Delete
+    /// Snippet goes at once, ⌘Z in the card puts it back; a skillie's row
+    /// offers Edit Skillie, skil.li's own commands no Delete.
     private func editFromLauncherOpensEditors() async {
-        let name = "⌘K on a snippet, a quicklink, a command: Edit … opens its own editor in Settings, esc changes nothing; Delete Snippet goes at once, ⌘Z puts it back with its pin; Edit Skillie opens its file in the plain-text app"
+        let name = "⌘K on a snippet, a quicklink, a command, in the list and in the “?”: Edit … opens its own editor in Settings, esc changes nothing; Delete Snippet goes at once, ⌘Z puts it back with its pin; Edit Skillie opens its file in the plain-text app"
         let launcher = context.launcher
         let settings = context.settings
         let commands = context.aiCommands
@@ -13474,12 +13485,34 @@ final class SelfTest {
                 return value as? String == text
             }
         }
-        /// The row named `title` found by its name, ⌘K, the action whose
-        /// title starts with `typed` filtered and run with ↩; what ⌘K listed.
-        func runAction(on title: String, _ typed: String, starting: String) async -> [String]? {
-            guard await openLauncher() else { return nil }
-            for character in title { await pressKey(character) }
-            guard await waitUntil(timeout: 2, { launcher.topResultName == title }) != nil else {
+        /// Where `runAction` stopped short, for the report.
+        var stopped = ""
+        /// The row named `title` found by its name (its entry in the "?"
+        /// with `inCatalog`), ⌘K, the action whose title starts with `typed`
+        /// filtered and run with ↩; what ⌘K listed.
+        func runAction(on title: String, _ typed: String, starting: String, inCatalog: Bool = false) async -> [String]? {
+            stopped = ""
+            guard await openLauncher() else {
+                let late = await waitUntil(timeout: 1) { launcher.isVisible } != nil
+                stopped = "the launcher did not open (open a second later: \(late), Settings shown: \(settings.isVisible), key window: \(NSApp.keyWindow.map { "\(type(of: $0))" } ?? "none"))"
+                await closeLauncher()
+                return nil
+            }
+            if inCatalog {
+                guard await typeCharacter("?"), await waitUntil(timeout: 1, { launcher.isInCatalog }) != nil else {
+                    stopped = "“?” did not open the Catalog (field “\(launcher.query)”)"
+                    await closeLauncher()
+                    return nil
+                }
+                // Lowercase: `pressKey` has no key for a capital and skips
+                // it (the root search found "elftest dit nippet", the "?"'s
+                // does not).
+                for character in " " + title.lowercased() { await pressKey(character) }
+            } else {
+                for character in title.lowercased() { await pressKey(character) }
+            }
+            guard await waitUntil(timeout: 2, { inCatalog ? launcher.selectedResultTitle == title : launcher.topResultName == title }) != nil else {
+                stopped = "not found: field “\(launcher.query)”, selected \(launcher.selectedResultTitle ?? "nothing"), first \(Array(launcher.resultTitles.prefix(3)))"
                 await closeLauncher()
                 return nil
             }
@@ -13494,14 +13527,10 @@ final class SelfTest {
             await pressKey(nil, code: CGKeyCode(kVK_Return))
             return listed
         }
-        var lines: [String] = []
-        var passed = true
-        for (title, action, pane) in [
-            (snippet.name, "Edit Snippet…", SettingsPane.snippets),
-            (link.name, "Edit Quicklink…", SettingsPane.catalog),
-            (command.title, "Edit Command…", SettingsPane.commands)
-        ] {
-            let listed = await runAction(on: title, "edit", starting: action) ?? []
+        /// ⌘K → `action` on the row (or entry) named `title`: `pane` open
+        /// with the editor on it, esc closing it.
+        func editOpens(_ title: String, _ action: String, _ pane: SettingsPane, inCatalog: Bool) async -> (passed: Bool, detail: String) {
+            let listed = await runAction(on: title, "edit", starting: action, inCatalog: inCatalog) ?? []
             let opened = await waitUntil(timeout: 3) { settings.isVisible && settings.pane == pane && settings.sheetShown } != nil
             // The command's editor says which it holds; the others' name field.
             let onIt = opened && (pane == .commands ? commands.editing?.id == command.id : sheetHolds(title))
@@ -13512,8 +13541,21 @@ final class SelfTest {
                 cancelled = await waitUntil(timeout: 2) { !settings.sheetShown } != nil
             }
             await closeSettings()
-            lines.append("“\(title)”: ⌘K \(listed); \(action) opened \(pane.title) with the editor: \(opened), on it: \(onIt), esc closed it: \(cancelled)")
-            passed = passed && listed.contains(action) && opened && onIt && cancelled
+            return (listed.contains(action) && opened && onIt && cancelled,
+                    "\(inCatalog ? "“?” " : "")“\(title)”: \(stopped.isEmpty ? "" : stopped + "; ")⌘K \(listed); \(action) opened \(pane.title) with the editor: \(opened), on it: \(onIt), esc closed it: \(cancelled)")
+        }
+        var lines: [String] = []
+        var passed = true
+        for inCatalog in [false, true] {
+            for (title, action, pane) in [
+                (snippet.name, "Edit Snippet…", SettingsPane.snippets),
+                (link.name, "Edit Quicklink…", SettingsPane.catalog),
+                (command.title, "Edit Command…", SettingsPane.commands)
+            ] {
+                let line = await editOpens(title, action, pane, inCatalog: inCatalog)
+                lines.append(line.detail)
+                passed = passed && line.passed
+            }
         }
         let unchanged = library.snippet(snippet.id) == snippet && store.links.contains(link)
             && commands.library.command(command.id)?.title == command.title

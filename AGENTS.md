@@ -107,6 +107,10 @@ xcodebuild -project Skilli.xcodeproj -scheme Skilli -destination 'platform=macOS
   first responder (an earlier check may have left the keyboard elsewhere);
   an app it opens is made frontmost through Accessibility only once
   `isFinishedLaunching` (before, `kAXErrorCannotComplete` and nothing).
+  `openLauncher` sends ✦Space a second time only when the first was lost
+  to something else, said in the log: macOS disabled the event tap on a
+  timeout (`KeyRouter.tapTimeouts`), or another app took the focus (the
+  launcher closes as it loses the keys).
   A click on skil.li's Dock tile is handled once `AppDelegate.reopens`
   counts it, not once skil.li is in front: the Dock makes it active first
   and sends the click up to ~70 ms later (2026-10-28: a window about to be
@@ -1030,6 +1034,9 @@ mode or skillie returns. Three runs (faded, `placeWeight` 2.5) and the empty
   Quicklink (not on a row offered because nothing matched), Delete
   Command (not on skil.li's own commands) go at once through
   `UndoableDeletes`, as in Settings; ⌘Z in the card brings them back.
+  Their entries in the "?" offer the same Edit (`editAction(for:)`, read
+  from the launcher row the entry stands for), with Edit Layout… and Edit
+  in Shortcuts; no Delete there.
 - Copy Link (no key, last of the copies; "Copy skil.li Link" on a
   quicklink, whose Copy Link is its web address) on every row the Catalog
   lists: commands, Mac commands and window places, the user's commands,

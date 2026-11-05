@@ -56,6 +56,9 @@ final class KeyRouter {
         tap.isRunning
     }
 
+    /// `EventTap.timeouts`.
+    var tapTimeouts: Int { tap.timeouts }
+
     /// Made and not stopped (`EventTap.isInstalled`).
     var isInstalled: Bool {
         tap.isInstalled
