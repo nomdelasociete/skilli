@@ -1028,19 +1028,18 @@ final class LauncherController: NSObject {
     /// The number row's keys by their place: AZERTY's ⌘& is ⌘1.
     private static let numberKeys = [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5,
                                      kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9]
-    /// ⌘ held alone this long before the rows show their numbers: a quick
-    /// ⌘C or ⌘K never shows them.
-    private static let rowNumbersDelay = Duration.milliseconds(300)
     private var commandMonitors: [Any] = []
-    private var rowNumbersTask: Task<Void, Never>?
     /// Self-test hook: the rows show ⌘1–⌘9.
     private(set) var rowNumbersShown = false
+    /// Some row's keycap is a number now (none in a grid): the passes over
+    /// the rows are skipped when there is nothing to put or take off.
+    private var rowNumbersDrawn = false
     /// Self-test hook: how many rows ⌘1–⌘9 reach now.
     var numberedRowCount: Int { numberedRows().count }
 
     /// 1 for ⌘1 … 9 for ⌘9; nil for any other key.
     static func rowNumber(_ event: NSEvent) -> Int? {
-        guard event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command else { return nil }
+        guard event.modifierFlags.intersection([.command, .shift, .option, .control, .function]) == .command else { return nil }
         return numberKeys.firstIndex(of: Int(event.keyCode)).map { $0 + 1 }
     }
 
@@ -1089,34 +1088,37 @@ final class LauncherController: NSObject {
         }
     }
 
+    /// The numbers show the moment ⌘ goes down: the key that follows (⌘C,
+    /// ⌘K) hides them at once. Fn held is another modifier; a latched Caps
+    /// Lock is not one held (and is the Hyper Key here).
     private func modifiersChanged(_ flags: NSEvent.ModifierFlags) {
-        hideRowNumbers()
-        guard flags.intersection([.command, .shift, .option, .control]) == .command, panel.isVisible, actionPanel.isHidden else { return }
-        rowNumbersTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.rowNumbersDelay)
-            guard !Task.isCancelled else { return }
-            self?.showRowNumbers()
+        guard flags.intersection([.command, .shift, .option, .control, .function]) == .command, panel.isVisible, actionPanel.isHidden else {
+            hideRowNumbers()
+            return
         }
+        if !rowNumbersShown { showRowNumbers() }
     }
 
     /// Each row on screen its number, the others what they show without
     /// (a snippet's keyword); again after a scroll or new results, so a
     /// keycap always names the row its key opens.
     private func showRowNumbers() {
+        rowNumbersShown = true
         let numbered = numberedRows()
+        guard !numbered.isEmpty || rowNumbersDrawn else { return }
+        rowNumbersDrawn = !numbered.isEmpty
         for row in results.indices {
             guard let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView else { continue }
             cell.setTrailingKeycap(numbered.firstIndex(of: row).map { "⌘\($0 + 1)" } ?? trailingCap(row))
         }
-        rowNumbersShown = true
     }
 
     /// Back to what the rows showed there (a snippet's keyword).
     private func hideRowNumbers() {
-        rowNumbersTask?.cancel()
-        rowNumbersTask = nil
         guard rowNumbersShown else { return }
         rowNumbersShown = false
+        guard rowNumbersDrawn else { return }
+        rowNumbersDrawn = false
         for row in results.indices {
             (tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView)?.setTrailingKeycap(trailingCap(row))
         }

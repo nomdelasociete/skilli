@@ -1006,9 +1006,9 @@ mode or skillie returns. Three runs (faded, `placeWeight` 2.5) and the empty
 - ⌘1–⌘9 (docs/launcher-row-numbers-hex.md) do ↩ on the Nth row shown,
   read by the number row's key codes (AZERTY's ⌘& is ⌘1):
   `LauncherController.numberedRows`, rows at least half visible drawn by
-  `ResultCellView` (not the Catalog's, not a grid). ⌘ held alone 0.3 s
-  shows ⌘1… as each row's trailing keycap, the accessory moving before
-  it; any key, another modifier or the release hides them (flagsChanged
+  `ResultCellView` (not the Catalog's, not a grid). ⌘ down alone shows
+  ⌘1… at once (no delay) as each row's trailing keycap, the accessory
+  moving before it; any key, another modifier or the release hides them (flagsChanged
   monitors, global and local, installed once the panel is up). They are
   in `LauncherKeys`: a shortcut may not take them.
 - In the list: typing filters (each word starts a word of the title: "co
