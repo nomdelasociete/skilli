@@ -96,10 +96,10 @@ you", next to `ask_user` (`SkillieDocsTests` checks that it is there).
 
 ### No `skilli://` link
 
-A link returns nothing to whoever opened it, and a pick whose answer goes
-nowhere serves no one. This is the one feature without a link. If a link
-is ever needed, it would be a link that runs a skillie, and that skillie
-calls `pick`.
+Decided 2026-11-05. A link returns nothing to whoever opened it, and a
+pick whose answer goes nowhere serves no one. This is the one feature
+without a link. If one is ever needed, it is a link that runs a skillie,
+and that skillie calls `pick`.
 
 ## The list
 
@@ -193,8 +193,3 @@ North star: the list shows in the frame after its data arrives.
   with `--json`.
 - Space or ⌘Y previews a file row with Quick Look, as vicinae does for
   paths.
-
-## Open point
-
-- No `skilli://` link (see above). Every other feature has one; this one
-  would return nothing. To confirm.
