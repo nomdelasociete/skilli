@@ -327,10 +327,12 @@ struct AICommandsPane: View {
         }
     }
 
-    /// New Command in the launcher: New Command's editor, unless one is open.
+    /// New Command in the launcher: New Command's editor, unless one is
+    /// open; ⌘K → Edit Command…: that command's (deleted meanwhile: the
+    /// list).
     private func startAsked() {
-        guard navigation?.take(.command) == true, model.editing == nil else { return }
-        model.editing = model.draft()
+        guard let asked = navigation?.take(.command), model.editing == nil else { return }
+        model.editing = if let id = asked.id { model.library.command(id) } else { model.draft() }
     }
 
     private func row(_ command: AICommand) -> some View {

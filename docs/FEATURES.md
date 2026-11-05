@@ -173,6 +173,10 @@ The search panel you open from anywhere. ✦Space.
   to keep it first.
 - **⌘K Actions** on every row: what the row can do, Copy Link, Set
   Alias…, Set Shortcut…, Pin; ⌘↩ the second action; ⌃N / ⌃P move.
+  What you made edits from there: Edit Snippet…, Edit Quicklink…, Edit
+  Command… open their editor in Settings, Edit Skillie its file in the
+  Mac's text editor; Delete Snippet, Delete Quicklink, Delete Command
+  (yours, not skil.li's own) go at once, ⌘Z in the card brings them back.
 - **⌘1–⌘9** open the rows shown, as ↩ on them; hold ⌘ to see their
   numbers.
 - **The same keys everywhere**: the footer names the selected row's ↩

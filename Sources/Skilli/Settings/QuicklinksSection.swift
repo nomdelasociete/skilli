@@ -176,10 +176,11 @@ extension QuicklinksSection {
     private static var new: Quicklink { Quicklink(name: "", keyword: "", url: "https://") }
 
     /// New Quicklink in the launcher: Add Quicklink's editor, unless one is
-    /// open.
+    /// open; ⌘K → Edit Quicklink…: that quicklink's (deleted meanwhile:
+    /// the list).
     private func startAsked() {
-        guard navigation?.take(.quicklink) == true, editing == nil else { return }
-        editing = Self.new
+        guard let asked = navigation?.take(.quicklink), editing == nil else { return }
+        editing = if let id = asked.id { store.links.first { $0.id.uuidString == id } } else { Self.new }
     }
 
     /// A ready quicklink, its keyword kept unless one of the user's has it.

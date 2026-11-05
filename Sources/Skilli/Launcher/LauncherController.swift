@@ -212,6 +212,15 @@ final class LauncherController: NSObject {
     var onEditLayout: ((SavedWindowLayout) -> Void)?
     var onUpdateLayout: ((SavedWindowLayout) -> Void)?
     var onDeleteLayout: ((SavedWindowLayout) -> Void)?
+    /// ⌘K on what the user made (a snippet, a quicklink, a command): its
+    /// editor in Settings; Delete at once, ⌘Z in the card puts it back.
+    var onEditSnippet: ((Snippet) -> Void)?
+    var onDeleteSnippet: ((Snippet) -> Void)?
+    var onEditQuicklink: ((Quicklink) -> Void)?
+    var onDeleteQuicklink: ((Quicklink) -> Void)?
+    /// A command by its id (`PromptLibrary`).
+    var onEditCommand: ((String) -> Void)?
+    var onDeleteCommand: ((String) -> Void)?
     /// Every window open now (Switch Window), and bringing one forward.
     var openWindows: (() -> [WindowArranger.OpenWindow])?
     var onFocusWindow: ((WindowArranger.OpenWindow) -> Void)?

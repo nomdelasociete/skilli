@@ -30,7 +30,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// The part of the Catalog to show once all its rows are in.
     private var pendingSection: String?
     /// A New … asked while an editor was open: shown once it closes.
-    private var waitingNew: SettingsNew?
+    private var waitingNew: SettingsAsk?
     private var sheetObserver: NSObjectProtocol?
     /// The commands' model outlives the window: its editor is closed with it.
     private weak var commands: AICommandsModel?
@@ -132,18 +132,20 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     /// The launcher's New Snippet, New Quicklink, New Command: the pane that
-    /// makes it, its editor open on a new one. An editor open already, on
-    /// any pane, keeps its edits: the new one waits until it closes (Save,
-    /// Cancel), the window brought forward meanwhile.
-    func showNew(_ item: SettingsNew) {
+    /// makes it, its editor open on a new one; with `id` (⌘K → Edit
+    /// Snippet…), on that one. An editor open already, on any pane, keeps
+    /// its edits: the one asked waits until it closes (Save, Cancel), the
+    /// window brought forward meanwhile.
+    func showNew(_ item: SettingsNew, id: String? = nil) {
+        let asked = SettingsAsk(item: item, id: id)
         if window?.attachedSheet != nil {
-            waitingNew = item
+            waitingNew = asked
             show()
             return
         }
         // The latest asked wins: one still waiting does not come after it.
         waitingNew = nil
-        navigation.new = item
+        navigation.new = asked
         switch item {
         case .snippet: show(pane: .snippets)
         case .quicklink: show(pane: .catalog, section: "quicklinks")
@@ -399,7 +401,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 DispatchQueue.main.async {
                     guard let item = self.waitingNew, self.window?.isVisible == true else { return }
                     self.waitingNew = nil
-                    self.showNew(item)
+                    self.showNew(item.item, id: item.id)
                 }
             }
         }
