@@ -13448,7 +13448,7 @@ final class SelfTest {
     /// card puts it back; a skillie's row offers Edit Skillie, skil.li's
     /// own commands no Delete.
     private func editFromLauncherOpensEditors() async {
-        let name = "⌘K on a snippet, a quicklink, a command: Edit … opens its own editor in Settings, esc changes nothing; Delete Snippet goes at once, ⌘Z puts it back; Edit Skillie listed"
+        let name = "⌘K on a snippet, a quicklink, a command: Edit … opens its own editor in Settings, esc changes nothing; Delete Snippet goes at once, ⌘Z puts it back with its pin; Edit Skillie opens its file in the plain-text app"
         let launcher = context.launcher
         let settings = context.settings
         let commands = context.aiCommands
@@ -13517,21 +13517,37 @@ final class SelfTest {
         }
         let unchanged = library.snippet(snippet.id) == snippet && store.links.contains(link)
             && commands.library.command(command.id)?.title == command.title
-        // Delete Snippet from ⌘K, then the card's ⌘Z.
+        // Delete Snippet from ⌘K on it pinned, its pin dropped as the
+        // launcher's next read does (`LauncherPins.kept`), then the card's
+        // ⌘Z: the snippet and its pin back.
+        let preferences = context.preferences
+        let savedPins = preferences.launcherPins
+        defer { preferences.launcherPins = savedPins }
+        let pinID = LauncherItem.snippet(snippet).learningID
+        preferences.launcherPins = LauncherPins.pinning(pinID, in: savedPins)
         let undo = await undoCardPutsBack("Snippet Deleted", named: snippet.name) {
             _ = await runAction(on: snippet.name, "delete", starting: "Delete Snippet")
+            preferences.launcherPins = LauncherPins.kept(preferences.launcherPins) { $0 == pinID }
         } isGone: {
-            library.snippet(snippet.id) == nil
+            library.snippet(snippet.id) == nil && !preferences.launcherPins.contains(pinID)
         } isBack: {
-            library.snippet(snippet.id) == snippet
+            library.snippet(snippet.id) == snippet && preferences.launcherPins.contains(pinID)
         }
         // Rows judged without opening anything: a skillie's, skil.li's own Ask.
         let skillie = ScriptCommand.parse("#!/bin/bash\n# @raycast.title Selftest Edit Skillie\n# @raycast.mode silent\n", path: "/tmp/selftest-edit-skillie.sh")
         let skillieActions = skillie.map { launcher.actions(for: .script($0, inline: nil)).map(\.title) } ?? []
+        // Edit Skillie run: its file, in the app for plain text (never its
+        // own type's: Terminal would run it); read, nothing opened.
+        var openedSkillie: (file: URL, editor: URL)?
+        launcher.openSkillieInEditor = { openedSkillie = ($0, $1) }
+        if let skillie { launcher.actions(for: .script(skillie, inline: nil)).first { $0.title == "Edit Skillie" }?.run() }
+        launcher.openSkillieInEditor = nil
+        let plainText = NSWorkspace.shared.urlForApplication(toOpen: .plainText)
+        let skillieOpens = openedSkillie?.file.path == "/tmp/selftest-edit-skillie.sh" && plainText != nil && openedSkillie?.editor == plainText
         let askActions = launcher.actions(for: .siCommand(LauncherSICommand(id: PromptLibrary.askID, title: "Ask"))).map(\.title)
-        let rows = skillieActions.contains("Edit Skillie") && askActions.contains("Edit Command…") && !askActions.contains("Delete Command")
+        let rows = skillieActions.contains("Edit Skillie") && skillieOpens && askActions.contains("Edit Command…") && !askActions.contains("Delete Command")
         record(name, passed && unchanged && undo.passed && rows,
-               lines.joined(separator: "; ") + "; nothing changed by esc: \(unchanged); Delete Snippet: \(undo.detail); skillie ⌘K \(skillieActions), Ask ⌘K \(askActions)", nil)
+               lines.joined(separator: "; ") + "; nothing changed by esc: \(unchanged); Delete Snippet: \(undo.detail); skillie ⌘K \(skillieActions), Edit Skillie opens \(openedSkillie.map { "\($0.file.lastPathComponent) in \($0.editor.lastPathComponent)" } ?? "nothing") (plain text: \(plainText?.lastPathComponent ?? "none")), Ask ⌘K \(askActions)", nil)
     }
 
     // MARK: - Settings → Catalog

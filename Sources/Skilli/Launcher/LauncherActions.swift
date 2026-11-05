@@ -530,6 +530,7 @@ extension LauncherController {
             NSWorkspace.shared.activateFileViewerSelecting([file])
             return
         }
+        if let openSkillieInEditor { return openSkillieInEditor(file, editor) }
         NSWorkspace.shared.open([file], withApplicationAt: editor, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
             guard let error else { return }
             Task { @MainActor in

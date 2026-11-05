@@ -18,8 +18,24 @@ final class UndoableDeletes {
 
     private let present: Offer
 
+    /// The launcher's pins (`Preferences.launcherPins`): the launcher drops
+    /// a row's pin once the row is gone, so ⌘Z pins it again where it was.
+    var pins: (read: @MainActor () -> [String], write: @MainActor ([String]) -> Void)?
+
     init(offer: @escaping Offer) {
         present = offer
+    }
+
+    /// What pins `id` again in its place, read before the delete; nothing
+    /// when it was not pinned, or is pinned again already.
+    private func pinBack(_ id: String) -> @MainActor () -> Void {
+        guard let pins, let index = pins.read().firstIndex(of: id) else { return {} }
+        return {
+            var now = pins.read()
+            guard !now.contains(id) else { return }
+            now.insert(id, at: min(index, now.count))
+            pins.write(now)
+        }
     }
 
     private func offer(_ title: String, _ details: String, row: String? = nil, _ undo: @escaping @MainActor () throws -> Void) {
@@ -194,11 +210,13 @@ final class UndoableDeletes {
     /// puts both back.
     func snippet(_ snippet: Snippet, in library: SnippetLibrary, shortcuts: ShortcutStore) {
         let entries = shortcuts.config.shortcuts.filter { $0.action == .snippet(snippet.id) }
+        let pin = pinBack(LauncherItem.snippet(snippet).learningID)
         guard let deleted = library.delete(snippet.id) else { return }
         shortcuts.removeEntries(for: .snippet(snippet.id))
         offer("Snippet Deleted", UndoDelete.details(snippet.name, snippet.keyword.isEmpty ? "" : " (\(snippet.keyword))"), row: UndoDelete.row(.snippet, snippet.id)) {
             library.restore(deleted)
             shortcuts.restore(entries)
+            pin()
             Self.shownAgain()
         }
     }
@@ -207,6 +225,7 @@ final class UndoableDeletes {
     /// its shortcuts; ⌘Z puts both back.
     func command(_ id: String, in model: AICommandsModel) {
         let entries = model.shortcuts.config.shortcuts.filter { $0.action == .aiPrompt(id) }
+        let pin = pinBack(LauncherItem.siCommand(LauncherSICommand(id: id, title: "")).learningID)
         // Never saved: nothing to bring back, its shortcut rows go.
         guard let deleted = model.library.deleteForUndo(id) else { return model.delete(id) }
         model.shortcuts.removeEntries(for: .aiPrompt(id))
@@ -214,7 +233,10 @@ final class UndoableDeletes {
         let keys = entries.contains { $0.keys != nil }
         offer("Command Deleted", UndoDelete.details(deleted.command.title, keys ? ": its shortcut too." : ""), row: UndoDelete.row(.command, id)) {
             let command = model.library.restore(deleted)
-            if command.id == id { model.shortcuts.restore(entries) }
+            if command.id == id {
+                model.shortcuts.restore(entries)
+                pin()
+            }
             model.refresh()
         }
     }
@@ -223,11 +245,13 @@ final class UndoableDeletes {
     /// shortcuts; ⌘Z puts both back.
     func quicklink(_ link: Quicklink, in store: QuicklinkStore, shortcuts: ShortcutStore) {
         let entries = shortcuts.config.shortcuts.filter { $0.action == .quicklink(link.id) }
+        let pin = pinBack(LauncherItem.quicklink(link, query: "").learningID)
         guard let removed = store.delete(link.id) else { return }
         shortcuts.removeEntries(for: .quicklink(link.id))
         offer("Quicklink Deleted", UndoDelete.details(link.name, link.keyword.isEmpty ? "" : " (\(link.keyword))"), row: UndoDelete.row(.quicklink, link.id)) {
             store.restore(removed)
             shortcuts.restore(entries)
+            pin()
             Self.shownAgain()
         }
     }

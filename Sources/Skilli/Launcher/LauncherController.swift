@@ -221,6 +221,9 @@ final class LauncherController: NSObject {
     /// A command by its id (`PromptLibrary`).
     var onEditCommand: ((String) -> Void)?
     var onDeleteCommand: ((String) -> Void)?
+    /// Self-test hook: Edit Skillie's file and the editor it would open in,
+    /// read instead of opened.
+    var openSkillieInEditor: ((_ file: URL, _ editor: URL) -> Void)?
     /// Every window open now (Switch Window), and bringing one forward.
     var openWindows: (() -> [WindowArranger.OpenWindow])?
     var onFocusWindow: ((WindowArranger.OpenWindow) -> Void)?

@@ -1330,6 +1330,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.resetChoice = { [preferences] in preferences.launcherReset }
         launcher.pins = { [preferences] in preferences.launcherPins }
         launcher.onPinsChange = { [preferences] pins in preferences.launcherPins = pins }
+        deletes.pins = (read: { [preferences] in preferences.launcherPins }, write: { [preferences] pins in preferences.launcherPins = pins })
         launcher.onPlaceChange = { [preferences] place in preferences.launcherPlace = place }
         actions.onOpenSettings = { [weak self] in
             self?.settings.show()
