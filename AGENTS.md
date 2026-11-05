@@ -1020,6 +1020,16 @@ mode or skillie returns. Three runs (faded, `placeWeight` 2.5) and the empty
   on ⇧⌘C here: pick an action in the list.", `ActionPanelView.say`) until
   the next key; the contact card's list too, and a key the card has no
   action for opens its list saying so.
+- What the user made edits from its row: Edit Snippet…, Edit
+  Quicklink…, Edit Command… open its editor in Settings
+  (`SettingsWindowController.showNew(_:id:)`, the same request as New
+  Snippet with the id: the pane's `startAsked` opens its editor on that
+  one, waiting for an editor already open); Edit Skillie opens its file
+  in the app the Mac opens plain text with, never its own type's (a
+  script's is often Terminal, which would run it). Delete Snippet, Delete
+  Quicklink (not on a row offered because nothing matched), Delete
+  Command (not on skil.li's own commands) go at once through
+  `UndoableDeletes`, as in Settings; ⌘Z in the card brings them back.
 - Copy Link (no key, last of the copies; "Copy skil.li Link" on a
   quicklink, whose Copy Link is its web address) on every row the Catalog
   lists: commands, Mac commands and window places, the user's commands,

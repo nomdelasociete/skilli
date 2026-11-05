@@ -134,10 +134,11 @@ struct SnippetsPane: View {
 
     private static var new: Snippet { Snippet(id: "", name: "", text: "") }
 
-    /// New Snippet in the launcher: Add Snippet's editor, unless one is open.
+    /// New Snippet in the launcher: Add Snippet's editor, unless one is open;
+    /// ⌘K → Edit Snippet…: that snippet's (deleted meanwhile: the list).
     private func startAsked() {
-        guard navigation?.take(.snippet) == true, editing == nil else { return }
-        editing = Self.new
+        guard let asked = navigation?.take(.snippet), editing == nil else { return }
+        editing = if let id = asked.id { library.snippet(id) } else { Self.new }
     }
 
     /// Rule 6: a permission expansion needs, only while it is not granted.

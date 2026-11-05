@@ -263,8 +263,19 @@ extension LauncherController {
                 self?.onSystemCommand?(.system(.arrangeWindows))
             }]
         case .command, .saveLayout, .startTimer, .keepAwake, .runningTimer, .createEvent, .addReminder,
-             .brewUpgradeAll, .setup, .ask, .siCommand, .system, .scriptArgument, .scriptChoice, .recordNamed:
+             .brewUpgradeAll, .setup, .ask, .system, .scriptArgument, .scriptChoice, .recordNamed:
             return [first]
+        // A command: its editor in Settings → Commands; one of the user's
+        // (not skil.li's own, which Reset to Default puts back) deleted.
+        case .siCommand(let command):
+            var list = [first, act("Edit Command…", "square.and.pencil") { [weak self] in self?.onEditCommand?(command.id) }]
+            if !PromptLibrary.isBuiltIn(command.id) {
+                list.append(remove("Delete Command") { [weak self] in
+                    self?.hide()
+                    self?.onDeleteCommand?(command.id)
+                })
+            }
+            return list
         // A recording made: its folder, its words, gone to the Trash.
         case .recorded(let found):
             return [first,
@@ -316,7 +327,16 @@ extension LauncherController {
             return [first, key("Paste as Plain Text", "textformat", .openThird)] + inApps
                 + [key("Copy", "doc.on.doc", .openSecond, group: .copy),
                    remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
-        case .snippet, .emoji:
+        // A snippet: its editor in Settings → Snippets, deleted at once.
+        case .snippet(let snippet):
+            return [first,
+                    act("Edit Snippet…", "square.and.pencil") { [weak self] in self?.onEditSnippet?(snippet) },
+                    key("Copy", "doc.on.doc", .openSecond, group: .copy),
+                    remove("Delete Snippet") { [weak self] in
+                        self?.hide()
+                        self?.onDeleteSnippet?(snippet)
+                    }]
+        case .emoji:
             return [first, key("Copy", "doc.on.doc", .openSecond, group: .copy)]
         case .gif(let gif):
             let query = gifQuery
@@ -453,7 +473,8 @@ extension LauncherController {
             return [first, key("Show in Finder", "folder", .openSecond),
                     copy("Copy Path", project.path, .copy)]
         case .script(let command, _):
-            return [first, reveal(URL(fileURLWithPath: command.path))]
+            return [first, act("Edit Skillie", "square.and.pencil") { [weak self] in self?.editSkillie(command) },
+                    reveal(URL(fileURLWithPath: command.path))]
         case .visit(let visit):
             return [first, key("Copy Link", "doc.on.doc", .openSecond, group: .copy),
                     copy("Copy as Markdown Link", "[\(visit.shownTitle)](\(visit.url))", .copySecond)]
@@ -463,10 +484,20 @@ extension LauncherController {
             list.append(copy("Copy Install Command", "brew install " + (package.isCask ? "--cask " : "") + package.name, .copy))
             if package.installed != nil { list.append(remove("Uninstall") { [weak self] in self?.uninstallSelectedBrew() }) }
             return list
-        case .quicklink(let link, let typed, _):
+        case .quicklink(let link, let typed, let fallback):
             // What Return opens: what is typed, else the selected text.
             let address = link.address(for: quicklinkQuery(link, typed: typed))
-            return [first] + [address.map { copy("Copy Link", $0.absoluteString, .copy) }].compactMap { $0 }
+            var list = [first, act("Edit Quicklink…", "square.and.pencil") { [weak self] in self?.onEditQuicklink?(link) }]
+            if let address { list.append(copy("Copy Link", address.absoluteString, .copy)) }
+            // Not on a row offered because nothing matched: never searched
+            // for, it is not the one to delete.
+            if !fallback {
+                list.append(remove("Delete Quicklink") { [weak self] in
+                    self?.hide()
+                    self?.onDeleteQuicklink?(link)
+                })
+            }
+            return list
         case .menuItem:
             return [first]
         case .catalog, .catalogHeader:
@@ -486,6 +517,25 @@ extension LauncherController {
                 return
             }
             self.onQuitProcess?(ProcessListing.Group(key: group.key, name: entry.name, appPath: group.appPath, entries: group.entries), force)
+        }
+    }
+
+    /// ⌘K → Edit Skillie: its file in the app the Mac opens text with
+    /// (TextEdit, unless the user chose another), never the app for its own
+    /// type: a script's is often Terminal, which would run it.
+    private func editSkillie(_ command: ScriptCommand) {
+        let file = URL(fileURLWithPath: command.path)
+        guard let editor = NSWorkspace.shared.urlForApplication(toOpen: .plainText) else {
+            onNotice?("No app opens text on this Mac: “\(command.title)” is shown in the Finder instead.")
+            NSWorkspace.shared.activateFileViewerSelecting([file])
+            return
+        }
+        if let openSkillieInEditor { return openSkillieInEditor(file, editor) }
+        NSWorkspace.shared.open([file], withApplicationAt: editor, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
+            guard let error else { return }
+            Task { @MainActor in
+                self?.onNotice?("“\(command.title)” did not open in \(FileManager.default.displayName(atPath: editor.path)): \(error.localizedDescription)")
+            }
         }
     }
 

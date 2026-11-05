@@ -661,6 +661,7 @@ final class SelfTest {
                 linksTrustedPerEntry,
                 quicklinksSectionShown,
                 newFromLauncherOpensEditors,
+                editFromLauncherOpensEditors,
                 quicklinkDeleteUndoes,
                 aliasRemovalUndoes
             ])
@@ -13439,6 +13440,114 @@ final class SelfTest {
         passed = passed && snippetOpen && kept && waited && dropped && blank
         let after = counts()
         record(name, passed && after == before, lines.joined(separator: "; ") + "; snippets, quicklinks, commands before \(before), after \(after)", nil)
+    }
+
+    /// ⌘K on a snippet, a quicklink and a command found in the launcher by
+    /// name, with keys: Edit … opens its pane with the editor on that one
+    /// (esc there changes nothing); Delete Snippet goes at once, ⌘Z in the
+    /// card puts it back; a skillie's row offers Edit Skillie, skil.li's
+    /// own commands no Delete.
+    private func editFromLauncherOpensEditors() async {
+        let name = "⌘K on a snippet, a quicklink, a command: Edit … opens its own editor in Settings, esc changes nothing; Delete Snippet goes at once, ⌘Z puts it back with its pin; Edit Skillie opens its file in the plain-text app"
+        let launcher = context.launcher
+        let settings = context.settings
+        let commands = context.aiCommands
+        let library = context.snippets
+        let store = settings.freshContext().quicklinks
+        let snippet = library.save(Snippet(id: "", name: "Selftest Edit Snippet", text: "Edited from the launcher"))
+        let link = Quicklink(name: "Selftest Edit Link", keyword: "", url: "https://example.com/?q={query}")
+        store.save(link)
+        var command = commands.newCommand()
+        command.title = "Selftest Edit Command"
+        commands.save(command)
+        defer {
+            library.delete(snippet.id)
+            store.delete(link.id)
+            commands.delete(command.id)
+        }
+        /// The editor's sheet has a field holding `text` (its name).
+        func sheetHolds(_ text: String) -> Bool {
+            guard let sheet = Self.axElements(role: kAXSheetRole).last else { return false }
+            return Self.axElements(roles: [kAXTextFieldRole, kAXTextAreaRole], under: sheet, where: { _ in true }).contains { field in
+                var value: CFTypeRef?
+                AXUIElementCopyAttributeValue(field, kAXValueAttribute as CFString, &value)
+                return value as? String == text
+            }
+        }
+        /// The row named `title` found by its name, ⌘K, the action whose
+        /// title starts with `typed` filtered and run with ↩; what ⌘K listed.
+        func runAction(on title: String, _ typed: String, starting: String) async -> [String]? {
+            guard await openLauncher() else { return nil }
+            for character in title { await pressKey(character) }
+            guard await waitUntil(timeout: 2, { launcher.topResultName == title }) != nil else {
+                await closeLauncher()
+                return nil
+            }
+            await pressKey("k", flags: .maskCommand)
+            _ = await waitUntil(timeout: 1) { launcher.isShowingActions }
+            let listed = launcher.shownActions.map(\.title)
+            for character in typed { await pressKey(character) }
+            guard await waitUntil(timeout: 1, { launcher.shownActions.first?.title.hasPrefix(starting) == true }) != nil else {
+                await closeLauncher()
+                return listed
+            }
+            await pressKey(nil, code: CGKeyCode(kVK_Return))
+            return listed
+        }
+        var lines: [String] = []
+        var passed = true
+        for (title, action, pane) in [
+            (snippet.name, "Edit Snippet…", SettingsPane.snippets),
+            (link.name, "Edit Quicklink…", SettingsPane.catalog),
+            (command.title, "Edit Command…", SettingsPane.commands)
+        ] {
+            let listed = await runAction(on: title, "edit", starting: action) ?? []
+            let opened = await waitUntil(timeout: 3) { settings.isVisible && settings.pane == pane && settings.sheetShown } != nil
+            // The command's editor says which it holds; the others' name field.
+            let onIt = opened && (pane == .commands ? commands.editing?.id == command.id : sheetHolds(title))
+            let key = await waitUntil(timeout: 1) { settings.sheetIsKey } != nil
+            var cancelled = false
+            if opened, key {
+                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                cancelled = await waitUntil(timeout: 2) { !settings.sheetShown } != nil
+            }
+            await closeSettings()
+            lines.append("“\(title)”: ⌘K \(listed); \(action) opened \(pane.title) with the editor: \(opened), on it: \(onIt), esc closed it: \(cancelled)")
+            passed = passed && listed.contains(action) && opened && onIt && cancelled
+        }
+        let unchanged = library.snippet(snippet.id) == snippet && store.links.contains(link)
+            && commands.library.command(command.id)?.title == command.title
+        // Delete Snippet from ⌘K on it pinned, its pin dropped as the
+        // launcher's next read does (`LauncherPins.kept`), then the card's
+        // ⌘Z: the snippet and its pin back.
+        let preferences = context.preferences
+        let savedPins = preferences.launcherPins
+        defer { preferences.launcherPins = savedPins }
+        let pinID = LauncherItem.snippet(snippet).learningID
+        preferences.launcherPins = LauncherPins.pinning(pinID, in: savedPins)
+        let undo = await undoCardPutsBack("Snippet Deleted", named: snippet.name) {
+            _ = await runAction(on: snippet.name, "delete", starting: "Delete Snippet")
+            preferences.launcherPins = LauncherPins.kept(preferences.launcherPins) { $0 == pinID }
+        } isGone: {
+            library.snippet(snippet.id) == nil && !preferences.launcherPins.contains(pinID)
+        } isBack: {
+            library.snippet(snippet.id) == snippet && preferences.launcherPins.contains(pinID)
+        }
+        // Rows judged without opening anything: a skillie's, skil.li's own Ask.
+        let skillie = ScriptCommand.parse("#!/bin/bash\n# @raycast.title Selftest Edit Skillie\n# @raycast.mode silent\n", path: "/tmp/selftest-edit-skillie.sh")
+        let skillieActions = skillie.map { launcher.actions(for: .script($0, inline: nil)).map(\.title) } ?? []
+        // Edit Skillie run: its file, in the app for plain text (never its
+        // own type's: Terminal would run it); read, nothing opened.
+        var openedSkillie: (file: URL, editor: URL)?
+        launcher.openSkillieInEditor = { openedSkillie = ($0, $1) }
+        if let skillie { launcher.actions(for: .script(skillie, inline: nil)).first { $0.title == "Edit Skillie" }?.run() }
+        launcher.openSkillieInEditor = nil
+        let plainText = NSWorkspace.shared.urlForApplication(toOpen: .plainText)
+        let skillieOpens = openedSkillie?.file.path == "/tmp/selftest-edit-skillie.sh" && plainText != nil && openedSkillie?.editor == plainText
+        let askActions = launcher.actions(for: .siCommand(LauncherSICommand(id: PromptLibrary.askID, title: "Ask"))).map(\.title)
+        let rows = skillieActions.contains("Edit Skillie") && skillieOpens && askActions.contains("Edit Command…") && !askActions.contains("Delete Command")
+        record(name, passed && unchanged && undo.passed && rows,
+               lines.joined(separator: "; ") + "; nothing changed by esc: \(unchanged); Delete Snippet: \(undo.detail); skillie ⌘K \(skillieActions), Edit Skillie opens \(openedSkillie.map { "\($0.file.lastPathComponent) in \($0.editor.lastPathComponent)" } ?? "nothing") (plain text: \(plainText?.lastPathComponent ?? "none")), Ask ⌘K \(askActions)", nil)
     }
 
     // MARK: - Settings → Catalog

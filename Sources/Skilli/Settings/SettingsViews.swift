@@ -256,20 +256,27 @@ enum SettingsNew: Equatable {
     case snippet, quicklink, command
 }
 
+/// An editor asked from the launcher: on a new one (New Snippet), or on
+/// one made already, by its id (⌘K → Edit Snippet…).
+struct SettingsAsk: Equatable {
+    let item: SettingsNew
+    let id: String?
+}
+
 /// Selected pane, shared with AppKit so menus can deep-link.
 @MainActor
 @Observable
 final class SettingsNavigation {
     var pane: SettingsPane? = .general
     /// Asked from the launcher, until the pane that makes it takes it.
-    var new: SettingsNew?
+    var new: SettingsAsk?
 
     /// The pane that makes `item`, as it shows or when asked while it is
-    /// shown: true once, the request then gone.
-    func take(_ item: SettingsNew) -> Bool {
-        guard new == item else { return false }
-        new = nil
-        return true
+    /// shown: the request once, then gone.
+    func take(_ item: SettingsNew) -> SettingsAsk? {
+        guard let new, new.item == item else { return nil }
+        self.new = nil
+        return new
     }
 }
 

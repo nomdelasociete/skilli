@@ -1026,6 +1026,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.onEditLayout = { [layoutEditor] layout in layoutEditor.edit(layout) }
         launcher.onUpdateLayout = { [layoutEditor] layout in layoutEditor.update(layout) }
         launcher.onDeleteLayout = { [weak self] layout in self?.deleteLayout(layout) }
+        // ⌘K on a snippet, a quicklink, a command: the editor Settings opens
+        // for it; deleted as there (`deletes`), an open pane reads it again.
+        launcher.onEditSnippet = { [weak self] snippet in self?.settings.showNew(.snippet, id: snippet.id) }
+        launcher.onEditQuicklink = { [weak self] link in self?.settings.showNew(.quicklink, id: link.id.uuidString) }
+        launcher.onEditCommand = { [weak self] id in self?.settings.showNew(.command, id: id) }
+        launcher.onDeleteSnippet = { [weak self] snippet in
+            guard let self else { return }
+            self.deletes.snippet(snippet, in: self.snippetLibrary, shortcuts: self.shortcuts)
+            NotificationCenter.default.post(name: SettingTools.changed, object: nil)
+        }
+        launcher.onDeleteQuicklink = { [weak self] link in
+            guard let self else { return }
+            self.deletes.quicklink(link, in: self.quicklinkStore, shortcuts: self.shortcuts)
+            NotificationCenter.default.post(name: SettingTools.changed, object: nil)
+        }
+        launcher.onDeleteCommand = { [weak self] id in
+            guard let self else { return }
+            self.deletes.command(id, in: self.aiCommands)
+        }
         shortcuts.deletes = deletes
         layoutEditor.onTry = { [weak self] layout in self?.applyLayout(layout) }
         displayWatch.onPlugged = { [weak self] plugged in self?.displaysPlugged(plugged) }
@@ -1311,6 +1330,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.resetChoice = { [preferences] in preferences.launcherReset }
         launcher.pins = { [preferences] in preferences.launcherPins }
         launcher.onPinsChange = { [preferences] pins in preferences.launcherPins = pins }
+        deletes.pins = (read: { [preferences] in preferences.launcherPins }, write: { [preferences] pins in preferences.launcherPins = pins })
         launcher.onPlaceChange = { [preferences] place in preferences.launcherPlace = place }
         actions.onOpenSettings = { [weak self] in
             self?.settings.show()
