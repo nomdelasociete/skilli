@@ -45,6 +45,7 @@ choices, the measures. Each one starts with its status and date.
 | [launcher-app-in-front.md](launcher-app-in-front.md) | The empty launcher learns the app in front; names mistyped found |
 | [launcher-row-numbers-hex.md](launcher-row-numbers-hex.md) | ⌘1–⌘9 open a row; the calculator reads hex |
 | [auto-quit.md](auto-quit.md) | Auto Quit: its own pane, only the apps listed, each its own delay; self-tests keep their own settings |
+| [pick-from-a-list.md](pick-from-a-list.md) | `Skilli pick`: a script's lines in the launcher, the row picked on standard output |
 
 ## Plans, reviews and lab notes
 

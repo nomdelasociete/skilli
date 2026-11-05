@@ -1,0 +1,200 @@
+# Pick from a list: `Skilli pick`
+
+Status: spec 2026-11-05, not built. Idea taken from vicinae
+(github.com/vicinaehq/vicinae, GPL-3.0), whose `vicinae dmenu` reads a
+list on standard input, shows it in its launcher and prints the row picked.
+The name and the Unix habit come from dmenu.
+
+## Short answer
+
+A script pipes lines into `Skilli pick`. The launcher opens on those lines,
+searched as the launcher searches. ↩ prints the row picked on standard
+output and exits 0. esc exits 1. Any skillie, any Terminal script and any
+agent can then let the user pick from a hundred branches, hosts or files
+without building a view. Today the only way is `ask_user`, which shows at
+most 9 options in the card and has no search.
+
+```bash
+branch=$(git branch --format='%(refname:short)' | "$SKILLI_CLI" pick --prompt Branch) &&
+  git switch "$branch"
+```
+
+## Moment
+
+1. **When.**
+   - *A skillie needs one of many*: a git branch, an SSH host from
+     `~/.ssh/config`, a Kubernetes context, a folder under `~/Projects`,
+     a line of a log. Today it asks for a typed argument (the user must
+     know the exact name) or calls `ask_user` (9 options at most, no
+     search).
+   - *A Terminal script*: the same need outside skil.li, where people
+     reach for `fzf` in the terminal. `Skilli pick` gives them the
+     launcher instead, over whatever app is in front.
+   - *An agent* (Ask, Claude Code through `Skilli mcp`) that has a long
+     list to put in front of the user: `pick_from_list`.
+   - *Not*: a choice among 2–6 answers (`ask_user` stays the right card),
+     a typed answer (`ask_user` without options), a form.
+2. **The path.** The script runs; the launcher comes forward in a mode
+   whose chip is the prompt, with the rows in it. The user types to narrow
+   the list, ↑↓ or ⌘1–⌘9 to choose, ↩ to pick. The launcher closes, and
+   focus goes back to the app that was in front (Terminal, for a Terminal
+   script). The script goes on with the answer.
+3. **Hint or push.** Neither. The list opens because the user ran the
+   script. Nothing is announced when it closes.
+4. **Deterministic or AI.** Code only. Rows are matched with
+   `FuzzyMatcher` (`Sources/SkilliCore/FuzzyMatcher.swift`), as the
+   launcher's own rows are. No ⇥ Ask, no meaning search: the list is the
+   script's, and a model has nothing to add to "which of these". The rows
+   never leave the Mac, are never stored, and never feed the launcher's
+   learning.
+5. **Wrong.**
+   - *The wrong row picked*: the script acts on it, as it would on a
+     mistyped argument. A script that does something it cannot undo asks
+     with `ask_user` after the pick, as it would after a typed argument.
+   - *Closed by mistake* (esc, a click elsewhere): exit 1, the script
+     stops or asks again. Nothing is half done by skil.li.
+   - *The launcher was in use*: the pick replaces what it showed (the user
+     started the script from it, or from a key). What was typed before is
+     not brought back after the pick.
+
+## Calling it
+
+Three ways, one code path: the CLI's `pick` is `call pick_from_list` with
+the items read from standard input, so approvals, exits and limits are the
+same everywhere.
+
+### `Skilli pick`
+
+```bash
+<lines> | Skilli pick [--prompt <text>] [--query <text>] [--index] [--custom] [--keep-order] [--socket <path>]
+<lines> | "$SKILLI_CLI" pick …          # from a skillie
+```
+
+| Option | What it does | Default |
+| --- | --- | --- |
+| `--prompt <text>` | The mode's chip and the search field's placeholder. | `Pick` |
+| `--query <text>` | Text already typed when the list opens. | empty |
+| `--index` | Prints the picked row's line number (1 first) instead of its text. Useful when lines repeat. | off |
+| `--custom` | ↩ with no row matching prints what was typed. The last row reads `Use “…”`. | off |
+| `--keep-order` | Matches keep the input's order instead of being ranked. Use it for lists already sorted by the script (recent first). | off |
+| `--socket <path>` | Another skil.li, as for `call`. | |
+
+Standard input is read to its end before anything shows. A skillie's own
+standard input is `/dev/null` (`running.md`), so a skillie always pipes
+its own lines into `pick`. It never forwards its standard input.
+
+### `pick_from_list`
+
+| Tool | What it does | Arguments |
+| --- | --- | --- |
+| `pick_from_list` | Shows a list in the launcher and returns the row the user picked. | `items` (list), `prompt?`, `query?`, `output?` (`text` or `index`), `custom?`, `keep_order?` |
+
+The right is the same as `ask_user`'s (risk none). It only shows text the
+caller gave and returns what the user chose. Listed in
+[calling-skilli.md](../skillies/docs/calling-skilli.md) under "Talking to
+you", next to `ask_user` (`SkillieDocsTests` checks that it is there).
+
+### No `skilli://` link
+
+A link returns nothing to whoever opened it, and a pick whose answer goes
+nowhere serves no one. This is the one feature without a link. If a link
+is ever needed, it would be a link that runs a skillie, and that skillie
+calls `pick`.
+
+## The list
+
+- One row per line, UTF-8. `\r\n` and `\n` both end a line. Empty lines
+  are skipped. Repeated lines are kept, since `--index` tells them apart.
+- A line is shown on one row, cut with "…" past the row's width, and
+  returned whole.
+- A line that is an absolute path to an existing file or folder gets that
+  file's icon, its name as the title and its folder as the subtitle.
+  Picking it still prints the line as given.
+- **Limits**: 10,000 lines and 1 MB at most. Past either limit nothing
+  opens: exit 1, `More than 10,000 lines` or `More than 1 MB`. Nothing is
+  cut silently, because a missing row would look like a row that does
+  not exist.
+- No lines at all: exit 1, `Nothing to pick from`. Nothing opens.
+
+## In the launcher
+
+- The launcher's own window, in a mode whose chip is the prompt. The empty
+  query shows every row in input order. Typing ranks the matches by
+  `FuzzyMatcher` score (ties keep input order), or keeps the input order
+  with `--keep-order`.
+- ↩ picks. ⌘1–⌘9 pick a visible row
+  ([launcher-row-numbers-hex.md](launcher-row-numbers-hex.md)). ⌘C copies
+  the row's text, and the list stays open. ⌘K shows Pick and Copy, nothing
+  else: the row is text the script owns, so there is nothing more to do
+  with it here.
+- esc, a click outside the launcher, or another app coming forward
+  dismisses the list. All three exit 1 with `Dismissed`.
+- ⇥ does nothing in this mode: no Ask, no actions panel.
+- A second pick while one is open waits its turn, and opens when the first
+  one closes. At most 4 can wait. A fifth exits 1 with
+  `Too many lists waiting`.
+
+## Output and exits
+
+| Exit | When | Standard output | Standard error |
+| --- | --- | --- | --- |
+| 0 | A row picked (or typed text with `--custom`) | The row's text, or its line number with `--index`, then `\n` | |
+| 1 | Dismissed, nothing to pick from, over a limit, too many waiting, skil.li not running and not startable | | Why, one line |
+| 2 | Written wrong (unknown option, `--prompt` with no value, not UTF-8) | | Usage |
+
+These are the same codes as `Skilli call`. A shell `&&` after `pick` runs
+only on a pick.
+
+## Time
+
+A skillie is stopped after 120 s (`ScriptLibrary.timeout`, a wall-clock
+limit). Time spent while a list is open must not count against it. Neither
+should time spent while `ask_user`'s card waits: check how `ChildProcess.run`
+counts it today, and fix both the same way. A list left open is dismissed
+after 10 minutes (exit 1, `Dismissed`), so a forgotten script does not
+wait forever.
+
+## Speed
+
+North star: the list shows in the frame after its data arrives.
+
+- `benchmark` gains a pick of 10,000 lines: time from the request on the
+  socket to the first frame drawn, and time per keystroke while filtering.
+  Both stay inside the launcher's current budget. Candidates
+  (`FuzzyCandidate`) are built once, off the main thread, before the list
+  shows.
+- Nothing is loaded or kept when no pick is open.
+
+## Tests
+
+- `SkilliCore`: parsing the input (line endings, empty lines, repeats,
+  limits, UTF-8), the CLI's options and exit codes, `--index` and
+  `--custom` answers.
+- `selftest scripts` (on the test Mac, with its lock): a skillie pipes
+  three lines into `pick`, types a query, picks with ↩ and checks its
+  output. Then esc for exit 1, `--index`, `--custom` with no match, a
+  second pick waiting for the first.
+- `SkillieDocsTests`: `pick_from_list` listed in calling-skilli.md.
+
+## Docs to update when built
+
+- [calling-skilli.md](../skillies/docs/calling-skilli.md): the tool, and a
+  `Skilli pick` section next to "Outside a skillie".
+- [skillies/README.md](../skillies/README.md): one recipe (switch git
+  branch).
+- [FEATURES.md](FEATURES.md) under Skillies, and the skillies guide
+  (`website/guides/skillies.md`).
+
+## Phase 2 (not built)
+
+- `--multi`: several rows picked (⌘↩ marks one, ↩ returns every marked
+  row, one per line).
+- Rows with a subtitle or an icon: tab-separated fields, or JSON lines
+  with `--json`.
+- Space or ⌘Y previews a file row with Quick Look, as vicinae does for
+  paths.
+
+## Open point
+
+- No `skilli://` link (see above). Every other feature has one; this one
+  would return nothing. To confirm.
