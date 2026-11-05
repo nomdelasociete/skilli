@@ -77,12 +77,24 @@ same everywhere.
 | --- | --- | --- |
 | `--prompt <text>` | The mode's chip and the search field's placeholder. | `Pick` |
 | `--query <text>` | Text already typed when the list opens. | empty |
-| `--index` | Prints the picked row's line number (1 first) instead of its text. Useful when lines repeat. Not with `--custom`: typed text has no line number, so both together are written wrong (exit 2). | off |
+| `--index` | Prints the picked row's line number in the input (1 first; skipped empty lines still count, so `sed -n "${n}p"` finds it) instead of its text. Useful when lines repeat. Not with `--custom`: typed text has no line number, so both together are written wrong (exit 2). | off |
 | `--custom` | ↩ with no row matching prints what was typed. The last row reads `Use “…”`. | off |
 | `--keep-order` | Matches keep the input's order instead of being ranked. Use it for lists already sorted by the script (recent first). | off |
 | `--socket <path>` | Another skil.li, as for `call`. | |
 
-Standard input is read to its end before anything shows. A skillie's own
+Standard input is read to its end before anything shows, with three
+bounds:
+
+- If a limit is crossed while reading (see [The list](#the-list)),
+  reading stops at once and the command exits 1. Nothing opens.
+- If no new byte arrives for 30 s, reading stops and the command exits 1
+  (`Nothing came on standard input for 30 s`). Nothing opens. A slow
+  producer that keeps writing, such as `find` over a big folder, is not
+  cut off.
+- If standard input is a terminal (`Skilli pick` typed with no pipe), the
+  command exits 2 at once (`Pipe lines into pick`).
+
+A skillie's own
 standard input is `/dev/null` (`running.md`), so a skillie always pipes
 its own lines into `pick`. It never forwards its standard input.
 
@@ -149,8 +161,8 @@ and that skillie calls `pick`.
 | Exit | When | Standard output | Standard error |
 | --- | --- | --- | --- |
 | 0 | A row picked (or typed text with `--custom`) | The row's text, or its line number with `--index`, then `\n` | |
-| 1 | Dismissed, nothing to pick from, over a limit, too many waiting, skil.li not running and not startable | | Why, one line |
-| 2 | Written wrong (unknown option, `--prompt` with no value, `--index` with `--custom`, not UTF-8) | | Usage |
+| 1 | Dismissed, nothing to pick from, over a limit, standard input silent for 30 s, too many waiting, skil.li not running and not startable | | Why, one line |
+| 2 | Written wrong (unknown option, `--prompt` with no value, `--index` with `--custom`, standard input a terminal, not UTF-8) | | Usage |
 
 These are the same codes as `Skilli call`. A shell `&&` after `pick` runs
 only on a pick.
@@ -181,8 +193,10 @@ North star: the list shows in the frame after its data arrives.
 ## Tests
 
 - `SkilliCore`: parsing the input (line endings, empty lines, repeats,
-  limits, UTF-8), the CLI's options and exit codes, `--index` and
-  `--custom` answers.
+  limits, UTF-8), the CLI's options and exit codes, `--index` (line
+  numbers counting the empty lines skipped) and `--custom` answers. Also
+  a pipe held open with no data (exit 1 after 30 s), and input stopped as
+  soon as it crosses a limit.
 - `selftest scripts` (on the test Mac, with its lock): a skillie pipes
   three lines into `pick`, types a query, picks with ↩ and checks its
   output. Then esc for exit 1, `--index`, `--custom` with no match,
