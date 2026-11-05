@@ -44,9 +44,12 @@ branch=$(git branch --format='%(refname:short)' | "$SKILLI_CLI" pick --prompt Br
 4. **Deterministic or AI.** Code only. Rows are matched with
    `FuzzyMatcher` (`Sources/SkilliCore/FuzzyMatcher.swift`), as the
    launcher's own rows are. No ⇥ Ask, no meaning search: the list is the
-   script's, and a model has nothing to add to "which of these". The rows
-   never leave the Mac, are never stored, and never feed the launcher's
-   learning.
+   script's, and a model has nothing to add to "which of these". The
+   picker sends the rows nowhere, stores none, and never feeds them to
+   the launcher's learning. The row picked goes back to the caller only.
+   When the caller is an agent (Ask, Claude Code through `Skilli mcp`),
+   that row is a tool result, and it reaches the agent's provider like
+   any other tool result.
 5. **Wrong.**
    - *The wrong row picked*: the script acts on it, as it would on a
      mistyped argument. A script that does something it cannot undo asks
@@ -74,7 +77,7 @@ same everywhere.
 | --- | --- | --- |
 | `--prompt <text>` | The mode's chip and the search field's placeholder. | `Pick` |
 | `--query <text>` | Text already typed when the list opens. | empty |
-| `--index` | Prints the picked row's line number (1 first) instead of its text. Useful when lines repeat. | off |
+| `--index` | Prints the picked row's line number (1 first) instead of its text. Useful when lines repeat. Not with `--custom`: typed text has no line number, so both together are written wrong (exit 2). | off |
 | `--custom` | ↩ with no row matching prints what was typed. The last row reads `Use “…”`. | off |
 | `--keep-order` | Matches keep the input's order instead of being ranked. Use it for lists already sorted by the script (recent first). | off |
 | `--socket <path>` | Another skil.li, as for `call`. | |
@@ -133,6 +136,13 @@ and that skillie calls `pick`.
 - A second pick while one is open waits its turn, and opens when the first
   one closes. At most 4 can wait. A fifth exits 1 with
   `Too many lists waiting`.
+- A caller that goes away (Ctrl-C in Terminal, a skillie stopped, an
+  agent ended) takes its list with it: an open list closes, and a waiting
+  one is dropped before it opens and stops counting toward the 4. skil.li
+  sees it on the socket. The connection's read loop ends when the caller's
+  end closes, and `MCPSocketServer` calls its `onClose`
+  (`Sources/Skilli/Tools/MCPSocketServer.swift`). The picks for that
+  connection go at that point.
 
 ## Output and exits
 
@@ -140,7 +150,7 @@ and that skillie calls `pick`.
 | --- | --- | --- | --- |
 | 0 | A row picked (or typed text with `--custom`) | The row's text, or its line number with `--index`, then `\n` | |
 | 1 | Dismissed, nothing to pick from, over a limit, too many waiting, skil.li not running and not startable | | Why, one line |
-| 2 | Written wrong (unknown option, `--prompt` with no value, not UTF-8) | | Usage |
+| 2 | Written wrong (unknown option, `--prompt` with no value, `--index` with `--custom`, not UTF-8) | | Usage |
 
 These are the same codes as `Skilli call`. A shell `&&` after `pick` runs
 only on a pick.
@@ -148,11 +158,14 @@ only on a pick.
 ## Time
 
 A skillie is stopped after 120 s (`ScriptLibrary.timeout`, a wall-clock
-limit). Time spent while a list is open must not count against it. Neither
-should time spent while `ask_user`'s card waits: check how `ChildProcess.run`
-counts it today, and fix both the same way. A list left open is dismissed
-after 10 minutes (exit 1, `Dismissed`), so a forgotten script does not
-wait forever.
+limit). Time spent while a list is open, or waiting its turn behind
+another, must not count against it. Neither should time spent while
+`ask_user`'s card waits: check how `ChildProcess.run` counts it today,
+and fix both the same way. Without the limit, nothing else would end an
+unanswered list or card. So a list left open, and an `ask_user` card left
+unanswered, are dismissed after 10 minutes (exit 1, `Dismissed`), and a
+forgotten script does not wait forever. Time spent waiting in the queue
+counts toward those 10 minutes only once the list is open.
 
 ## Speed
 
@@ -172,8 +185,9 @@ North star: the list shows in the frame after its data arrives.
   `--custom` answers.
 - `selftest scripts` (on the test Mac, with its lock): a skillie pipes
   three lines into `pick`, types a query, picks with ↩ and checks its
-  output. Then esc for exit 1, `--index`, `--custom` with no match, a
-  second pick waiting for the first.
+  output. Then esc for exit 1, `--index`, `--custom` with no match,
+  `--index --custom` refused, a second pick waiting for the first, and a
+  waiting pick whose caller is killed (it never opens).
 - `SkillieDocsTests`: `pick_from_list` listed in calling-skilli.md.
 
 ## Docs to update when built
