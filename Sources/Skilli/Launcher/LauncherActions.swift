@@ -207,6 +207,8 @@ extension LauncherController {
         func remove(_ title: String, _ run: @escaping @MainActor () -> Void) -> LauncherAction {
             LauncherAction(title: title, symbol: "trash", key: removeKey, group: .remove, run: run)
         }
+        /// Its editor (`editAction`): the rows that have one call it.
+        func edit(_ item: LauncherItem) -> LauncherAction { editAction(for: item)! }
         /// ↩, as the footer names it.
         let first = key(main.title, main.symbol, .open)
 
@@ -235,7 +237,7 @@ extension LauncherController {
             return list
         case .layout(let layout):
             return [first,
-                    act("Edit Layout…", "slider.horizontal.3") { [weak self] in self?.onEditLayout?(layout) },
+                    edit(item),
                     act("Update to the Windows Open…", "arrow.triangle.2.circlepath") { [weak self] in self?.onUpdateLayout?(layout) },
                     copy("Copy Name", layout.name, .copy),
                     remove("Delete Layout") { [weak self] in
@@ -255,7 +257,7 @@ extension LauncherController {
             if let selected = shownSelection {
                 list.append(act("Run with the Selection", "text.line.first.and.arrowtriangle.forward") { [weak self] in self?.onRunShortcut?(shortcut, .text(selected)) })
             }
-            list.append(act("Edit in Shortcuts", "square.and.pencil") { [weak self] in self?.onEditShortcut?(shortcut) })
+            list.append(edit(item))
             return list
         // A window open: every window where the user usually puts it.
         case .openWindow:
@@ -268,7 +270,7 @@ extension LauncherController {
         // A command: its editor in Settings → Commands; one of the user's
         // (not skil.li's own, which Reset to Default puts back) deleted.
         case .siCommand(let command):
-            var list = [first, act("Edit Command…", "square.and.pencil") { [weak self] in self?.onEditCommand?(command.id) }]
+            var list = [first, edit(item)]
             if !PromptLibrary.isBuiltIn(command.id) {
                 list.append(remove("Delete Command") { [weak self] in
                     self?.hide()
@@ -330,7 +332,7 @@ extension LauncherController {
         // A snippet: its editor in Settings → Snippets, deleted at once.
         case .snippet(let snippet):
             return [first,
-                    act("Edit Snippet…", "square.and.pencil") { [weak self] in self?.onEditSnippet?(snippet) },
+                    edit(item),
                     key("Copy", "doc.on.doc", .openSecond, group: .copy),
                     remove("Delete Snippet") { [weak self] in
                         self?.hide()
@@ -473,7 +475,7 @@ extension LauncherController {
             return [first, key("Show in Finder", "folder", .openSecond),
                     copy("Copy Path", project.path, .copy)]
         case .script(let command, _):
-            return [first, act("Edit Skillie", "square.and.pencil") { [weak self] in self?.editSkillie(command) },
+            return [first, edit(item),
                     reveal(URL(fileURLWithPath: command.path))]
         case .visit(let visit):
             return [first, key("Copy Link", "doc.on.doc", .openSecond, group: .copy),
@@ -487,7 +489,7 @@ extension LauncherController {
         case .quicklink(let link, let typed, let fallback):
             // What Return opens: what is typed, else the selected text.
             let address = link.address(for: quicklinkQuery(link, typed: typed))
-            var list = [first, act("Edit Quicklink…", "square.and.pencil") { [weak self] in self?.onEditQuicklink?(link) }]
+            var list = [first, edit(item)]
             if let address { list.append(copy("Copy Link", address.absoluteString, .copy)) }
             // Not on a row offered because nothing matched: never searched
             // for, it is not the one to delete.
@@ -517,6 +519,28 @@ extension LauncherController {
                 return
             }
             self.onQuitProcess?(ProcessListing.Group(key: group.key, name: entry.name, appPath: group.appPath, entries: group.entries), force)
+        }
+    }
+
+    /// Where what the user made is edited: a snippet, quicklink or command
+    /// in its Settings editor, a layout in its own, a skillie's file, a
+    /// shortcut in Shortcuts. The launcher closes first. The row's ⌘K and
+    /// its entry's in the "?" both offer it.
+    func editAction(for item: LauncherItem) -> LauncherAction? {
+        let edit: (title: String, symbol: String, run: @MainActor () -> Void)
+        switch item {
+        case .snippet(let snippet): edit = ("Edit Snippet…", "square.and.pencil", { [weak self] in self?.onEditSnippet?(snippet) })
+        case .quicklink(let link, _, _): edit = ("Edit Quicklink…", "square.and.pencil", { [weak self] in self?.onEditQuicklink?(link) })
+        case .siCommand(let command): edit = ("Edit Command…", "square.and.pencil", { [weak self] in self?.onEditCommand?(command.id) })
+        case .script(let command, _): edit = ("Edit Skillie", "square.and.pencil", { [weak self] in self?.editSkillie(command) })
+        case .layout(let layout): edit = ("Edit Layout…", "slider.horizontal.3", { [weak self] in self?.onEditLayout?(layout) })
+        case .system(.shortcut(let shortcut, false), _):
+            edit = ("Edit in Shortcuts", "square.and.pencil", { [weak self] in self?.onEditShortcut?(shortcut) })
+        default: return nil
+        }
+        return LauncherAction(title: edit.title, symbol: edit.symbol) { [weak self] in
+            self?.hide()
+            edit.run()
         }
     }
 

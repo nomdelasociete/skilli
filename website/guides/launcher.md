@@ -40,7 +40,8 @@ Every row has actions. Press **⌘K** on it to see them, with their keys:
 - what the row itself can do (Quit and Force Quit on a running app,
   Annotate on an image, Join on a meeting…);
 - **Edit…** on what you made: a snippet, a quicklink or a command opens
-  in its editor in Settings, a skillie in your text editor; **Delete**
+  in its editor in Settings, a skillie in your text editor (also from its
+  entry in the "?"); **Delete**
   removes a snippet, a quicklink or a command of yours at once (⌘Z brings
   it back);
 - **Set Shortcut…**: give it a key of your own;

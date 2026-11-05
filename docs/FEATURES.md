@@ -177,6 +177,7 @@ The search panel you open from anywhere. ✦Space.
   Command… open their editor in Settings, Edit Skillie its file in the
   Mac's text editor; Delete Snippet, Delete Quicklink, Delete Command
   (yours, not skil.li's own) go at once, ⌘Z in the card brings them back.
+  Their entries in the "?" have the same Edit.
 - **⌘1–⌘9** open the rows shown, as ↩ on them; hold ⌘ to see their
   numbers.
 - **The same keys everywhere**: the footer names the selected row's ↩

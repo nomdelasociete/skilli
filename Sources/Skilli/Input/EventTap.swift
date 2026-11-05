@@ -31,6 +31,10 @@ final class EventTap {
     /// Made and not stopped, running or disabled by macOS.
     var isInstalled: Bool { port != nil }
 
+    /// How many times macOS disabled the tap because skil.li answered too
+    /// late (the main thread busy): the key in flight then went past it.
+    private(set) var timeouts = 0
+
     /// Accessibility gone while the tap runs (a tap-disabled event and no
     /// permission behind it): the owner stops it and says so.
     var onAccessLost: (() -> Void)?
@@ -107,6 +111,7 @@ final class EventTap {
             if let port {
                 CGEvent.tapEnable(tap: port, enable: true)
             }
+            if type == .tapDisabledByTimeout { timeouts += 1 }
             Log.input.error("Event tap was disabled (\(type.rawValue)); re-enabled")
             return false
         default:

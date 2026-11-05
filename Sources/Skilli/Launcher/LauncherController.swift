@@ -3949,12 +3949,14 @@ final class LauncherController: NSObject {
                        off: entry.canBeOff && off.contains(entry.id))
     }
 
-    /// ⌘K on an entry: run it; its alias when it is a launcher row of its
-    /// own; its shortcut, set in Settings → Keys.
+    /// ⌘K on an entry: run it; edit it when its launcher row can (a
+    /// snippet, quicklink, command, skillie, layout or shortcut); its alias when it is a launcher row of its own; its shortcut,
+    /// set in Settings → Keys.
     func catalogActions(_ entry: CatalogEntry) -> [LauncherAction] {
         var list = [LauncherAction(title: catalogReturnTitle(entry), symbol: "return", key: .open) { [weak self] in
             self?.launchSelected(flags: [])
         }]
+        if let edit = catalogItems[entry.id].flatMap(editAction) { list.append(edit) }
         if let item = catalogItems[entry.id], item.learningID == entry.id, takesAlias(item) {
             list += aliasActions(for: item)
             if takesPin(item) { list.append(pinAction(for: item)) }
