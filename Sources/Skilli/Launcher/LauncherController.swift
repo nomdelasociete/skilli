@@ -1031,6 +1031,9 @@ final class LauncherController: NSObject {
     private var commandMonitors: [Any] = []
     /// Self-test hook: the rows show ⌘1–⌘9.
     private(set) var rowNumbersShown = false
+    /// Some row's keycap is a number now (none in a grid): the passes over
+    /// the rows are skipped when there is nothing to put or take off.
+    private var rowNumbersDrawn = false
     /// Self-test hook: how many rows ⌘1–⌘9 reach now.
     var numberedRowCount: Int { numberedRows().count }
 
@@ -1086,9 +1089,10 @@ final class LauncherController: NSObject {
     }
 
     /// The numbers show the moment ⌘ goes down: the key that follows (⌘C,
-    /// ⌘K) hides them at once.
+    /// ⌘K) hides them at once. Fn held is another modifier; a latched Caps
+    /// Lock is not one held (and is the Hyper Key here).
     private func modifiersChanged(_ flags: NSEvent.ModifierFlags) {
-        guard flags.intersection([.command, .shift, .option, .control]) == .command, panel.isVisible, actionPanel.isHidden else {
+        guard flags.intersection([.command, .shift, .option, .control, .function]) == .command, panel.isVisible, actionPanel.isHidden else {
             hideRowNumbers()
             return
         }
@@ -1099,18 +1103,22 @@ final class LauncherController: NSObject {
     /// (a snippet's keyword); again after a scroll or new results, so a
     /// keycap always names the row its key opens.
     private func showRowNumbers() {
+        rowNumbersShown = true
         let numbered = numberedRows()
+        guard !numbered.isEmpty || rowNumbersDrawn else { return }
+        rowNumbersDrawn = !numbered.isEmpty
         for row in results.indices {
             guard let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView else { continue }
             cell.setTrailingKeycap(numbered.firstIndex(of: row).map { "⌘\($0 + 1)" } ?? trailingCap(row))
         }
-        rowNumbersShown = true
     }
 
     /// Back to what the rows showed there (a snippet's keyword).
     private func hideRowNumbers() {
         guard rowNumbersShown else { return }
         rowNumbersShown = false
+        guard rowNumbersDrawn else { return }
+        rowNumbersDrawn = false
         for row in results.indices {
             (tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView)?.setTrailingKeycap(trailingCap(row))
         }
