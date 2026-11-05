@@ -19,11 +19,13 @@ only) are not taken: they would need the same keys, and the modes (`f`,
    The number row's keys by their place, so AZERTY's ⌘& is ⌘1, as on
    every layout. The same as ↩ on that row: an app opens, a snippet
    pastes, a mode's row does what its ↩ does.
-3. **Hint, not push**: nothing on screen until ⌘ is held alone; after
-   0.3 s, each visible row shows its key (⌘1…⌘9) at its right edge, in
-   place of what is there (a snippet's keyword), back on release. A
-   quick ⌘C, ⌘K or ⌘↩ never shows them. No setting, no badge, no hint
-   that comes back by itself (MANIFESTO 9).
+3. **Hint, not push**: nothing on screen until ⌘ goes down alone; then,
+   at once, each visible row shows its key (⌘1…⌘9) at its right edge, in
+   place of what is there (a snippet's keyword), back on release. The
+   key of a ⌘C, ⌘K or ⌘↩ hides them as it goes down: a brief flash, the
+   cost of numbers that never keep the user waiting (it was 0.3 s held
+   first until 2026-11-05). No setting, no badge, no hint that comes
+   back by itself (MANIFESTO 9).
 4. **Deterministic**: the rows as drawn, counted from the first visible
    one. Nothing leaves the Mac.
 5. **Wrong**: ⌘3 opens the third row when the user meant another: the

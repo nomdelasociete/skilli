@@ -4980,10 +4980,10 @@ final class SelfTest {
     }
 
     /// "0xff + 1": 256, then 0x100 (written with hex). ⌘ held alone shows
-    /// ⌘1, ⌘2 on the rows, gone on release; a quick ⌘ shows nothing; ⌘2
+    /// ⌘1, ⌘2 on the rows, gone on release; a quick ⌘ leaves nothing; ⌘2
     /// pastes the second row here, as ↩ on it.
     private func commandNumbersOpenRows() async {
-        let name = "Root search: ⌘ held shows ⌘1–⌘9 on the rows (not a quick ⌘), ⌘2 does the second row's ↩; “0xff + 1” answers 256 and 0x100"
+        let name = "Root search: ⌘ down shows ⌘1–⌘9 on the rows at once, a quick ⌘ leaves none, ⌘2 does the second row's ↩; “0xff + 1” answers 256 and 0x100"
         let launcher = context.launcher
         guard await focusTestWindow() else { return }
         window.makeFirstResponder(textView)
@@ -4995,15 +4995,16 @@ final class SelfTest {
         for character in "0xff + 1" { await pressKey(character) }
         let answered = await waitUntil(timeout: 1) { Array(launcher.resultTitles.prefix(2)) == ["256", "0x100"] } != nil
         let rows = launcher.resultTitles.prefix(2).joined(separator: ", ")
-        // A quick ⌘, as before ⌘C: nothing shown.
+        // A quick ⌘, as before ⌘C: nothing left once it is up.
         postKey(CGKeyCode(kVK_Command), down: true, flags: .maskCommand)
         await pause(80)
         postKey(CGKeyCode(kVK_Command), down: false)
-        await pause(450)
+        await pause(150)
         let quietOnTap = !launcher.rowNumbersShown
-        // Held: the numbers, then gone on release.
+        // Held: the numbers at once (no wait before them), then gone on
+        // release.
         postKey(CGKeyCode(kVK_Command), down: true, flags: .maskCommand)
-        let shown = await waitUntil(timeout: 1) {
+        let shown = await waitUntil(timeout: 0.15) {
             launcher.rowNumbersShown && Array(launcher.shownTrailingKeycaps.prefix(2)) == ["⌘1", "⌘2"]
         } != nil
         let caps = launcher.shownTrailingKeycaps.prefix(3).map { $0 ?? "–" }.joined(separator: " ")
