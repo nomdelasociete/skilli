@@ -371,6 +371,9 @@ final class ClipboardPreviewView: NSView {
     func toggleImageText() {
         guard let item, Self.imageText(item) != nil else { return }
         textShownFor = showsImageText ? nil : item.id
+        // Opened again later, the whole text goes to its first found
+        // word again, wherever it was left.
+        lastMarked = nil
         show(item, imageURL: imageURL)
     }
 
