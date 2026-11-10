@@ -44,6 +44,9 @@ final class PreviewText: NSView {
         textView.drawsBackground = false
         textView.textContainerInset = NSSize(width: 8, height: 10)
         textView.isVerticallyResizable = true
+        // As tall as its text: without this it stays as tall as it was
+        // made, and a place far down a long text cannot be scrolled to.
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         scroll.documentView = textView
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = false
@@ -101,6 +104,24 @@ final class PreviewText: NSView {
 
     /// How many places `mark` marked.
     private(set) var markedCount = 0
+    private var firstMarked: NSRange?
+
+    /// Self-test hook: the first place marked is in the part of the text
+    /// in view.
+    var firstMarkInView: Bool {
+        guard let firstMarked, let layout = textView.layoutManager, let container = textView.textContainer else { return false }
+        let glyphs = layout.glyphRange(forCharacterRange: firstMarked, actualCharacterRange: nil)
+        let rect = layout.boundingRect(forGlyphRange: glyphs, in: container).offsetBy(dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
+        return textView.visibleRect.intersects(rect)
+    }
+
+    /// Self-test hook: where the first mark and the part in view are.
+    var markPlace: String {
+        guard let firstMarked, let layout = textView.layoutManager, let container = textView.textContainer else { return "no mark" }
+        let glyphs = layout.glyphRange(forCharacterRange: firstMarked, actualCharacterRange: nil)
+        let rect = layout.boundingRect(forGlyphRange: glyphs, in: container)
+        return "mark y \(Int(rect.minY)), in view \(Int(textView.visibleRect.minY))–\(Int(textView.visibleRect.maxY)), text \(Int(textView.frame.height)) pt high, max \(Int(min(textView.maxSize.height, 99_999)))"
+    }
 
     /// Marks every place a word of `words` is in the text shown (the
     /// history's search), and with `moving` scrolls the first into view.
@@ -113,6 +134,7 @@ final class PreviewText: NSView {
         let string = textView.string
         let found = words.isEmpty ? [] : ClipboardSearch.ranges(of: words, in: string).map { NSRange($0, in: string) }
         markedCount = found.count
+        firstMarked = found.first
         for range in found {
             layout.addTemporaryAttribute(.backgroundColor, value: NSColor.systemYellow.withAlphaComponent(0.35), forCharacterRange: range)
         }

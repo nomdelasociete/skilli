@@ -23,7 +23,9 @@ images, files, and your screenshots too.
   day.
 - **Search** by the words, or a piece of one ("board" finds
   "clipboard"), a bit of a link, or the app it came from ("slack"),
-  without worrying about accents, even words inside images. The copy
+  without worrying about accents, even words inside images. A piece
+  needs 3 letters or more: with a shorter word in what you type, words
+  are found from their start only. The copy
   found shows the line where your words are. **⇥** searches by meaning, through all the history you
   keep: "my train ticket from yesterday", or what a copy is: "email", "a
   link", "phone number".

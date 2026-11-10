@@ -15934,11 +15934,12 @@ final class SelfTest {
             return
         }
         let before = store.search("").first?.copies
+        // The old rows were never indexed by FTS: they still show in the
+        // list, and the index made for inside words holds them. Asked
+        // before the copy is made again, which would index it anyway.
+        let insideWords = store.findsInsideWords && store.search("cienne").first?.text == "ancienne copie"
         _ = try? store.add(.init(kind: .text, text: "ancienne copie", hash: "old-hash"))
         let after = store.search("").first?.copies
-        // The old rows were never indexed by FTS: they still show in the
-        // list, and the index made for inside words holds them.
-        let insideWords = store.findsInsideWords && store.search("cienne").first?.text == "ancienne copie"
         record(name, before == 1 && after == 2 && insideWords,
                "copies before: \(before.map(String.init) ?? "nil"), after copying again: \(after.map(String.init) ?? "nil"), found by “cienne”: \(insideWords)", nil)
     }
@@ -16840,6 +16841,26 @@ final class SelfTest {
                 problems.append("the history did not open again for its rows")
             }
             if let older { try? store.delete(older.id) }
+
+            // Other words on the same copy: the preview goes to where the
+            // new ones are, far down a long text.
+            let long = (["Zanzibar ledger"] + (1...70).map { "Line \($0) of the notes." } + ["Signed by the quokka."]).joined(separator: "\n")
+            let longCopy = try? store.add(.init(kind: .text, text: long, app: "com.apple.Notes", appName: "Notes", hash: "selftest-found-far")).item
+            if await openHistory() {
+                for letter in "anzib" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { launcher.shownRowCount == 1 && preview.markedCount == 1 && preview.firstMarkInView }) == nil {
+                    problems.append("“anzib”: \(launcher.shownRowCount) rows, \(preview.markedCount) marked, \(preview.markPlace)")
+                }
+                for _ in "anzib" { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+                for letter in "uokk" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { launcher.shownRowCount == 1 && preview.markedCount == 1 && preview.firstMarkInView }) == nil {
+                    problems.append("“uokk” after “anzib” on the same copy: \(launcher.shownRowCount) rows, \(preview.markedCount) marked, \(preview.markPlace)")
+                }
+                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            } else {
+                problems.append("the history did not open again for a long copy")
+            }
+            if let longCopy { try? store.delete(longCopy.id) }
         }
 
         // The whole history walks: past its first 50 rows, the older ones

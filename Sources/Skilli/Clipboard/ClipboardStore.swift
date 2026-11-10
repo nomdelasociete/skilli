@@ -158,7 +158,26 @@ final class ClipboardStore: @unchecked Sendable {
         // the words' one.
         do {
             if try strings("SELECT name FROM sqlite_master WHERE name = 'items_sub'", []).isEmpty {
-                try execute("""
+                // One transaction: the table is there only whole, with its
+                // triggers and every copy in it. Stopped half way (a full
+                // disk, the app quit while a long history is read), nothing
+                // of it stays and the next launch makes it again.
+                try execute("BEGIN IMMEDIATE;")
+                do {
+                    try execute(Self.insideWordsIndex)
+                    try execute("COMMIT;")
+                } catch {
+                    try? execute("ROLLBACK;")
+                    throw error
+                }
+            }
+            findsInsideWords = true
+        } catch {
+            Log.actions.error("Clipboard history, no search inside words: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private static let insideWordsIndex = """
                     CREATE VIRTUAL TABLE items_sub USING fts5 (
                         text, ocr, tags, app_name, content = 'items', content_rowid = 'id',
                         tokenize = 'trigram remove_diacritics 1'
@@ -178,13 +197,7 @@ final class ClipboardStore: @unchecked Sendable {
                             VALUES (new.id, new.text, coalesce(new.ocr, ''), coalesce(new.tags, ''), coalesce(new.app_name, ''));
                     END;
                     INSERT INTO items_sub (items_sub) VALUES ('rebuild');
-                    """)
-            }
-            findsInsideWords = true
-        } catch {
-            Log.actions.error("Clipboard history, no search inside words: \(error.localizedDescription, privacy: .public)")
-        }
-    }
+                    """
 
     /// The trigram index is there: words are found from inside too.
     private(set) var findsInsideWords = false
