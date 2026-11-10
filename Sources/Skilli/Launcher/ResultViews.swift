@@ -78,6 +78,8 @@ final class ResultCellView: NSTableCellView {
     }
 
     var accessoryText: String { accessory.text }
+    /// Self-test hook: the title as drawn.
+    var titleText: String { title.stringValue }
 
     /// Self-test hook: the accessory as drawn ("AI Command" under the
     /// pointer) and where it is on screen.
@@ -147,6 +149,12 @@ final class ResultCellView: NSTableCellView {
         layoutLabels()
     }
 
+    /// The accessory is as wide as its words, no more (a copy's time in
+    /// the clipboard history's narrow list): the title keeps the rest.
+    var fitsAccessory = false {
+        didSet { if fitsAccessory != oldValue { layoutLabels() } }
+    }
+
     /// The title as last set (no round trip through the label).
     private var shownTitle = ""
     /// The accessory as last set, before `place`.
@@ -183,7 +191,8 @@ final class ResultCellView: NSTableCellView {
             right = trailingCap.frame.minX - 12
             titleEnd = right
         }
-        let accessoryWidth: CGFloat = accessory.stringValue.isEmpty ? 0 : 156
+        let accessoryWidth: CGFloat = accessory.stringValue.isEmpty ? 0
+            : fitsAccessory ? min(156, ceil(accessory.attributedStringValue.size().width) + 6) : 156
         accessory.frame = NSRect(x: right - accessoryWidth, y: 15, width: accessoryWidth, height: 16)
         if accessoryWidth > 0 { titleEnd = accessory.frame.minX - 14 }
         // Right after the title's text, where Raycast shows its alias: the

@@ -62,6 +62,11 @@ final class ClipboardPreviewView: NSView {
     private var textShownFor: Int64?
     /// The image's whole text shows, not its picture.
     var showsImageText: Bool { item?.imageText != nil && item?.id == textShownFor && textShownFor != nil }
+    /// The words the list was searched by: marked in the text shown, the
+    /// first scrolled into view (docs/clipboard-rows-and-search.md).
+    var searched = ""
+    /// How many places are marked in the text (self-test hook).
+    var markedCount: Int { text.isHidden ? 0 : text.markedCount }
     /// The text shown in the tile (a text or code copy, an image's whole
     /// text), and the part of it picked with the pointer.
     var shownText: String { text.isHidden ? "" : text.string }
@@ -330,6 +335,7 @@ final class ClipboardPreviewView: NSView {
     private func showPlain(_ string: String, code: Bool, language: String?) {
         text.show(string, code: code, language: language, keeping: sameAsShown)
         text.isHidden = false
+        text.mark(searched, moving: !sameAsShown)
     }
 
     /// An image's picture and its whole text, one for the other (⌘K → Show
@@ -420,6 +426,7 @@ final class ClipboardPreviewView: NSView {
             // Its whole text in the picture's place, under "Text in Image".
             text.show(whole, code: false, language: "Text in Image", limit: Self.imageTextLimit, keeping: sameAsShown)
             text.isHidden = false
+            text.mark(searched, moving: !sameAsShown)
             imageView.isHidden = true
             shownTextInImage = whole
         } else if let text = Self.imageText(item) {
@@ -481,6 +488,7 @@ final class ClipboardPreviewView: NSView {
         if let whole {
             text.show(whole, code: false, language: "Text in Image", limit: Self.imageTextLimit, keeping: sameAsShown)
             text.isHidden = false
+            text.mark(searched, moving: !sameAsShown)
             fileName.isHidden = true
             shownTextInImage = whole
         } else if let words = Self.imageText(item) {

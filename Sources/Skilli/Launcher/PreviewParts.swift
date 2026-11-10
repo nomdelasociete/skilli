@@ -1,4 +1,5 @@
 import AppKit
+import SkilliCore
 
 // The parts the launcher's previews are made of (Clipboard History's,
 // Search Snippets'): a soft tile, a text that fades at the bottom, and
@@ -96,6 +97,26 @@ final class PreviewText: NSView {
     /// over it).
     func screenRect(of range: NSRange) -> NSRect {
         textView.firstRect(forCharacterRange: range, actualRange: nil)
+    }
+
+    /// How many places `mark` marked.
+    private(set) var markedCount = 0
+
+    /// Marks every place a word of `words` is in the text shown (the
+    /// history's search), and with `moving` scrolls the first into view.
+    /// Temporary attributes: the text itself, and what is picked in it,
+    /// stay as they are.
+    func mark(_ words: String, moving: Bool) {
+        guard let layout = textView.layoutManager else { return }
+        let whole = NSRange(location: 0, length: (textView.string as NSString).length)
+        layout.removeTemporaryAttribute(.backgroundColor, forCharacterRange: whole)
+        let string = textView.string
+        let found = words.isEmpty ? [] : ClipboardSearch.ranges(of: words, in: string).map { NSRange($0, in: string) }
+        markedCount = found.count
+        for range in found {
+            layout.addTemporaryAttribute(.backgroundColor, value: NSColor.systemYellow.withAlphaComponent(0.35), forCharacterRange: range)
+        }
+        if moving, let first = found.first { textView.scrollRangeToVisible(first) }
     }
 
     /// Plain text, monospaced when it is code. `keeping`: the same copy
