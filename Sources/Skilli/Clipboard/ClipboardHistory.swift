@@ -423,11 +423,14 @@ final class ClipboardHistory {
                                       app: app, appName: appName, hash: hash("image", image.png))
     }
 
-    /// The clipboard's image as it is there: PNG, TIFF, or whatever else
-    /// AppKit reads as an image (JPEG, HEIC), up to 40 MB. The history and
-    /// `get_clipboard` read the same.
+    /// The clipboard's image as it is there, for Vision to read
+    /// (`get_clipboard`): PNG, TIFF, a JPEG or a HEIC as copied (the 40 MB
+    /// bound is on what was copied, not on a TIFF made from it), else
+    /// whatever AppKit reads as an image.
     static func imageData(on pasteboard: NSPasteboard) -> Data? {
         let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
+            ?? pasteboard.data(forType: NSPasteboard.PasteboardType("public.jpeg"))
+            ?? pasteboard.data(forType: NSPasteboard.PasteboardType("public.heic"))
             ?? NSImage(pasteboard: pasteboard)?.tiffRepresentation
         guard let data, data.count <= 40_000_000 else { return nil }
         return data
@@ -435,7 +438,9 @@ final class ClipboardHistory {
 
     /// The clipboard's image as PNG, with its size in pixels.
     private static func pngData(from pasteboard: NSPasteboard) -> (png: Data, size: String)? {
-        guard let data = imageData(on: pasteboard), let rep = NSBitmapImageRep(data: data) else { return nil }
+        let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
+            ?? NSImage(pasteboard: pasteboard)?.tiffRepresentation
+        guard let data, data.count <= 40_000_000, let rep = NSBitmapImageRep(data: data) else { return nil }
         let png = pasteboard.data(forType: .png) ?? rep.representation(using: .png, properties: [:])
         guard let png else { return nil }
         return (png, "\(rep.pixelsWide)×\(rep.pixelsHigh)")

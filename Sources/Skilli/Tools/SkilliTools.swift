@@ -908,12 +908,15 @@ final class SkilliTools {
             return "Replaced."
 
         case "get_clipboard":
-            if let text = NSPasteboard.general.string(forType: .string) { return text }
+            // An empty text beside an image is no text, as the history
+            // reads it.
+            let string = NSPasteboard.general.string(forType: .string)
+            if let string, !string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return string }
             // An image: the words in it, read by Vision on this Mac (as
-            // the history's Copy Text in Image), from the image as the
-            // history reads it; nothing written to disk.
-            guard let image = ClipboardHistory.imageData(on: .general) else { return "" }
-            return await ClipboardHistory.recognizeText(in: image) ?? ""
+            // the history's Copy Text in Image), from the image as it
+            // was copied; nothing written to disk.
+            guard let image = ClipboardHistory.imageData(on: .general) else { return string ?? "" }
+            return await ClipboardHistory.recognizeText(in: image) ?? string ?? ""
 
         case "set_clipboard":
             let value = try text("text")
