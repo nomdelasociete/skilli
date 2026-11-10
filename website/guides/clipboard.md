@@ -18,7 +18,7 @@ images, files, and your screenshots too.
 - **The text in an image**: **⌘K** on the image → *Show Text in Image*
   puts all its words in the picture's place, to read or pick a part
   from; *Copy Text in Image* (**⇧⌘C**) copies them all, **⇧↩** pastes
-  them.
+  them. A picture copied as a file works the same.
 - **Search** by the words, without worrying about accents, even words
   inside images. **⇥** searches by meaning, through all the history you
   keep: "my train ticket from yesterday", or what a copy is: "email", "a

@@ -1,6 +1,7 @@
 import AppKit
 import CryptoKit
 import Observation
+import QuickLookThumbnailing
 import SkilliCore
 import Vision
 
@@ -62,6 +63,7 @@ final class ClipboardHistory {
         // Previews whose copy went while skil.li was not running.
         let store = self.store
         Task.detached(priority: .utility) { store?.sweepPreviews() }
+        readUnreadPictureFiles()
     }
 
     func stop() {
@@ -99,6 +101,8 @@ final class ClipboardHistory {
                 if preferences.clipboardOCR { readText(in: url, id: item.id) }
                 if preferences.imageTagsClipboard { tag(url, id: item.id) }
             }
+            // The same picture copied as its file: read too.
+            if item.ocr == nil, preferences.clipboardOCR, let file = item.pictureFile { readText(inFile: file, id: item.id) }
             return item
         } catch {
             Log.actions.error("\(error.localizedDescription, privacy: .public)")
@@ -201,8 +205,8 @@ final class ClipboardHistory {
         revision += 1
     }
 
-    func search(_ text: String) -> [ClipboardStore.Item] {
-        store?.search(text) ?? []
+    func search(_ text: String, before: Date? = nil) -> [ClipboardStore.Item] {
+        store?.search(text, before: before) ?? []
     }
 
     /// What a search by meaning found: the copies that fit, best first,
@@ -340,7 +344,9 @@ final class ClipboardHistory {
             }
         case .files:
             if plain {
-                entry.setString(item.text, forType: .string)
+                // A picture's file whose text was read: its text, as an
+                // image's; else the paths.
+                entry.setString(item.imageText ?? item.text, forType: .string)
             } else {
                 urls = item.text.split(separator: "\n").map { NSURL(fileURLWithPath: String($0)) }
             }
@@ -484,6 +490,47 @@ final class ClipboardHistory {
             Log.trace("Clipboard: OCR read \(text.count) characters in \((ContinuousClock.now - start).compact)")
             await MainActor.run { self?.revision += 1 }
         }
+    }
+
+    /// A picture copied as its file: its text read once, from the picture
+    /// Quick Look draws of it (as the preview shows it: skil.li itself
+    /// opens no file in the user's folders). No text, or a file that is
+    /// gone: kept as read, with none, so it is not read again.
+    private func readText(inFile url: URL, id: Int64) {
+        let store = self.store
+        Task.detached(priority: .utility) { [weak self] in
+            let start = ContinuousClock.now
+            let text = await Self.recognizeText(inFile: url)
+            try? store?.setOCR(text ?? "", for: id)
+            Log.trace("Clipboard: OCR read \(text?.count ?? 0) characters in a copied picture file in \((ContinuousClock.now - start).compact)")
+            await MainActor.run { self?.revision += 1 }
+        }
+    }
+
+    /// Picture files copied before they were read (or while Read text in
+    /// images was off): the newest `limit` read now, one after the other.
+    func readUnreadPictureFiles(limit: Int = 60) {
+        guard let store, preferences.clipboardOCR else { return }
+        Task.detached(priority: .utility) { [weak self] in
+            var read = 0
+            for item in store.unreadFiles(limit: limit) {
+                guard let file = item.pictureFile else { continue }
+                try? store.setOCR(await Self.recognizeText(inFile: file) ?? "", for: item.id)
+                read += 1
+            }
+            guard read > 0 else { return }
+            Log.trace("Clipboard: \(read) copied picture files read")
+            await MainActor.run { self?.revision += 1 }
+        }
+    }
+
+    /// The text in a picture file, read in Quick Look's picture of it, up
+    /// to 3,000 pixels a side.
+    nonisolated static func recognizeText(inFile url: URL) async -> String? {
+        let request = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: 3_000, height: 3_000), scale: 1,
+                                                   representationTypes: .thumbnail)
+        guard let picture = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request) else { return nil }
+        return text(of: try? await textRequest.perform(on: picture.cgImage))
     }
 
     /// The image's text, line by line, in whatever language it is.

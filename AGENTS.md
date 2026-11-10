@@ -4014,9 +4014,24 @@ re-investigating.
   Image / Show Image (`toggleImageText`: the whole text in the picture's
   place, up to 50,000 characters, for that row until another shows) and
   Copy Text in Image (⇧⌘C); one with none lists none, nor a plain-text
-  paste. `get_clipboard` gives the text read in an image on the
-  clipboard. `remote previews` drags over the text with real mouse
-  events (`partsOfACopy`). ⇥ searches by meaning
+  paste. A picture copied as its file (one file, a picture by its
+  extension: `CopiedPicture`, `Item.pictureFile`; Finder, CleanShot) is
+  the same picture to the user: read once when copied
+  (`readText(inFile:)`, Vision on Quick Look's picture of it, up to
+  3,000 px: skil.li opens no file in the user's folders, as the preview;
+  none found is kept as "" so it is not read again; the newest 60 never
+  read are read at launch, `readUnreadPictureFiles`), found by its
+  words, and with text read it lists the same three plus Copy Path (⇧↩
+  pastes the text; without text, Paste as Plain Text pastes the path as
+  before). Not tagged by Jev. `get_clipboard` gives the text read in an
+  image on the clipboard. The list is the whole history: 50 rows, then
+  the next 50 older ones (`search(_:before:)`, by the oldest row's date)
+  when the selection or the scroll is within ten rows of the end
+  (`showOlderClips`); not for a search by meaning. Opening the history
+  reads the clipboard first (`onClipboardMode` → `poll`): a copy made
+  since the last 0.4 s tick is in the list. `remote previews` drags over
+  the text with real mouse events (`partsOfACopy`), checks a picture's
+  file and walks 70 copies. ⇥ searches by meaning
   (`ClipboardHistory.searchByMeaning`, `ClipboardMeaning`): every kept
   copy (2026-10-28: no longer only the last 240), one line each (kind,
   app, "yesterday 18:02", 200 characters of

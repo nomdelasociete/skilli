@@ -61,7 +61,7 @@ final class ClipboardPreviewView: NSView {
     /// Text in Image): that row, until another shows.
     private var textShownFor: Int64?
     /// The image's whole text shows, not its picture.
-    var showsImageText: Bool { item?.kind == .image && item?.id == textShownFor && textShownFor != nil }
+    var showsImageText: Bool { item?.imageText != nil && item?.id == textShownFor && textShownFor != nil }
     /// The text shown in the tile (a text or code copy, an image's whole
     /// text), and the part of it picked with the pointer.
     var shownText: String { text.isHidden ? "" : text.string }
@@ -335,16 +335,14 @@ final class ClipboardPreviewView: NSView {
     /// An image's picture and its whole text, one for the other (⌘K → Show
     /// Text in Image, Show Image). Nothing on a copy with no text read.
     func toggleImageText() {
-        guard let item, item.kind == .image, Self.imageText(item) != nil else { return }
+        guard let item, Self.imageText(item) != nil else { return }
         textShownFor = showsImageText ? nil : item.id
         show(item, imageURL: imageURL)
     }
 
-    /// The text read in an image copy, when there is some.
-    static func imageText(_ item: ClipboardStore.Item) -> String? {
-        guard item.kind == .image, let text = item.ocr?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
-        return text
-    }
+    /// The text read in an image copy (or in a picture copied as its
+    /// file), when there is some.
+    static func imageText(_ item: ClipboardStore.Item) -> String? { item.imageText }
 
     /// An image's whole text shows up to this many characters.
     static let imageTextLimit = 50_000
@@ -476,9 +474,24 @@ final class ClipboardPreviewView: NSView {
         fileName.stringValue = url.lastPathComponent
         fileName.isHidden = false
         let key = "file:\(path)"
+        // A picture's file whose text was read: as an image's, its whole
+        // text in the picture's place (Show Text in Image) or its first
+        // lines under it.
+        let whole = showsImageText ? Self.imageText(item) : nil
+        if let whole {
+            text.show(whole, code: false, language: "Text in Image", limit: Self.imageTextLimit, keeping: sameAsShown)
+            text.isHidden = false
+            fileName.isHidden = true
+            shownTextInImage = whole
+        } else if let words = Self.imageText(item) {
+            ocrText.stringValue = words
+            ocrText.isHidden = false
+            ocrHeader.isHidden = false
+            shownTextInImage = words
+        }
         if let cached = pictures[key] {
             imageView.image = cached
-            imageView.isHidden = false
+            imageView.isHidden = whole != nil
             hasPicture = true
         }
         let token = self.token
@@ -499,17 +512,18 @@ final class ClipboardPreviewView: NSView {
             self.update("Modified", details.modified)
             if let picture {
                 self.imageView.image = picture
-                self.imageView.isHidden = false
+                self.imageView.isHidden = self.showsImageText
                 self.hasPicture = true
                 self.needsLayout = true
-            } else if !details.exists {
+            } else if !details.exists, !self.showsImageText {
                 self.imageView.image = Theme.symbol("questionmark.folder", pointSize: 40, weight: .light)
                 self.imageView.contentTintColor = .tertiaryLabelColor
                 self.imageView.isHidden = false
                 self.needsLayout = true
             }
         }
-        return [("Kind", "…"), ("Size", "…"), ("Where", folder), ("Modified", "…")]
+        return [("Kind", "…")] + (whole.map { [("Text", PreviewInformation.size(of: $0).size)] } ?? [])
+            + [("Size", "…"), ("Where", folder), ("Modified", "…")]
     }
 
     // MARK: - Off the main thread

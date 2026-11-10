@@ -15826,11 +15826,47 @@ final class SelfTest {
             pasteboard.clearContents()
         }
 
+        // The same picture copied as its file: read in Quick Look's
+        // picture of it, its text pasted as an image's.
+        var fileRead = false
+        let pictureFile = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-\(getpid())/Facture copiée.png")
+        if let tiff = picture.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+            try? FileManager.default.createDirectory(at: pictureFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? png.write(to: pictureFile)
+            pasteboard.clearContents()
+            pasteboard.writeObjects([pictureFile as NSURL])
+            if let copy = history.capture(), copy.kind == .files, copy.pictureFile != nil {
+                let text = await ClipboardHistory.recognizeText(inFile: pictureFile)
+                try? store.setOCR(text ?? "", for: copy.id)
+                if let read = store.search("facture 2026").first, read.id == copy.id, read.imageText != nil {
+                    fileRead = history.write(read, plain: true) && pasteboard.string(forType: .string)?.lowercased().contains("facture") == true
+                }
+                try? store.delete(copy.id)
+            }
+            pasteboard.clearContents()
+            try? FileManager.default.removeItem(at: pictureFile)
+        }
+
+        // The list's pages: 120 copies come 50, 50, 20, none twice.
+        var paged = false
+        let pagesFrom = Date.now.addingTimeInterval(-3_600)
+        for index in 0..<120 {
+            _ = try? store.add(.init(kind: .text, text: "feuillet \(index)", hash: "selftest-page-\(index)"), at: pagesFrom.addingTimeInterval(-Double(index)))
+        }
+        let firstPage = store.search("feuillet")
+        if firstPage.count == 50, let last = firstPage.last {
+            let second = store.search("feuillet", before: last.copiedAt)
+            let third = second.last.map { store.search("feuillet", before: $0.copiedAt) } ?? []
+            paged = second.count == 50 && third.count == 20 && second.first?.text == "feuillet 50"
+                && Set((firstPage + second + third).map(\.id)).count == 120
+        }
+        for item in store.search("feuillet", limit: 200) { try? store.delete(item.id) }
+
         let old = try? store.add(.init(kind: .text, text: "Très vieux", hash: "selftest-old"), at: .now.addingTimeInterval(-40 * 86_400))
         let pruned = old != nil && (try? store.prune(before: ClipboardRetention.month.cutoff()!))?.count == 1 && store.search("vieux").isEmpty
 
-        record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && ocrFromData && imageFileGone && pruned,
-               "a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
+        record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged,
+               "a picture copied as its file read and its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
                ocrMs)
     }
 
@@ -16691,6 +16727,60 @@ final class SelfTest {
         if await waitUntil(timeout: 1, { !launcher.isVisible && copied() == imageText }) == nil {
             problems.append("⇧⌘C on the invoice copied “\(copied().prefix(40))”, launcher open \(launcher.isVisible)")
         }
+        // The same picture copied as its file (the chart's, given words):
+        // the same actions, its path too, its whole text shown.
+        let chartText = "Quarterly Chart\nQ1 35 % · Q2 55 % · Q3 48 % · Q4 80 %"
+        if let chart = context.clipboard.search("quarterly").first(where: { $0.pictureFile != nil }), let store = context.clipboard.store {
+            try? store.setOCR(chartText, for: chart.id)
+            if await openHistory() {
+                for letter in "q4" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { preview.shown == .file && preview.shownTextInImage == chartText }) == nil {
+                    problems.append("“q4” did not show the picture file with its words (\(preview.shown.rawValue), “\(preview.shownTextInImage.prefix(30))”)")
+                }
+                await pressKey("k", flags: .maskCommand)
+                _ = await waitUntil(timeout: 1) { !launcher.shownActions.isEmpty }
+                let fileActions = launcher.shownActions
+                for (title, key) in [("Paste Text in Image", "⇧↩"), ("Show Text in Image", nil), ("Copy Text in Image", "⇧⌘C"), ("Copy Path", nil)] as [(String, String?)]
+                where !fileActions.contains(where: { $0.title == title && $0.key == key }) {
+                    problems.append("⌘K on a picture's file lacks \(title): \(fileActions.map(\.title))")
+                }
+                if fileActions.contains(where: { $0.title == "Paste as Plain Text" }) { problems.append("⌘K on a picture's file with text still says Paste as Plain Text") }
+                for letter in "show t" { await pressKey(letter == " " ? nil : letter, code: letter == " " ? CGKeyCode(kVK_Space) : nil) }
+                await pressKey(nil, code: CGKeyCode(kVK_Return))
+                if await waitUntil(timeout: 1, { preview.showsImageText && preview.shownText == chartText }) == nil {
+                    problems.append("Show Text in Image on a picture's file showed “\(preview.shownText.prefix(40))”")
+                }
+                await captureLauncherBothWays(as: "launcher-clipboard-preview-file-text")
+            } else {
+                problems.append("the history did not open again for the picture's file")
+            }
+        } else {
+            problems.append("no picture file among the copies")
+        }
+
+        // The whole history walks: past its first 50 rows, the older ones
+        // join the list as the selection nears its end.
+        if let store = context.clipboard.store {
+            let from = Date.now.addingTimeInterval(-7_200)
+            for index in 0..<70 {
+                _ = try? store.add(.init(kind: .text, text: "feuillet \(index)", app: "com.apple.Notes", appName: "Notes", hash: "selftest-walk-\(index)"),
+                                   at: from.addingTimeInterval(-Double(index)))
+            }
+            if await openHistory() {
+                for letter in "feuillet" { await pressKey(letter) }
+                _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 50 }
+                let first = launcher.shownRowCount
+                for _ in 0..<45 { await pressKey(nil, code: CGKeyCode(kVK_DownArrow)) }
+                if await waitUntil(timeout: 2, { launcher.shownRowCount == 70 }) == nil {
+                    problems.append("70 copies: \(first) rows at first, \(launcher.shownRowCount) after 45 ↓ (70 expected)")
+                }
+                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            } else {
+                problems.append("the history did not open again for its older rows")
+            }
+            for item in store.search("feuillet", limit: 200) { try? store.delete(item.id) }
+        }
+
         // What these copies added to the history goes with the test.
         await pause(700)
         for text in ["keeps", imageText] {

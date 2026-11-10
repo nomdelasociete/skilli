@@ -81,6 +81,13 @@ On an image whose text was read, ⌘K lists:
   gains "Text" (its words and characters). Up to 50,000 characters.
 - Showing another row puts the picture back: the choice is for that row,
   that time.
+- **The same picture copied as its file** (one file copied in Finder,
+  or by a capture app that puts its file on the clipboard) is an image
+  to the user, who cannot tell which way it was copied: its text is
+  read the same (when copied; the ones already kept, at the next
+  launch), search finds it, and ⌘K lists the same three, plus Copy Path.
+  ⇧↩ pastes its text; a picture's file with no text read keeps Paste as
+  Plain Text (its path).
 - From a skillie or an agent: `get_clipboard` gives the text read in the
   image on the clipboard when the clipboard holds no text
   (`"$SKILLI_CLI" call get_clipboard`). No `skilli://` link: these act on
