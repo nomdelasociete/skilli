@@ -171,13 +171,6 @@ private final class PreviewTextView: NSTextView {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString((string as NSString).substring(with: range), forType: .string)
     }
-
-    override func writeSelection(to pboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {
-        let range = selectedRange()
-        guard range.length > 0 else { return false }
-        pboard.clearContents()
-        return pboard.setString((string as NSString).substring(with: range), forType: .string)
-    }
 }
 
 /// Draws `PreviewText.wash` as a rounded fill behind its characters, line
