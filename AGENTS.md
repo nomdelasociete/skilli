@@ -4001,7 +4001,22 @@ re-investigating.
   290 pt beside a preview (`ClipboardPreviewView`, its parts in
   `PreviewParts.swift`, shared with Search Snippets') made for each kind of
   copy (below), then Information (copied as a relative date, times copied:
-  `copies` column, added to older files on open). ⇥ searches by meaning
+  `copies` column, added to older files on open). A part of a text or
+  code copy is picked with the pointer in the preview
+  (docs/clipboard-text-selection.md; `PreviewText.isSelectable`, the
+  history's only): ⌘C then copies that part as plain text and closes
+  (`deliver`, before the row's copy), esc lets it go first, the same row
+  shown again keeps it. The click makes the preview first responder; the
+  keys still reach the field through `deliver`, which makes it first
+  responder again with the caret at the end (becoming first responder
+  selects its words, and the key typed would replace them). An image
+  whose text was read: ⌘K lists Paste Text in Image (⇧↩), Show Text in
+  Image / Show Image (`toggleImageText`: the whole text in the picture's
+  place, up to 50,000 characters, for that row until another shows) and
+  Copy Text in Image (⇧⌘C); one with none lists none, nor a plain-text
+  paste. `get_clipboard` gives the text read in an image on the
+  clipboard. `remote previews` drags over the text with real mouse
+  events (`partsOfACopy`). ⇥ searches by meaning
   (`ClipboardHistory.searchByMeaning`, `ClipboardMeaning`): every kept
   copy (2026-10-28: no longer only the last 240), one line each (kind,
   app, "yesterday 18:02", 200 characters of

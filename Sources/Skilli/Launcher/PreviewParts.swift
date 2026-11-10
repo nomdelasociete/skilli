@@ -22,7 +22,7 @@ final class PreviewText: NSView {
     static let code = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
 
     private let scroll = NSScrollView()
-    private let textView: NSTextView
+    private let textView: PreviewTextView
     private let fade = CAGradientLayer()
     private let language = NSTextField(labelWithString: "")
     private let languageLine = HairlineView()
@@ -35,10 +35,11 @@ final class PreviewText: NSView {
         let container = NSTextContainer(size: NSSize(width: frame.width, height: .greatestFiniteMagnitude))
         container.widthTracksTextView = true
         layout.addTextContainer(container)
-        textView = NSTextView(frame: frame, textContainer: container)
+        textView = PreviewTextView(frame: frame, textContainer: container)
         super.init(frame: frame)
         textView.isEditable = false
         textView.isSelectable = false
+        textView.selectedTextAttributes = [.backgroundColor: NSColor.controlAccentColor.withAlphaComponent(0.28)]
         textView.drawsBackground = false
         textView.textContainerInset = NSSize(width: 8, height: 10)
         textView.isVerticallyResizable = true
@@ -64,26 +65,64 @@ final class PreviewText: NSView {
     /// The text as shown (attachments as U+FFFC).
     var string: String { textView.string }
 
-    /// Plain text, monospaced when it is code.
-    func show(_ text: String, code: Bool, language: String?) {
-        show(NSAttributedString(string: text, attributes: Self.attributes(code: code)), language: language)
+    /// A part of the text can be picked with the pointer (the clipboard
+    /// history's copies: docs/clipboard-text-selection.md).
+    var isSelectable: Bool {
+        get { textView.isSelectable }
+        set { textView.isSelectable = newValue }
     }
 
-    func show(_ text: NSAttributedString, language name: String?) {
-        // Past 4,000 characters nobody reads it here.
-        if text.length > 4_000 {
-            let end = (text.string as NSString).rangeOfComposedCharacterSequence(at: 4_000).location
-            let cut = NSMutableAttributedString(attributedString: text.attributedSubstring(from: NSRange(location: 0, length: end)))
-            cut.append(NSAttributedString(string: "…", attributes: text.attributes(at: end - 1, effectiveRange: nil)))
-            textView.textStorage?.setAttributedString(cut)
-        } else {
-            textView.textStorage?.setAttributedString(text)
-        }
-        textView.scroll(.zero)
+    /// The part picked, when there is one.
+    var selectedText: String? {
+        let range = textView.selectedRange()
+        guard textView.isSelectable, !isHidden, range.length > 0 else { return nil }
+        return (textView.string as NSString).substring(with: range)
+    }
+
+    /// Nothing picked any more. `true` when a part was.
+    @discardableResult
+    func clearSelection() -> Bool {
+        let had = textView.selectedRange().length > 0
+        if had { textView.setSelectedRange(NSRange(location: 0, length: 0)) }
+        return had
+    }
+
+    /// Picks `range` of the text shown (self-test hook).
+    func select(_ range: NSRange) {
+        textView.setSelectedRange(range)
+    }
+
+    /// Where `range` of the text is on screen (self-test hook: a real drag
+    /// over it).
+    func screenRect(of range: NSRange) -> NSRect {
+        textView.firstRect(forCharacterRange: range, actualRange: nil)
+    }
+
+    /// Plain text, monospaced when it is code. `keeping`: the same copy
+    /// shown again keeps its place and what is picked in it.
+    func show(_ text: String, code: Bool, language: String?, limit: Int = 4_000, keeping: Bool = false) {
+        show(NSAttributedString(string: text, attributes: Self.attributes(code: code)), language: language, limit: limit, keeping: keeping)
+    }
+
+    func show(_ text: NSAttributedString, language name: String?, limit: Int = 4_000, keeping: Bool = false) {
         language.stringValue = name ?? ""
         language.isHidden = name == nil
         languageLine.isHidden = name == nil
         needsLayout = true
+        if keeping, let shown = textView.textStorage, shown.isEqual(to: Self.cut(text, at: limit)) { return }
+        textView.textStorage?.setAttributedString(Self.cut(text, at: limit))
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        textView.scroll(.zero)
+    }
+
+    /// Past `limit` characters (4,000: nobody reads more here) the start,
+    /// then "…".
+    private static func cut(_ text: NSAttributedString, at limit: Int) -> NSAttributedString {
+        guard text.length > limit else { return text }
+        let end = (text.string as NSString).rangeOfComposedCharacterSequence(at: limit).location
+        let cut = NSMutableAttributedString(attributedString: text.attributedSubstring(from: NSRange(location: 0, length: end)))
+        cut.append(NSAttributedString(string: "…", attributes: text.attributes(at: end - 1, effectiveRange: nil)))
+        return cut
     }
 
     static func attributes(code: Bool) -> [NSAttributedString.Key: Any] {
@@ -111,6 +150,26 @@ final class PreviewText: NSView {
         CATransaction.commit()
         textView.frame = NSRect(origin: .zero, size: NSSize(width: inner.width, height: max(scroll.frame.height, textView.frame.height)))
         textView.textContainer?.containerSize = NSSize(width: inner.width - 16, height: .greatestFiniteMagnitude)
+    }
+}
+
+/// The preview's text: a part of it picked with the pointer copies as
+/// plain text (never the preview's font and color), and a right click
+/// offers Copy alone: Look Up or Services would take the keys from the
+/// launcher, which closes when it loses them.
+private final class PreviewTextView: NSTextView {
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard isSelectable, selectedRange().length > 0 else { return nil }
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "")
+        return menu
+    }
+
+    override func copy(_ sender: Any?) {
+        let range = selectedRange()
+        guard range.length > 0 else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString((string as NSString).substring(with: range), forType: .string)
     }
 }
 

@@ -324,7 +324,8 @@ final class SkilliTools {
                        group: .selection, risk: .changes,
                        parameters: [.init(name: "text", description: "The new text.")]),
         ToolDefinition(name: "get_clipboard", title: "Read the clipboard",
-                       description: "The text on the clipboard.", group: .clipboard, risk: .read),
+                       description: "The text on the clipboard. When it holds an image and no text: the text read in that image, on this Mac.",
+                       group: .clipboard, risk: .read),
         ToolDefinition(name: "set_clipboard", title: "Copy to the clipboard",
                        description: "Puts text on the clipboard, replacing what is there.", group: .clipboard, risk: .changes,
                        parameters: [.init(name: "text", description: "The text to copy.")]),
@@ -907,7 +908,15 @@ final class SkilliTools {
             return "Replaced."
 
         case "get_clipboard":
-            return NSPasteboard.general.string(forType: .string) ?? ""
+            // An empty text beside an image is no text, as the history
+            // reads it.
+            let string = NSPasteboard.general.string(forType: .string)
+            if let string, !string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return string }
+            // An image: the words in it, read by Vision on this Mac (as
+            // the history's Copy Text in Image), from the image as it
+            // was copied; nothing written to disk.
+            guard let image = ClipboardHistory.imageData(on: .general) else { return string ?? "" }
+            return await ClipboardHistory.recognizeText(in: image) ?? string ?? ""
 
         case "set_clipboard":
             let value = try text("text")

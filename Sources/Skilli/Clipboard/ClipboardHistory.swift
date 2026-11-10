@@ -423,6 +423,19 @@ final class ClipboardHistory {
                                       app: app, appName: appName, hash: hash("image", image.png))
     }
 
+    /// The clipboard's image as it is there, for Vision to read
+    /// (`get_clipboard`): PNG, TIFF, a JPEG or a HEIC as copied (the 40 MB
+    /// bound is on what was copied, not on a TIFF made from it), else
+    /// whatever AppKit reads as an image.
+    static func imageData(on pasteboard: NSPasteboard) -> Data? {
+        let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
+            ?? pasteboard.data(forType: NSPasteboard.PasteboardType("public.jpeg"))
+            ?? pasteboard.data(forType: NSPasteboard.PasteboardType("public.heic"))
+            ?? NSImage(pasteboard: pasteboard)?.tiffRepresentation
+        guard let data, data.count <= 40_000_000 else { return nil }
+        return data
+    }
+
     /// The clipboard's image as PNG, with its size in pixels.
     private static func pngData(from pasteboard: NSPasteboard) -> (png: Data, size: String)? {
         let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
@@ -475,11 +488,24 @@ final class ClipboardHistory {
 
     /// The image's text, line by line, in whatever language it is.
     nonisolated static func recognizeText(in url: URL) async -> String? {
+        text(of: try? await textRequest.perform(on: url))
+    }
+
+    /// The same from an image's data (the clipboard's: no file written).
+    nonisolated static func recognizeText(in image: Data) async -> String? {
+        text(of: try? await textRequest.perform(on: image))
+    }
+
+    nonisolated private static var textRequest: RecognizeTextRequest {
         var request = RecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.automaticallyDetectsLanguage = true
         request.usesLanguageCorrection = true
-        guard let observations = try? await request.perform(on: url) else { return nil }
+        return request
+    }
+
+    nonisolated private static func text(of observations: [RecognizedTextObservation]?) -> String? {
+        guard let observations else { return nil }
         let text = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
         return text.isEmpty ? nil : text
     }

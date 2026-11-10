@@ -13,6 +13,12 @@ images, files, and your screenshots too.
 
 - **↩** pastes it in the app you were in. **⇧↩** pastes it as plain text,
   **⌘↩** only copies it.
+- **Only a part of it?** Drag over the text in the preview, then **⌘C**:
+  that part is copied.
+- **The text in an image**: **⌘K** on the image → *Show Text in Image*
+  puts all its words in the picture's place, to read or pick a part
+  from; *Copy Text in Image* (**⇧⌘C**) copies them all, **⇧↩** pastes
+  them.
 - **Search** by the words, without worrying about accents, even words
   inside images. **⇥** searches by meaning, through all the history you
   keep: "my train ticket from yesterday", or what a copy is: "email", "a

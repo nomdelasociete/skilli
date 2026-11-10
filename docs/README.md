@@ -33,6 +33,7 @@ choices, the measures. Each one starts with its status and date.
 | [apps.md](apps.md) | The apps skil.li drives, CleanShot X first |
 | [gif-search.md](gif-search.md) | GIF Search |
 | [snippet-preview.md](snippet-preview.md) | Search Snippets' list and preview |
+| [clipboard-text-selection.md](clipboard-text-selection.md) | Clipboard History: a part of a copy picked with the pointer, an image's whole text |
 | [skillie-files.md](skillie-files.md) | `.skilli` files: double-click to add |
 | [adding-a-shortcut.md](adding-a-shortcut.md) | Giving anything a shortcut |
 | [meeting-recorder.md](meeting-recorder.md) | The meeting recorder |

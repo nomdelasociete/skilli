@@ -1183,6 +1183,13 @@ final class LauncherController: NSObject {
             launchSelected(flags: keyEvent.modifierFlags)
             return true
         }
+        // ⌘C with a part of the copy picked in the preview: that part.
+        if LauncherAction.Key(keyEvent) == .copy, clipboardMode, let part = clipPreview.selectedText {
+            hide()
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(part, forType: .string)
+            return true
+        }
         // ⌘C and ⇧⌘C copy from the selected row, unless text is selected in
         // the field: then ⌘C copies that text.
         if let key = LauncherAction.Key(keyEvent), key == .copy || key == .copySecond,
@@ -1207,7 +1214,11 @@ final class LauncherController: NSObject {
             return true
         }
         if searchField.currentEditor() == nil {
+            // A click in the preview took the keys: back to the field, its
+            // words kept (becoming first responder selects them all, and
+            // the key typed would replace them).
             panel.makeFirstResponder(searchField)
+            searchField.currentEditor()?.selectedRange = NSRange(location: (searchField.stringValue as NSString).length, length: 0)
         }
         // ⌘ with an arrow or ⌫: the command macOS's key bindings name (⌘←
         // to the start, ⇧⌘→ selects to the end, ⌘⌫ erases to the start),
@@ -4201,6 +4212,8 @@ final class LauncherController: NSObject {
     /// goes back to the root search as it was before it, then the
     /// launcher closes. A mode opened straight (✦C) closes at once.
     func escape() {
+        // A part picked in the history's preview: esc lets it go first.
+        if actionPanel.isHidden, clipboardMode, clipPreview.clearSelection() { return }
         switch LauncherEscape.of(showingActions: !actionPanel.isHidden, unfolded: unfolded != nil, inMode: mode != nil, back: modeBack) {
         case .closeActions:
             closeActions()

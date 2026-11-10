@@ -15814,11 +15814,23 @@ final class SelfTest {
             }
         }
 
+        // A JPEG alone on the clipboard (no PNG, no TIFF): read as the
+        // history reads it, its text from the data (`get_clipboard`).
+        var ocrFromData = false
+        if let tiff = picture.tiffRepresentation, let jpeg = NSBitmapImageRep(data: tiff)?.representation(using: .jpeg, properties: [:]) {
+            pasteboard.clearContents()
+            pasteboard.setData(jpeg, forType: NSPasteboard.PasteboardType("public.jpeg"))
+            if let data = ClipboardHistory.imageData(on: pasteboard), let text = await ClipboardHistory.recognizeText(in: data) {
+                ocrFromData = text.lowercased().contains("facture")
+            }
+            pasteboard.clearContents()
+        }
+
         let old = try? store.add(.init(kind: .text, text: "Très vieux", hash: "selftest-old"), at: .now.addingTimeInterval(-40 * 86_400))
         let pruned = old != nil && (try? store.prune(before: ClipboardRetention.month.cutoff()!))?.count == 1 && store.search("vieux").isEmpty
 
-        record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && imageFileGone && pruned,
-               "found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
+        record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && ocrFromData && imageFileGone && pruned,
+               "a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
                ocrMs)
     }
 
@@ -16556,6 +16568,8 @@ final class SelfTest {
             preview.shownTitle == "Link previews, read on your Mac" && preview.shownLinkHasPicture && preview.shownLinkHasIcon
         }
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let parts = await partsOfACopy(essay: essay, imageText: "Facture\nN° 2026-118 · skil.li SAS · 16 octobre 2026\nAbonnement annuel 980,00 €\nTotal 1 240,00 €")
+        problems += parts.problems
 
         let read = served.requests
         let cookies = read.filter { $0.headers["cookie"] != nil }.map(\.target)
@@ -16579,8 +16593,110 @@ final class SelfTest {
         record(name, problems.isEmpty,
                (problems.isEmpty ? "every kind shown" : problems.joined(separator: "; "))
                    + (covering.isEmpty ? "" : "; other apps' windows over the launcher: \(covering.sorted())")
+                   + (parts.note.isEmpty ? "" : "; \(parts.note)")
                    + "; requests: \(read.map(\.target).map { $0.split(separator: "?").first.map(String.init) ?? $0 }); shown in \(times.joined(separator: ", "))",
                slowest.milliseconds)
+    }
+
+    /// docs/clipboard-text-selection.md, on the copies `clipboardPreviews`
+    /// seeded: a part of a text copy picked with a real drag, the next key
+    /// typed still the field's (its words kept), esc letting the part go
+    /// first, ⌘C copying the part; then an image's ⌘K list, its whole text
+    /// in the picture's place and ⇧⌘C copying it. What went wrong, and
+    /// what was not tried: with another app's window over the launcher the
+    /// drag would press in that window, so the part is picked without it.
+    private func partsOfACopy(essay: String, imageText: String) async -> (problems: [String], note: String) {
+        let launcher = context.launcher
+        let preview = launcher.clipboardPreview
+        var problems: [String] = []
+        var note = ""
+        func openHistory() async -> Bool {
+            if launcher.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+            _ = await waitUntil(timeout: 1) { !launcher.isVisible }
+            guard await focusTestWindow() else { return false }
+            window.makeFirstResponder(textView)
+            _ = await hyperChord(["c"], trigger: Self.ownTriggerKeyCode)
+            return await waitUntil(timeout: 1, { launcher.isInClipboard }) != nil
+        }
+        func copied() -> String { NSPasteboard.general.string(forType: .string) ?? "" }
+
+        // The essay alone in the list: "keep" typed, its last letter after
+        // the click in the preview.
+        guard await openHistory() else { return (["the history did not open again for the part of a copy"], note) }
+        for letter in "kee" { await pressKey(letter) }
+        if await waitUntil(timeout: 2, { preview.shown == .text && preview.shownText.hasPrefix("skil.li keeps") }) == nil {
+            problems.append("“kee” did not show the long text (\(preview.shown.rawValue), “\(launcher.query)”)")
+        } else {
+            let rect = preview.screenRect(of: NSRange(location: 0, length: 24))
+            let top = NSScreen.screens.first?.frame.maxY ?? 0
+            let over = Self.othersOver(launcher.window)
+            if over.isEmpty {
+                await mouseDrag(from: CGPoint(x: rect.minX + 1, y: top - rect.midY), to: CGPoint(x: rect.maxX - 1, y: top - rect.midY))
+            } else {
+                note = "no drag over the text (\(over.joined(separator: ", ")) over the launcher): the part picked without the pointer"
+                preview.select(NSRange(location: 0, length: 24))
+            }
+            _ = await waitUntil(timeout: 1) { preview.selectedText != nil }
+            let part = preview.selectedText ?? ""
+            if part.count < 12 || !essay.hasPrefix(part) { problems.append("a drag over the text picked “\(part)”") }
+            await captureLauncherBothWays(as: "launcher-clipboard-preview-part")
+            await pressKey("p")
+            if await waitUntil(timeout: 1, { launcher.query == "keep" }) == nil {
+                problems.append("a key after the click: the field says “\(launcher.query)”, not “keep”")
+            }
+            if launcher.isVisible, preview.selectedText != part { problems.append("the list refreshed and the part went") }
+            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            await pause(150)
+            if preview.selectedText != nil || !launcher.isInClipboard || launcher.query != "keep" {
+                problems.append("esc with a part picked: picked \(preview.selectedText != nil), history \(launcher.isInClipboard), “\(launcher.query)”")
+            }
+            preview.select(NSRange(location: 8, length: 5))
+            NSPasteboard.general.clearContents()
+            await pressKey("c", flags: .maskCommand)
+            if await waitUntil(timeout: 1, { !launcher.isVisible && copied() == "keeps" }) == nil {
+                problems.append("⌘C with “keeps” picked copied “\(copied().prefix(40))”, launcher open \(launcher.isVisible)")
+            }
+        }
+
+        // The invoice: its text's actions, its whole text shown, copied.
+        guard await openHistory() else { return (problems + ["the history did not open again for the image's text"], note) }
+        for letter in "facture" { await pressKey(letter) }
+        guard await waitUntil(timeout: 2, { preview.shown == .image && preview.hasPicture }) != nil else {
+            return (problems + ["“facture” did not show the invoice (\(preview.shown.rawValue))"], note)
+        }
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 1) { !launcher.shownActions.isEmpty }
+        let listed = launcher.shownActions
+        let titles = listed.map(\.title)
+        for (title, key) in [("Paste Text in Image", "⇧↩"), ("Show Text in Image", nil), ("Copy Text in Image", "⇧⌘C")] as [(String, String?)]
+        where !listed.contains(where: { $0.title == title && $0.key == key }) {
+            problems.append("⌘K on the invoice lacks \(title)\(key.map { " " + $0 } ?? ""): \(titles)")
+        }
+        if titles.contains("Paste as Plain Text") { problems.append("⌘K on an image still says Paste as Plain Text") }
+        for letter in "show t" { await pressKey(letter == " " ? nil : letter, code: letter == " " ? CGKeyCode(kVK_Space) : nil) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        if await waitUntil(timeout: 1, { preview.showsImageText && preview.shownText == imageText }) == nil {
+            problems.append("Show Text in Image showed “\(preview.shownText.prefix(40))” (whole text \(preview.showsImageText), launcher open \(launcher.isVisible))")
+        }
+        if !preview.shownInfo.contains(where: { $0.0 == "Text" }) { problems.append("no Text row in Information") }
+        await captureLauncherBothWays(as: "launcher-clipboard-preview-image-text")
+        await pressKey("k", flags: .maskCommand)
+        if await waitUntil(timeout: 1, { launcher.shownActions.contains { $0.title == "Show Image" } }) == nil {
+            problems.append("⌘K with the text shown does not offer Show Image: \(launcher.shownActions.map(\.title))")
+        }
+        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        await pause(150)
+        NSPasteboard.general.clearContents()
+        await pressKey("c", flags: [.maskCommand, .maskShift])
+        if await waitUntil(timeout: 1, { !launcher.isVisible && copied() == imageText }) == nil {
+            problems.append("⇧⌘C on the invoice copied “\(copied().prefix(40))”, launcher open \(launcher.isVisible)")
+        }
+        // What these copies added to the history goes with the test.
+        await pause(700)
+        for text in ["keeps", imageText] {
+            for item in context.clipboard.search(text) where item.kind == .text && item.text == text { context.clipboard.delete(item) }
+        }
+        return (problems, note)
     }
 
     /// Other apps' windows over `window` on screen ("Owner 340×280"):

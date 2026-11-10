@@ -326,9 +326,23 @@ extension LauncherController {
         case .clip(let clip):
             // An image (or one file copied in Finder): CleanShot's too.
             let inApps = clipFile(clip).map(openFileActions) ?? []
-            return [first, key("Paste as Plain Text", "textformat", .openThird)] + inApps
-                + [key("Copy", "doc.on.doc", .openSecond, group: .copy),
-                   remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
+            // An image: its text when some was read (⇧↩ pastes it, the
+            // preview shows it whole, ⇧⌘C copies it); none of them, nor a
+            // plain text that pastes nothing, when none was.
+            var plain = [key("Paste as Plain Text", "textformat", .openThird)]
+            var copies = [key("Copy", "doc.on.doc", .openSecond, group: .copy)]
+            if clip.kind == .image {
+                plain = []
+                if let text = ClipboardPreviewView.imageText(clip) {
+                    plain = [key("Paste Text in Image", "text.viewfinder", .openThird),
+                             LauncherAction(title: clipboardPreview.showsImageText ? "Show Image" : "Show Text in Image",
+                                            symbol: clipboardPreview.showsImageText ? "photo" : "text.alignleft") { [weak self] in
+                                 self?.clipboardPreview.toggleImageText()
+                             }]
+                    copies.append(copy("Copy Text in Image", text, .copySecond))
+                }
+            }
+            return [first] + plain + inApps + copies + [remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
         // A snippet: its editor in Settings → Snippets, deleted at once.
         case .snippet(let snippet):
             return [first,

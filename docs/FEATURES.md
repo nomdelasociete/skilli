@@ -249,6 +249,11 @@ Everything you copy, and your screenshots, ready to paste again.
   is ("email", "a link"). ↩ pastes, ⇧↩ plain text, ⌘↩ copies, ⌘⌫ forgets
   (⌘Z brings it back for 10 s). With CleanShot X, ⌘K on an image
   annotates it, pins it or adds it to Quick Access.
+- **A part of a copy**: drag over a text or code copy in the preview, ⌘C
+  copies that part.
+- **Text in an image**: ⌘K → Show Text in Image (all its words in the
+  picture's place, selectable), Copy Text in Image (⇧⌘C), Paste Text in
+  Image (⇧↩).
 - **Previews** by kind: a link's card (picture, title, site), a color's
   swatch with Hex, RGB, HSL, an image with what SI sees and its words, a
   file's thumbnail, an email, phone or address, code, long text.

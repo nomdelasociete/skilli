@@ -40,6 +40,7 @@ final class ClipboardPreviewView: NSView {
     private let information = PreviewInformation(rows: 7)
 
     private var item: ClipboardStore.Item?
+    private var sameAsShown = false
     private var imageURL: URL?
     /// Bumped by each `show`: what comes back late for another copy is dropped.
     private var token = 0
@@ -56,6 +57,20 @@ final class ClipboardPreviewView: NSView {
     var shownLinkHasIcon: Bool { linkCard.hasIcon }
     private(set) var shownReading = ""
     private(set) var shownTextInImage = ""
+    /// The image whose whole text shows in its picture's place (⌘K → Show
+    /// Text in Image): that row, until another shows.
+    private var textShownFor: Int64?
+    /// The image's whole text shows, not its picture.
+    var showsImageText: Bool { item?.kind == .image && item?.id == textShownFor && textShownFor != nil }
+    /// The text shown in the tile (a text or code copy, an image's whole
+    /// text), and the part of it picked with the pointer.
+    var shownText: String { text.isHidden ? "" : text.string }
+    var selectedText: String? { text.selectedText }
+    @discardableResult
+    func clearSelection() -> Bool { text.isHidden ? false : text.clearSelection() }
+    /// Self-test hooks: a part picked, and where it is on screen.
+    func select(_ range: NSRange) { text.select(range) }
+    func screenRect(of range: NSRange) -> NSRect { text.screenRect(of: range) }
     private(set) var hasPicture = false
     private(set) var lastShowTime: Duration = .zero
     /// Where that time went ("value 1.2 ms · views 0.4 ms").
@@ -68,6 +83,7 @@ final class ClipboardPreviewView: NSView {
         super.init(frame: frame)
         addSubview(divider)
         addSubview(tile)
+        text.isSelectable = true
         tile.addSubview(text)
 
         imageView.imageScaling = .scaleProportionallyUpOrDown
@@ -193,6 +209,10 @@ final class ClipboardPreviewView: NSView {
         token += 1
         linkTask?.cancel()
         linkTask = nil
+        // The same copy shown again (the list refreshed) keeps what is
+        // picked in it; another puts an image's picture back.
+        sameAsShown = item != nil && item?.id == self.item?.id
+        if !sameAsShown { textShownFor = nil }
         self.item = item
         self.imageURL = imageURL
         hasPicture = false
@@ -308,9 +328,26 @@ final class ClipboardPreviewView: NSView {
     }
 
     private func showPlain(_ string: String, code: Bool, language: String?) {
-        text.show(string, code: code, language: language)
+        text.show(string, code: code, language: language, keeping: sameAsShown)
         text.isHidden = false
     }
+
+    /// An image's picture and its whole text, one for the other (⌘K → Show
+    /// Text in Image, Show Image). Nothing on a copy with no text read.
+    func toggleImageText() {
+        guard let item, item.kind == .image, Self.imageText(item) != nil else { return }
+        textShownFor = showsImageText ? nil : item.id
+        show(item, imageURL: imageURL)
+    }
+
+    /// The text read in an image copy, when there is some.
+    static func imageText(_ item: ClipboardStore.Item) -> String? {
+        guard item.kind == .image, let text = item.ocr?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        return text
+    }
+
+    /// An image's whole text shows up to this many characters.
+    static let imageTextLimit = 50_000
 
     // MARK: Link
 
@@ -380,7 +417,14 @@ final class ClipboardPreviewView: NSView {
             readingIcon.isHidden = false
             shownReading = sentence
         }
-        if let text = item.ocr?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+        let whole = showsImageText ? Self.imageText(item) : nil
+        if let whole {
+            // Its whole text in the picture's place, under "Text in Image".
+            text.show(whole, code: false, language: "Text in Image", limit: Self.imageTextLimit, keeping: sameAsShown)
+            text.isHidden = false
+            imageView.isHidden = true
+            shownTextInImage = whole
+        } else if let text = Self.imageText(item) {
             ocrText.stringValue = text
             ocrText.isHidden = false
             ocrHeader.isHidden = false
@@ -388,6 +432,7 @@ final class ClipboardPreviewView: NSView {
         }
         let tags = item.tags.flatMap(ImageTags.init(words:))
         var info: [(String, String)] = [("Content", tags.map { $0.kind.title + ($0.person ? ", with a person" : "") } ?? "Image")]
+        if let whole { info.append(("Text", PreviewInformation.size(of: whole).size)) }
         if let size = item.size {
             info.append(("Dimensions", size.replacingOccurrences(of: "×", with: " × ") + " pixels"))
         }
@@ -407,7 +452,7 @@ final class ClipboardPreviewView: NSView {
             self.update("File size", bytes.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "Unknown")
             if let picture {
                 self.imageView.image = picture
-                self.imageView.isHidden = false
+                self.imageView.isHidden = self.showsImageText
                 self.hasPicture = true
                 self.needsLayout = true
             }
