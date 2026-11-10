@@ -398,15 +398,6 @@ final class ClipboardStore: @unchecked Sendable {
                           [.int(Int64(limit))])) ?? []
     }
 
-    /// One-file copies never read for their text, newest first: the
-    /// pictures among them are read as images are (`CopiedPicture`).
-    func unreadFiles(limit: Int) -> [Item] {
-        lock.lock()
-        defer { lock.unlock() }
-        return (try? rows("SELECT \(Self.columns) FROM items WHERE kind = 'files' AND ocr IS NULL AND instr(text, char(10)) = 0 ORDER BY copied DESC LIMIT ?",
-                          [.int(Int64(limit))])) ?? []
-    }
-
     /// Every saved format of a text copy, to paste it as it was copied.
     func formats(of id: Int64) -> [String: Data]? {
         lock.lock()

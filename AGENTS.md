@@ -4016,13 +4016,21 @@ re-investigating.
   Copy Text in Image (⇧⌘C); one with none lists none, nor a plain-text
   paste. A picture copied as its file (one file, a picture by its
   extension: `CopiedPicture`, `Item.pictureFile`; Finder, CleanShot) is
-  the same picture to the user: read once when copied
-  (`readText(inFile:)`, Vision on Quick Look's picture of it, up to
-  3,000 px: skil.li opens no file in the user's folders, as the preview;
-  none found is kept as "" so it is not read again; the newest 60 never
-  read are read at launch, `readUnreadPictureFiles`), found by its
-  words, and with text read it lists the same three plus Copy Path (⇧↩
-  pastes the text; without text, Paste as Plain Text pastes the path as
+  the same picture to the user. Its text is read when its row first
+  shows in the preview (`onPictureFileShown` →
+  `readText(inPictureFile:)`: Vision on Quick Look's picture of it, up
+  to 3,000 px, then `clipChanged` puts the read copy in the row), or
+  when it is copied if the app put the picture beside its file as data
+  (`pictureData(on:)`, never `NSImage(pasteboard:)`, which opens the
+  file). Never from the file at copy or at launch: a file in Downloads
+  or on the Desktop made macOS ask for the folder in skil.li's name with
+  nobody looking (seen on the test Mac, 2026-11-10); the preview asks
+  Quick Look for that file anyway, so reading it then asks nothing new.
+  Read with no text: kept as "" (not read again); not read (Quick Look
+  or Vision failed): left NULL, tried once a run. Until read, its words
+  are not searched. With text read it lists the same three plus Copy
+  Path (⇧↩ pastes the text; without text, Paste as Plain Text pastes the
+  path as
   before). Not tagged by Jev. `get_clipboard` gives the text read in an
   image on the clipboard. The list is the whole history: 50 rows, then
   the next 50 older ones (`search(_:before:)`, by the oldest row's date)

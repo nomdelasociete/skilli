@@ -26,14 +26,15 @@ history feels like, and the things below matter far more.
 
 Done since (same branch): #1 the whole history walks, #2 the clipboard
 is read as the history opens, and a gap found right after: a picture
-copied as its file had no text read and none of #123's actions.
+copied as its file had no text read and none of #123's actions (now read
+when its row shows; reading it when copied made macOS ask for the folder).
 
 ## Must (the history is behind the others here)
 
 | # | Gap | Proof | Others |
 |---|---|---|---|
-| 1 | **Only the last 50 copies can be browsed.** No more load on scroll. Past 50, a copy is reachable only by typing words it holds. | `ClipboardStore.search(_:limit: 50)`, called without a limit from `AppDelegate`; the test Mac keeps 402. | All of them scroll the whole history. |
-| 2 | **A copy made just before ✦C can be missing.** The clipboard is read on a 0.4 s timer (+0.1 s tolerance); opening the history does not read it. Copy, ✦C at once: the list is up to half a second old. | `ClipboardHistory.start` (timer), `enterMode(.clipboard)` never calls `poll()`. | Same timer everywhere (macOS has no notification), but they read on open. |
+| 1 | ~~Only the last 50 copies can be browsed.~~ **Fixed:** the next older copies join the list as it nears its end (`showOlderClips`). | `ClipboardStore.search(_:limit:before:)`. | All of them scroll the whole history. |
+| 2 | ~~A copy made just before ✦C can be missing.~~ **Fixed:** opening the history reads the clipboard first (`onClipboardMode` → `poll`). | The 0.4 s timer stays for the rest. | Same timer everywhere (macOS has no notification); they read on open. |
 | 3 | **No pins.** Nothing can be kept at the top or kept past the retention; `ClipboardRetention`'s own comment says "pinned items stay" and no pin exists. An address or an IBAN copied last month is gone. | No pin column, no action. | Raycast (⇧⌘P), Maccy (⌥P), Paste (pinboards), Alfred (via snippets). |
 | 4 | **Search is words-from-their-start only, newest first.** "board" does not find "clipboard", "voice" does not find "invoice"; no typo tolerance; no ranking (a title match and a match at character 9,000 are equal). The app's name is not searched ("slack"). | `ClipboardSearch.ftsQuery`: `"word"*` joined by AND, `ORDER BY copied DESC`; FTS columns are text, ocr, tags. | Maccy: fuzzy; Raycast, Alfred: substring. The launcher itself is fuzzy; the history is the one place that is not. |
 | 5 | **No filter by kind.** Images only, links only, files only, colors, from one app: not there without the AI key (⇥ "a link" asks Jev, ~0.25 s to seconds, and needs a key). The kinds are already known in code (`CopiedValue`). | No filter in `LauncherController`'s clipboard mode. | Raycast (⌘P menu), Paste, Pastebot. |
@@ -120,8 +121,8 @@ list, ↩ to pasted, copy to kept.
 
 ## Order I would take
 
-1. #2 (read on open) and #1 (scroll the whole history): hours, not days,
-   and both are plain defects.
+1. ~~#2 (read on open) and #1 (scroll the whole history)~~: done, with
+   the picture copied as its file.
 2. #6 (rows: time at right, day sections, "+n lines") and #4 (substring
    and ranked search, app name): the history starts to feel fast.
 3. #3 pins and #5 kind filter: one spec, they share the header.

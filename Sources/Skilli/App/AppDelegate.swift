@@ -872,6 +872,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.clipboardItems = { [weak self] text, before in self?.clipboard.search(text, before: before) ?? [] }
         launcher.clipboardImageURL = { [weak self] item in self?.clipboard.store?.imageURL(item) }
         launcher.clipboardPreview.links = clipboard.links
+        launcher.clipboardPreview.onPictureFileShown = { [weak self] item in
+            self?.clipboard.readText(inPictureFile: item) { [weak self] read in self?.launcher.clipChanged(read) }
+        }
         launcher.clipboardStatus = { [weak self] in self?.clipboardStatus }
         launcher.onClipboardMode = { [weak self] in
             // What was copied since the last tick (0.4 s apart) is in the

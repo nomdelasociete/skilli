@@ -520,6 +520,18 @@ final class LauncherController: NSObject {
     /// Self-test hooks.
     var isInEmoji: Bool { mode == .emoji }
     var isShowingFeeling: Bool { feeling != nil && feeling?.query == searchField.stringValue }
+    /// A copy changed since the list was made (a picture file's text was
+    /// read): its row holds it as it is now, and the preview and the
+    /// row's keys follow when it is the one selected.
+    func clipChanged(_ item: ClipboardStore.Item) {
+        guard clipboardMode, let row = results.firstIndex(where: { if case .clip(let shown) = $0 { shown.id == item.id } else { false } })
+        else { return }
+        results[row] = .clip(item)
+        guard tableView.selectedRow == row else { return }
+        updatePreview()
+        updateFooter()
+    }
+
     /// Clipboard mode opened: the history may need its permission.
     var onClipboardMode: (() -> Void)?
     var clipboardImageURL: ((ClipboardStore.Item) -> URL?)?
