@@ -910,12 +910,10 @@ final class SkilliTools {
         case "get_clipboard":
             if let text = NSPasteboard.general.string(forType: .string) { return text }
             // An image: the words in it, read by Vision on this Mac (as
-            // the history's Copy Text in Image).
-            guard let image = NSPasteboard.general.data(forType: .png) ?? NSPasteboard.general.data(forType: .tiff) else { return "" }
-            let file = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-clipboard-\(UUID().uuidString)")
-            defer { try? FileManager.default.removeItem(at: file) }
-            guard (try? image.write(to: file, options: .atomic)) != nil else { return "" }
-            return await ClipboardHistory.recognizeText(in: file) ?? ""
+            // the history's Copy Text in Image), from the image as the
+            // history reads it; nothing written to disk.
+            guard let image = ClipboardHistory.imageData(on: .general) else { return "" }
+            return await ClipboardHistory.recognizeText(in: image) ?? ""
 
         case "set_clipboard":
             let value = try text("text")
