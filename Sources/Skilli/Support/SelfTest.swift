@@ -15835,14 +15835,24 @@ final class SelfTest {
             try? png.write(to: pictureFile)
             pasteboard.clearContents()
             pasteboard.writeObjects([pictureFile as NSURL])
+            // Nothing reads the file when it is copied (macOS would ask
+            // for its folder): unread until the preview shows it, then
+            // read by the history; a file that is not there is not read,
+            // and not kept as read.
+            let readsText = context.preferences.clipboardOCR
+            context.preferences.clipboardOCR = true
             if let copy = history.capture(), copy.kind == .files, copy.pictureFile != nil {
-                let text = await ClipboardHistory.recognizeText(inFile: pictureFile)
-                try? store.setOCR(text ?? "", for: copy.id)
-                if let read = store.search("facture 2026").first, read.id == copy.id, read.imageText != nil {
+                await pause(600)
+                let unreadWhenCopied = store.items([copy.id]).first?.ocr == nil
+                history.readText(inPictureFile: copy) { _ in }
+                _ = await waitUntil(timeout: 10) { store.search("facture 2026").first?.id == copy.id }
+                let gone = await ClipboardHistory.recognizeText(inFile: pictureFile.deletingLastPathComponent().appendingPathComponent("Absente.png"))
+                if unreadWhenCopied, let read = store.search("facture 2026").first, read.id == copy.id, read.imageText != nil, gone == nil {
                     fileRead = history.write(read, plain: true) && pasteboard.string(forType: .string)?.lowercased().contains("facture") == true
                 }
                 try? store.delete(copy.id)
             }
+            context.preferences.clipboardOCR = readsText
             pasteboard.clearContents()
             try? FileManager.default.removeItem(at: pictureFile)
         }
@@ -15902,7 +15912,7 @@ final class SelfTest {
         let pruned = old != nil && (try? store.prune(before: ClipboardRetention.month.cutoff()!))?.count == 1 && store.search("vieux").isEmpty
 
         record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true",
-               "found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file read and its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
+               "found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
                ocrMs)
     }
 
@@ -16562,6 +16572,11 @@ final class SelfTest {
             (.init(kind: .text, text: words, app: "com.apple.Safari", appName: "Safari", hash: ClipboardHistory.hash("text", Data(words.utf8))), .link),
             (.init(kind: .text, text: link, app: "com.apple.Safari", appName: "Safari", hash: ClipboardHistory.hash("text", Data(link.utf8))), .link)
         ]
+        // The invoice once more, copied as its file: last in the list.
+        let scanFile = folder.appendingPathComponent("Facture scannée.png")
+        try? invoice.write(to: scanFile)
+        let scan = try? store.add(.init(kind: .files, text: scanFile.path, app: "com.apple.finder", appName: "Finder",
+                                        hash: ClipboardHistory.hash("files", Data(scanFile.path.utf8))), at: .now.addingTimeInterval(-600)).item
         let top = Date.now.addingTimeInterval(600)
         var items: [ClipboardStore.Item] = []
         for (index, seed) in seeds.enumerated() {
@@ -16664,6 +16679,7 @@ final class SelfTest {
         // Measured on the mini: 0.3–1.3 ms a kind; half a frame is a regression.
         if slowest > .milliseconds(8) { problems.append("a preview took \(slowest.compact) to show") }
         for item in items.dropLast() { context.clipboard.delete(item) }
+        if let scan { context.clipboard.delete(scan) }
         try? FileManager.default.removeItem(at: folder)
         record(name, problems.isEmpty,
                (problems.isEmpty ? "every kind shown" : problems.joined(separator: "; "))
@@ -16766,15 +16782,17 @@ final class SelfTest {
         if await waitUntil(timeout: 1, { !launcher.isVisible && copied() == imageText }) == nil {
             problems.append("⇧⌘C on the invoice copied “\(copied().prefix(40))”, launcher open \(launcher.isVisible)")
         }
-        // The same picture copied as its file (the chart's, given words):
-        // the same actions, its path too, its whole text shown.
-        let chartText = "Quarterly Chart\nQ1 35 % · Q2 55 % · Q3 48 % · Q4 80 %"
-        if let chart = context.clipboard.search("quarterly").first(where: { $0.pictureFile != nil }), let store = context.clipboard.store {
-            try? store.setOCR(chartText, for: chart.id)
+        // The same picture copied as its file: unread until its row
+        // shows, then read (Quick Look's picture of it, Vision), the same
+        // actions and its path, its whole text shown.
+        let readsText = context.preferences.clipboardOCR
+        context.preferences.clipboardOCR = true
+        if let scan = context.clipboard.search("scann").first(where: { $0.pictureFile != nil }) {
+            if scan.ocr != nil { problems.append("the picture's file was read before it was shown") }
             if await openHistory() {
-                for letter in "q4" { await pressKey(letter) }
-                if await waitUntil(timeout: 2, { preview.shown == .file && preview.shownTextInImage == chartText }) == nil {
-                    problems.append("“q4” did not show the picture file with its words (\(preview.shown.rawValue), “\(preview.shownTextInImage.prefix(30))”)")
+                for letter in "scann" { await pressKey(letter) }
+                if await waitUntil(timeout: 10, { preview.shown == .file && preview.shownTextInImage.hasPrefix("Facture") }) == nil {
+                    problems.append("“scann” did not show the picture file with its words (\(preview.shown.rawValue), “\(preview.shownTextInImage.prefix(30))”)")
                 }
                 await pressKey("k", flags: .maskCommand)
                 _ = await waitUntil(timeout: 1) { !launcher.shownActions.isEmpty }
@@ -16786,7 +16804,7 @@ final class SelfTest {
                 if fileActions.contains(where: { $0.title == "Paste as Plain Text" }) { problems.append("⌘K on a picture's file with text still says Paste as Plain Text") }
                 for letter in "show t" { await pressKey(letter == " " ? nil : letter, code: letter == " " ? CGKeyCode(kVK_Space) : nil) }
                 await pressKey(nil, code: CGKeyCode(kVK_Return))
-                if await waitUntil(timeout: 1, { preview.showsImageText && preview.shownText == chartText }) == nil {
+                if await waitUntil(timeout: 1, { preview.showsImageText && preview.shownText.hasPrefix("Facture") }) == nil {
                     problems.append("Show Text in Image on a picture's file showed “\(preview.shownText.prefix(40))”")
                 }
                 await captureLauncherBothWays(as: "launcher-clipboard-preview-file-text")
@@ -16796,6 +16814,7 @@ final class SelfTest {
         } else {
             problems.append("no picture file among the copies")
         }
+        context.preferences.clipboardOCR = readsText
 
         // Rows say when, the header the day; a copy found inside a word,
         // past its first line, shows the line and its words marked.

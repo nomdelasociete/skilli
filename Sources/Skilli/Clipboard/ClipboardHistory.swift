@@ -63,7 +63,6 @@ final class ClipboardHistory {
         // Previews whose copy went while skil.li was not running.
         let store = self.store
         Task.detached(priority: .utility) { store?.sweepPreviews() }
-        readUnreadPictureFiles()
     }
 
     func stop() {
@@ -101,8 +100,13 @@ final class ClipboardHistory {
                 if preferences.clipboardOCR { readText(in: url, id: item.id) }
                 if preferences.imageTagsClipboard { tag(url, id: item.id) }
             }
-            // The same picture copied as its file: read too.
-            if item.ocr == nil, preferences.clipboardOCR, let file = item.pictureFile { readText(inFile: file, id: item.id) }
+            // The same picture copied as its file: read now when the app
+            // put the picture itself beside its file. Never from the
+            // file here: nobody asked to see it, and macOS would ask for
+            // its folder in skil.li's name (`readText(inPictureFile:)`).
+            if item.ocr == nil, preferences.clipboardOCR, item.pictureFile != nil, let data = Self.pictureData(on: pasteboard) {
+                readText(inCopied: data, id: item.id)
+            }
             return item
         } catch {
             Log.actions.error("\(error.localizedDescription, privacy: .public)")
@@ -492,47 +496,71 @@ final class ClipboardHistory {
         }
     }
 
-    /// A picture copied as its file: its text read once, from the picture
-    /// Quick Look draws of it (as the preview shows it: skil.li itself
-    /// opens no file in the user's folders). No text, or a file that is
-    /// gone: kept as read, with none, so it is not read again.
-    private func readText(inFile url: URL, id: Int64) {
+    /// The picture an app put on the clipboard beside its file, as data
+    /// (PNG, TIFF, JPEG, HEIC). Only what is there as data: nothing here
+    /// opens the file.
+    static func pictureData(on pasteboard: NSPasteboard) -> Data? {
+        let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
+            ?? pasteboard.data(forType: NSPasteboard.PasteboardType("public.jpeg"))
+            ?? pasteboard.data(forType: NSPasteboard.PasteboardType("public.heic"))
+        guard let data, data.count <= 40_000_000 else { return nil }
+        return data
+    }
+
+    /// A picture's file copied with the picture beside it: its text, when
+    /// the data holds some. None found says nothing about the file (Finder
+    /// puts an icon there): it stays unread.
+    private func readText(inCopied data: Data, id: Int64) {
         let store = self.store
         Task.detached(priority: .utility) { [weak self] in
-            let start = ContinuousClock.now
-            let text = await Self.recognizeText(inFile: url)
-            try? store?.setOCR(text ?? "", for: id)
-            Log.trace("Clipboard: OCR read \(text?.count ?? 0) characters in a copied picture file in \((ContinuousClock.now - start).compact)")
+            guard let text = await Self.recognizeText(in: data) else { return }
+            try? store?.setOCR(text, for: id)
+            Log.trace("Clipboard: OCR read \(text.count) characters in a picture copied beside its file")
             await MainActor.run { self?.revision += 1 }
         }
     }
 
-    /// Picture files copied before they were read (or while Read text in
-    /// images was off): the newest `limit` read now, one after the other.
-    func readUnreadPictureFiles(limit: Int = 60) {
-        guard let store, preferences.clipboardOCR else { return }
-        Task.detached(priority: .utility) { [weak self] in
-            var read = 0
-            // Other files are never read and stay in that list: looked
-            // past, so they do not keep the pictures out of it.
-            for item in store.unreadFiles(limit: 1_000).filter({ $0.pictureFile != nil }).prefix(limit) {
-                guard let file = item.pictureFile else { continue }
-                try? store.setOCR(await Self.recognizeText(inFile: file) ?? "", for: item.id)
-                read += 1
+    /// The picture files tried since launch: one try a run.
+    @ObservationIgnored private var pictureFilesTried: Set<Int64> = []
+
+    /// A picture copied as its file, never read, shown in the history's
+    /// preview: its text read then, from the picture Quick Look draws of
+    /// it, and `then` given the copy as it is now. Only then: the preview
+    /// asks Quick Look for that file anyway, so nothing new is asked of
+    /// macOS; read at copy or at launch, a file in Downloads or on the
+    /// Desktop made macOS ask for the folder in skil.li's name, out of
+    /// nowhere (seen 2026-11-10). Read with no text in it: kept as read.
+    /// Not read (Quick Look or Vision failed): left unread, tried again
+    /// the next time skil.li runs and it is shown.
+    func readText(inPictureFile item: ClipboardStore.Item, then: @escaping @MainActor (ClipboardStore.Item) -> Void) {
+        guard let store, preferences.clipboardOCR, item.ocr == nil, let file = item.pictureFile,
+              pictureFilesTried.insert(item.id).inserted else { return }
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let start = ContinuousClock.now
+            guard let text = await Self.recognizeText(inFile: file) else {
+                Log.trace("Clipboard: a copied picture file could not be read for its text")
+                return
             }
-            guard read > 0 else { return }
-            Log.trace("Clipboard: \(read) copied picture files read")
-            await MainActor.run { self?.revision += 1 }
+            try? store.setOCR(text, for: item.id)
+            Log.trace("Clipboard: OCR read \(text.count) characters in a copied picture file in \((ContinuousClock.now - start).compact)")
+            guard let read = store.items([item.id]).first else { return }
+            await MainActor.run {
+                self?.revision += 1
+                then(read)
+            }
         }
     }
 
     /// The text in a picture file, read in Quick Look's picture of it, up
-    /// to 3,000 pixels a side.
+    /// to 3,000 pixels a side: "" when it was read and holds none, nil
+    /// when it could not be read (no picture from Quick Look, or Vision
+    /// failed).
     nonisolated static func recognizeText(inFile url: URL) async -> String? {
         let request = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: 3_000, height: 3_000), scale: 1,
                                                    representationTypes: .thumbnail)
-        guard let picture = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request) else { return nil }
-        return text(of: try? await textRequest.perform(on: picture.cgImage))
+        guard let picture = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request),
+              let observations = try? await textRequest.perform(on: picture.cgImage) else { return nil }
+        return text(of: observations) ?? ""
     }
 
     /// The image's text, line by line, in whatever language it is.

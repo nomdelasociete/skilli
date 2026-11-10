@@ -67,6 +67,9 @@ final class ClipboardPreviewView: NSView {
     var searched = ""
     /// How many places are marked in the text (self-test hook).
     var markedCount: Int { text.isHidden ? 0 : text.markedCount }
+    /// A picture's file whose text was never read is shown, and its file
+    /// is there: the history reads it (`readText(inPictureFile:)`).
+    var onPictureFileShown: ((ClipboardStore.Item) -> Void)?
     /// The text shown in the tile (a text or code copy, an image's whole
     /// text), and the part of it picked with the pointer.
     var shownText: String { text.isHidden ? "" : text.string }
@@ -518,6 +521,9 @@ final class ClipboardPreviewView: NSView {
             self.update("Kind", details.kind)
             self.update("Size", details.size)
             self.update("Modified", details.modified)
+            // A picture's file never read, shown now: its text is read
+            // (Quick Look was just asked for this file: nothing new).
+            if details.exists, item.ocr == nil, item.pictureFile != nil { self.onPictureFileShown?(item) }
             if let picture {
                 self.imageView.image = picture
                 self.imageView.isHidden = self.showsImageText

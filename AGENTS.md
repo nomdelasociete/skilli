@@ -3992,9 +3992,25 @@ re-investigating.
   that macOS marked as a screen capture (`kMDItemIsScreenCapture`, an
   extended attribute `screencapture` writes) or named as macOS or
   CleanShot X name theirs, put on the clipboard as an image (PNG, TIFF)
-  and pasted; seen pasted, nothing said. Rows newest first; typing searches
-  SQLite FTS5 (`unicode61 remove_diacritics 2`: "reunion" finds "Réunion")
-  over the text and what Vision read in images. Return pastes in the app
+  and pasted; seen pasted, nothing said. Rows newest first, each saying
+  when at its right edge (`ClipboardDay.short`: "14:32" today, "Mon" the
+  six days before, "3 Nov" before; `fitsAccessory`, as wide as its
+  words), the header over the list the day of the row at its top,
+  following the scroll (`ClipboardDay.header`: "Copied yesterday";
+  docs/clipboard-rows-and-search.md). Typing searches SQLite FTS5: words
+  of 3 letters or more are found anywhere, inside words too ("board"
+  finds "clipboard", "ithub.com/acme"), in the text, what Vision read in
+  images, an image's tags and the app's name (`items_sub`, the `trigram`
+  tokenizer with `remove_diacritics 1`, kept by its own triggers, made
+  and filled once on an older file; `ClipboardSearch.substringQuery`);
+  with a word under 3 letters, words from their start in the text and
+  images (`items_fts`, `unicode61 remove_diacritics 2`: "reunion" finds
+  "Réunion"). Newest first either way. A copy found past its first line
+  shows the line found as its title (`ClipboardSearch.found`,
+  `Item.title(searched:)`), and the preview marks the words in the text
+  shown and scrolls to the first (`PreviewText.mark`, temporary
+  attributes). Measured: 0.69 ms the slowest key among 3,000 copies
+  (`remote clipboard`). Return pastes in the app
   in front (every format it was copied with), ⇧Return plain text (an
   image's OCR text), ⌘Return only copies, ⌘⌫ forgets at once (Undo ⌘Z
   for 10 s, the card under the launcher). The list narrows to
@@ -4016,13 +4032,21 @@ re-investigating.
   Copy Text in Image (⇧⌘C); one with none lists none, nor a plain-text
   paste. A picture copied as its file (one file, a picture by its
   extension: `CopiedPicture`, `Item.pictureFile`; Finder, CleanShot) is
-  the same picture to the user: read once when copied
-  (`readText(inFile:)`, Vision on Quick Look's picture of it, up to
-  3,000 px: skil.li opens no file in the user's folders, as the preview;
-  none found is kept as "" so it is not read again; the newest 60 never
-  read are read at launch, `readUnreadPictureFiles`), found by its
-  words, and with text read it lists the same three plus Copy Path (⇧↩
-  pastes the text; without text, Paste as Plain Text pastes the path as
+  the same picture to the user. Its text is read when its row first
+  shows in the preview (`onPictureFileShown` →
+  `readText(inPictureFile:)`: Vision on Quick Look's picture of it, up
+  to 3,000 px, then `clipChanged` puts the read copy in the row), or
+  when it is copied if the app put the picture beside its file as data
+  (`pictureData(on:)`, never `NSImage(pasteboard:)`, which opens the
+  file). Never from the file at copy or at launch: a file in Downloads
+  or on the Desktop made macOS ask for the folder in skil.li's name with
+  nobody looking (seen on the test Mac, 2026-11-10); the preview asks
+  Quick Look for that file anyway, so reading it then asks nothing new.
+  Read with no text: kept as "" (not read again); not read (Quick Look
+  or Vision failed): left NULL, tried once a run. Until read, its words
+  are not searched. With text read it lists the same three plus Copy
+  Path (⇧↩ pastes the text; without text, Paste as Plain Text pastes the
+  path as
   before). Not tagged by Jev. `get_clipboard` gives the text read in an
   image on the clipboard. The list is the whole history: 50 rows, then
   the next 50 older ones (`search(_:before:)`, by the oldest row's date)
