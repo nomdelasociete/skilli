@@ -112,6 +112,23 @@ public enum ClipboardSearch {
     }
 }
 
+/// A copy that is one file, and that file a picture (a screenshot copied
+/// in Finder or by a capture app): read and offered as an image copied as
+/// an image is (docs/clipboard-text-selection.md).
+public enum CopiedPicture {
+    static let extensions: Set<String> = ["png", "jpg", "jpeg", "heic", "heif", "tif", "tiff", "gif", "webp", "bmp"]
+
+    /// The file's path when `files` (a files copy's text: paths, one a
+    /// line) is one picture; nil for several files or another kind.
+    public static func path(in files: String) -> String? {
+        let paths = files.split(whereSeparator: \.isNewline)
+        guard paths.count == 1, let path = paths.first.map(String.init) else { return nil }
+        let name = path.split(separator: "/").last.map(String.init) ?? ""
+        guard let dot = name.lastIndex(of: "."), dot != name.startIndex else { return nil }
+        return extensions.contains(name[name.index(after: dot)...].lowercased()) ? path : nil
+    }
+}
+
 /// What the clipboard history never keeps.
 public enum ClipboardPolicy {
     /// nspasteboard.org markers: secrets from password managers, and

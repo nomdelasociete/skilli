@@ -13,6 +13,16 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertNil(ClipboardRetention.unlimited.cutoff(now: now))
     }
 
+    func testOneCopiedPictureFileIsAPicture() {
+        XCTAssertEqual(CopiedPicture.path(in: "/tmp/CleanShot 2026-11-10 at 18.16.45@2x.jpg"), "/tmp/CleanShot 2026-11-10 at 18.16.45@2x.jpg")
+        XCTAssertEqual(CopiedPicture.path(in: "/tmp/Scan.HEIC"), "/tmp/Scan.HEIC")
+        XCTAssertNil(CopiedPicture.path(in: "/tmp/a.png\n/tmp/b.png"))
+        XCTAssertNil(CopiedPicture.path(in: "/tmp/notes.txt"))
+        XCTAssertNil(CopiedPicture.path(in: "/tmp/.png"))
+        XCTAssertNil(CopiedPicture.path(in: "/tmp/folder.png/readme"))
+        XCTAssertNil(CopiedPicture.path(in: ""))
+    }
+
     func testCustomStartsFromTheCurrentChoice() {
         XCTAssertEqual(ClipboardRetention.day.asCustom, .days(1))
         XCTAssertEqual(ClipboardRetention.week.asCustom, .days(7))

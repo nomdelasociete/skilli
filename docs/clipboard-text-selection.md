@@ -81,6 +81,18 @@ On an image whose text was read, ⌘K lists:
   gains "Text" (its words and characters). Up to 50,000 characters.
 - Showing another row puts the picture back: the choice is for that row,
   that time.
+- **The same picture copied as its file** (one file copied in Finder,
+  or by a capture app that puts its file on the clipboard) is an image
+  to the user, who cannot tell which way it was copied: ⌘K lists the
+  same three, plus Copy Path; ⇧↩ pastes its text; a picture's file with
+  no text read keeps Paste as Plain Text (its path).
+  Its text is read the first time its row shows (a fraction of a second
+  after the picture), not when it is copied: the file is in the user's
+  folders, and reading it with nobody looking made macOS ask "skil.li
+  would like to access files in your Downloads folder" out of nowhere.
+  The preview already shows that file, so reading it then asks nothing
+  more. The cost: search finds its words only once it was shown. An app
+  that puts the picture itself beside its file gets it read when copied.
 - From a skillie or an agent: `get_clipboard` gives the text read in the
   image on the clipboard when the clipboard holds no text
   (`"$SKILLI_CLI" call get_clipboard`). No `skilli://` link: these act on

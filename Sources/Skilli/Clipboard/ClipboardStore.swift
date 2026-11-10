@@ -338,24 +338,30 @@ final class ClipboardStore: @unchecked Sendable {
     // MARK: - Reading
 
     /// Newest first; words match as prefixes, accents ignored ("reunion"
-    /// finds "Réunion"), in the text and in what OCR read.
-    func search(_ text: String, limit: Int = 50) -> [Item] {
+    /// finds "Réunion"), in the text and in what OCR read. `before`: only
+    /// what was copied before then (the list's next older rows, as it
+    /// nears its end).
+    func search(_ text: String, limit: Int = 50, before: Date? = nil) -> [Item] {
         lock.lock()
         defer { lock.unlock() }
         let trimmed = text.trimmingCharacters(in: .whitespaces)
+        let older = before.map { [Value.double($0.timeIntervalSince1970)] } ?? []
         do {
             if trimmed.isEmpty {
-                return try rows("SELECT \(Self.columns) FROM items ORDER BY copied DESC LIMIT ?", [.int(Int64(limit))])
+                return try rows("SELECT \(Self.columns) FROM items \(before == nil ? "" : "WHERE copied < ?") ORDER BY copied DESC LIMIT ?",
+                                older + [.int(Int64(limit))])
             }
             if let match = ClipboardSearch.ftsQuery(trimmed) {
                 return try rows("""
                     SELECT \(Self.columnList("items")) FROM items_fts JOIN items ON items.id = items_fts.rowid
-                    WHERE items_fts MATCH ? ORDER BY items.copied DESC LIMIT ?
-                    """, [.text(match), .int(Int64(limit))])
+                    WHERE items_fts MATCH ? \(before == nil ? "" : "AND items.copied < ?") ORDER BY items.copied DESC LIMIT ?
+                    """, [.text(match)] + older + [.int(Int64(limit))])
             }
             // Only symbols ("€", "->"): plain substring.
-            return try rows("SELECT \(Self.columns) FROM items WHERE instr(text, ?) > 0 OR instr(coalesce(ocr, ''), ?) > 0 ORDER BY copied DESC LIMIT ?",
-                            [.text(trimmed), .text(trimmed), .int(Int64(limit))])
+            return try rows("""
+                SELECT \(Self.columns) FROM items WHERE (instr(text, ?) > 0 OR instr(coalesce(ocr, ''), ?) > 0)
+                \(before == nil ? "" : "AND copied < ?") ORDER BY copied DESC LIMIT ?
+                """, [.text(trimmed), .text(trimmed)] + older + [.int(Int64(limit))])
         } catch {
             Log.actions.error("\(error.localizedDescription, privacy: .public)")
             return []
@@ -533,6 +539,20 @@ final class ClipboardStore: @unchecked Sendable {
 }
 
 extension ClipboardStore.Item {
+    /// The one picture file this copy is (copied in Finder, or by a
+    /// capture app that puts its file on the clipboard).
+    var pictureFile: URL? {
+        kind == .files ? CopiedPicture.path(in: text).map { URL(fileURLWithPath: $0) } : nil
+    }
+
+    /// The text read in an image, copied as an image or as its file, when
+    /// there is some.
+    var imageText: String? {
+        guard kind == .image || pictureFile != nil,
+              let text = ocr?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        return text
+    }
+
     /// A row's title: the first line, an image's first words, file names.
     var title: String {
         switch kind {

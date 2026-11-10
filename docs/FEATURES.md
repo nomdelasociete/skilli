@@ -253,7 +253,10 @@ Everything you copy, and your screenshots, ready to paste again.
   copies that part.
 - **Text in an image**: ⌘K → Show Text in Image (all its words in the
   picture's place, selectable), Copy Text in Image (⇧⌘C), Paste Text in
-  Image (⇧↩).
+  Image (⇧↩). The same for a picture copied as its file (from Finder or
+  a capture app), with Copy Path: its text is read when its row shows.
+- **The whole history**: the list goes on past its first rows as you go
+  down it; a copy made a moment before ✦C is already there.
 - **Previews** by kind: a link's card (picture, title, site), a color's
   swatch with Hex, RGB, HSL, an image with what SI sees and its words, a
   file's thumbnail, an email, phone or address, code, long text.

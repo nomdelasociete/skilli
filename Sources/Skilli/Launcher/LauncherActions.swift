@@ -331,7 +331,10 @@ extension LauncherController {
             // plain text that pastes nothing, when none was.
             var plain = [key("Paste as Plain Text", "textformat", .openThird)]
             var copies = [key("Copy", "doc.on.doc", .openSecond, group: .copy)]
-            if clip.kind == .image {
+            // The same picture copied as its file: the same three, and
+            // its path (⇧↩ pasted it before its text was read).
+            let pictureFile = clip.pictureFile.flatMap { ClipboardPreviewView.imageText(clip) == nil ? nil : $0 }
+            if clip.kind == .image || pictureFile != nil {
                 plain = []
                 if let text = ClipboardPreviewView.imageText(clip) {
                     plain = [key("Paste Text in Image", "text.viewfinder", .openThird),
@@ -341,6 +344,7 @@ extension LauncherController {
                              }]
                     copies.append(copy("Copy Text in Image", text, .copySecond))
                 }
+                if let pictureFile { copies.append(copy("Copy Path", pictureFile.path)) }
             }
             return [first] + plain + inApps + copies + [remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
         // A snippet: its editor in Settings → Snippets, deleted at once.

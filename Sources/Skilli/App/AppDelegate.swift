@@ -869,11 +869,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the launcher opens, off the main thread; a change redraws the rows.
         launcher.onShow = { [weak self] in self?.refreshRadios() }
         launcher.bluetoothAskable = { BluetoothDevices.authorization == .notDetermined }
-        launcher.clipboardItems = { [weak self] text in self?.clipboard.search(text) ?? [] }
+        launcher.clipboardItems = { [weak self] text, before in self?.clipboard.search(text, before: before) ?? [] }
         launcher.clipboardImageURL = { [weak self] item in self?.clipboard.store?.imageURL(item) }
         launcher.clipboardPreview.links = clipboard.links
+        launcher.clipboardPreview.onPictureFileShown = { [weak self] item in
+            self?.clipboard.readText(inPictureFile: item) { [weak self] read in self?.launcher.clipChanged(read) }
+        }
         launcher.clipboardStatus = { [weak self] in self?.clipboardStatus }
         launcher.onClipboardMode = { [weak self] in
+            // What was copied since the last tick (0.4 s apart) is in the
+            // list as it opens: copy, ✦C at once.
+            self?.clipboard.poll()
             guard let self, self.preferences.clipboardHistory, !self.clipboard.mayRead else { return }
             self.permissions.needed(.pasteboard)
         }

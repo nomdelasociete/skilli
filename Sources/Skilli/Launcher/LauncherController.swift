@@ -122,8 +122,12 @@ final class LauncherController: NSObject {
     /// Self-test hooks.
     var isKilling: Bool { killMode }
     var isInClipboard: Bool { clipboardMode }
-    /// Clipboard history: the rows for a filter, newest first.
-    var clipboardItems: ((String) -> [ClipboardStore.Item])?
+    /// Clipboard history: the rows for a filter, newest first, a page of
+    /// them: the first, or those copied before a date (`showOlderClips`).
+    var clipboardItems: ((String, Date?) -> [ClipboardStore.Item])?
+    /// The history's list holds every copy the filter finds: no older
+    /// page to ask for.
+    private var clipsEnded = true
     /// Pastes, pastes as plain text or copies a row, after the launcher hid.
     var onClip: ((ClipboardStore.Item, ClipboardHistory.Use) -> Void)?
     /// ⌘⌫ (or ⌘K → Forget) on a copy: gone at once, ⌘Z brings it back.
@@ -516,6 +520,18 @@ final class LauncherController: NSObject {
     /// Self-test hooks.
     var isInEmoji: Bool { mode == .emoji }
     var isShowingFeeling: Bool { feeling != nil && feeling?.query == searchField.stringValue }
+    /// A copy changed since the list was made (a picture file's text was
+    /// read): its row holds it as it is now, and the preview and the
+    /// row's keys follow when it is the one selected.
+    func clipChanged(_ item: ClipboardStore.Item) {
+        guard clipboardMode, let row = results.firstIndex(where: { if case .clip(let shown) = $0 { shown.id == item.id } else { false } })
+        else { return }
+        results[row] = .clip(item)
+        guard tableView.selectedRow == row else { return }
+        updatePreview()
+        updateFooter()
+    }
+
     /// Clipboard mode opened: the history may need its permission.
     var onClipboardMode: (() -> Void)?
     var clipboardImageURL: ((ClipboardStore.Item) -> URL?)?
@@ -1525,7 +1541,9 @@ final class LauncherController: NSObject {
             } else {
                 // SQLite FTS5 on this Mac: well under a millisecond.
                 meaning = nil
-                results = (clipboardItems?(text) ?? []).map(LauncherItem.clip)
+                let page = clipboardItems?(text, nil) ?? []
+                results = page.map(LauncherItem.clip)
+                clipsEnded = page.count < Layout.resultLimit
             }
         } else if query.isEmpty {
             let apps = index.search("", usage: usage, limit: Layout.resultLimit).map(LauncherItem.app)
@@ -3900,8 +3918,25 @@ final class LauncherController: NSObject {
 
     /// The header above the list names the group at its top, as the rows
     /// scroll: a group's own name still in sight names it itself.
+    /// Clipboard History: the next older copies join the list as it
+    /// nears its end (the selection or the scroll within ten rows of it),
+    /// a page at a time, so the whole history can be walked. Not for a
+    /// search by meaning: its picks are all there.
+    private func showOlderClips() {
+        guard clipboardMode, !clipsEnded, meaningPending == nil, meaning == nil, !results.isEmpty else { return }
+        let last = max(tableView.selectedRow, tableView.row(at: NSPoint(x: 1, y: tableView.visibleRect.maxY - 1)))
+        guard last >= results.count - 10, case .clip(let oldest) = results[results.count - 1] else { return }
+        let page = clipboardItems?(searchField.stringValue, oldest.copiedAt) ?? []
+        clipsEnded = page.count < Layout.resultLimit
+        guard !page.isEmpty else { return }
+        let shown = results.count
+        results += page.map(LauncherItem.clip)
+        tableView.insertRows(at: IndexSet(shown..<results.count), withAnimation: [])
+    }
+
     @objc private func listScrolled() {
         if rowNumbersShown { showRowNumbers() }
+        showOlderClips()
         guard mode == .catalog else { return }
         var row = tableView.row(at: NSPoint(x: 1, y: tableView.visibleRect.minY + 0.5))
         if results.indices.contains(row), case .catalogHeader = results[row] { row -= 1 }
@@ -4260,6 +4295,8 @@ final class LauncherController: NSObject {
 
     /// Self-test hooks: ⌘K's list as shown, each action with its key.
     var isShowingActions: Bool { !actionPanel.isHidden }
+    /// How many rows the list holds (the history's older pages included).
+    var shownRowCount: Int { results.count }
     var shownActions: [(title: String, key: String?)] { actionPanel.shown.map { ($0.title, $0.key?.label) } }
     var selectedActionTitle: String? { actionPanel.selectedAction?.title }
 
@@ -5010,6 +5047,7 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
+        showOlderClips()
         if mode == .emoji { showEmojiSelection() }
         if mode == .gifs { showGIFSelection() }
         updatePreview()
