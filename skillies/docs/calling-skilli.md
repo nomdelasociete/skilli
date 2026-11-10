@@ -101,7 +101,7 @@ page: add a line here when you add a tool. -->
 | --- | --- | --- |
 | `get_selection` | The text selected in the app in front. reads | |
 | `replace_selection` | Replaces the selected text. | `text` |
-| `get_clipboard` | The clipboard's text. reads | |
+| `get_clipboard` | The clipboard's text; for an image, the text read in it. reads | |
 | `set_clipboard` | Copies a text. | `text` |
 
 ### Apps, browsers, windows

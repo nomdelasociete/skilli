@@ -324,7 +324,8 @@ final class SkilliTools {
                        group: .selection, risk: .changes,
                        parameters: [.init(name: "text", description: "The new text.")]),
         ToolDefinition(name: "get_clipboard", title: "Read the clipboard",
-                       description: "The text on the clipboard.", group: .clipboard, risk: .read),
+                       description: "The text on the clipboard. When it holds an image and no text: the text read in that image, on this Mac.",
+                       group: .clipboard, risk: .read),
         ToolDefinition(name: "set_clipboard", title: "Copy to the clipboard",
                        description: "Puts text on the clipboard, replacing what is there.", group: .clipboard, risk: .changes,
                        parameters: [.init(name: "text", description: "The text to copy.")]),
@@ -907,7 +908,14 @@ final class SkilliTools {
             return "Replaced."
 
         case "get_clipboard":
-            return NSPasteboard.general.string(forType: .string) ?? ""
+            if let text = NSPasteboard.general.string(forType: .string) { return text }
+            // An image: the words in it, read by Vision on this Mac (as
+            // the history's Copy Text in Image).
+            guard let image = NSPasteboard.general.data(forType: .png) ?? NSPasteboard.general.data(forType: .tiff) else { return "" }
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-clipboard-\(UUID().uuidString)")
+            defer { try? FileManager.default.removeItem(at: file) }
+            guard (try? image.write(to: file, options: .atomic)) != nil else { return "" }
+            return await ClipboardHistory.recognizeText(in: file) ?? ""
 
         case "set_clipboard":
             let value = try text("text")
