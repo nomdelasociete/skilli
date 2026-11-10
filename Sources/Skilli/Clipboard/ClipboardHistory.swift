@@ -513,7 +513,9 @@ final class ClipboardHistory {
         guard let store, preferences.clipboardOCR else { return }
         Task.detached(priority: .utility) { [weak self] in
             var read = 0
-            for item in store.unreadFiles(limit: limit) {
+            // Other files are never read and stay in that list: looked
+            // past, so they do not keep the pictures out of it.
+            for item in store.unreadFiles(limit: 1_000).filter({ $0.pictureFile != nil }).prefix(limit) {
                 guard let file = item.pictureFile else { continue }
                 try? store.setOCR(await Self.recognizeText(inFile: file) ?? "", for: item.id)
                 read += 1
