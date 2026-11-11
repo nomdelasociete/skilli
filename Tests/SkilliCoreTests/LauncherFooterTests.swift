@@ -14,6 +14,12 @@ final class LauncherFooterTests: XCTestCase {
         XCTAssertEqual(shown(LauncherFooter.hints(main: "Join", tab: .nothing)), ["Join ↩", "Actions ⌘K"])
     }
 
+    func testARowsSecondKeyComesRightAfterReturn() {
+        XCTAssertEqual(shown(LauncherFooter.hints(main: "Paste", also: ("Paste Text", "⇧↩"), tab: .own("By Meaning"))),
+                       ["Paste ↩", "Paste Text ⇧↩", "By Meaning ⇥", "Actions ⌘K"])
+        XCTAssertEqual(shown(LauncherFooter.hints(main: nil, also: ("Paste Text", "⇧↩"), tab: .nothing)), [])
+    }
+
     func testNoRowNoReturnNorActions() {
         // "No words match: ⇥ searches by meaning": ⇥ alone.
         XCTAssertEqual(shown(LauncherFooter.hints(main: nil, tab: .own("By Meaning"))), ["By Meaning ⇥"])

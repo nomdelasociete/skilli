@@ -264,6 +264,7 @@ Everything you copy, and your screenshots, ready to paste again.
   picture's place, selectable), Copy Text in Image (⇧⌘C), Paste Text in
   Image (⇧↩). The same for a picture copied as its file (from Finder or
   a capture app), with Copy Path: its text is read when its row shows.
+  On such a row the footer says it: Paste Text ⇧↩.
 - **The whole history**: the list goes on past its first rows as you go
   down it; a copy made a moment before ✦C is already there.
 - **Previews** by kind: a link's card (picture, title, site), a color's
@@ -272,12 +273,19 @@ Everything you copy, and your screenshots, ready to paste again.
 - **Paste in Sequence** (✦K V): your last copies one after another, a key
   each, newest first.
 - **Paste Latest Screenshot**: your last screenshot in the app in front.
-- Passwords marked secret by password managers are never kept.
+- Passwords marked secret by password managers are never kept. Nor a
+  copy that is a key or a token by its shape (a GitHub, GitLab, Stripe,
+  AWS, Slack, Google or npm token, an `sk-` API key, a JWT, a private
+  key), unless Never keep keys and tokens is turned off.
+- **Not kept, and said**: a key or token, a text over 5 MB or a picture
+  over 40 MB is not kept; the history says so in one line when it opens
+  next (what, from which app, when), never what was copied.
 
 Settings: Keep clipboard history · Keep screenshots too · Folder · Keep
 copies for · Clear History · Advanced: Search by meaning with ⇥ · Show
 link previews · Read text in images · Images you copy, by what they
-show · Screenshots, by what they show · Never keep copies from.
+show · Screenshots, by what they show · Never keep keys and tokens ·
+Never keep copies from.
 
 <!-- pane: snippets -->
 ## Snippets

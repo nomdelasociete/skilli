@@ -56,6 +56,13 @@ snippets and the calculator: the app in front taking its focus back);
 a row's small picture is made again each run (not kept on disk), so a
 first page of pictures shows the symbol for a few frames once a run.
 
+Then (docs/clipboard-secrets-drops-hint.md): #13 a copy that is a key
+or a token by its shape is not kept (Never keep keys and tokens, on);
+#14 a copy not kept (a key, a text over 5 MB, a picture over 40 MB) is
+said in one line when the history opens next; #16 the footer of an image
+whose words were read says Paste Text ⇧↩. Left of #13: a key inside a
+longer text, expiry, the file not encrypted.
+
 ## Must (the history is behind the others here)
 
 | # | Gap | Proof | Others |
@@ -154,4 +161,5 @@ list, ↩ to pasted, copy to kept.
    and ranked search, app name): the history starts to feel fast.
 3. #3 pins and #5 kind filter: one spec, they share the header.
 4. #7 actions per kind (open link, show file, save as snippet).
-5. ~~Speed budget lines + the three measurements~~: done. Then #8–#16.
+5. ~~Speed budget lines + the three measurements~~: done.
+6. ~~#13, #14, #16~~: done. Then #8–#12 and #15.

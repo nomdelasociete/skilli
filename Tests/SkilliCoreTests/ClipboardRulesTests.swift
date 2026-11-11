@@ -126,6 +126,44 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertFalse(ClipboardPolicy.shouldRecord(types: [], app: nil, excluded: []))
     }
 
+    /// Made here, never real: the shapes only.
+    func testKeysAndTokensAreKnownByTheirShape() {
+        let letters = String(repeating: "aB3dE6gH", count: 8)
+        XCTAssertEqual(ClipboardSecret.name(of: "ghp_" + letters.prefix(36)), "a GitHub token")
+        XCTAssertEqual(ClipboardSecret.name(of: "  github_pat_" + letters + "\n"), "a GitHub token")
+        XCTAssertEqual(ClipboardSecret.name(of: "sk-proj-" + letters), "an API key")
+        XCTAssertEqual(ClipboardSecret.name(of: "sk_test_" + letters.prefix(24)), "a Stripe key")
+        XCTAssertEqual(ClipboardSecret.name(of: "AKIA" + "ABCDEFGH12345678"), "an AWS access key")
+        XCTAssertEqual(ClipboardSecret.name(of: "xoxb-" + "1234567890-" + letters.prefix(24)), "a Slack token")
+        XCTAssertEqual(ClipboardSecret.name(of: "eyJ" + letters.prefix(20) + ".eyJ" + letters.prefix(30) + "." + letters.prefix(43)), "a sign-in token")
+        XCTAssertEqual(ClipboardSecret.name(of: "-----BEGIN OPENSSH PRIVATE KEY-----\n" + letters + "\n-----END OPENSSH PRIVATE KEY-----\n"), "a private key")
+    }
+
+    /// What the user wants back from the history is kept: a hash, a UUID,
+    /// a sentence that names a key, a link, a short word.
+    func testWhatOnlyLooksRandomIsKept() {
+        let letters = String(repeating: "aB3dE6gH", count: 8)
+        for kept in ["9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+                     "3F2504E0-4F89-11D3-9A0C-0305E82C3301",
+                     "set GITHUB_TOKEN to ghp_" + letters.prefix(36) + " in the file",
+                     "https://example.com/a/very/long/path/with-many-words-in-it",
+                     "sk-short", "ghp_", "skilli", "",
+                     "-----BEGIN CERTIFICATE-----\n" + letters + "\n-----END CERTIFICATE-----"] {
+            XCTAssertNil(ClipboardSecret.name(of: kept), kept)
+        }
+    }
+
+    func testACopyNotKeptSaysWhatFromWhereAndWhen() {
+        let date = Date(timeIntervalSince1970: 1_000)
+        let secret = ClipboardNotKept(reason: .secret("a GitHub token"), appName: "Terminal", date: date)
+        XCTAssertEqual(secret.line(time: "14:02"), "Not kept: looks like a GitHub token (Terminal, 14:02). To keep them: Settings → Clipboard → Advanced.")
+        XCTAssertEqual(ClipboardNotKept(reason: .longText, appName: nil, date: date).line(time: "14:02"), "Not kept: a text over 5 MB (14:02).")
+        XCTAssertEqual(ClipboardNotKept(reason: .bigPicture, appName: "Preview", date: date).line(time: "9:41"),
+                       "Not kept: a picture over 40 MB (Preview, 9:41).")
+        XCTAssertTrue(secret.isRecent(now: date.addingTimeInterval(3_600)))
+        XCTAssertFalse(secret.isRecent(now: date.addingTimeInterval(90_000)))
+    }
+
     /// Each run the next older copy, newest first; 30 s apart or a copy
     /// of the user's own in between starts again; past the oldest, none.
     func testPasteSequenceGoesOlderThenStartsAgain() {

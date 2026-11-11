@@ -241,6 +241,8 @@ public enum SettingsTable {
                 note: "Under Advanced: Jev looks once at a small copy of each new image of the folder. Only while Keep screenshots too is on."),
         setting("clipboard", "imageTagsFolderPath", "Folder", .folder(empty: "macOS's screenshots folder"),
                 note: "Shown when Keep screenshots too is on; “default” for macOS's screenshots folder."),
+        setting("clipboard", "clipboardSkipSecrets", "Never keep keys and tokens", .toggle,
+                note: "Under Advanced. A copy that is a key or a token by its shape (a GitHub, GitLab, Stripe, AWS, Slack, Google or npm token, an sk- API key, a JWT, a private key) is not kept; the history says so once when it opens next. Read on this Mac, by code."),
         setting("clipboard", "clipboardExcludedApps", "Never keep copies from", .list(item: "an app, by its name or bundle id", adds: true)),
 
         // Snippets

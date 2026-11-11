@@ -102,13 +102,17 @@ final class ClipboardHistory {
     func keep() {
         guard let store else { return }
         let front = NSWorkspace.shared.frontmostApplication
-        switch Self.look(pasteboard, app: front?.bundleIdentifier, appName: front?.localizedName, excluded: Set(preferences.clipboardExcludedApps)) {
+        switch Self.look(pasteboard, app: front?.bundleIdentifier, appName: front?.localizedName,
+                         excluded: Set(preferences.clipboardExcludedApps), keepsSecrets: !preferences.clipboardSkipSecrets) {
         case nil:
             return
         case .item(let new):
             keepNow(new)
-        case .later(let make):
+        case .notKept(let reason):
+            note(reason, from: front?.localizedName)
+        case .later(let make, let ifNot):
             let date = Date.now
+            let appName = front?.localizedName
             // Clear History while it is made: not kept after it.
             let clears = store.clears
             keepingLater += 1
@@ -120,10 +124,29 @@ final class ClipboardHistory {
                     } catch {
                         Log.actions.error("\(error.localizedDescription, privacy: .public)")
                     }
+                } else if let ifNot {
+                    await self?.note(ifNot, from: appName, at: date)
                 }
                 await self?.keptLater(added)
             }
         }
+    }
+
+    /// The last copy not kept and why, until the history says it
+    /// (`takeNotKept`). In memory only, never what was copied.
+    @ObservationIgnored private(set) var notKept: ClipboardNotKept?
+
+    private func note(_ reason: ClipboardNotKept.Reason, from appName: String?, at date: Date = .now) {
+        notKept = ClipboardNotKept(reason: reason, appName: appName, date: date)
+        // Its shape only, as for the copies kept.
+        Log.trace("Clipboard: a copy not kept (\(String(describing: reason))), from \(appName ?? "?")")
+    }
+
+    /// The copy not kept since this was last asked, when it is still of
+    /// today's use (a day); said once.
+    func takeNotKept() -> ClipboardNotKept? {
+        defer { notKept = nil }
+        return notKept.flatMap { $0.isRecent(now: .now) ? $0 : nil }
     }
 
     private func keptLater(_ added: (item: ClipboardStore.Item, isNew: Bool)?) {
@@ -139,7 +162,7 @@ final class ClipboardHistory {
     func capture() -> ClipboardStore.Item? {
         let front = NSWorkspace.shared.frontmostApplication
         guard let new = Self.read(pasteboard, app: front?.bundleIdentifier, appName: front?.localizedName,
-                                  excluded: Set(preferences.clipboardExcludedApps))
+                                  excluded: Set(preferences.clipboardExcludedApps), keepsSecrets: !preferences.clipboardSkipSecrets)
         else { return nil }
         return keepNow(new)
     }
@@ -538,28 +561,33 @@ final class ClipboardHistory {
 
     /// What is on the clipboard, as the history keeps it; nil for nothing
     /// worth keeping, secrets and excluded apps.
-    static func read(_ pasteboard: NSPasteboard, app: String?, appName: String?, excluded: Set<String>) -> ClipboardStore.NewItem? {
-        switch look(pasteboard, app: app, appName: appName, excluded: excluded) {
-        case nil: nil
+    static func read(_ pasteboard: NSPasteboard, app: String?, appName: String?, excluded: Set<String>,
+                     keepsSecrets: Bool = false) -> ClipboardStore.NewItem? {
+        switch look(pasteboard, app: app, appName: appName, excluded: excluded, keepsSecrets: keepsSecrets) {
+        case nil, .notKept: nil
         case .item(let new): new
-        case .later(let make): make()
+        case .later(let make, _): make()
         }
     }
 
-    /// What `look` read on the clipboard: a copy ready to keep, or one
+    /// What `look` read on the clipboard: a copy ready to keep, one
     /// whose making is heavy and can run on any thread (nil from it: not
-    /// worth keeping after all).
+    /// kept after all, for `ifNot` when the user is to be told), or one
+    /// not kept that the history says.
     enum Looked {
         case item(ClipboardStore.NewItem)
-        case later(@Sendable () -> ClipboardStore.NewItem?)
+        case later(@Sendable () -> ClipboardStore.NewItem?, ifNot: ClipboardNotKept.Reason?)
+        case notKept(ClipboardNotKept.Reason)
     }
 
     /// A text longer than this is hashed and stored off the main thread.
     static let longText = 100_000
 
     /// Reads the clipboard: only the pasteboard's own calls and what is
-    /// short. Nil for nothing worth keeping, secrets and excluded apps.
-    static func look(_ pasteboard: NSPasteboard, app: String?, appName: String?, excluded: Set<String>) -> Looked? {
+    /// short. Nil for nothing worth keeping, what a password manager
+    /// marks secret and excluded apps. `keepsSecrets`: keys and tokens known
+    /// by their shape are kept too (Settings → Clipboard → Advanced, off).
+    static func look(_ pasteboard: NSPasteboard, app: String?, appName: String?, excluded: Set<String>, keepsSecrets: Bool = false) -> Looked? {
         let types = (pasteboard.types ?? []).map(\.rawValue)
         guard ClipboardPolicy.shouldRecord(types: types, app: app, excluded: excluded) else { return nil }
 
@@ -587,23 +615,26 @@ final class ClipboardHistory {
             }
             let kept = formats.isEmpty ? nil : formats
             let make: @Sendable () -> ClipboardStore.NewItem? = {
-                guard string.utf8.count <= 5_000_000 else { return nil }
+                guard string.utf8.count <= ClipboardPolicy.textLimit else { return nil }
                 return ClipboardStore.NewItem(kind: .text, text: string, formats: kept, app: app, appName: appName, hash: hash("text", Data(string.utf8)))
             }
             // `utf16.count` costs nothing on a string the pasteboard gave.
-            return string.utf16.count > longText ? .later(make) : make().map(Looked.item)
+            if string.utf16.count > longText { return .later(make, ifNot: .longText) }
+            // A key or a token by its shape: a few patterns on one word.
+            if !keepsSecrets, let name = ClipboardSecret.name(of: string) { return .notKept(.secret(name)) }
+            return make().map(Looked.item)
         }
 
         // The picture as it is there; what is made of it is heavy.
         let png = pasteboard.data(forType: .png)
-        guard let data = png ?? pasteboard.data(forType: .tiff) ?? NSImage(pasteboard: pasteboard)?.tiffRepresentation,
-              data.count <= 40_000_000 else { return nil }
-        return .later {
+        guard let data = png ?? pasteboard.data(forType: .tiff) ?? NSImage(pasteboard: pasteboard)?.tiffRepresentation else { return nil }
+        guard data.count <= ClipboardPolicy.pictureLimit else { return .notKept(.bigPicture) }
+        return .later({
             guard let rep = NSBitmapImageRep(data: data), let png = png ?? rep.representation(using: .png, properties: [:]) else { return nil }
             // A copied web image keeps its address: searchable too.
             return ClipboardStore.NewItem(kind: .image, text: string ?? "", imageData: png, size: "\(rep.pixelsWide)×\(rep.pixelsHigh)",
                                           app: app, appName: appName, hash: hash("image", png))
-        }
+        }, ifNot: nil)
     }
 
     /// The clipboard's image as it is there, for Vision to read

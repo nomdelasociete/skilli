@@ -157,6 +157,7 @@ final class Preferences {
         static let snippetMeaningSearch = "Preferences.snippetMeaningSearch"
         static let clipboardScreenshots = "Preferences.clipboardScreenshots"
         static let clipboardLinkPreviews = "Preferences.clipboardLinkPreviews"
+        static let clipboardSkipSecrets = "Preferences.clipboardSkipSecrets"
         static let fileMeaningSearch = "Preferences.fileMeaningSearch"
         static let historyMeaningSearch = "Preferences.historyMeaningSearch"
         static let emojiSkinTone = "Preferences.emojiSkinTone"
@@ -462,6 +463,12 @@ final class Preferences {
     /// title, description, picture and icon (`ClipboardLinks`).
     var clipboardLinkPreviews: Bool {
         didSet { save(clipboardLinkPreviews, Key.clipboardLinkPreviews) }
+    }
+
+    /// A copy that is a key or a token by its shape is not kept
+    /// (`ClipboardSecret`); the history says so when it opens next.
+    var clipboardSkipSecrets: Bool {
+        didSet { save(clipboardSkipSecrets, Key.clipboardSkipSecrets) }
     }
 
     /// New images in the screenshots folder (or the one chosen) join the
@@ -776,6 +783,7 @@ final class Preferences {
         clipboardScreenshots = defaults.object(forKey: Key.clipboardScreenshots) as? Bool
             ?? defaults.object(forKey: Key.imageTagsFolder) as? Bool ?? true
         clipboardLinkPreviews = defaults.object(forKey: Key.clipboardLinkPreviews) as? Bool ?? true
+        clipboardSkipSecrets = defaults.object(forKey: Key.clipboardSkipSecrets) as? Bool ?? true
         fileMeaningSearch = defaults.object(forKey: Key.fileMeaningSearch) as? Bool ?? true
         historyMeaningSearch = defaults.object(forKey: Key.historyMeaningSearch) as? Bool ?? true
         emojiSkinTone = defaults.string(forKey: Key.emojiSkinTone).flatMap(EmojiSkinTone.init(rawValue:)) ?? .standard
