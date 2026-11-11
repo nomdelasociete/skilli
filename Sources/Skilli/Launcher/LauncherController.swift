@@ -611,6 +611,11 @@ final class LauncherController: NSObject {
     private var thumbnailsUnderWay: Set<Int64> = []
     /// Self-test hook: the small pictures not drawn yet.
     var clipThumbnailsUnderWay: Int { thumbnailsUnderWay.count }
+    /// Self-test hook: whether a copied picture's row has its own small
+    /// picture (not the symbol shown until, or instead of, it).
+    func clipHasThumbnail(_ id: Int64) -> Bool {
+        thumbnails[id].map { $0 !== CommandIcon.image(for: "photo") } ?? false
+    }
     private var appIcons: [String: NSImage] = [:]
     private var processRefresh: Task<Void, Never>?
     /// Mac commands with their title now ("Turn Off Keep Awake" while kept

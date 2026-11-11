@@ -16352,15 +16352,34 @@ final class SelfTest {
         }
         // A picture, then a word right after: the word is kept at once,
         // the picture a moment later, and still under it.
+        let before = store.count
+        let lastPicture = store.search("", limit: 20).first { $0.kind == .image }?.id
         pasteboard.clearContents()
         pasteboard.setData(Self.screenPicture(50), forType: .png)
         history.keep()
         pasteboard.clearContents()
         pasteboard.setString("copied right after the picture", forType: .string)
         history.keep()
-        _ = await waitUntil(timeout: 5) { history.keepingLater == 0 }
+        _ = await waitUntil(timeout: 5) { history.keepingLater == 0 && store.count == before + 2 }
         let newest = store.search("", limit: 2)
-        if newest.map(\.kind) != [.text, .image] { problems.append("a picture kept after the text copied after it sits over it (\(newest.map(\.kind.rawValue)))") }
+        if store.count != before + 2 || newest.count != 2 || newest[0].text != "copied right after the picture" || newest[1].kind != .image
+            || newest[1].id == lastPicture {
+            problems.append("a picture, then a word copied right after: \(store.count - before) kept of 2, the newest two \(newest.map(\.kind.rawValue)) (the word first, its picture under it)")
+        }
+
+        // The same content kept twice, the older copy stored last: it
+        // stays where its latest copy put it. And a copy still being made
+        // when the history is cleared is not kept after it.
+        let twice = ClipboardStore.NewItem(kind: .text, text: "kept twice, out of order", app: "com.example.later", appName: "Later",
+                                           hash: ClipboardHistory.hash("text", Data("kept twice, out of order".utf8)))
+        var earlier = twice
+        (earlier.app, earlier.appName) = ("com.example.earlier", "Earlier")
+        let latest = Date.now
+        _ = try? store.add(twice, at: latest)
+        let merged = try? store.add(earlier, at: latest.addingTimeInterval(-60)).item
+        if merged?.copies != 2 || merged?.appName != "Later" || abs((merged?.copiedAt ?? .distantPast).timeIntervalSince(latest)) > 0.01 {
+            problems.append("an older copy of the same content stored last moved it back (\(merged?.appName ?? "nil"), \(merged?.copies ?? 0) copies)")
+        }
 
         for item in pictures {
             var wrote = false
@@ -16368,7 +16387,17 @@ final class SelfTest {
             wrote = history.write(item, plain: false)
             back.append(.now - start)
             // The TIFF is made when asked for, as an app pasted into does.
-            if !wrote || pasteboard.data(forType: .png) == nil || pasteboard.data(forType: .tiff) == nil { problems.append("a picture was not put back as PNG and TIFF") }
+            let sizes = [NSPasteboard.PasteboardType.png, .tiff].map { type in
+                pasteboard.data(forType: type).flatMap(NSBitmapImageRep.init(data:)).map { "\($0.pixelsWide)×\($0.pixelsHigh)" } ?? "unreadable"
+            }
+            if !wrote || sizes != [item.size ?? "", item.size ?? ""] { problems.append("a \(item.size ?? "?") picture put back reads as PNG \(sizes[0]), TIFF \(sizes[1])") }
+        }
+        let clears = store.clears
+        try? store.clear()
+        let late = ClipboardStore.NewItem(kind: .text, text: "made while the history was cleared", app: nil, appName: nil,
+                                          hash: ClipboardHistory.hash("text", Data("made while the history was cleared".utf8)))
+        if (try? store.add(late, at: .now, ifClears: clears)) != nil || store.count != 0 {
+            problems.append("a copy being made when the history was cleared was kept after it")
         }
         guard !asTIFF.isEmpty, !back.isEmpty else {
             record(name, false, "no picture could be made or kept: \(problems.joined(separator: "; "))", nil)
@@ -16378,7 +16407,7 @@ final class SelfTest {
         // The history as the launcher opens it: 400 texts, then 12
         // pictures, the newest.
         let top = Date.now
-        var seeded: [Int64] = []
+        var seeded: [Int64] = [], seededPictures: [Int64] = []
         defer { for id in seeded { try? real.delete(id) } }
         for index in 0..<400 {
             let text = "Speed copy \(index): a line of text as most copies are, kept to make the history long."
@@ -16389,7 +16418,14 @@ final class SelfTest {
             let png = Self.screenPicture(200 + index)
             let new = ClipboardStore.NewItem(kind: .image, text: "", imageData: png, size: "2560×1600", app: nil, appName: "Self-test",
                                              hash: ClipboardHistory.hash("image", png))
-            if let item = try? real.add(new, at: top.addingTimeInterval(-Double(index))).item { seeded.append(item.id) }
+            if let item = try? real.add(new, at: top.addingTimeInterval(-Double(index))).item {
+                seeded.append(item.id)
+                seededPictures.append(item.id)
+            }
+        }
+        guard seededPictures.count == 12, real.search("", limit: 12).map(\.id) == seededPictures else {
+            record(name, false, "the 12 pictures are not the newest copies of the history (\(seededPictures.count) kept)", nil)
+            return
         }
         guard await focusTestWindow() else { return }
         let launcher = context.launcher
@@ -16405,7 +16441,11 @@ final class SelfTest {
             launcher.window.displayIfNeeded()
             let drawn = ContinuousClock.now - start
             guard launcher.isInClipboard, launcher.resultTitles.count >= 12 else { return nil }
-            if await waitUntil(timeout: 3, { launcher.clipThumbnailsUnderWay == 0 }) == nil { problems.append("the rows' pictures were not drawn in 3 s") }
+            // The rows in sight: each with its own picture, not the symbol.
+            let shown = seededPictures.prefix(8)
+            if await waitUntil(timeout: 3, { shown.allSatisfy(launcher.clipHasThumbnail) }) == nil {
+                problems.append("\(shown.filter { !launcher.clipHasThumbnail($0) }.count) of the first \(shown.count) rows have no picture of their own after 3 s")
+            }
             return (drawn, .now - start)
         }
         guard let first = await open() else {
@@ -16422,12 +16462,19 @@ final class SelfTest {
         }
         // A copy kept a moment after the history opened joins its list.
         var joined = false
+        // The app's own way: a long text on the clipboard, made off the
+        // main thread, and the list told when it is kept.
         if await open() != nil {
-            let late = "kept a moment after the history opened"
-            let new = ClipboardStore.NewItem(kind: .text, text: late, app: nil, appName: "Self-test", hash: ClipboardHistory.hash("text", Data(late.utf8)))
-            if let item = try? real.add(new).item { seeded.append(item.id) }
-            launcher.clipKept()
-            joined = launcher.resultTitles.first == late
+            let late = "Kept a moment after the history opened \(Int.random(in: 1000...9999))"
+            let general = NSPasteboard.general
+            general.clearContents()
+            general.setString(late + "\n" + String(repeating: "a long copy, made off the main thread. ", count: 4_000), forType: .string)
+            context.clipboard.keep()
+            let atOnce = launcher.resultTitles.first == late
+            joined = await waitUntil(timeout: 3) { launcher.resultTitles.first == late } != nil
+            if atOnce { problems.append("a long text was kept on the main thread") }
+            if let item = real.search(late, limit: 1).first { seeded.append(item.id) }
+            general.clearContents()
         }
         await close()
         if !joined { problems.append("a copy kept after the history opened did not join its list") }

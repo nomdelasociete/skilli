@@ -109,12 +109,14 @@ final class ClipboardHistory {
             keepNow(new)
         case .later(let make):
             let date = Date.now
+            // Clear History while it is made: not kept after it.
+            let clears = store.clears
             keepingLater += 1
             Task.detached(priority: .userInitiated) { [weak self] in
                 var added: (item: ClipboardStore.Item, isNew: Bool)?
                 if let new = make() {
                     do {
-                        added = try store.add(new, at: date)
+                        added = try store.add(new, at: date, ifClears: clears)
                     } catch {
                         Log.actions.error("\(error.localizedDescription, privacy: .public)")
                     }
@@ -196,12 +198,13 @@ final class ClipboardHistory {
     /// thread (a screenshot is as heavy as a copied picture).
     func keepImageLater(at url: URL, made date: Date, from source: String) {
         guard let store, preferences.clipboardHistory else { return }
+        let clears = store.clears
         keepingLater += 1
         Task.detached(priority: .utility) { [weak self] in
             var added: (item: ClipboardStore.Item, isNew: Bool)?
             if let new = Self.picture(at: url, from: source) {
                 do {
-                    added = try store.add(new, at: date)
+                    added = try store.add(new, at: date, ifClears: clears)
                 } catch {
                     Log.actions.error("\(error.localizedDescription, privacy: .public)")
                 }
