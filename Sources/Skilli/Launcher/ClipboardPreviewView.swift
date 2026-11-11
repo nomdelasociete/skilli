@@ -51,6 +51,9 @@ final class ClipboardPreviewView: NSView {
     /// Self-test hooks: what is shown, and how long showing it took.
     private(set) var shown: Shown = .none
     var shownInfo: [(String, String)] { information.shown }
+    /// Self-test hook: the files of a several-files copy marked as no
+    /// longer there.
+    var shownGoneFiles: Int { fileList.goneShown }
     /// A link's or a value's title, as the card shows it.
     var shownTitle: String { shown == .link ? linkCard.shownTitle : shown == .file ? fileName.stringValue : valueCard.shownTitle }
     var shownLinkHasPicture: Bool { linkCard.hasPicture }
@@ -514,7 +517,18 @@ final class ClipboardPreviewView: NSView {
             shown = .files
             fileList.isHidden = false
             fileList.show(paths)
-            return [("Content", "\(paths.count) Files"), ("Where", folder)]
+            // Which are still there: looked for now that the copy is
+            // shown, off the main thread.
+            let token = self.token
+            Task { [weak self] in
+                let gone = await Task.detached(priority: .userInitiated) {
+                    Set(paths.indices.filter { !FileManager.default.fileExists(atPath: paths[$0]) })
+                }.value
+                guard let self, self.token == token, !gone.isEmpty else { return }
+                self.fileList.mark(gone: gone)
+                self.update("Content", ClipboardFiles.count(paths.count, gone: gone.count))
+            }
+            return [("Content", ClipboardFiles.count(paths.count, gone: 0)), ("Where", folder)]
         }
         shown = .file
         let url = URL(fileURLWithPath: path)
@@ -844,7 +858,8 @@ private final class BadgeView: NSView {
 }
 
 /// Several files: each one's icon, name and kind, the first ones; how
-/// many more. Read from the names only: nothing from the disk.
+/// many more. Read from the names only; whether each is still there is
+/// looked for by the preview once the copy shows (`mark(gone:)`).
 private final class FileListView: NSView {
     private var lines: [(icon: NSImageView, name: NSTextField, kind: NSTextField)] = []
     private let more = NSTextField(labelWithString: "")
@@ -881,9 +896,24 @@ private final class FileListView: NSView {
     /// Icons by kind of file, asked of macOS once each.
     private static var icons: [String: NSImage] = [:]
 
+    /// The files of these rows are no longer there: said in the kind's
+    /// place, the name dimmed.
+    func mark(gone: Set<Int>) {
+        goneShown = gone.count
+        for (index, line) in lines.enumerated() where gone.contains(index) {
+            line.kind.stringValue = "No longer there"
+            line.name.textColor = .tertiaryLabelColor
+        }
+    }
+
+    /// Self-test hook: how many files are marked as no longer there.
+    private(set) var goneShown = 0
+
     func show(_ paths: [String]) {
+        goneShown = 0
         for (index, line) in lines.enumerated() {
             let path = index < paths.count ? paths[index] : nil
+            line.name.textColor = .labelColor
             line.name.stringValue = path.map { ($0 as NSString).lastPathComponent } ?? ""
             let ext = path.map { ($0 as NSString).pathExtension.lowercased() } ?? ""
             let type = ext.isEmpty ? UTType.folder : UTType(filenameExtension: ext) ?? .data

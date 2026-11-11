@@ -1154,9 +1154,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         launcher.onClip = { [weak self] item, use in
             guard let self else { return }
+            // Files moved or deleted since they were copied: said, the
+            // others pasted (docs/clipboard-missing-files.md).
+            let files = use == .pastePlain ? (there: [], gone: []) : self.clipboard.files(of: item)
+            let gone = ClipboardFiles.line(gone: files.gone, of: files.there.count + files.gone.count, done: use == .copy ? "copied" : "pasted")
             guard self.clipboard.write(item, plain: use == .pastePlain) else {
                 // Rule 6: what happened and what to do, never a bare beep.
                 let line = switch (item.kind, use) {
+                case (.files, _) where gone != nil: gone ?? ""
                 case (.image, .pastePlain): "This image has no text to paste as plain text: ↩ pastes the image itself."
                 case (.image, _): "This image is no longer in the history's folder: pick another copy with ✦C."
                 default: "macOS did not take this copy on the clipboard: try it again with ✦C."
@@ -1165,6 +1170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             Log.trace("Clipboard: \(use) \(item.kind.rawValue)")
+            if let gone { self.aiActions.notify(gone, caller: "Clipboard", run: nil, seconds: 4) }
             guard use != .copy else { return }
             // Let the app that was in front get its focus back first.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {

@@ -471,3 +471,29 @@ extension ClipboardPolicy {
     /// A picture copy is kept up to this many bytes, as copied.
     public static let pictureLimit = 40_000_000
 }
+
+/// Files copied a while ago and moved or deleted since: what is said
+/// when one is pasted (docs/clipboard-missing-files.md). The history
+/// keeps their paths, not the files.
+public enum ClipboardFiles {
+    /// `gone`: the names no longer where they were copied, of `total`
+    /// in the copy. Nil when all are there. `done`: "pasted" or "copied",
+    /// what was done with the others.
+    public static func line(gone: [String], of total: Int, done: String) -> String? {
+        guard let first = gone.first else { return nil }
+        let others = total - gone.count
+        if others <= 0 {
+            return gone.count == 1
+                ? "“\(first)” is no longer where it was copied: ⇧↩ pastes its path."
+                : "These \(gone.count) files are no longer where they were copied: ⇧↩ pastes their paths."
+        }
+        let rest = others == 1 ? "the other was \(done)" : "the \(others) others were \(done)"
+        return gone.count == 1 ? "“\(first)” is no longer there: \(rest)." : "\(gone.count) of \(total) files are no longer there: \(rest)."
+    }
+
+    /// The several-files preview's first line: "5 Files", "5 Files · 2 no
+    /// longer there".
+    public static func count(_ total: Int, gone: Int) -> String {
+        gone == 0 ? "\(total) Files" : gone == total ? "\(total) Files · no longer there" : "\(total) Files · \(gone) no longer there"
+    }
+}

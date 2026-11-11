@@ -507,11 +507,31 @@ final class ClipboardHistory {
                 // image's; else the paths.
                 entry.setString(item.imageText ?? item.text, forType: .string)
             } else {
-                urls = item.text.split(separator: "\n").map { NSURL(fileURLWithPath: String($0)) }
+                // Only the files still there: a path to nothing pastes
+                // nothing, and Finder refuses the lot.
+                urls = files(of: item).there.map { NSURL(fileURLWithPath: $0) }
+                guard !urls.isEmpty else { return false }
             }
         }
         pasteboard.clearContents()
         return urls.isEmpty ? pasteboard.writeObjects([entry]) : pasteboard.writeObjects(urls)
+    }
+
+    /// A files copy's paths: those still there, and the names of those
+    /// moved or deleted since. Looked for when the copy is used (pasted,
+    /// copied, shown), never while the list is drawn.
+    func files(of item: ClipboardStore.Item) -> (there: [String], gone: [String]) {
+        guard item.kind == .files else { return ([], []) }
+        var there: [String] = []
+        var gone: [String] = []
+        for path in item.text.split(separator: "\n").map(String.init) {
+            if FileManager.default.fileExists(atPath: path) {
+                there.append(path)
+            } else {
+                gone.append((path as NSString).lastPathComponent)
+            }
+        }
+        return (there, gone)
     }
 
     /// A text put on the clipboard for ⌘V: a copy pasted another way
@@ -560,7 +580,10 @@ final class ClipboardHistory {
         guard let id, let item = sequenceItems[id] else {
             return sequenceItems.isEmpty ? "Nothing copied yet." : "That was the oldest copy. Again starts from the newest."
         }
-        guard write(item, plain: false) else { return "That copy is gone from the history." }
+        guard write(item, plain: false) else {
+            let files = files(of: item)
+            return ClipboardFiles.line(gone: files.gone, of: files.gone.count, done: "pasted") ?? "That copy is gone from the history."
+        }
         // Whatever changes the clipboard after this is the user's own copy.
         sequence.wrote(changeCount: pasteboard.changeCount)
         Log.trace("Paste in Sequence: copy \(sequence.position + 1) of \(sequence.ids.count), \(item.kind.rawValue)")
