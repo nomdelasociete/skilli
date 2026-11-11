@@ -346,6 +346,13 @@ extension LauncherController {
                 }
                 if let pictureFile { copies.append(copy("Copy Path", pictureFile.path)) }
             }
+            // A text pasted another way, only the ways that change it
+            // (docs/clipboard-paste-transforms.md).
+            if clip.kind == .text {
+                plain += ClipboardTransform.all(for: clip.text).map { way in
+                    act(way.title, way.symbol) { [weak self] in self?.onClipText?(way.text) }
+                }
+            }
             // What the copy is, not a paste of it: the page, a new mail,
             // the file itself (docs/clipboard-pins-filter-actions.md).
             var does: [LauncherAction] = []

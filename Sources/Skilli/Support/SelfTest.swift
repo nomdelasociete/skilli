@@ -17292,6 +17292,65 @@ final class SelfTest {
             }
             for word in ["lilas", "zebracross", "quagga"] { for item in store.search(word) { try? store.delete(item.id) } }
 
+            // ⌘K on a text copy offers the ways it can be pasted that
+            // change it (docs/clipboard-paste-transforms.md): a color's
+            // other forms, a link without its tracking, pasted for real.
+            _ = try? store.add(.init(kind: .text, text: "rgb(10, 20, 30)", app: "com.apple.Notes", appName: "Notes", hash: "selftest-way-color"))
+            _ = try? store.add(.init(kind: .text, text: "https://example.com/okapi?id=7&utm_source=mail&fbclid=abc", app: "com.apple.Notes",
+                                     appName: "Notes", hash: "selftest-way-link"))
+            if await openHistory() {
+                for letter in "rgb" { await pressKey(letter) }
+                _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 1 }
+                await pressKey("k", flags: .maskCommand)
+                _ = await waitUntil(timeout: 1) { !launcher.shownActions.isEmpty }
+                let onColor = launcher.shownActions.map(\.title)
+                if !onColor.contains("Paste as Hex") || !onColor.contains("Paste as HSL") || onColor.contains("Paste as RGB")
+                    || onColor.contains("Paste UPPERCASE") {
+                    problems.append("⌘K on a color copied as RGB: \(onColor)")
+                }
+                await captureLauncherBothWays(as: "launcher-clipboard-paste-ways")
+                // No key once the launcher is not the one typed in any
+                // more: it would go to whatever took its place.
+                if launcher.isVisible, launcher.isInClipboard {
+                    await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                    await pause(150)
+                }
+                if launcher.isVisible, launcher.isInClipboard, launcher.query == "rgb" {
+                    for _ in "rgb" { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+                    for letter in "okapi" { await pressKey(letter) }
+                    _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 1 }
+                    textView.string = ""
+                    await pressKey("k", flags: .maskCommand)
+                    if await waitUntil(timeout: 1, { launcher.shownActions.contains { $0.title == "Paste Without Tracking" } }) != nil {
+                        for letter in "tracking" { await pressKey(letter) }
+                        if await waitUntil(timeout: 1, { launcher.shownActions.first?.title == "Paste Without Tracking" }) == nil {
+                            problems.append("“tracking” in ⌘K on a link with tracking: \(launcher.shownActions.map(\.title))")
+                        } else {
+                            await pressKey(nil, code: CGKeyCode(kVK_Return))
+                            if await waitUntil(timeout: 3, { !launcher.isVisible && self.textView.string == "https://example.com/okapi?id=7" }) == nil {
+                                problems.append("Paste Without Tracking pasted “\(textView.string.prefix(80))”")
+                            }
+                        }
+                    } else {
+                        problems.append("⌘K on a link with tracking: \(launcher.shownActions.map(\.title))")
+                    }
+                    textView.string = ""
+                } else {
+                    problems.append("the launcher was no longer the history on “rgb” after its capture: no key sent")
+                }
+            } else {
+                problems.append("the history did not open again for the ways to paste")
+            }
+            // What was pasted joined the history; the copy it came from
+            // is still there as copied.
+            context.clipboard.poll()
+            let texts = store.search("okapi").map(\.text)
+            if !texts.contains("https://example.com/okapi?id=7") || !texts.contains("https://example.com/okapi?id=7&utm_source=mail&fbclid=abc") {
+                problems.append("after Paste Without Tracking the history holds \(texts)")
+            }
+            NSPasteboard.general.clearContents()
+            for word in ["okapi", "rgb(10, 20, 30)"] { for item in store.search(word) { try? store.delete(item.id) } }
+
             // ⌘K → Show Only Links: the chip says it, the list holds links
             // alone, the words typed still narrow it; ⌫ in the empty field
             // shows all again, the history still open.

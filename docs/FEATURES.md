@@ -258,6 +258,10 @@ Everything you copy, and your screenshots, ready to paste again.
   and Show Only from an app narrow the list; ⌫ in the empty field shows
   all again. With CleanShot X, ⌘K on an image
   annotates it, pins it or adds it to Quick Access.
+- **Pasted another way**: ⌘K on a text copy pastes it changed, only
+  the ways that change it: a color as Hex, RGB or HSL, a link without
+  its tracking, JSON pretty or minified, URL-decoded, as one line,
+  trimmed, UPPERCASE, lowercase, Title Case. The copy stays as it was.
 - **A part of a copy**: drag over a text or code copy in the preview, ⌘C
   copies that part. A long copy shows whole (up to 200,000 characters):
   a word found far down it is marked and in view.

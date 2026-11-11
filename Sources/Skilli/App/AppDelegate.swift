@@ -1171,6 +1171,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.selection.press("v", flags: .maskCommand)
             }
         }
+        launcher.onClipText = { [weak self] text in
+            guard let self else { return }
+            guard self.clipboard.write(text: text) else {
+                self.aiActions.notify("macOS did not take this text on the clipboard: try it again with ✦C.", caller: "Clipboard", run: nil)
+                return
+            }
+            // Never the text: only that it was pasted another way.
+            Log.trace("Clipboard: a copy pasted another way, \(text.count) characters")
+            // The launcher never takes the front: the app in front now
+            // is the one the paste is for.
+            let target = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            // Let it get its focus back first.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                // Another app in front meanwhile, or the launcher open
+                // again: ⌘V would land there. Left on the clipboard.
+                guard !self.launcher.isVisible, NSWorkspace.shared.frontmostApplication?.processIdentifier == target else {
+                    self.aiActions.notify("The text is on the clipboard: ⌘V pastes it.", caller: "Clipboard", run: nil, seconds: 3)
+                    return
+                }
+                self.selection.press("v", flags: .maskCommand)
+            }
+        }
         launcher.onQuitProcess = { [weak self] group, force in
             guard let self else { return }
             Task {
