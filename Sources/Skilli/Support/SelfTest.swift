@@ -17054,7 +17054,7 @@ final class SelfTest {
             let line = "A long copy goes on line after line, and none of them is cut from the preview. "
             // Its own word each run: the copy of it made below can be
             // forgotten without touching a copy that was there before.
-            let word = "zanzibar\(Int.random(in: 100_000...999_999))"
+            let word = "zanzibar" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
             let long = String(repeating: line, count: 1_500) + "The word \(word) sits far down. " + String(repeating: line, count: 300)
             let far = (long as NSString).range(of: word)
             if let added = try? store.add(ClipboardStore.NewItem(kind: .text, text: long, app: "com.example.long", appName: "Long",
