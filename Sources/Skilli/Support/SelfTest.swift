@@ -17047,6 +17047,43 @@ final class SelfTest {
             }
         }
 
+        // A long copy (docs/clipboard-long-copies.md): its start at once,
+        // the rest right after; a word far past the start is marked and
+        // in view, and a part picked there is the part copied.
+        if let store = context.clipboard.store {
+            let line = "A long copy goes on line after line, and none of them is cut from the preview. "
+            let long = String(repeating: line, count: 1_500) + "The word zanzibar sits far down. " + String(repeating: line, count: 300)
+            let far = (long as NSString).range(of: "zanzibar")
+            if let added = try? store.add(ClipboardStore.NewItem(kind: .text, text: long, app: "com.example.long", appName: "Long",
+                                                                 hash: ClipboardHistory.hash("text", Data(long.utf8)))) {
+                defer { context.clipboard.delete(added.item) }
+                guard await openHistory() else { return (problems + ["the history did not open again for the long copy"], note) }
+                for letter in "zanzibar" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { preview.shown == .text && preview.shownText.hasPrefix("A long copy") }) == nil {
+                    problems.append("“zanzibar” did not show the long copy (\(preview.shown.rawValue))")
+                } else {
+                    _ = await waitUntil(timeout: 2) { !preview.restPending }
+                    let shown = (preview.shownText as NSString).length
+                    if shown != (long as NSString).length { problems.append("the long copy shows \(shown) of \((long as NSString).length) characters") }
+                    if await waitUntil(timeout: 1, { preview.firstMarkInView }) == nil {
+                        problems.append("“zanzibar”, \(far.location) characters down, is not in view: \(preview.markPlace)")
+                    }
+                    // Half a frame, as showing a preview.
+                    if preview.restTook > .milliseconds(8) { problems.append("a piece of a long copy's rest held the main thread \(preview.restTook.compact)") }
+                    note += (note.isEmpty ? "" : "; ") + "a \(shown)-character copy whole, its rest joined in \(preview.restLaps), the main thread held \(preview.restTook.compact) at most"
+                    await captureLauncherBothWays(as: "launcher-clipboard-long-copy")
+                    preview.select(far)
+                    NSPasteboard.general.clearContents()
+                    await pressKey("c", flags: .maskCommand)
+                    if await waitUntil(timeout: 1, { !launcher.isVisible && copied() == "zanzibar" }) == nil {
+                        problems.append("⌘C with “zanzibar” picked far down copied “\(copied().prefix(40))”")
+                    }
+                }
+            } else {
+                problems.append("the long copy could not be kept")
+            }
+        }
+
         // A key by its shape is not kept, and the history says so once as
         // it opens (docs/clipboard-secrets-drops-hint.md). Made here,
         // never a real one.
