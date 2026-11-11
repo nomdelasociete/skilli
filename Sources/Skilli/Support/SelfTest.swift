@@ -17052,12 +17052,14 @@ final class SelfTest {
         // in view, and a part picked there is the part copied.
         if let store = context.clipboard.store {
             let line = "A long copy goes on line after line, and none of them is cut from the preview. "
-            let long = String(repeating: line, count: 1_500) + "The word zanzibar sits far down. " + String(repeating: line, count: 300)
-            let far = (long as NSString).range(of: "zanzibar")
+            // Its own word each run: the copy of it made below can be
+            // forgotten without touching a copy that was there before.
+            let word = "zanzibar\(Int.random(in: 100_000...999_999))"
+            let long = String(repeating: line, count: 1_500) + "The word \(word) sits far down. " + String(repeating: line, count: 300)
+            let far = (long as NSString).range(of: word)
             if let added = try? store.add(ClipboardStore.NewItem(kind: .text, text: long, app: "com.example.long", appName: "Long",
                                                                  hash: ClipboardHistory.hash("text", Data(long.utf8)))) {
                 defer { context.clipboard.delete(added.item) }
-                let hadWord = store.search("zanzibar", limit: 5).contains { $0.text == "zanzibar" }
                 guard await openHistory() else { return (problems + ["the history did not open again for the long copy"], note) }
                 for letter in "zanzibar" { await pressKey(letter) }
                 if await waitUntil(timeout: 2, { preview.shown == .text && preview.shownText.hasPrefix("A long copy") }) == nil {
@@ -17078,13 +17080,13 @@ final class SelfTest {
                     preview.select(far)
                     NSPasteboard.general.clearContents()
                     await pressKey("c", flags: .maskCommand)
-                    if await waitUntil(timeout: 1, { !launcher.isVisible && copied() == "zanzibar" }) == nil {
+                    if await waitUntil(timeout: 1, { !launcher.isVisible && copied() == word }) == nil {
                         problems.append("⌘C with “zanzibar” picked far down copied “\(copied().prefix(40))”")
                     }
-                    // The word copied is not left in the history (it was
-                    // not there before): read now, then forgotten.
+                    // The word copied is not left in the history: read
+                    // now, then forgotten.
                     context.clipboard.poll()
-                    for item in store.search("zanzibar", limit: 5) where item.text == "zanzibar" && !hadWord { context.clipboard.delete(item) }
+                    for item in store.search(word, limit: 5) where item.text == word { context.clipboard.delete(item) }
                     NSPasteboard.general.clearContents()
                     // A letter under 9,000 marks right after the start: the
                     // rest still comes, whole.
