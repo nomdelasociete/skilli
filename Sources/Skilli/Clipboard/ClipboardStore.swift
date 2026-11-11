@@ -151,7 +151,56 @@ final class ClipboardStore: @unchecked Sendable {
                 INSERT INTO items_fts (items_fts) VALUES ('rebuild');
                 """)
         }
+        // Added later: the same four read by threes of letters, so a word
+        // is found from inside too (docs/clipboard-rows-and-search.md).
+        // Kept by its own triggers; made and filled once on an older file.
+        // Not made (an SQLite without the tokenizer): the search stays
+        // the words' one.
+        do {
+            if try strings("SELECT name FROM sqlite_master WHERE name = 'items_sub'", []).isEmpty {
+                // One transaction: the table is there only whole, with its
+                // triggers and every copy in it. Stopped half way (a full
+                // disk, the app quit while a long history is read), nothing
+                // of it stays and the next launch makes it again.
+                try execute("BEGIN IMMEDIATE;")
+                do {
+                    try execute(Self.insideWordsIndex)
+                    try execute("COMMIT;")
+                } catch {
+                    try? execute("ROLLBACK;")
+                    throw error
+                }
+            }
+            findsInsideWords = true
+        } catch {
+            Log.actions.error("Clipboard history, no search inside words: \(error.localizedDescription, privacy: .public)")
+        }
     }
+
+    private static let insideWordsIndex = """
+                    CREATE VIRTUAL TABLE items_sub USING fts5 (
+                        text, ocr, tags, app_name, content = 'items', content_rowid = 'id',
+                        tokenize = 'trigram remove_diacritics 1'
+                    );
+                    CREATE TRIGGER items_sub_ai AFTER INSERT ON items BEGIN
+                        INSERT INTO items_sub (rowid, text, ocr, tags, app_name)
+                            VALUES (new.id, new.text, coalesce(new.ocr, ''), coalesce(new.tags, ''), coalesce(new.app_name, ''));
+                    END;
+                    CREATE TRIGGER items_sub_ad AFTER DELETE ON items BEGIN
+                        INSERT INTO items_sub (items_sub, rowid, text, ocr, tags, app_name)
+                            VALUES ('delete', old.id, old.text, coalesce(old.ocr, ''), coalesce(old.tags, ''), coalesce(old.app_name, ''));
+                    END;
+                    CREATE TRIGGER items_sub_au AFTER UPDATE OF text, ocr, tags, app_name ON items BEGIN
+                        INSERT INTO items_sub (items_sub, rowid, text, ocr, tags, app_name)
+                            VALUES ('delete', old.id, old.text, coalesce(old.ocr, ''), coalesce(old.tags, ''), coalesce(old.app_name, ''));
+                        INSERT INTO items_sub (rowid, text, ocr, tags, app_name)
+                            VALUES (new.id, new.text, coalesce(new.ocr, ''), coalesce(new.tags, ''), coalesce(new.app_name, ''));
+                    END;
+                    INSERT INTO items_sub (items_sub) VALUES ('rebuild');
+                    """
+
+    /// The trigram index is there: words are found from inside too.
+    private(set) var findsInsideWords = false
 
     deinit {
         sqlite3_close(db)
@@ -300,7 +349,9 @@ final class ClipboardStore: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try run("DELETE FROM items", [])
-        try execute("INSERT INTO items_fts (items_fts) VALUES ('rebuild'); VACUUM;")
+        try execute("INSERT INTO items_fts (items_fts) VALUES ('rebuild');")
+        if findsInsideWords { try execute("INSERT INTO items_sub (items_sub) VALUES ('rebuild');") }
+        try execute("VACUUM;")
         let manager = FileManager.default
         for file in ((try? manager.contentsOfDirectory(at: imagesFolder, includingPropertiesForKeys: nil)) ?? [])
             + ((try? manager.contentsOfDirectory(at: previewsFolder, includingPropertiesForKeys: nil)) ?? []) {
@@ -337,8 +388,11 @@ final class ClipboardStore: @unchecked Sendable {
 
     // MARK: - Reading
 
-    /// Newest first; words match as prefixes, accents ignored ("reunion"
-    /// finds "Réunion"), in the text and in what OCR read. `before`: only
+    /// Newest first; words of 3 letters or more are found anywhere, inside
+    /// words too, in the text, what OCR read, an image's tags and the
+    /// app's name; with a shorter word, words match as prefixes, in the
+    /// text and OCR. Accents ignored ("reunion" finds "Réunion").
+    /// `before`: only
     /// what was copied before then (the list's next older rows, as it
     /// nears its end).
     func search(_ text: String, limit: Int = 50, before: Date? = nil) -> [Item] {
@@ -350,6 +404,14 @@ final class ClipboardStore: @unchecked Sendable {
             if trimmed.isEmpty {
                 return try rows("SELECT \(Self.columns) FROM items \(before == nil ? "" : "WHERE copied < ?") ORDER BY copied DESC LIMIT ?",
                                 older + [.int(Int64(limit))])
+            }
+            // Every word of 3 letters or more: found inside words too,
+            // and in the app's name.
+            if findsInsideWords, let match = ClipboardSearch.substringQuery(trimmed) {
+                return try rows("""
+                    SELECT \(Self.columnList("items")) FROM items_sub JOIN items ON items.id = items_sub.rowid
+                    WHERE items_sub MATCH ? \(before == nil ? "" : "AND items.copied < ?") ORDER BY items.copied DESC LIMIT ?
+                    """, [.text(match)] + older + [.int(Int64(limit))])
             }
             if let match = ClipboardSearch.ftsQuery(trimmed) {
                 return try rows("""
@@ -539,6 +601,21 @@ final class ClipboardStore: @unchecked Sendable {
 }
 
 extension ClipboardStore.Item {
+    /// A found row's title: the line where the first word typed is, when
+    /// its first line does not hold it (an image: among its words).
+    func title(searched words: String) -> String {
+        guard !words.isEmpty else { return title }
+        switch kind {
+        case .text:
+            return ClipboardSearch.found(words, in: text) ?? title
+        case .image:
+            guard let ocr, let line = ClipboardSearch.found(words, in: ocr, limit: 80) else { return title }
+            return "\(tags.flatMap(ImageTags.init(words:))?.kind.title ?? "Image") “\(line)”"
+        case .files:
+            return title
+        }
+    }
+
     /// The one picture file this copy is (copied in Finder, or by a
     /// capture app that puts its file on the clipboard).
     var pictureFile: URL? {

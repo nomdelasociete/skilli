@@ -34,6 +34,8 @@ choices, the measures. Each one starts with its status and date.
 | [gif-search.md](gif-search.md) | GIF Search |
 | [snippet-preview.md](snippet-preview.md) | Search Snippets' list and preview |
 | [clipboard-text-selection.md](clipboard-text-selection.md) | Clipboard History: a part of a copy picked with the pointer, an image's whole text |
+| [clipboard-rows-and-search.md](clipboard-rows-and-search.md) | Clipboard History: rows say when, the header the day; search inside words, by a link's piece, by app |
+| [clipboard-review.md](clipboard-review.md) | Clipboard History against the other apps: what is behind, what was fixed since |
 | [skillie-files.md](skillie-files.md) | `.skilli` files: double-click to add |
 | [adding-a-shortcut.md](adding-a-shortcut.md) | Giving anything a shortcut |
 | [meeting-recorder.md](meeting-recorder.md) | The meeting recorder |

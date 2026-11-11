@@ -3992,9 +3992,25 @@ re-investigating.
   that macOS marked as a screen capture (`kMDItemIsScreenCapture`, an
   extended attribute `screencapture` writes) or named as macOS or
   CleanShot X name theirs, put on the clipboard as an image (PNG, TIFF)
-  and pasted; seen pasted, nothing said. Rows newest first; typing searches
-  SQLite FTS5 (`unicode61 remove_diacritics 2`: "reunion" finds "Réunion")
-  over the text and what Vision read in images. Return pastes in the app
+  and pasted; seen pasted, nothing said. Rows newest first, each saying
+  when at its right edge (`ClipboardDay.short`: "14:32" today, "Mon" the
+  six days before, "3 Nov" before; `fitsAccessory`, as wide as its
+  words), the header over the list the day of the row at its top,
+  following the scroll (`ClipboardDay.header`: "Copied yesterday";
+  docs/clipboard-rows-and-search.md). Typing searches SQLite FTS5: words
+  of 3 letters or more are found anywhere, inside words too ("board"
+  finds "clipboard", "ithub.com/acme"), in the text, what Vision read in
+  images, an image's tags and the app's name (`items_sub`, the `trigram`
+  tokenizer with `remove_diacritics 1`, kept by its own triggers, made
+  and filled once on an older file; `ClipboardSearch.substringQuery`);
+  with a word under 3 letters, words from their start in the text and
+  images (`items_fts`, `unicode61 remove_diacritics 2`: "reunion" finds
+  "Réunion"). Newest first either way. A copy found past its first line
+  shows the line found as its title (`ClipboardSearch.found`,
+  `Item.title(searched:)`), and the preview marks the words in the text
+  shown and scrolls to the first (`PreviewText.mark`, temporary
+  attributes). Measured: 0.69 ms the slowest key among 3,000 copies
+  (`remote clipboard`). Return pastes in the app
   in front (every format it was copied with), ⇧Return plain text (an
   image's OCR text), ⌘Return only copies, ⌘⌫ forgets at once (Undo ⌘Z
   for 10 s, the card under the launcher). The list narrows to

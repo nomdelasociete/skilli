@@ -15872,11 +15872,47 @@ final class SelfTest {
         }
         for item in store.search("feuillet", limit: 200) { try? store.delete(item.id) }
 
+        // Found inside words, by a piece of a link, by the app's name,
+        // without accents; a 2-letter word keeps the words' search; the
+        // found line is the row's title. Then a key among 3,000 copies.
+        var inside = "no copy"
+        var insideMs: Double?
+        let insideText = "Notes de réunion\nMerci d'envoyer la facture signée : https://github.com/acme/billing/pull/42"
+        if let slack = try? store.add(.init(kind: .text, text: insideText, app: "com.tinyspeck.slackmacgap", appName: "Slack", hash: "selftest-inside"),
+                                      at: .now.addingTimeInterval(-60)).item {
+            func finds(_ words: String) -> Bool { store.search(words).contains { $0.id == slack.id } }
+            var missed: [String] = []
+            for words in ["acture", "ithub.com/acme", "slack signee", "REUNION", "no reunion"] where !finds(words) { missed.append(words) }
+            if finds("zzacture") { missed.append("found “zzacture”") }
+            if slack.title(searched: "acture") != "Merci d'envoyer la facture signée : https://github.com/acme/billing/pull/42" {
+                missed.append("title “\(slack.title(searched: "acture"))”")
+            }
+            if slack.title(searched: "notes") != "Notes de réunion" { missed.append("title for “notes”") }
+            try? store.delete(slack.id)
+            if finds("acture") { missed.append("still found once deleted") }
+            let volumeFrom = Date.now.addingTimeInterval(-86_400)
+            for index in 0..<3_000 {
+                _ = try? store.add(.init(kind: .text, text: "Copie \(index) : la facturation du lot \(index % 97) part jeudi, voir https://example.com/lots/\(index)",
+                                         app: "com.apple.Notes", appName: "Notes", hash: "selftest-volume-\(index)"), at: volumeFrom.addingTimeInterval(-Double(index)))
+            }
+            var times: [Double] = []
+            for words in ["act", "actu", "actur", "acturation", "lots/29", "notes jeudi", "xample.com/lots/1", "du lot 4"] {
+                let start = ContinuousClock.now
+                let rows = store.search(words)
+                times.append((ContinuousClock.now - start).milliseconds)
+                if rows.isEmpty { missed.append("nothing for “\(words)” among 3,000") }
+            }
+            insideMs = times.max()
+            if let slowest = insideMs, slowest > 16 { missed.append("a key took \(String(format: "%.1f", slowest)) ms among 3,000 copies") }
+            try? store.clear()
+            inside = missed.isEmpty ? "true" : "missed \(missed)"
+        }
+
         let old = try? store.add(.init(kind: .text, text: "Très vieux", hash: "selftest-old"), at: .now.addingTimeInterval(-40 * 86_400))
         let pruned = old != nil && (try? store.prune(before: ClipboardRetention.month.cutoff()!))?.count == 1 && store.search("vieux").isEmpty
 
-        record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged,
-               "a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
+        record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true",
+               "found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
                ocrMs)
     }
 
@@ -15898,10 +15934,14 @@ final class SelfTest {
             return
         }
         let before = store.search("").first?.copies
+        // The old rows were never indexed by FTS: they still show in the
+        // list, and the index made for inside words holds them. Asked
+        // before the copy is made again, which would index it anyway.
+        let insideWords = store.findsInsideWords && store.search("cienne").first?.text == "ancienne copie"
         _ = try? store.add(.init(kind: .text, text: "ancienne copie", hash: "old-hash"))
         let after = store.search("").first?.copies
-        // The old rows were never indexed by FTS: they still show in the list.
-        record(name, before == 1 && after == 2, "copies before: \(before.map(String.init) ?? "nil"), after copying again: \(after.map(String.init) ?? "nil")", nil)
+        record(name, before == 1 && after == 2 && insideWords,
+               "copies before: \(before.map(String.init) ?? "nil"), after copying again: \(after.map(String.init) ?? "nil"), found by “cienne”: \(insideWords)", nil)
     }
 
     /// Copies a person would look for, among 25 others, found from how they
@@ -16776,6 +16816,52 @@ final class SelfTest {
             problems.append("no picture file among the copies")
         }
         context.preferences.clipboardOCR = readsText
+
+        // Rows say when, the header the day; a copy found inside a word,
+        // past its first line, shows the line and its words marked.
+        if let store = context.clipboard.store {
+            let report = "Weekly report\n\nRevenue is up, churn is flat.\nThe overdue invoices were all paid on Thursday."
+            let older = try? store.add(.init(kind: .text, text: report, app: "com.apple.Notes", appName: "Notes", hash: "selftest-found"),
+                                       at: .now.addingTimeInterval(-3 * 86_400)).item
+            if await openHistory() {
+                if launcher.headerText != "Copied today" { problems.append("the header says “\(launcher.headerText)”, not Copied today") }
+                let time = launcher.accessoryShown(row: 0)?.text ?? ""
+                if !time.contains(where: \.isNumber) { problems.append("the first row's time is “\(time)”") }
+                for letter in "verdue" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { launcher.shownRowCount == 1 && launcher.titleShown(row: 0) == "The overdue invoices were all paid on Thursday." }) == nil {
+                    problems.append("“verdue”: \(launcher.shownRowCount) rows, the first “\(launcher.titleShown(row: 0) ?? "")”")
+                }
+                if launcher.headerText == "Copied today" || !launcher.headerText.hasPrefix("Copied ") {
+                    problems.append("a copy of three days ago under “\(launcher.headerText)”")
+                }
+                if await waitUntil(timeout: 1, { preview.markedCount == 1 }) == nil { problems.append("\(preview.markedCount) places marked for “verdue”") }
+                await captureLauncherBothWays(as: "launcher-clipboard-found")
+                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            } else {
+                problems.append("the history did not open again for its rows")
+            }
+            if let older { try? store.delete(older.id) }
+
+            // Other words on the same copy: the preview goes to where the
+            // new ones are, far down a long text.
+            let long = (["Zanzibar ledger"] + (1...70).map { "Line \($0) of the notes." } + ["Signed by the quokka."]).joined(separator: "\n")
+            let longCopy = try? store.add(.init(kind: .text, text: long, app: "com.apple.Notes", appName: "Notes", hash: "selftest-found-far")).item
+            if await openHistory() {
+                for letter in "anzib" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { launcher.shownRowCount == 1 && preview.markedCount == 1 && preview.firstMarkInView }) == nil {
+                    problems.append("“anzib”: \(launcher.shownRowCount) rows, \(preview.markedCount) marked, \(preview.markPlace)")
+                }
+                for _ in "anzib" { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+                for letter in "uokk" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { launcher.shownRowCount == 1 && preview.markedCount == 1 && preview.firstMarkInView }) == nil {
+                    problems.append("“uokk” after “anzib” on the same copy: \(launcher.shownRowCount) rows, \(preview.markedCount) marked, \(preview.markPlace)")
+                }
+                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            } else {
+                problems.append("the history did not open again for a long copy")
+            }
+            if let longCopy { try? store.delete(longCopy.id) }
+        }
 
         // The whole history walks: past its first 50 rows, the older ones
         // join the list as the selection nears its end.

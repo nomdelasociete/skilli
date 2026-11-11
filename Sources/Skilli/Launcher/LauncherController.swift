@@ -1835,7 +1835,7 @@ final class LauncherController: NSObject {
             } else if let meaning, meaning.query == text {
                 sectionHeader.stringValue = meaning.result.unanswered == nil ? "By meaning · \(meaning.result.label)" : "By meaning"
             } else {
-                sectionHeader.stringValue = query.isEmpty ? "Copied recently" : "Copied"
+                sectionHeader.stringValue = clipDay(atRow: 0) ?? (query.isEmpty ? "Copied recently" : "Copied")
             }
             if meaningPending == text, !text.isEmpty {
                 emptyState.stringValue = "Searching by meaning…"
@@ -2059,6 +2059,7 @@ final class LauncherController: NSObject {
                 clipPreview.show(nil, imageURL: nil)
                 return
             }
+            clipPreview.searched = meaning == nil && meaningPending == nil ? searchField.stringValue.trimmingCharacters(in: .whitespaces) : ""
             clipPreview.show(clip, imageURL: clip.kind == .image ? clipboardImageURL?(clip) : nil)
         } else if mode == .snippets {
             guard case .snippet(let snippet) = item else {
@@ -3159,6 +3160,11 @@ final class LauncherController: NSObject {
         (tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView)?.accessoryShown
     }
 
+    /// Self-test hook: a row's title as drawn (the history's found line).
+    func titleShown(row: Int) -> String? {
+        (tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView)?.titleText
+    }
+
     /// Self-test hook: the detail at the right of each row drawn.
     var resultAccessories: [String] {
         (0..<tableView.numberOfRows).map { (tableView.view(atColumn: 0, row: $0, makeIfNecessary: false) as? ResultCellView)?.accessoryText ?? "" }
@@ -3934,9 +3940,22 @@ final class LauncherController: NSObject {
         tableView.insertRows(at: IndexSet(shown..<results.count), withAnimation: [])
     }
 
+    /// "Copied yesterday": the day of the copy at `row`, for the header
+    /// over the history's list.
+    private func clipDay(atRow row: Int) -> String? {
+        guard results.indices.contains(row), case .clip(let item) = results[row] else { return nil }
+        return ClipboardDay.header(item.copiedAt)
+    }
+
     @objc private func listScrolled() {
         if rowNumbersShown { showRowNumbers() }
         showOlderClips()
+        // The history's header follows the day of the row at the top.
+        if clipboardMode, meaning == nil, meaningPending == nil,
+           let day = clipDay(atRow: max(0, tableView.row(at: NSPoint(x: 1, y: tableView.visibleRect.minY + 0.5)))),
+           sectionHeader.stringValue != day {
+            sectionHeader.stringValue = day
+        }
         guard mode == .catalog else { return }
         var row = tableView.row(at: NSPoint(x: 1, y: tableView.visibleRect.minY + 0.5))
         if results.indices.contains(row), case .catalogHeader = results[row] { row -= 1 }
@@ -4821,6 +4840,7 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             header.title = group.title
         default:
             guard let cell = view as? ResultCellView else { return false }
+            if case .clip = results[row] {} else { cell.fitsAccessory = false }
             configure(cell, for: results[row])
             let id = results[row].learningID
             // Beside a preview a row is its name (and a snippet's keyword):
@@ -5033,8 +5053,11 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             cell.configure(title: snippet.name, accessory: mode == .snippets ? "" : snippet.keyword.isEmpty ? "Snippet" : "Snippet · \(snippet.keyword)",
                            icon: CommandIcon.image(for: "text.quote"))
         case .clip(let item):
-            // Beside the preview, which says the rest.
-            cell.configure(title: item.title, accessory: "", icon: icon(for: item))
+            // Beside the preview, which says the rest: when it was copied,
+            // and the line a search found it by.
+            cell.fitsAccessory = true
+            let words = meaning == nil && meaningPending == nil ? searchField.stringValue.trimmingCharacters(in: .whitespaces) : ""
+            cell.configure(title: item.title(searched: words), accessory: ClipboardDay.short(item.copiedAt), icon: icon(for: item))
         case .setup(let permission):
             // Only Accessibility's opens the setup window; the others ask
             // right here (D7).

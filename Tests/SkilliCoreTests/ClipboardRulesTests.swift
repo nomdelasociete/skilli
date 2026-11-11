@@ -13,6 +13,48 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertNil(ClipboardRetention.unlimited.cutoff(now: now))
     }
 
+    func testSubstringQueryTakesWordsOfThreeLettersOrMore() {
+        XCTAssertEqual(ClipboardSearch.substringQuery("board"), "\"board\"")
+        XCTAssertEqual(ClipboardSearch.substringQuery("  ithub.com/acme  voice "), "\"ithub.com/acme\" \"voice\"")
+        XCTAssertEqual(ClipboardSearch.substringQuery("say \"hi\"!"), "\"say\" \"\"\"hi\"\"!\"")
+        XCTAssertNil(ClipboardSearch.substringQuery("id 4521"))
+        XCTAssertNil(ClipboardSearch.substringQuery("ab"))
+        XCTAssertNil(ClipboardSearch.substringQuery("   "))
+    }
+
+    func testFoundLineIsTheTitleWhenTheFirstLineDoesNotHoldTheWord() {
+        let text = "Meeting notes\n\nPlease send the signed invoice for October before Friday.\nThanks"
+        XCTAssertEqual(ClipboardSearch.found("voice", in: text), "…send the signed invoice for October before Friday.")
+        XCTAssertNil(ClipboardSearch.found("meet", in: text))
+        XCTAssertNil(ClipboardSearch.found("absent", in: text))
+        XCTAssertEqual(ClipboardSearch.found("THANKS", in: text), "Thanks")
+        XCTAssertEqual(ClipboardSearch.found("reunion", in: "Agenda\nRéunion à 14 h"), "Réunion à 14 h")
+        XCTAssertEqual(ClipboardSearch.ranges(of: "o no", in: "No, not now").map { String("No, not now"[$0]) }, ["No", "o", "no", "o", "no", "o"])
+    }
+
+    func testRowsSayWhenAndTheHeaderSaysTheDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Paris")!
+        let locale = Locale(identifier: "en_GB")
+        func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 12, _ minute: Int = 0) -> Date {
+            calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+        }
+        let now = date(2026, 11, 10, 18, 30)   // a Tuesday
+        func short(_ date: Date) -> String { ClipboardDay.short(date, now: now, calendar: calendar, locale: locale) }
+        func header(_ date: Date) -> String { ClipboardDay.header(date, now: now, calendar: calendar, locale: locale) }
+        XCTAssertEqual(short(date(2026, 11, 10, 9, 23)), "09:23")
+        XCTAssertEqual(short(date(2026, 11, 9, 23, 59)), "Mon")
+        XCTAssertEqual(short(date(2026, 11, 4)), "Wed")
+        XCTAssertEqual(short(date(2026, 11, 3)), "3 Nov")
+        XCTAssertEqual(short(date(2025, 11, 3)), "3 Nov 2025")
+        XCTAssertEqual(header(date(2026, 11, 10, 0, 1)), "Copied today")
+        XCTAssertEqual(header(date(2026, 11, 9, 23, 59)), "Copied yesterday")
+        XCTAssertEqual(header(date(2026, 11, 6)), "Copied Friday")
+        XCTAssertEqual(header(date(2026, 11, 3)), "Copied 3 November")
+        XCTAssertEqual(header(date(2025, 11, 3)), "Copied 3 November 2025")
+        XCTAssertEqual(header(date(2026, 11, 11)), "Copied today")
+    }
+
     func testOneCopiedPictureFileIsAPicture() {
         XCTAssertEqual(CopiedPicture.path(in: "/tmp/CleanShot 2026-11-10 at 18.16.45@2x.jpg"), "/tmp/CleanShot 2026-11-10 at 18.16.45@2x.jpg")
         XCTAssertEqual(CopiedPicture.path(in: "/tmp/Scan.HEIC"), "/tmp/Scan.HEIC")

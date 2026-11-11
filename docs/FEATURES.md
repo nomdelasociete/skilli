@@ -243,8 +243,12 @@ open.
 
 Everything you copy, and your screenshots, ready to paste again.
 
-- **Clipboard History** (✦C, `cb`): text, images and files; search
-  without accents, even words inside images; ⇥ by meaning, through the
+- **Clipboard History** (✦C, `cb`): text, images and files, each row
+  saying when it was copied, the day over the list; search without
+  accents, inside words too ("board" finds "clipboard"; from 3 letters,
+  a shorter word in the search finds from words' starts only), by a piece of a
+  link, by the app it came from, even words inside images; a copy found
+  shows the line found, its words marked in the preview; ⇥ by meaning, through the
   whole history kept ("my train ticket from yesterday") or by what a copy
   is ("email", "a link"). ↩ pastes, ⇧↩ plain text, ⌘↩ copies, ⌘⌫ forgets
   (⌘Z brings it back for 10 s). With CleanShot X, ⌘K on an image

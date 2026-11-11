@@ -19,8 +19,14 @@ images, files, and your screenshots too.
   puts all its words in the picture's place, to read or pick a part
   from; *Copy Text in Image* (**⇧⌘C**) copies them all, **⇧↩** pastes
   them. A picture copied as a file works the same.
-- **Search** by the words, without worrying about accents, even words
-  inside images. **⇥** searches by meaning, through all the history you
+- **Each row says when** it was copied; the line over the list says the
+  day.
+- **Search** by the words, or a piece of one ("board" finds
+  "clipboard"), a bit of a link, or the app it came from ("slack"),
+  without worrying about accents, even words inside images. A piece
+  needs 3 letters or more: with a shorter word in what you type, words
+  are found from their start only. The copy
+  found shows the line where your words are. **⇥** searches by meaning, through all the history you
   keep: "my train ticket from yesterday", or what a copy is: "email", "a
   link", "phone number".
   While it searches, the list says so; keep typing to stop it.

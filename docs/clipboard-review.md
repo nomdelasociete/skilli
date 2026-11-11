@@ -29,6 +29,12 @@ is read as the history opens, and a gap found right after: a picture
 copied as its file had no text read and none of #123's actions (now read
 when its row shows; reading it when copied made macOS ask for the folder).
 
+Then (docs/clipboard-rows-and-search.md): #6 rows say when and the
+header the day, #4 words are found inside words, by a piece of a link
+and by the app, the found line shown and marked. Left of #4: typo
+tolerance and ranking (the order stays newest first). Left of #6: day
+separators inside the list, "+n lines".
+
 ## Must (the history is behind the others here)
 
 | # | Gap | Proof | Others |

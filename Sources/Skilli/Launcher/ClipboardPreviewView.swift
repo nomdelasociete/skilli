@@ -62,6 +62,14 @@ final class ClipboardPreviewView: NSView {
     private var textShownFor: Int64?
     /// The image's whole text shows, not its picture.
     var showsImageText: Bool { item?.imageText != nil && item?.id == textShownFor && textShownFor != nil }
+    /// The words the list was searched by: marked in the text shown, the
+    /// first scrolled into view (docs/clipboard-rows-and-search.md).
+    var searched = ""
+    /// How many places are marked in the text (self-test hook).
+    var markedCount: Int { text.isHidden ? 0 : text.markedCount }
+    /// The first place marked is in view (self-test hook).
+    var firstMarkInView: Bool { !text.isHidden && text.firstMarkInView }
+    var markPlace: String { text.markPlace }
     /// A picture's file whose text was never read is shown, and its file
     /// is there: the history reads it (`readText(inPictureFile:)`).
     var onPictureFileShown: ((ClipboardStore.Item) -> Void)?
@@ -215,7 +223,10 @@ final class ClipboardPreviewView: NSView {
         // The same copy shown again (the list refreshed) keeps what is
         // picked in it; another puts an image's picture back.
         sameAsShown = item != nil && item?.id == self.item?.id
-        if !sameAsShown { textShownFor = nil }
+        if !sameAsShown {
+            textShownFor = nil
+            lastMarked = nil
+        }
         self.item = item
         self.imageURL = imageURL
         hasPicture = false
@@ -333,13 +344,36 @@ final class ClipboardPreviewView: NSView {
     private func showPlain(_ string: String, code: Bool, language: String?) {
         text.show(string, code: code, language: language, keeping: sameAsShown)
         text.isHidden = false
+        markFound(inWholeText: false)
     }
+
+    /// Marks the words searched in the text shown. The first is scrolled
+    /// into view when what is marked changed: another copy, other words,
+    /// or an image's whole text just opened. The same copy shown again
+    /// by the same words (the list refreshed) stays where it was read.
+    private func markFound(inWholeText whole: Bool) {
+        let marked = Marked(id: item?.id, whole: whole, words: searched)
+        text.mark(searched, moving: marked != lastMarked)
+        lastMarked = marked
+    }
+
+    private struct Marked: Equatable {
+        let id: Int64?
+        let whole: Bool
+        let words: String
+    }
+
+    /// What `markFound` last marked.
+    private var lastMarked: Marked?
 
     /// An image's picture and its whole text, one for the other (⌘K → Show
     /// Text in Image, Show Image). Nothing on a copy with no text read.
     func toggleImageText() {
         guard let item, Self.imageText(item) != nil else { return }
         textShownFor = showsImageText ? nil : item.id
+        // Opened again later, the whole text goes to its first found
+        // word again, wherever it was left.
+        lastMarked = nil
         show(item, imageURL: imageURL)
     }
 
@@ -423,6 +457,7 @@ final class ClipboardPreviewView: NSView {
             // Its whole text in the picture's place, under "Text in Image".
             text.show(whole, code: false, language: "Text in Image", limit: Self.imageTextLimit, keeping: sameAsShown)
             text.isHidden = false
+            markFound(inWholeText: true)
             imageView.isHidden = true
             shownTextInImage = whole
         } else if let text = Self.imageText(item) {
@@ -484,6 +519,7 @@ final class ClipboardPreviewView: NSView {
         if let whole {
             text.show(whole, code: false, language: "Text in Image", limit: Self.imageTextLimit, keeping: sameAsShown)
             text.isHidden = false
+            markFound(inWholeText: true)
             fileName.isHidden = true
             shownTextInImage = whole
         } else if let words = Self.imageText(item) {

@@ -102,6 +102,54 @@ public enum ClipboardSearch {
         max(0, text.split(whereSeparator: \.isNewline).filter { !$0.allSatisfy(\.isWhitespace) }.count - 1)
     }
 
+    /// The query for the trigram index (`items_sub`): every word as it is
+    /// typed, found inside words too, all of them required. Nil when a
+    /// word is under 3 characters (a trigram cannot find it): the search
+    /// is then `ftsQuery`'s.
+    public static func substringQuery(_ text: String) -> String? {
+        let words = text.split(whereSeparator: \.isWhitespace).prefix(8)
+        guard !words.isEmpty, words.allSatisfy({ $0.unicodeScalars.count >= 3 }) else { return nil }
+        return words.map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }.joined(separator: " ")
+    }
+
+    /// Where each word typed is in `text`, accents and case ignored, in
+    /// the order found, `limit` at most: what the preview marks.
+    public static func ranges(of words: String, in text: String, limit: Int = 200) -> [Range<String.Index>] {
+        var found: [Range<String.Index>] = []
+        for word in words.split(whereSeparator: \.isWhitespace).prefix(8) {
+            var from = text.startIndex
+            while found.count < limit, let range = text.range(of: word, options: [.caseInsensitive, .diacriticInsensitive], range: from..<text.endIndex) {
+                found.append(range)
+                from = range.upperBound
+            }
+        }
+        return found.sorted { $0.lowerBound < $1.lowerBound }
+    }
+
+    /// A found copy's title when its first line does not hold the first
+    /// word typed: the line that does, from a few words before it
+    /// ("…the invoice for October"). Nil when the first line holds it, or
+    /// nothing does in the first 100,000 characters.
+    public static func found(_ words: String, in text: String, limit: Int = 200) -> String? {
+        guard let word = words.split(whereSeparator: \.isWhitespace).first else { return nil }
+        let head = text.prefix(100_000)
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        guard let match = head.range(of: word, options: options) else { return nil }
+        if title(of: text, limit: limit).range(of: word, options: options) != nil { return nil }
+        let lineStart = head[..<match.lowerBound].lastIndex(where: \.isNewline).map { head.index(after: $0) } ?? head.startIndex
+        let lineEnd = head[match.upperBound...].firstIndex(where: \.isNewline) ?? head.endIndex
+        // At most 24 characters before the word, from a word's start.
+        var start = lineStart
+        let before = head[lineStart..<match.lowerBound]
+        if before.count > 24 {
+            let near = before.index(before.endIndex, offsetBy: -24)
+            start = before[near...].firstIndex(where: \.isWhitespace).map { before.index(after: $0) } ?? near
+        }
+        let line = head[start..<lineEnd].split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let cut = line.count > limit ? String(line.prefix(limit)) + "…" : line
+        return start == lineStart ? cut : "…" + cut
+    }
+
     public static func ftsQuery(_ text: String) -> String? {
         let words = text
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
@@ -109,6 +157,51 @@ public enum ClipboardSearch {
             .prefix(8)
         guard !words.isEmpty else { return nil }
         return words.map { "\"\($0)\"*" }.joined(separator: " ")
+    }
+}
+
+/// When a copy was made, as the history's list says it
+/// (docs/clipboard-rows-and-search.md).
+public enum ClipboardDay {
+    /// At a row's right edge: "14:32" today, "Mon" the six days before,
+    /// "3 Nov" before that, "3 Nov 2025" in another year.
+    public static func short(_ date: Date, now: Date = .now, calendar: Calendar = .current, locale: Locale = .current) -> String {
+        var style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+        let days = daysAgo(date, now: now, calendar: calendar)
+        if days <= 0 {
+            style = style.hour().minute()
+        } else if days < 7 {
+            style = style.weekday(.abbreviated)
+        } else if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
+            style = style.day().month(.abbreviated)
+        } else {
+            style = style.day().month(.abbreviated).year()
+        }
+        return date.formatted(style)
+    }
+
+    /// Over the list, for the row at its top: "Copied today", "Copied
+    /// yesterday", "Copied Monday", "Copied 3 November", "Copied 3
+    /// November 2025".
+    public static func header(_ date: Date, now: Date = .now, calendar: Calendar = .current, locale: Locale = .current) -> String {
+        var style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+        let days = daysAgo(date, now: now, calendar: calendar)
+        if days <= 0 { return "Copied today" }
+        if days == 1 { return "Copied yesterday" }
+        if days < 7 {
+            style = style.weekday(.wide)
+        } else if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
+            style = style.day().month(.wide)
+        } else {
+            style = style.day().month(.wide).year()
+        }
+        return "Copied " + date.formatted(style)
+    }
+
+    /// Whole days between the two dates' days; 0 for today (and for a
+    /// date after now).
+    static func daysAgo(_ date: Date, now: Date, calendar: Calendar) -> Int {
+        max(0, calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0)
     }
 }
 
