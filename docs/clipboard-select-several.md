@@ -1,8 +1,9 @@
 # Clipboard History: several copies at once, in the order copied
 
-**A proposal. Nothing here is built.** Two gaps of
-`docs/clipboard-review.md`, taken together because one idea answers
-both:
+**Built in two steps.** Done: selecting, ↩ and ⌘↩ on a selection.
+To come: Paste in Sequence on a selection (its section below is still
+a proposal). Two gaps of `docs/clipboard-review.md`, taken together
+because one idea answers both:
 
 - **#8** Paste in Sequence goes newest first: copy A, B, C, then three
   keys paste C, B, A. Collecting in one place to paste in another wants
@@ -65,7 +66,8 @@ pasted in the order it was copied, all at once (↩) or one key each
 - At most 50 (the length of a sequence today).
 - ⌘1–⌘9 still paste that row alone.
 - ⌘⌫, Pin and the other actions of ⌘K still act on the row under the
-  keys, not on the selection (first version).
+  keys, not on the selection (first version). ⌘K's first line, Paste,
+  is ↩: with a selection it pastes the selection.
 
 ## ↩ on a selection: one paste
 
@@ -73,7 +75,7 @@ pasted in the order it was copied, all at once (↩) or one key each
 |---|---|
 | Texts (links, colors, addresses, code: all text) | One text, a line each, in the order copied. Plain: the fonts and colors a copy came with are not kept. |
 | Files | All the files, as one copy of several files (the ones still there: `docs/clipboard-missing-files.md`). |
-| Texts and files together, or any image | Nothing: "These copies do not make one paste: ⌘K → Paste in Sequence pastes them one by one." |
+| Texts and files together, or any image | Nothing: "These copies do not make one paste: only texts together, or files together." Once Paste in Sequence takes a selection, the line will point to it. |
 
 ⇧↩ pastes the same as ↩ for texts, and the paths for files.
 
@@ -81,6 +83,8 @@ Not in the first version: another separator than a line (a space, a
 comma); an image's text standing for the image.
 
 ## Paste in Sequence on a selection: one key each
+
+Not built yet.
 
 - ⌘K → *Paste in Sequence* with a selection: the launcher closes, the
   oldest selected copy is pasted. Each Paste in Sequence after it
@@ -135,18 +139,20 @@ is the launcher's key bound (8 ms). To measure, not assumed.
 Two pull requests: (1) select, ↩ and ⌘↩; (2) Paste in Sequence on a
 selection.
 
-## Checks planned
+## Checks
 
 - Unit: the order copied whatever the order selected; what makes one
-  paste; the sequence forward from given ids, its end, its 30 s.
-- Self-test (`previews`): ⇧↓ twice selects two rows with their numbers,
-  the chip and the footer say so; ↩ pastes both in the app in front, a
-  line each, oldest first; esc clears before it closes; ⌘K → Paste in
-  Sequence then the command twice more pastes A, B, C.
-- Captures of the selected rows, light and dark, judged before it is
-  shown.
+  paste (texts, files, neither); the chip. To come with the second
+  step: the sequence forward from given ids, its end, its 30 s.
+- Self-test (`previews`): ⇧↓ twice selects two rows, their places, the
+  chip and the footer say so; ⌘K → Select adds the third; ↩ pastes the
+  three in the app in front, a line each, oldest first; opened again,
+  nothing is selected; esc lets a selection go before it closes the
+  history. To come: ⌘K → Paste in Sequence, then the command twice
+  more, pastes A, B, C.
+- Captures of the selected rows, light and dark, looked at.
 
-## Questions (my answer first)
+## Questions (my answer first; built with these answers, 2026-11-11)
 
 1. **⇧↓ / ⇧↑ select.** Yes: they are keys of the open list, like ⇧↩
    and ⌘⌫, not shortcuts given to a command. If these count as the
