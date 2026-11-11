@@ -62,7 +62,7 @@ key's header:
 | `AIza` + 35 | a Google API key |
 | `npm_` + 36 | an npm token |
 | three base64url parts, the first two starting `eyJ` | a sign-in token |
-| `-----BEGIN … PRIVATE KEY-----` anywhere in the copy | a private key |
+| `-----BEGIN … PRIVATE KEY-----` anywhere in a copy of at most 20,000 characters | a private key |
 
 - Settings → Clipboard → Advanced → **Never keep keys and tokens**, on
   out of the box, as the password managers' apps are excluded out of
