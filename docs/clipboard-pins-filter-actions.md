@@ -82,11 +82,13 @@ What leaves the Mac, and when:
   contacted as if the link were clicked. Only when the action is
   chosen; listing it in ⌘K contacts nothing.
 - Apart from these actions, and unchanged by them: with link previews
-  on (Settings → Privacy, on by default), showing a link's row already
-  reads its page for the card in the preview, after a short pause on
-  the row (`ClipboardLinks`). That request is the preview's, made by
-  skil.li, without cookies; turning link previews off stops it. Open in
-  Browser is a second, separate contact, by the browser.
+  on (Settings → Clipboard → Advanced → Show link previews, on by
+  default), showing a link's row reads its page for the card in the
+  preview, after a short pause on the row, when a preview is due: none
+  kept yet, or the one kept is to be read again (`ClipboardLinks`).
+  That request is the preview's, made by skil.li, without cookies;
+  turning link previews off stops it. Open in Browser is apart from it:
+  the browser's own contact, whether or not a preview was read.
 - *New Email*: a new message opens in the mail app, addressed; nothing
   is sent until the user sends it.
 
