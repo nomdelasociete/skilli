@@ -539,6 +539,14 @@ final class LauncherController: NSObject {
         updateFooter()
     }
 
+    /// A copy that took time to keep (a picture converted, a long text)
+    /// is in the history now: the list takes it while it still shows the
+    /// top of the history as it opened (nothing picked further down).
+    func clipKept() {
+        guard clipboardMode, panel.isVisible, meaning == nil, meaningPending == nil, tableView.selectedRow <= 0 else { return }
+        updateResults(query: searchField.stringValue)
+    }
+
     /// Clipboard mode opened: the history may need its permission.
     var onClipboardMode: (() -> Void)?
     var clipboardImageURL: ((ClipboardStore.Item) -> URL?)?
@@ -599,6 +607,10 @@ final class LauncherController: NSObject {
     var isShowingMeaningSpinner: Bool { !meaningSpinner.isHidden }
     var emptyStateText: String? { emptyState.isHidden ? nil : emptyState.stringValue }
     private var thumbnails: [Int64: NSImage] = [:]
+    /// The pictures being drawn small off the main thread, by copy.
+    private var thumbnailsUnderWay: Set<Int64> = []
+    /// Self-test hook: the small pictures not drawn yet.
+    var clipThumbnailsUnderWay: Int { thumbnailsUnderWay.count }
     private var appIcons: [String: NSImage] = [:]
     private var processRefresh: Task<Void, Never>?
     /// Mac commands with their title now ("Turn Off Keep Awake" while kept
@@ -5131,31 +5143,59 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             ?? ResultRowView()
     }
 
+    /// A kept picture, 64 pixels at most a side, as PNG; nil when its file
+    /// is gone or is no picture.
+    nonisolated private static func smallPicture(at url: URL) -> Data? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceThumbnailMaxPixelSize: 64
+              ] as CFDictionary)
+        else { return nil }
+        return NSBitmapImageRep(cgImage: thumbnail).representation(using: .png, properties: [:])
+    }
+
+    /// The small picture of a copy is made: kept, and its row, if it
+    /// shows, drawn with it. None could be made: the row keeps the symbol.
+    private func thumbnailMade(_ small: Data?, for id: Int64) {
+        thumbnailsUnderWay.remove(id)
+        if thumbnails.count > 300 { thumbnails.removeAll() }
+        guard let small, let image = NSImage(data: small) else {
+            thumbnails[id] = CommandIcon.image(for: "photo")
+            return
+        }
+        let fitted = NSImage(size: NSSize(width: 32, height: 32), flipped: false) { rect in
+            let scale = min(rect.width / image.size.width, rect.height / image.size.height)
+            let drawn = NSSize(width: image.size.width * scale, height: image.size.height * scale)
+            let frame = NSRect(x: rect.midX - drawn.width / 2, y: rect.midY - drawn.height / 2, width: drawn.width, height: drawn.height)
+            NSBezierPath(roundedRect: frame, xRadius: 4, yRadius: 4).addClip()
+            image.draw(in: frame)
+            return true
+        }
+        thumbnails[id] = fitted
+        guard clipboardMode, let row = results.firstIndex(where: { if case .clip(let shown) = $0 { shown.id == id } else { false } }),
+              let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView else { return }
+        cell.setIcon(fitted)
+    }
+
     /// An image's thumbnail, the app a text came from, a file's icon.
     private func icon(for item: ClipboardStore.Item) -> NSImage {
         let size = NSSize(width: 32, height: 32)
         switch item.kind {
         case .image:
             if let cached = thumbnails[item.id] { return cached }
-            guard let url = (clipboardImageURL?(item)),
-                  let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                      kCGImageSourceCreateThumbnailFromImageAlways: true,
-                      kCGImageSourceThumbnailMaxPixelSize: 64
-                  ] as CFDictionary)
-            else { return CommandIcon.image(for: "photo") }
-            if thumbnails.count > 300 { thumbnails.removeAll() }
-            let image = NSImage(cgImage: thumbnail, size: .zero)
-            let fitted = NSImage(size: size, flipped: false) { rect in
-                let scale = min(rect.width / image.size.width, rect.height / image.size.height)
-                let drawn = NSSize(width: image.size.width * scale, height: image.size.height * scale)
-                let frame = NSRect(x: rect.midX - drawn.width / 2, y: rect.midY - drawn.height / 2, width: drawn.width, height: drawn.height)
-                NSBezierPath(roundedRect: frame, xRadius: 4, yRadius: 4).addClip()
-                image.draw(in: frame)
-                return true
+            // Drawn small off the main thread (a screenshot's whole PNG is
+            // read for it: ~20 ms each, 250 ms for a first page of them,
+            // measured 2026-11-11); the row has its picture when it is made.
+            guard let url = clipboardImageURL?(item) else { return CommandIcon.image(for: "photo") }
+            if thumbnailsUnderWay.insert(item.id).inserted {
+                let id = item.id
+                Task.detached(priority: .userInitiated) { [weak self] in
+                    let small = Self.smallPicture(at: url)
+                    await self?.thumbnailMade(small, for: id)
+                }
             }
-            thumbnails[item.id] = fitted
-            return fitted
+            return CommandIcon.image(for: "photo")
         case .files:
             let path = item.text.split(separator: "\n").first.map(String.init) ?? ""
             guard FileManager.default.fileExists(atPath: path) else { return CommandIcon.image(for: "doc") }

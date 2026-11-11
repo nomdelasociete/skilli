@@ -41,6 +41,21 @@ address starts a mail, a file opens or shows in Finder. Left of #7:
 Save as Snippet, Quick Look large, drag out. #5: ⌘K → Show Only Links
 (the row's kind) or from its app, the chip says it, ⌫ shows all again.
 
+Then the speed (AGENTS.md → Speed, three lines; `remote speed`): what
+was measured on the main thread on 2026-11-11 and what it is now.
+
+| Path | Before | Now |
+|---|---|---|
+| A 2560×1600 picture copied as TIFF, kept | 100 ms | 0.25 ms (in the history 103 ms later) |
+| 1.6 MB of text copied, kept | 40 ms | 0.2 ms (40 ms later) |
+| A kept picture put back for ⌘V | 32 ms | 1.3 ms (its TIFF made if asked) |
+| ✦C on 412 copies, 12 such pictures first | 249 ms | 15 ms, the pictures 73 ms after |
+
+Left of the speed: the 50 ms fixed wait before ⌘V (shared with emoji,
+snippets and the calculator: the app in front taking its focus back);
+a row's small picture is made again each run (not kept on disk), so a
+first page of pictures shows the symbol for a few frames once a run.
+
 ## Must (the history is behind the others here)
 
 | # | Gap | Proof | Others |
@@ -139,4 +154,4 @@ list, ↩ to pasted, copy to kept.
    and ranked search, app name): the history starts to feel fast.
 3. #3 pins and #5 kind filter: one spec, they share the header.
 4. #7 actions per kind (open link, show file, save as snippet).
-5. Speed budget lines + the three measurements, then #8–#16.
+5. ~~Speed budget lines + the three measurements~~: done. Then #8–#16.
