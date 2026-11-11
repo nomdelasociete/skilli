@@ -16621,9 +16621,25 @@ final class SelfTest {
         if history.putNextInSequence() == nil { selected.append(pasteboard.string(forType: .string) ?? "") }
         let last = history.putNextInSequence() ?? ""
         let after = history.putNextInSequence() == nil ? pasteboard.string(forType: .string) ?? "" : ""
+        // Selected files gone since: a first copy with none left is said
+        // and the next key goes on with the next selected; one of two
+        // left is pasted, the other named.
+        let kept = folder.appendingPathComponent("wombat.txt")
+        try? Data("wombat".utf8).write(to: kept)
+        let lost = folder.appendingPathComponent("quokka.txt").path
+        let none = try? store.add(.init(kind: .files, text: lost, app: nil, appName: "Finder", hash: "sequence-files-none"),
+                                  at: .now.addingTimeInterval(-30)).item
+        let part = try? store.add(.init(kind: .files, text: "\(kept.path)\n\(lost)", app: nil, appName: "Finder", hash: "sequence-files-part"),
+                                  at: .now.addingTimeInterval(-20)).item
+        let failed = history.putFirstInSequence(of: [none, part].compactMap { $0 }) ?? ""
+        let went = history.putNextInSequence() == nil
+        let partPasted = (pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL])?.map(\.lastPathComponent) ?? []
+        let note = history.sequenceNote ?? ""
+        let filesFine = failed.contains("quokka.txt") && went && partPasted == ["wombat.txt"] && note.contains("quokka.txt")
         record(name, got == ["trois", "deux", "un"] && end.hasPrefix("That was the oldest") && again == "quatre"
-                   && selected == ["un", "trois"] && last == "That was the last of the 2 selected." && after == "quatre",
-               "pasted \(got), then “\(end)”, after a new copy “\(again)”; two selected: \(selected), then “\(last)”, then “\(after)”", nil)
+                   && selected == ["un", "trois"] && last == "That was the last of the 2 selected." && after == "quatre" && filesFine,
+               "pasted \(got), then “\(end)”, after a new copy “\(again)”; two selected: \(selected), then “\(last)”, then “\(after)”; "
+                   + "selected files gone: “\(failed)”, then \(went ? "\(partPasted) with “\(note)”" : "nothing")", nil)
     }
 
     /// ✦C, "facture": the image row shows its picture and what is known

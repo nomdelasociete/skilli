@@ -585,6 +585,9 @@ final class ClipboardHistory {
     @ObservationIgnored private var sequence = PasteSequence()
     /// The copies of the sequence under way, by id, as it began.
     @ObservationIgnored private var sequenceItems: [Int64: ClipboardStore.Item] = [:]
+    /// What to say with the copy just put there: its files moved or
+    /// deleted since (the others are pasted). Nil for nothing.
+    @ObservationIgnored private(set) var sequenceNote: String?
 
     /// Paste in Sequence: the next older copy put on the clipboard for ⌘V,
     /// the newest when a sequence begins (`PasteSequence`). Nil once it is
@@ -609,15 +612,22 @@ final class ClipboardHistory {
         return put(sequence.begin(with: items.map(\.id), now: now))
     }
 
-    /// The sequence's copy on the clipboard; nil once it is there.
+    /// The sequence's copy on the clipboard; nil once it is there
+    /// (`sequenceNote`: what to say with it).
     private func put(_ id: Int64?) -> String? {
+        sequenceNote = nil
         guard let id, let item = sequenceItems[id] else {
             return sequenceItems.isEmpty ? "Nothing copied yet." : sequence.end
         }
+        let files = files(of: item)
         guard write(item, plain: false) else {
-            let files = files(of: item)
+            // Selected copies: the next key goes on with the next one,
+            // the first as any other (the clipboard as it is now is the
+            // sequence's, not a copy of the user's own).
+            if sequence.chosen { sequence.wrote(changeCount: pasteboard.changeCount) }
             return ClipboardFiles.line(gone: files.gone, of: files.gone.count, done: "pasted") ?? "That copy is gone from the history."
         }
+        sequenceNote = ClipboardFiles.line(gone: files.gone, of: files.there.count + files.gone.count, done: "pasted")
         // Whatever changes the clipboard after this is the user's own copy.
         sequence.wrote(changeCount: pasteboard.changeCount)
         Log.trace("Paste in Sequence: copy \(sequence.position + 1) of \(sequence.ids.count)\(sequence.chosen ? " selected" : ""), \(item.kind.rawValue)")

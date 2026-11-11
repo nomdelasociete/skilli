@@ -94,6 +94,11 @@ comma); an image's text standing for the image.
 - The app in front changed before the first paste, or the launcher is
   still up: nothing is pasted, a line says the first copy is on the
   clipboard (⌘V pastes it, Paste in Sequence the next).
+- A copy whose files are all gone is said and skipped: the next key
+  goes on with the next selected one, the first as any other. Files
+  gone among others: the others pasted, the gone ones named.
+- Something else put on the clipboard before the first ⌘V is sent:
+  nothing is pasted, and said.
 - `PasteSequence.begin(with:now:)` in SkilliCore;
   `ClipboardHistory.putFirstInSequence(of:)`.
 - Images and mixed kinds are fine here: each is its own paste.

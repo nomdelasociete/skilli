@@ -1209,10 +1209,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.aiActions.notify(problem, caller: "Paste in Sequence", run: nil, seconds: 2.5)
                 return
             }
+            if let note = self.clipboard.sequenceNote { self.aiActions.notify(note, caller: "Paste in Sequence", run: nil, seconds: 4) }
             // The launcher never takes the front: the app in front now
-            // is the one the paste is for.
+            // is the one the paste is for. And only this copy: anything
+            // put on the clipboard meanwhile is not pasted in its place.
             let target = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            let written = NSPasteboard.general.changeCount
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                guard NSPasteboard.general.changeCount == written else {
+                    self.aiActions.notify("The clipboard changed before the paste: nothing was pasted.", caller: "Paste in Sequence", run: nil, seconds: 3)
+                    return
+                }
                 guard !self.launcher.isVisible, NSWorkspace.shared.frontmostApplication?.processIdentifier == target else {
                     self.aiActions.notify("The first copy is on the clipboard: ⌘V pastes it, Paste in Sequence the next.", caller: "Paste in Sequence", run: nil, seconds: 3)
                     return
@@ -1889,6 +1896,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             aiActions.notify(problem, caller: "Paste in Sequence", run: nil, seconds: 2.5)
             return
         }
+        // Files of the copy moved or deleted since: said, the others pasted.
+        if let note = clipboard.sequenceNote { aiActions.notify(note, caller: "Paste in Sequence", run: nil, seconds: 4) }
         // From the launcher, the app that was in front gets its focus back first.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [selection] in
             selection.press("v", flags: .maskCommand)
