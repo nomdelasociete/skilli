@@ -401,7 +401,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 DispatchQueue.main.async {
                     guard let item = self.waitingNew, self.window?.isVisible == true else { return }
                     self.waitingNew = nil
-                    self.showNew(item.item, id: item.id)
+                    self.showNew(item.item, id: item.id, text: item.text)
                 }
             }
         }

@@ -17402,12 +17402,34 @@ final class SelfTest {
                         if await waitUntil(timeout: 3, { settings.isVisible && settings.pane == .snippets && settings.sheetShown }) == nil {
                             problems.append("Save as Snippet… did not open the snippet editor (Settings open \(settings.isVisible), sheet \(settings.sheetShown))")
                         } else {
-                            let fields = Self.axElements(roles: [kAXTextAreaRole, kAXTextFieldRole], where: { $0.contains("Wombat") || $0 == "Bien cordialement," })
-                            if fields.count < 2 { problems.append("the editor shows \(fields.count) of the copy's text and its first line as a name") }
+                            func fields(_ text: String) -> Int { Self.axElements(roles: [kAXTextAreaRole, kAXTextFieldRole], where: { $0 == text }).count }
+                            if fields("Bien cordialement,") != 1 || fields(signature) != 1 {
+                                problems.append("the editor has \(fields("Bien cordialement,")) field with the first line as a name, \(fields(signature)) with the copy's whole text")
+                            }
                             await captureSettingsBothWays(as: "settings-snippet-from-copy")
-                            if await waitUntil(timeout: 1, { settings.sheetIsKey }) != nil {
+                            /// esc in the editor: its Cancel. False when the
+                            /// sheet did not take the keys or stayed open.
+                            func cancelled() async -> Bool {
+                                guard await waitUntil(timeout: 2, { settings.sheetIsKey }) != nil else { return false }
                                 await pressKey(nil, code: CGKeyCode(kVK_Escape))
-                                _ = await waitUntil(timeout: 2) { !settings.sheetShown }
+                                return await waitUntil(timeout: 2) { !settings.sheetShown } != nil
+                            }
+                            if await cancelled() {
+                                // Asked while another editor is open: it
+                                // waits, and comes with its text once that
+                                // one closed.
+                                settings.showNew(.snippet)
+                                if await waitUntil(timeout: 3, { settings.sheetShown }) != nil {
+                                    settings.showNew(.snippet, text: "Quokka waits its turn")
+                                    let first = await cancelled()
+                                    let came = await waitUntil(timeout: 3) { settings.sheetShown && fields("Quokka waits its turn") == 2 } != nil
+                                    if !first || !came { problems.append("a copy saved while an editor was open: that one closed \(first), its own came with its text \(came)") }
+                                    if settings.sheetShown, !(await cancelled()) { problems.append("esc did not close the editor that waited") }
+                                } else {
+                                    problems.append("New Snippet's editor did not open for the one that waits")
+                                }
+                            } else {
+                                problems.append("esc did not close the editor opened by Save as Snippet… (keys in it \(settings.sheetIsKey), open \(settings.sheetShown))")
                             }
                         }
                         settings.close()
