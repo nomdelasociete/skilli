@@ -33,6 +33,11 @@ images, files, and your screenshots too.
 - **The preview** beside the list shows each copy as what it is: a link
   as a card (picture, title, site), a color as a swatch with its Hex, RGB
   and HSL, an image with the text in it, a file's thumbnail.
+- **Pin** (**⌘K** → *Pin*) keeps a copy at the top of the list, under
+  "Pinned", for as long as you want: it is not removed when older
+  copies are. *Unpin* puts it back at its date.
+- **⌘K** also does what the copy is: *Open in Browser* for a link, *New
+  Email* for an address, *Open* and *Show in Finder* for a file.
 - **⌘⌫** forgets one. Changed your mind? **⌘Z** brings it back for 10
   seconds.
 

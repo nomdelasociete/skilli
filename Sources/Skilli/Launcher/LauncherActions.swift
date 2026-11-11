@@ -346,7 +346,38 @@ extension LauncherController {
                 }
                 if let pictureFile { copies.append(copy("Copy Path", pictureFile.path)) }
             }
-            return [first] + plain + inApps + copies + [remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
+            // What the copy is, not a paste of it: the page, a new mail,
+            // the file itself (docs/clipboard-pins-filter-actions.md).
+            var does: [LauncherAction] = []
+            switch clip.kind {
+            case .text:
+                switch CopiedValue.read(clip.text) {
+                case .link(let url): does += [open("Open in Browser", "safari", url)].compactMap { $0 }
+                case .email(let address): does += [open("New Email", "envelope", URL(string: "mailto:\(address)"))].compactMap { $0 }
+                default: break
+                }
+            case .files:
+                let files = clip.text.split(separator: "\n").map { URL(fileURLWithPath: String($0)) }
+                // Looked for when asked, never while the list is drawn.
+                func there(_ run: @escaping @MainActor ([URL]) -> Void) -> @MainActor () -> Void {
+                    { [weak self] in
+                        let found = files.filter { FileManager.default.fileExists(atPath: $0.path) }
+                        if found.isEmpty {
+                            self?.onNotice?(files.count == 1 ? "“\(files[0].lastPathComponent)” is no longer there." : "These files are no longer there.")
+                        } else {
+                            run(found)
+                        }
+                    }
+                }
+                if files.count == 1 { does.append(act("Open", "arrow.up.forward", there { NSWorkspace.shared.open($0[0]) })) }
+                if !files.isEmpty { does.append(act("Show in Finder", "folder", there { NSWorkspace.shared.activateFileViewerSelecting($0) })) }
+            case .image:
+                break
+            }
+            let pin = LauncherAction(title: clip.isPinned ? "Unpin" : "Pin", symbol: clip.isPinned ? "pin.slash" : "pin") { [weak self] in
+                self?.togglePinOfSelectedClip()
+            }
+            return [first] + plain + does + inApps + [pin] + copies + [remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
         // A snippet: its editor in Settings → Snippets, deleted at once.
         case .snippet(let snippet):
             return [first,

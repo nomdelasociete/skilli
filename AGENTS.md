@@ -4013,7 +4013,16 @@ re-investigating.
   (`remote clipboard`). Return pastes in the app
   in front (every format it was copied with), ⇧Return plain text (an
   image's OCR text), ⌘Return only copies, ⌘⌫ forgets at once (Undo ⌘Z
-  for 10 s, the card under the launcher). The list narrows to
+  for 10 s, the card under the launcher). ⌘K → Pin keeps a copy
+  (docs/clipboard-pins-filter-actions.md; `items.pinned`, the date
+  pinned): first in the list with no words, in the order pinned, under
+  the header "Pinned", its pin on the row (`ClipboardHistory.page`,
+  `ClipboardStore.pinned`); at its date in a search; never removed by
+  Keep copies for (`prune`, `count(before:)` leave pinned rows out);
+  pinned again after ⌘⌫ ⌘Z; Clear History removes it too. No key: the
+  user's to give. ⌘K also does what the copy is: Open in Browser (a
+  link), New Email (an address), Open and Show in Finder (files, looked
+  for only when asked: "… is no longer there"). The list narrows to
   290 pt beside a preview (`ClipboardPreviewView`, its parts in
   `PreviewParts.swift`, shared with Search Snippets') made for each kind of
   copy (below), then Information (copied as a relative date, times copied:

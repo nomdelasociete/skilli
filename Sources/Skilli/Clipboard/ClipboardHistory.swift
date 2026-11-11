@@ -213,11 +213,30 @@ final class ClipboardHistory {
         store?.search(text, before: before) ?? []
     }
 
+    /// The launcher's list: a page of the history. With no words its
+    /// first page starts with the pinned copies, in the order pinned,
+    /// and the pages by date leave them out; with words, one list by
+    /// date.
+    func page(_ text: String, before: Date? = nil) -> [ClipboardStore.Item] {
+        guard let store else { return [] }
+        guard text.trimmingCharacters(in: .whitespaces).isEmpty else { return store.search(text, before: before) }
+        return (before == nil ? store.pinned() : []) + store.search("", before: before, unpinnedOnly: true)
+    }
+
+    /// ⌘K → Pin, Unpin. The copy as it is now.
+    @discardableResult
+    func setPinned(_ pinned: Bool, _ item: ClipboardStore.Item) -> ClipboardStore.Item? {
+        let now = try? store?.setPinned(pinned, for: item.id)
+        revision += 1
+        return now ?? nil
+    }
+
     /// What a search by meaning found: the copies that fit, best first,
     /// and who decided ("Jev · 0.42 s"). `unanswered`: no model answered
     /// in time ("Jev did not answer"), and nothing was found.
     struct MeaningResult: Sendable {
-        let items: [ClipboardStore.Item]
+        /// `var`: a copy pinned while they show is shown as it is now.
+        var items: [ClipboardStore.Item]
         let label: String
         var unanswered: String?
         /// The copies the model read (the history narrowed), and the

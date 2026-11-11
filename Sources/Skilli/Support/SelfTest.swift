@@ -15911,8 +15911,48 @@ final class SelfTest {
         let old = try? store.add(.init(kind: .text, text: "Très vieux", hash: "selftest-old"), at: .now.addingTimeInterval(-40 * 86_400))
         let pruned = old != nil && (try? store.prune(before: ClipboardRetention.month.cutoff()!))?.count == 1 && store.search("vieux").isEmpty
 
-        record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true",
-               "found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
+        // A pinned copy: kept by the pass that removes its neighbour, out
+        // of what Settings says will go, first in the list with no words
+        // and at its date with some, pinned again after ⌘⌫ ⌘Z.
+        var pins = "true"
+        do {
+            var missed: [String] = []
+            let longAgo = Date.now.addingTimeInterval(-40 * 86_400)
+            let cutoff = ClipboardRetention.month.cutoff()!
+            let keep = try? store.add(.init(kind: .text, text: "Épinglé ancien", hash: "selftest-pin"), at: longAgo).item
+            _ = try? store.add(.init(kind: .text, text: "Voisin ancien", hash: "selftest-pin-neighbour"), at: longAgo)
+            _ = try? store.add(.init(kind: .text, text: "Copie récente", hash: "selftest-pin-recent"))
+            if let keep {
+                if (try? store.setPinned(true, for: keep.id))?.isPinned != true { missed.append("not pinned") }
+                if store.count(before: cutoff) != 1 { missed.append("\(store.count(before: cutoff)) to remove, not 1") }
+                let removed = (try? store.prune(before: cutoff)) ?? []
+                if removed.count != 1 || removed.contains(keep.id) { missed.append("the pass removed \(removed.count)") }
+                if store.pinned().map(\.id) != [keep.id] { missed.append("pinned: \(store.pinned().map(\.text))") }
+                if store.search("", unpinnedOnly: true).contains(where: { $0.id == keep.id }) { missed.append("among the unpinned") }
+                if store.search("pingl").first?.isPinned != true { missed.append("found by words without its pin") }
+                _ = try? store.add(.init(kind: .text, text: "Épinglé ancien", hash: "selftest-pin"))
+                if store.pinned().first?.copies != 2 { missed.append("copied again: \(store.pinned().first?.copies ?? 0) copies, pinned \(store.pinned().count)") }
+                if let forgotten = try? store.forget(keep.id), store.pinned().isEmpty, (try? store.restore(forgotten))?.isPinned == true {} else { missed.append("not pinned after forget and restore") }
+                // Forgotten, copied again, then ⌘Z: the new row, pinned.
+                if let id = store.pinned().first?.id, let forgotten = try? store.forget(id) {
+                    _ = try? store.add(.init(kind: .text, text: "Épinglé ancien", hash: "selftest-pin"))
+                    if (try? store.restore(forgotten))?.isPinned != true || store.pinned().count != 1 || store.search("pingl").count != 1 {
+                        missed.append("copied again before ⌘Z: pinned \(store.pinned().count), rows \(store.search("pingl").count)")
+                    }
+                } else {
+                    missed.append("nothing to forget a second time")
+                }
+                if let now = store.pinned().first { _ = try? store.setPinned(false, for: now.id) }
+                if !store.pinned().isEmpty { missed.append("still pinned after Unpin") }
+            } else {
+                missed.append("no copy to pin")
+            }
+            for word in ["pingl", "Copie r"] { for item in store.search(word) { try? store.delete(item.id) } }
+            pins = missed.isEmpty ? "true" : "missed \(missed)"
+        }
+
+        record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true" && pins == "true",
+               "a pinned copy kept by the pass, first with no words, pinned after forget and restore: \(pins); found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
                ocrMs)
     }
 
@@ -16799,6 +16839,7 @@ final class SelfTest {
                 _ = await waitUntil(timeout: 1) { !launcher.shownActions.isEmpty }
                 let fileActions = launcher.shownActions
                 for (title, key) in [("Paste Text in Image", "⇧↩"), ("Show Text in Image", nil), ("Copy Text in Image", "⇧⌘C"), ("Copy Path", nil)] as [(String, String?)]
+                    + [("Show in Finder", nil), ("Open", nil), ("Pin", nil)]
                 where !fileActions.contains(where: { $0.title == title && $0.key == key }) {
                     problems.append("⌘K on a picture's file lacks \(title): \(fileActions.map(\.title))")
                 }
@@ -16841,6 +16882,59 @@ final class SelfTest {
                 problems.append("the history did not open again for its rows")
             }
             if let older { try? store.delete(older.id) }
+
+            // ⌘K → Pin: the copy first, under "Pinned", its pin on the
+            // row; ⌘K → Unpin: back at its date. A link's page, an
+            // address's mail: offered.
+            _ = try? store.add(.init(kind: .text, text: "quagga@example.com", app: "com.apple.Notes", appName: "Notes", hash: "selftest-act-mail"))
+            _ = try? store.add(.init(kind: .text, text: "https://example.com/zebracrossing", app: "com.apple.Notes", appName: "Notes", hash: "selftest-act-link"))
+            _ = try? store.add(.init(kind: .text, text: "12 rue des Lilas, à garder", app: "com.apple.Notes", appName: "Notes", hash: "selftest-pin-row"),
+                               at: .now.addingTimeInterval(-2 * 86_400))
+            if await openHistory() {
+                func offered() async -> [String] {
+                    await pressKey("k", flags: .maskCommand)
+                    _ = await waitUntil(timeout: 1) { !launcher.shownActions.isEmpty }
+                    let titles = launcher.shownActions.map(\.title)
+                    await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                    await pause(150)
+                    return titles
+                }
+                func offered(on word: String) async -> [String] {
+                    for letter in word { await pressKey(letter) }
+                    _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 1 }
+                    let titles = await offered()
+                    for _ in word { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+                    return titles
+                }
+                let onLink = await offered(on: "zebracross")
+                if !onLink.contains("Open in Browser") || !onLink.contains("Pin") { problems.append("⌘K on a link: \(onLink)") }
+                let onMail = await offered(on: "quagga")
+                if !onMail.contains("New Email") { problems.append("⌘K on an address: \(onMail)") }
+                for letter in "lilas" { await pressKey(letter) }
+                _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 1 }
+                await pressKey("k", flags: .maskCommand)
+                _ = await waitUntil(timeout: 1) { launcher.shownActions.contains { $0.title == "Pin" } }
+                for letter in "pin" { await pressKey(letter) }
+                if await waitUntil(timeout: 1, { launcher.shownActions.first?.title == "Pin" }) == nil { problems.append("“pin” in ⌘K: \(launcher.shownActions.map(\.title))") }
+                await pressKey(nil, code: CGKeyCode(kVK_Return))
+                if await waitUntil(timeout: 1, { launcher.shownPinned.first == true }) == nil { problems.append("no pin on the row after Pin") }
+                for _ in "lilas" { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+                if await waitUntil(timeout: 2, { launcher.headerText == "Pinned" && launcher.titleShown(row: 0) == "12 rue des Lilas, à garder" && launcher.shownPinned.first == true && launcher.shownPinned.dropFirst().first == false }) == nil {
+                    problems.append("pinned, no words: header “\(launcher.headerText)”, first row “\(launcher.titleShown(row: 0) ?? "")”, pins \(launcher.shownPinned.prefix(3))")
+                }
+                await captureLauncherBothWays(as: "launcher-clipboard-pinned")
+                await pressKey("k", flags: .maskCommand)
+                _ = await waitUntil(timeout: 1) { launcher.shownActions.contains { $0.title == "Unpin" } }
+                for letter in "unpin" { await pressKey(letter) }
+                await pressKey(nil, code: CGKeyCode(kVK_Return))
+                if await waitUntil(timeout: 2, { launcher.headerText != "Pinned" && launcher.shownPinned.first == false }) == nil {
+                    problems.append("after Unpin: header “\(launcher.headerText)”, pins \(launcher.shownPinned.prefix(3))")
+                }
+                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            } else {
+                problems.append("the history did not open again for a pin")
+            }
+            for word in ["lilas", "zebracross", "quagga"] { for item in store.search(word) { try? store.delete(item.id) } }
 
             // Other words on the same copy: the preview goes to where the
             // new ones are, far down a long text.
