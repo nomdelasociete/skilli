@@ -460,7 +460,7 @@ final class ClipboardHistory {
                 entry.setData(data, forType: .png)
                 // The TIFF only if the app pasted into asks for it (most
                 // take the PNG): making it here was 30 ms before ⌘V.
-                let late = LateTIFF(png: url)
+                let late = LateTIFF(file: url)
                 if entry.setDataProvider(late, forTypes: [.tiff]) { lateTIFF = late }
             }
         case .files:
@@ -483,14 +483,15 @@ final class ClipboardHistory {
     /// clipboard for it. Not asked before skil.li quits: the clipboard
     /// keeps the PNG alone.
     private final class LateTIFF: NSObject, NSPasteboardItemDataProvider {
-        private let png: URL
+        /// The kept picture's PNG file.
+        private let file: URL
 
-        init(png: URL) {
-            self.png = png
+        init(file: URL) {
+            self.file = file
         }
 
         func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType) {
-            guard type == .tiff, let data = try? Data(contentsOf: png), let tiff = NSImage(data: data)?.tiffRepresentation else { return }
+            guard type == .tiff, let data = try? Data(contentsOf: file), let tiff = NSImage(data: data)?.tiffRepresentation else { return }
             item.setData(tiff, forType: .tiff)
         }
     }
