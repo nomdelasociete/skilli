@@ -80,7 +80,13 @@ What leaves the Mac, and when:
 - *Open in Browser*: skil.li sends nothing itself; it hands the link to
   the default browser, which then loads the page, so the site is
   contacted as if the link were clicked. Only when the action is
-  chosen: a link is never opened or read by showing its row or its ⌘K.
+  chosen; listing it in ⌘K contacts nothing.
+- Apart from these actions, and unchanged by them: with link previews
+  on (Settings → Privacy, on by default), showing a link's row already
+  reads its page for the card in the preview, after a short pause on
+  the row (`ClipboardLinks`). That request is the preview's, made by
+  skil.li, without cookies; turning link previews off stops it. Open in
+  Browser is a second, separate contact, by the browser.
 - *New Email*: a new message opens in the mail app, addressed; nothing
   is sent until the user sends it.
 
