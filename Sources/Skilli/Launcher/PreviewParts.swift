@@ -188,10 +188,20 @@ final class PreviewText: NSView {
         textView.textStorage?.setAttributedString(head)
         textView.setSelectedRange(NSRange(location: 0, length: 0))
         textView.scroll(.zero)
-        guard whole > limit, text.length > limit else { return }
+        // `head !== text`: it was cut, and ends with "…".
+        guard whole > limit, head !== text else { return }
         restPending = true
         restTook = .zero
         join(Self.cut(text, at: whole), from: head.length - 1, show: shows, began: .now, pieces: 0)
+    }
+
+    /// Another preview takes the text's place (a picture, a card, no
+    /// row): the pieces still to come are dropped, and the same text
+    /// asked for again is shown anew.
+    func stop() {
+        shows += 1
+        restPending = false
+        source = nil
     }
 
     /// A piece of the rest joins the text on each turn of the main
@@ -208,7 +218,7 @@ final class PreviewText: NSView {
             guard let self, self.shows == show, let storage = self.textView.textStorage, storage.length == from + 1 else { return }
             let start = ContinuousClock.now
             var end = min(all.length, from + Self.piece)
-            if end < all.length { end = (all.string as NSString).rangeOfComposedCharacterSequence(at: end).location }
+            if end < all.length { end = Self.edge(in: all, near: end, after: from) }
             let part = NSMutableAttributedString(attributedString: all.attributedSubstring(from: NSRange(location: from, length: end - from)))
             let last = end == all.length
             if !last { part.append(NSAttributedString(string: "…", attributes: all.attributes(at: end - 1, effectiveRange: nil))) }
@@ -232,10 +242,20 @@ final class PreviewText: NSView {
     /// Past `limit` characters the start, then "…".
     private static func cut(_ text: NSAttributedString, at limit: Int) -> NSAttributedString {
         guard text.length > limit else { return text }
-        let end = (text.string as NSString).rangeOfComposedCharacterSequence(at: limit).location
+        let end = edge(in: text, near: limit, after: 0)
+        guard end < text.length else { return text }
         let cut = NSMutableAttributedString(attributedString: text.attributedSubstring(from: NSRange(location: 0, length: end)))
         cut.append(NSAttributedString(string: "…", attributes: text.attributes(at: end - 1, effectiveRange: nil)))
         return cut
+    }
+
+    /// Where to cut `text` near `place` without splitting a character
+    /// made of several (a letter and its marks, an emoji): before it,
+    /// or after it when that would not go past `start` (a letter with
+    /// thousands of marks: a cut before it would never advance).
+    static func edge(in text: NSAttributedString, near place: Int, after start: Int) -> Int {
+        let whole = (text.string as NSString).rangeOfComposedCharacterSequence(at: place)
+        return whole.location > start ? whole.location : min(text.length, NSMaxRange(whole))
     }
 
     static func attributes(code: Bool) -> [NSAttributedString.Key: Any] {

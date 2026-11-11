@@ -17057,6 +17057,7 @@ final class SelfTest {
             if let added = try? store.add(ClipboardStore.NewItem(kind: .text, text: long, app: "com.example.long", appName: "Long",
                                                                  hash: ClipboardHistory.hash("text", Data(long.utf8)))) {
                 defer { context.clipboard.delete(added.item) }
+                let hadWord = store.search("zanzibar", limit: 5).contains { $0.text == "zanzibar" }
                 guard await openHistory() else { return (problems + ["the history did not open again for the long copy"], note) }
                 for letter in "zanzibar" { await pressKey(letter) }
                 if await waitUntil(timeout: 2, { preview.shown == .text && preview.shownText.hasPrefix("A long copy") }) == nil {
@@ -17064,7 +17065,9 @@ final class SelfTest {
                 } else {
                     _ = await waitUntil(timeout: 2) { !preview.restPending }
                     let shown = (preview.shownText as NSString).length
-                    if shown != (long as NSString).length { problems.append("the long copy shows \(shown) of \((long as NSString).length) characters") }
+                    if preview.shownText != long {
+                        problems.append("the long copy shows \(shown) of \((long as NSString).length) characters, or not the same ones")
+                    }
                     if await waitUntil(timeout: 1, { preview.firstMarkInView }) == nil {
                         problems.append("“zanzibar”, \(far.location) characters down, is not in view: \(preview.markPlace)")
                     }
@@ -17077,6 +17080,26 @@ final class SelfTest {
                     await pressKey("c", flags: .maskCommand)
                     if await waitUntil(timeout: 1, { !launcher.isVisible && copied() == "zanzibar" }) == nil {
                         problems.append("⌘C with “zanzibar” picked far down copied “\(copied().prefix(40))”")
+                    }
+                    // The word copied is not left in the history (it was
+                    // not there before): read now, then forgotten.
+                    context.clipboard.poll()
+                    for item in store.search("zanzibar", limit: 5) where item.text == "zanzibar" && !hadWord { context.clipboard.delete(item) }
+                    NSPasteboard.general.clearContents()
+                    // A letter under 9,000 marks right after the start: the
+                    // rest still comes, whole.
+                    let marks = String(repeating: "a", count: 4_000) + "e" + String(repeating: "\u{301}", count: 9_000) + String(repeating: " end", count: 3_000)
+                    if let odd = try? store.add(ClipboardStore.NewItem(kind: .text, text: marks, app: "com.example.long", appName: "Long",
+                                                                       hash: ClipboardHistory.hash("text", Data(marks.utf8)))) {
+                        defer { context.clipboard.delete(odd.item) }
+                        preview.show(odd.item, imageURL: nil)
+                        if await waitUntil(timeout: 2, { !preview.restPending }) == nil || preview.shownText != marks {
+                            problems.append("a letter under 9,000 marks: \((preview.shownText as NSString).length) of \((marks as NSString).length) characters shown")
+                        }
+                        // Another kind of preview: the pieces stop.
+                        preview.show(added.item, imageURL: nil)
+                        preview.show(nil, imageURL: nil)
+                        if preview.restPending { problems.append("a long copy's rest still comes after its preview was replaced") }
                     }
                 }
             } else {

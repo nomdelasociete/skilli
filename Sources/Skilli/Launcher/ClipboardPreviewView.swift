@@ -231,6 +231,8 @@ final class ClipboardPreviewView: NSView {
         if !sameAsShown {
             textShownFor = nil
             lastMarked = nil
+            // Another copy, or none: the rest of a long one stops coming.
+            text.stop()
         }
         self.item = item
         self.imageURL = imageURL
