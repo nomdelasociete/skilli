@@ -49,7 +49,10 @@ Every row has actions. Press **⌘K** on it to see them, with their keys:
   command that reads a value (Keep Awake, Timer, Set Volume, Record
   Meeting, Add an Event, Remind Me), the alias then a space opens the
   command with the field waiting for the value: `a 2h` with `a` on Keep
-  Awake;
+  Awake. An alias another result already has is said first; ↩ again
+  moves it;
+- **Keep Awake for a While…** on Keep Awake, **Name the Recording…** on
+  Record Meeting: the same field, without an alias;
 - **Pin**: keep it first;
 - **Copy Link**: a `skilli://` link that runs it from anywhere (Shortcuts,
   a Stream Deck, a web page).

@@ -475,6 +475,7 @@ final class SelfTest {
                 macCommandsUseRealAPIs,
                 keepAwakeHoldsTheMac,
                 keepAwakeForAWhile,
+                argumentChips,
                 keepAwakeSeenInTheLauncher,
                 keepAwakeSurvivesARestart,
                 killProcessByNameAndPort,
@@ -5520,6 +5521,7 @@ final class SelfTest {
         await appsQuitHideAndMicrophone()
         await keepAwakeHoldsTheMac()
         await keepAwakeForAWhile()
+        await argumentChips()
         await keepAwakeSeenInTheLauncher()
         await keepAwakeSurvivesARestart()
         await killProcessByNameAndPort()
@@ -14991,6 +14993,93 @@ final class SelfTest {
     /// "awake 1 hour" in the launcher: Return keeps the Mac awake about an
     /// hour (a real power assertion, its end in the menu); "allow sleep"
     /// typed in Ask lets it sleep again, without a model.
+    /// The chips of the other commands that say what they read (Set
+    /// Volume, Record Meeting, Add an Event, Remind Me), each by the user's
+    /// alias; the chip from ⌘K where ↩ acts with no value; an alias
+    /// another item has, said before it moves. Nothing is run: no ↩ on a
+    /// value. Spec: `docs/launcher-arguments.md`.
+    private func argumentChips() async {
+        let name = "Launcher arguments: “zv 30”, “zr weekly sync”, “ze lunch tomorrow 1pm”, “zm call paul at 9am” (aliases) open the Volume, Record, Event and Remind Me chips with what was read; Record Meeting → ⌘K → Name the Recording… opens the Record chip; an alias another item has is said, ↩ again moves it"
+        let launcher = context.launcher
+        guard let calendar = launcher.calendar, let reminders = launcher.reminders else {
+            record(name, false, "no calendar or reminders", nil)
+            return
+        }
+        let savedAliases = context.preferences.launcherAliases
+        // Never the Mac's own events and reminders: none, and usable.
+        calendar.testEvents = []
+        reminders.testItems = []
+        defer {
+            context.preferences.launcherAliases = savedAliases
+            calendar.testEvents = nil
+            reminders.testItems = nil
+        }
+        context.preferences.launcherAliases = [LauncherAlias(id: "catalog.volume", alias: "zv", title: "Set Volume"),
+                                               LauncherAlias(id: "cmd:recordMeeting", alias: "zr", title: "Record Meeting"),
+                                               LauncherAlias(id: "catalog.event", alias: "ze", title: "Add an Event"),
+                                               LauncherAlias(id: "catalog.remind", alias: "zm", title: "Remind Me")]
+        guard await focusTestWindow() else { return }
+        _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+        var lines: [String] = []
+        var passed = true
+        for (alias, value, chip, reads) in [
+            ("zv", "30", "Volume", { (row: String) in row == VolumeRequest.title(30) }),
+            ("zr", "weekly sync", "Record", { (row: String) in row == "Record “weekly sync”" }),
+            ("ze", "lunch tomorrow 1pm", "Event", { (row: String) in row.hasPrefix("Add “") && row.lowercased().contains("lunch") }),
+            ("zm", "call paul at 9am", "Remind Me", { (row: String) in row.hasPrefix("Remind Me: ") && row.lowercased().contains("call paul") })
+        ] {
+            for character in alias + " " + value { await pressKey(character) }
+            let read = await waitUntil(timeout: 1) { launcher.chipTitle == chip && reads(launcher.topResultName ?? "") } != nil
+            lines.append("“\(alias) \(value)” → chip “\(launcher.chipTitle)”, row “\(launcher.topResultName ?? "none")”: \(read)")
+            passed = passed && read
+            // ⌫ through the value, once more out of the chip, then the alias.
+            for _ in 0...value.count { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+            _ = await waitUntil(timeout: 1) { launcher.chipTitle.isEmpty }
+            for _ in 0..<3 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+        }
+
+        // ↩ on Record Meeting records at once: its name is asked from ⌘K.
+        for character in "record meeting" { await pressKey(character) }
+        let found = await waitUntil(timeout: 2) { launcher.topResultName == "Record Meeting" } != nil
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 1) { launcher.isShowingActions }
+        let listed = launcher.shownActions.map(\.title)
+        for character in "name the" { await pressKey(character) }
+        let offered = await waitUntil(timeout: 1) { launcher.shownActions.first?.title == "Name the Recording…" } != nil
+        if offered { await pressKey(nil, code: CGKeyCode(kVK_Return)) }
+        let named = await waitUntil(timeout: 1) { !launcher.isShowingActions && launcher.chipTitle == "Record" && launcher.query.isEmpty } != nil
+        lines.append("“record meeting” first: \(found), ⌘K \(listed), Name the Recording… opens the Record chip, the field empty: \(named)")
+        passed = passed && found && named
+        await closeLauncher()
+
+        // “zv” is Set Volume's: given to Record Meeting, it is said first
+        // and nothing moves; ↩ on the same word moves it.
+        _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
+        for character in "record meeting" { await pressKey(character) }
+        _ = await waitUntil(timeout: 2) { launcher.topResultName == "Record Meeting" }
+        await pressKey("k", flags: .maskCommand)
+        _ = await waitUntil(timeout: 1) { launcher.isShowingActions }
+        for character in "change alias" { await pressKey(character) }
+        _ = await waitUntil(timeout: 1) { launcher.shownActions.first?.title.hasPrefix("Change Alias") == true }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        _ = await waitUntil(timeout: 1) { launcher.shownActionsHeader == "Alias for Record Meeting" }
+        // Its alias is in the field, selected: typing replaces it.
+        for character in "zv" { await pressKey(character) }
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let said = await waitUntil(timeout: 1) { launcher.shownActionsHeader == "“zv” opens Set Volume: ↩ again gives it to Record Meeting" } != nil
+        let header = launcher.shownActionsHeader
+        let kept = context.preferences.launcherAliases.first { $0.alias == "zv" }?.id == "catalog.volume"
+        await pressKey(nil, code: CGKeyCode(kVK_Return))
+        let moved = await waitUntil(timeout: 1) {
+            self.context.preferences.launcherAliases.first { $0.alias == "zv" }?.id == "cmd:recordMeeting"
+        } != nil
+        let lost = !context.preferences.launcherAliases.contains { $0.id == "catalog.volume" }
+        lines.append("“zv” given to Record Meeting: header “\(header)”: \(said), Set Volume keeps it meanwhile: \(kept), ↩ again moves it: \(moved), Set Volume has none: \(lost)")
+        passed = passed && said && kept && moved && lost
+        await closeLauncher()
+        record(name, passed, lines.joined(separator: "; "), nil)
+    }
+
     private func keepAwakeForAWhile() async {
         let name = "Keep Awake for a while: “awake 1 hour” in the launcher, “do not sleep 2” read as hours, “awa 3h” stays a search, “zk 4h” (an alias: the Keep Awake chip), the cup in the menu bar; Ask's values from the model (1 h 30, done with ⌘Z when unsure, off with no time)"
         guard let commands = context.tools.tools.systemCommands else {

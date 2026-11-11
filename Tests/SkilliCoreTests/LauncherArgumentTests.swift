@@ -25,6 +25,20 @@ final class LauncherArgumentTests: XCTestCase {
         XCTAssertNil(LauncherArgument.of("cmd:emoji"), "a mode has a filter, not an argument")
     }
 
+    /// ↩ on Keep Awake or Record Meeting acts with no value: ⌘K names the
+    /// way to their chip. The others open it with ↩: no action for it.
+    func testOnlyACommandThatActsWithNoValueNamesTheWayToItsChip() throws {
+        let entries = FeatureCatalog.entries(FeatureCatalog.Input())
+        for argument in LauncherArgument.all {
+            let entry = try XCTUnwrap(entries.first { $0.id == argument.id }, argument.id)
+            if case .type = entry.run {
+                XCTAssertNil(argument.ask, argument.id)
+            } else {
+                XCTAssertEqual(argument.ask?.hasSuffix("…"), true, argument.id)
+            }
+        }
+    }
+
     /// One declaration per alias id, named as the Catalog names it, with
     /// its example.
     func testEachCommandIsDeclaredOnceAsTheCatalogNamesIt() throws {

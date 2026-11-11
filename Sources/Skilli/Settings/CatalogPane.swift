@@ -20,6 +20,8 @@ final class CatalogPaneModel {
     var aliasDraft = ""
     /// Why the alias typed was not kept, under its field.
     private(set) var aliasProblem: String?
+    /// The alias another entry has, said once: Done again moves it here.
+    private var aliasToMove: String?
     /// A shortcut the popover added to record.
     @ObservationIgnored private let newShortcut = NewShortcut()
     /// Self-test hook: how long reading the entries took.
@@ -64,6 +66,7 @@ final class CatalogPaneModel {
         guard isEditable(entry) else { return }
         aliasDraft = alias(of: entry, preferences) ?? ""
         aliasProblem = nil
+        aliasToMove = nil
         editing = entry.id
     }
 
@@ -114,7 +117,8 @@ final class CatalogPaneModel {
     }
 
     /// Keeps what is typed, as ⌘K → Set Alias… does: one word, 12 letters
-    /// at most, empty removes it, and given to another entry it moves.
+    /// at most, empty removes it. One another item has is said first and
+    /// moves on the second Done; closed otherwise, it stays where it was.
     private func commitAlias(_ preferences: Preferences, quietly: Bool = false) -> Bool {
         guard let id = editing, let entry = entry(id), entry.takesAlias else { return true }
         let alias = LauncherAliases.normalized(aliasDraft)
@@ -125,7 +129,15 @@ final class CatalogPaneModel {
             }
             return false
         }
+        if let holder = LauncherAliases.holder(of: alias, otherThan: id, in: preferences.launcherAliases), quietly || aliasToMove != alias {
+            if !quietly {
+                aliasToMove = alias
+                aliasProblem = "“\(alias)” opens \(holder.title). Done again gives it to \(entry.title)."
+            }
+            return false
+        }
         aliasProblem = nil
+        aliasToMove = nil
         if alias != self.alias(of: entry, preferences) ?? "" {
             preferences.launcherAliases = LauncherAliases.setting(alias, id: id, title: entry.title, in: preferences.launcherAliases)
         }
