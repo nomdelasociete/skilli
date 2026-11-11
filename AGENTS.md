@@ -1104,23 +1104,24 @@ mode or skillie returns. Three runs (faded, `placeWeight` 2.5) and the empty
 - Typed then a space (`LauncherAliases.split`): a command that turns the
   launcher into a mode opens it with the rest as its filter ("e smile",
   `LauncherController.mode(for:)`); a skillie with arguments asks its first
-  one; a quicklink takes the rest as its query; a row that reads a value
-  takes it ("a 2h" with `a` on Keep Awake, "r Weekly sync" on Record
-  Meeting; `LauncherShorthand.aliased`), its read row first. Typed alone,
+  one; a quicklink takes the rest as its query; a command that reads a
+  value opens its chip with the rest as that value (below). Typed alone,
   or for what opens no mode: the item comes first, its alias as a keycap
   on the row.
-- A word cut short then a space and a value (asked 2026-10-28: "awa" in a
-  hurry, ⇥ asks, ↩ toggles; spec `docs/launcher-shorthand.md`): "awa 2h",
-  "tim 10 tea", "vo 30" are read as "awake 2h", "timer 10 tea", "volume
-  30" by the same parsers (`LauncherShorthand.expand`). Two letters or
-  more, the start of one taught word whose value is strict (a duration, a
-  time, a level); free-text values ("event", "remind me", "rec") only
-  after the whole word or an alias, so a search like "visual st" never
-  becomes a command. An alias typed wins (`aw` on an app is never cut
-  short to "awake"). Nothing read: the launcher as before. No new key, ⇥
-  stays Ask. A new value word: add it to `LauncherShorthand.shortened`
-  only if its parser rejects plain words (a test keeps the two-letter
-  starts apart).
+- A command that reads a value says so (2026-11-11, `LauncherArgument` in
+  SkilliCore, spec `docs/launcher-arguments.md`): Keep Awake and Keep
+  Awake for a While, Timer, Set Volume, Record Meeting, Add an Event,
+  Remind Me declare the word their parser reads, a chip and an example.
+  The user's alias then a space, or ↩ on the entry in the "?", turns the
+  launcher into that chip (`Mode.argument`): the field holds only the
+  value, the example as its placeholder, the row says what was read
+  (`argumentRows`, the parsers of the whole words), ↩ does it. Nothing
+  typed: the command's plain row where it has one (Keep Awake, Record
+  Meeting, the timers running). These entries take an alias even without
+  a row of their own (`CatalogEntry.takesAlias`). skil.li gives no alias
+  and cuts no word short ("awa 2h" is a search): one system, the user's.
+  A new command that reads a value: one line in `LauncherArgument.all`,
+  its rows in `argumentRows`.
 
 ### Root search ("our way": fewer knobs than Raycast)
 
@@ -1247,10 +1248,11 @@ mode or skillie returns. Three runs (faded, `placeWeight` 2.5) and the empty
   read (`LauncherController.controlTextDidChange`, `ProcessListing.query`,
   the `modeFilter`s): the first of each is the Catalog's keycap. The words
   Return types ("timer ", "awake ", "event ", "remind me ") are the
-  parsers' own constants; a test parses them with words after. "timer",
-  "awake" and "volume" also work cut short ("aw 2h", `LauncherShorthand`).
+  parsers' own constants; a test parses them with words after. Those that
+  read a value open their chip instead (`LauncherArgument`).
 - An entry's id is its launcher row's `learningID` ("cmd:emoji"), so the
-  alias is the row's; "catalog.…" when it has none (no alias then).
+  alias is the row's; "catalog.…" when it has none (no alias then, but
+  for the commands that read a value).
   `selftest catalog` checks they match.
 - The mode: "?" first (or "What skil.li Can Do"), the accent chip
   "Catalog"; text after it filters (`FeatureCatalog.filter`: a group stays
@@ -2822,8 +2824,8 @@ re-investigating.
 - Keep Awake for a while (`AwakeRequest` in SkilliCore,
   `SystemCommands.keepAwake`): "awake 1 hour", "do not sleep 1", "garde le
   mac éveillé 2h", "caffeinate until 6pm", "pas de veille jusqu'à 18h30",
-  "turn off awake" typed in the launcher, "awa 2h" too (the word cut
-  short or an alias, `LauncherShorthand`; whole words, accents ignored; a
+  "turn off awake" typed in the launcher, or the length alone in its chip
+  (the user's alias then a space, `LauncherArgument`; whole words, accents ignored; a
   bare number is hours up to 24, minutes above; "until/jusqu'à" a time,
   today or tomorrow) show "Keep Awake · 1 h (until 14:05)" first. The
   same power assertion as Keep

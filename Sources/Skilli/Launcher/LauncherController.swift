@@ -70,7 +70,7 @@ final class LauncherController: NSObject {
     private var portRows: [Int: [Processes.Row]] = [:]
     /// A mode's name sits as a chip before the field, which then holds only
     /// the filter: Kill (a name or a port), Clipboard (words).
-    enum Mode {
+    enum Mode: Hashable {
         case kill
         case clipboard
         case emoji
@@ -82,6 +82,9 @@ final class LauncherController: NSObject {
         case projects
         /// Filling a skillie's arguments, one after the other.
         case script
+        /// The value a built-in command reads ("Keep Awake" then "2h"):
+        /// `LauncherArgument`.
+        case argument(LauncherArgument)
         case history
         case brew
         case contacts
@@ -1439,9 +1442,6 @@ final class LauncherController: NSObject {
         let query = FuzzyMatcher.Query(text)
         if mode == nil { rootQuery = text }
         updateAwakeChip(empty: text.isEmpty)
-        // A value read after a word cut short or an alias ("awa 2h", "a 2h"):
-        // its row stays first, the alias's plain row does not go above it.
-        var shorthandRead = false
         if mode == .catalog {
             // Filtered in memory: the entries were read as it opened.
             results = Self.catalogRows(FeatureCatalog.filter(catalogEntries, text))
@@ -1524,6 +1524,8 @@ final class LauncherController: NSObject {
             } else {
                 results = [.scriptArgument(input.command, index: input.values.count, text: text)]
             }
+        } else if case .argument(let argument) = mode {
+            results = argumentRows(argument, text)
         } else if mode == .recordings {
             results = recordingRows(text)
         } else if mode == .projects {
@@ -1768,19 +1770,12 @@ final class LauncherController: NSObject {
                 let running = (runningTimers?() ?? []).map(LauncherItem.runningTimer)
                 results.insert(contentsOf: running, at: min(1, results.count))
             }
-            // "awa 2h", "tim 10", "vo 30", an alias then its value: read by
-            // the same parsers as the word typed whole (`LauncherShorthand`).
-            let shorthand = LauncherShorthand.expand(text, aliases: aliases())
-            let valued = shorthand ?? text
-            var read = false
-            if catalog.shows("catalog.timer"), let request = TimerRequest.parse(valued), onStartTimer != nil {
+            if catalog.shows("catalog.timer"), let request = TimerRequest.parse(text), onStartTimer != nil {
                 results.insert(.startTimer(request), at: 0)
-                read = true
             }
-            let awakeRequest = catalog.shows("catalog.awake") && onKeepAwake != nil ? AwakeRequest.parse(valued) : nil
+            let awakeRequest = catalog.shows("catalog.awake") && onKeepAwake != nil ? AwakeRequest.parse(text) : nil
             if let awakeRequest {
                 results.insert(.keepAwake(awakeRequest), at: 0)
-                read = true
             }
             // Kept awake now: the words about it ("awake", "keep awake")
             // show it running, ↩ lets it sleep; after a length typed, the
@@ -1788,7 +1783,7 @@ final class LauncherController: NSObject {
             // Keep Awake" while awake; "turn off awake" typed is that row
             // already.
             let awake = awakeState()
-            if awake.awake, catalog.shows("catalog.awake"), onKeepAwake != nil, AwakeRequest.mentions(valued) {
+            if awake.awake, catalog.shows("catalog.awake"), onKeepAwake != nil, AwakeRequest.mentions(text) {
                 // One "Turn Off Keep Awake" row, never two alike.
                 results.removeAll { if case .system(.system(.keepAwake), _) = $0 { true } else { false } }
                 if awakeRequest != .allowSleep { results.insert(.keptAwake(until: awake.until), at: awakeRequest == nil ? 0 : 1) }
@@ -1797,21 +1792,17 @@ final class LauncherController: NSObject {
             // one records, the words about it show it, ↩ stops it; it stands
             // for Record Meeting's own row (no second recording at once).
             if catalog.shows("cmd:recordMeeting"), onRecord != nil {
-                if let live = recordingState(), RecordRequest.mentions(valued) {
+                if let live = recordingState(), RecordRequest.mentions(text) {
                     results.removeAll { if case .command(let command) = $0 { command.id == .recordMeeting } else { false } }
                     results.insert(.recording(live), at: 0)
-                    read = true
-                } else if let name = RecordRequest.name(valued) {
+                } else if let name = RecordRequest.name(text) {
                     results.insert(.recordNamed(name), at: 0)
-                    read = true
                 }
             }
             // "volume 30", "mets le son à 30 %": the level, first.
-            if catalog.shows("catalog.volume"), let level = VolumeRequest.parse(valued), onSystemCommand != nil {
+            if catalog.shows("catalog.volume"), let level = VolumeRequest.parse(text), onSystemCommand != nil {
                 results.insert(.system(.volume(level), title: VolumeRequest.title(level)), at: 0)
-                read = true
             }
-            shorthandRead = shorthand != nil && read
             // "connecte mes AirPods" before Bluetooth is allowed: the one
             // thing to do first is to allow it; "réglages bluetooth" asks
             // for the pane: it stays first, the offer next.
@@ -1858,7 +1849,7 @@ final class LauncherController: NSObject {
         laps.lap("found")
         // The item an alias names comes first ("e", "e " or "ql query").
         aliasByID = Dictionary(aliases().map { ($0.id, $0.alias) }, uniquingKeysWith: { first, _ in first })
-        if mode == nil, !shorthandRead, let aliased = aliasedItem(text) {
+        if mode == nil, let aliased = aliasedItem(text) {
             results.removeAll { $0.learningID == aliased.learningID }
             results.insert(aliased, at: 0)
         }
@@ -1925,6 +1916,10 @@ final class LauncherController: NSObject {
             let total = input.command.arguments.count
             sectionHeader.stringValue = "\(input.command.title) · \(argument.placeholder)" + (total > 1 ? " (\(index + 1) of \(total))" : "")
             emptyState.stringValue = "No choice matches “\(text)”"
+        case .argument(let argument):
+            sectionHeader.stringValue = argument.chip
+            emptyState.stringValue = text.trimmingCharacters(in: .whitespaces).isEmpty ? "Type it, then ↩: \(argument.placeholder)"
+                : "Not read: “\(text)”. Try: \(argument.placeholder)"
         case .reminders:
             let open = reminderEntries?.filter { !$0.item.isCompleted }.count ?? 0
             sectionHeader.stringValue = reminderEntries == nil ? "Reminders" : text.isEmpty ? "\(open) to do" : "Reminders with “\(text)”"
@@ -2983,6 +2978,9 @@ final class LauncherController: NSObject {
                 let argument = input.command.arguments[input.values.count]
                 searchField.placeholderString = argument.placeholder + (argument.optional ? " (optional)" : "")
             }
+        case .argument(let argument):
+            modeChip.set(title: argument.chip, color: .systemOrange)
+            searchField.placeholderString = argument.placeholder
         case .projects:
             modeChip.set(title: "Projects", color: .systemPurple)
             searchField.placeholderString = "A project's name or editor"
@@ -3795,7 +3793,14 @@ final class LauncherController: NSObject {
     /// argument, a quicklink's query. False when the alias opens nothing
     /// (an app, a plain command): it then only comes first.
     private func openAlias(_ text: String) -> Bool {
-        guard mode == nil, let (alias, rest) = LauncherAliases.split(text, among: aliases()), let item = resolve(learnedID: alias.id) else { return false }
+        guard mode == nil, let (alias, rest) = LauncherAliases.split(text, among: aliases()) else { return false }
+        // A command that says what it reads: its chip, the rest its value.
+        if let argument = LauncherArgument.of(alias.id) {
+            guard argumentShown(argument) else { return false }
+            enterMode(.argument(argument), filter: rest)
+            return true
+        }
+        guard let item = resolve(learnedID: alias.id) else { return false }
         switch item {
         case .command(let command):
             guard let next = Self.mode(for: command.id) else { return false }
@@ -3807,6 +3812,58 @@ final class LauncherController: NSObject {
             return true
         default:
             return false
+        }
+    }
+
+    /// The Catalog entry a command's value rows go by: off, no chip either.
+    private static func catalogID(_ argument: LauncherArgument) -> String {
+        argument.id == "system:keepAwake" ? "catalog.awake" : argument.id
+    }
+
+    /// Whether the command can run now: on in the Catalog, and wired.
+    private func argumentShown(_ argument: LauncherArgument) -> Bool {
+        guard currentCatalog().shows(Self.catalogID(argument)) else { return false }
+        switch argument.word {
+        case AwakeRequest.word: return onKeepAwake != nil
+        case TimerRequest.word: return onStartTimer != nil
+        case VolumeRequest.word: return onSystemCommand != nil
+        case RecordRequest.word: return onRecord != nil
+        case EventRequest.word: return calendar != nil && calendarUsable
+        case ReminderRequest.word: return reminders.map { $0.isAllowed || $0.canAsk } ?? false
+        default: return false
+        }
+    }
+
+    /// The chip's rows: what the command's own parser reads in the value
+    /// typed, first; nothing typed, the command's plain row where it has
+    /// one (Keep Awake toggles, Record Meeting records, the timers running).
+    private func argumentRows(_ argument: LauncherArgument, _ typed: String) -> [LauncherItem] {
+        let text = argument.text(typed)
+        switch argument.word {
+        case AwakeRequest.word:
+            let awake = awakeState()
+            guard let text else {
+                return awake.awake ? [.keptAwake(until: awake.until)] : [resolve(learnedID: "system:keepAwake")].compactMap { $0 }
+            }
+            guard let request = AwakeRequest.parse(text) else { return [] }
+            return [.keepAwake(request)] + (awake.awake && request != .allowSleep ? [.keptAwake(until: awake.until)] : [])
+        case TimerRequest.word:
+            guard let text else { return (runningTimers?() ?? []).map(LauncherItem.runningTimer) }
+            return TimerRequest.parse(text).map { [.startTimer($0)] } ?? []
+        case VolumeRequest.word:
+            return text.flatMap(VolumeRequest.parse).map { [.system(.volume($0), title: VolumeRequest.title($0))] } ?? []
+        case RecordRequest.word:
+            if let live = recordingState() { return [.recording(live)] }
+            guard let text else { return [resolve(learnedID: "cmd:recordMeeting")].compactMap { $0 } }
+            return RecordRequest.name(text).map { [.recordNamed($0)] } ?? []
+        case EventRequest.word:
+            guard let text, let calendar else { return [] }
+            return EventRequest.parse(text, calendars: calendar.calendarNames(), nounFirst: true).map { [.createEvent($0)] } ?? []
+        case ReminderRequest.word:
+            guard let text, let reminders else { return [] }
+            return ReminderRequest.parse(text, lists: reminders.listNames()).map { [.addReminder($0)] } ?? []
+        default:
+            return []
         }
     }
 
@@ -3862,16 +3919,14 @@ final class LauncherController: NSObject {
 
     /// ⌘K → Set Alias…: the list becomes a field; ↩ saves (empty removes).
     /// One not taken asks again, with what was typed.
-    func askAlias(for item: LauncherItem, retry typed: String? = nil) {
-        let id = item.learningID
-        let title = item.title
+    func askAlias(id: String, title: String, retry typed: String? = nil) {
         let header = typed == nil ? "Alias for \(title)" : "Alias for \(title): one word, 12 letters at most"
         actionPanel.ask(header, initial: typed ?? aliasByID[id] ?? "") { [weak self] typed in
             guard let self else { return }
             let alias = LauncherAliases.normalized(typed)
             // Asked again, the list's header saying what an alias is.
             guard alias.isEmpty || LauncherAliases.isValid(alias) else {
-                self.askAlias(for: item, retry: String(alias.filter { !$0.isWhitespace }.prefix(12)))
+                self.askAlias(id: id, title: title, retry: String(alias.filter { !$0.isWhitespace }.prefix(12)))
                 return
             }
             self.onSetAlias?(id, title, alias)
@@ -3932,6 +3987,11 @@ final class LauncherController: NSObject {
     /// what to type in the field.
     private func runCatalog(_ entry: CatalogEntry, flags: NSEvent.ModifierFlags) {
         switch entry.run {
+        case .type where LauncherArgument.of(entry.id).map(argumentShown) == true:
+            // A command that says what it reads: its chip, as its alias.
+            guard let argument = LauncherArgument.of(entry.id) else { return }
+            leaveMode(update: false)
+            enterMode(.argument(argument), filter: "")
         case .type(let text, let hint):
             leaveMode(update: false)
             searchField.placeholderString = hint ?? "Search"
@@ -4108,6 +4168,9 @@ final class LauncherController: NSObject {
         if let item = catalogItems[entry.id], item.learningID == entry.id, takesAlias(item) {
             list += aliasActions(for: item)
             if takesPin(item) { list.append(pinAction(for: item)) }
+        } else if catalogItems[entry.id] == nil, LauncherArgument.of(entry.id) != nil {
+            // No row of its own: its alias then a space opens its chip.
+            list += aliasActions(id: entry.id, title: entry.title)
         }
         if let action = catalogAction(entry) {
             // Its keys, recorded right away and said in the card, as on

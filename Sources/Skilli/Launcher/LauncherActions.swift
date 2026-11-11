@@ -133,12 +133,18 @@ extension LauncherController {
 
     /// Set Alias…, or Change Alias “e”… and Remove Alias.
     func aliasActions(for item: LauncherItem) -> [LauncherAction] {
-        let current = aliases().first { $0.id == item.learningID }?.alias
+        aliasActions(id: item.learningID, title: item.title)
+    }
+
+    /// The same for what an alias names by id: a row, or a Catalog entry
+    /// that reads a value (`LauncherArgument`).
+    func aliasActions(id: String, title: String) -> [LauncherAction] {
+        let current = aliases().first { $0.id == id }?.alias
         var alias = [LauncherAction(title: current.map { "Change Alias “\($0)”…" } ?? "Set Alias…", symbol: "character.cursor.ibeam",
-                                    keepsOpen: true) { [weak self] in self?.askAlias(for: item) }]
+                                    keepsOpen: true) { [weak self] in self?.askAlias(id: id, title: title) }]
         if current != nil {
             alias.append(LauncherAction(title: "Remove Alias", symbol: "xmark.circle") { [weak self] in
-                self?.onSetAlias?(item.learningID, item.title, "")
+                self?.onSetAlias?(id, title, "")
                 self?.refreshResults()
             })
         }

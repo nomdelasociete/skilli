@@ -1571,7 +1571,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         items += arranger.layouts().map { (.layout($0), "Window Layout") }
         items += snippetLibrary.all.map { (.snippet($0), "Snippet") }
         items += (launcher.systemCommands?() ?? []).map { (.system($0.0, title: $0.1), "Mac Command") }
+        // The commands that read a value and have no row of their own
+        // ("Timer"): their alias then a space opens their chip.
+        let rows = Set(items.map(\.item.learningID))
         return items.map { SettingTools.AliasTarget(id: $0.item.learningID, title: $0.item.title, kind: $0.kind) }
+            + LauncherArgument.all.filter { !rows.contains($0.id) }.map { SettingTools.AliasTarget(id: $0.id, title: $0.title, kind: "Command") }
     }
 
     /// What Settings → Keys → Add Shortcut offers, as its menu names it.
