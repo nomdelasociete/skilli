@@ -47,7 +47,7 @@ was measured on the main thread on 2026-11-11 and what it is now.
 | Path | Before | Now |
 |---|---|---|
 | A 2560×1600 picture copied as TIFF, kept | 100 ms | 0.25 ms (in the history 103 ms later) |
-| 1.6 MB of text copied, kept | 40 ms | 0.2 ms (40 ms later) |
+| 1.6 MB of text copied, kept | 40 ms | 0.2 ms (64 ms later, its shape checked for a key since #129) |
 | A kept picture put back for ⌘V | 32 ms | 1.3 ms (its TIFF made if asked) |
 | ✦C on 412 copies, 12 such pictures first | 249 ms | 15 ms, the pictures 73 ms after |
 
