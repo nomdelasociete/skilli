@@ -251,7 +251,10 @@ Everything you copy, and your screenshots, ready to paste again.
   shows the line found, its words marked in the preview; ⇥ by meaning, through the
   whole history kept ("my train ticket from yesterday") or by what a copy
   is ("email", "a link"). ↩ pastes, ⇧↩ plain text, ⌘↩ copies, ⌘⌫ forgets
-  (⌘Z brings it back for 10 s). With CleanShot X, ⌘K on an image
+  (⌘Z brings it back for 10 s). ⌘K → Pin keeps a copy at the top, under
+  "Pinned", past Keep copies for; ⌘K opens a copied link in the browser,
+  starts a mail to a copied address, opens a copied file or shows it in
+  Finder. With CleanShot X, ⌘K on an image
   annotates it, pins it or adds it to Quick Access.
 - **A part of a copy**: drag over a text or code copy in the preview, ⌘C
   copies that part.

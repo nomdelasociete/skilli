@@ -132,6 +132,8 @@ final class LauncherController: NSObject {
     var onClip: ((ClipboardStore.Item, ClipboardHistory.Use) -> Void)?
     /// ⌘⌫ (or ⌘K → Forget) on a copy: gone at once, ⌘Z brings it back.
     var onDeleteClip: ((ClipboardStore.Item) -> Void)?
+    /// ⌘K → Pin, Unpin on a copy: pinned or not, the copy as it is now.
+    var onPinClip: ((ClipboardStore.Item, Bool) -> ClipboardStore.Item?)?
     /// Why the history shows nothing ("off in Settings"), when it is not
     /// just empty.
     var clipboardStatus: (() -> String?)?
@@ -3241,6 +3243,19 @@ final class LauncherController: NSObject {
         moveSelection(by: row)
     }
 
+    /// ⌘K → Pin, Unpin on the selected copy: it goes under "Pinned" at
+    /// the top, or back to its date, and stays selected where it shows.
+    func togglePinOfSelectedClip() {
+        let row = tableView.selectedRow
+        guard results.indices.contains(row), case .clip(let item) = results[row] else { return }
+        _ = onPinClip?(item, !item.isPinned)
+        closeActions()
+        updateResults(query: searchField.stringValue)
+        guard let now = results.firstIndex(where: { if case .clip(let shown) = $0 { shown.id == item.id } else { false } }) else { return }
+        tableView.selectRowIndexes(IndexSet(integer: now), byExtendingSelection: false)
+        tableView.scrollRowToVisible(now)
+    }
+
     private func moveSelection(by delta: Int) {
         guard !results.isEmpty else { return }
         let current = max(tableView.selectedRow, 0)
@@ -3944,6 +3959,8 @@ final class LauncherController: NSObject {
     /// over the history's list.
     private func clipDay(atRow row: Int) -> String? {
         guard results.indices.contains(row), case .clip(let item) = results[row] else { return nil }
+        // The empty field starts with the pinned copies.
+        if item.isPinned, searchField.stringValue.trimmingCharacters(in: .whitespaces).isEmpty { return "Pinned" }
         return ClipboardDay.header(item.copiedAt)
     }
 
@@ -4846,7 +4863,11 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             // Beside a preview a row is its name (and a snippet's keyword):
             // the preview says the alias, the name needs the room.
             cell.setAlias(beside == nil ? aliasByID[id] : nil)
-            cell.setPinned(mode == nil && pinsNow.ids.contains(id))
+            if case .clip(let clip) = results[row] {
+                cell.setPinned(clip.isPinned)
+            } else {
+                cell.setPinned(mode == nil && pinsNow.ids.contains(id))
+            }
             cell.setPlace(mode == nil && searchField.stringValue.isEmpty && placeShown.contains(id) ? shownApp?.name : nil)
             cell.setTrailingKeycap(trailingCap(row))
             cell.setMaybe(row == snippetMaybeRow)

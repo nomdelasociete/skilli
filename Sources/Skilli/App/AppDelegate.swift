@@ -869,7 +869,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the launcher opens, off the main thread; a change redraws the rows.
         launcher.onShow = { [weak self] in self?.refreshRadios() }
         launcher.bluetoothAskable = { BluetoothDevices.authorization == .notDetermined }
-        launcher.clipboardItems = { [weak self] text, before in self?.clipboard.search(text, before: before) ?? [] }
+        launcher.clipboardItems = { [weak self] text, before in self?.clipboard.page(text, before: before) ?? [] }
+        launcher.onPinClip = { [weak self] item, pinned in self?.clipboard.setPinned(pinned, item) }
         launcher.clipboardImageURL = { [weak self] item in self?.clipboard.store?.imageURL(item) }
         launcher.clipboardPreview.links = clipboard.links
         launcher.clipboardPreview.onPictureFileShown = { [weak self] item in
