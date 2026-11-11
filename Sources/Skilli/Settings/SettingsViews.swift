@@ -256,11 +256,15 @@ enum SettingsNew: Equatable {
     case snippet, quicklink, command
 }
 
-/// An editor asked from the launcher: on a new one (New Snippet), or on
-/// one made already, by its id (⌘K → Edit Snippet…).
+/// An editor asked from the launcher: on a new one (New Snippet, or Save
+/// as Snippet… with its text), or on one made already, by its id (⌘K →
+/// Edit Snippet…).
 struct SettingsAsk: Equatable {
     let item: SettingsNew
     let id: String?
+    /// A new snippet's text, when it is made of a copy (⌘K → Save as
+    /// Snippet… in the clipboard history).
+    var text: String?
 }
 
 /// Selected pane, shared with AppKit so menus can deep-link.

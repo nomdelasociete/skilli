@@ -262,6 +262,9 @@ Everything you copy, and your screenshots, ready to paste again.
   the ways that change it: a color as Hex, RGB or HSL, a link without
   its tracking, JSON pretty or minified, URL-decoded, as one line,
   trimmed, UPPERCASE, lowercase, Title Case. The copy stays as it was.
+- **Saved as a snippet**: ⌘K → Save as Snippet… on a text copy (up to
+  20,000 characters) opens the snippet editor with its text, a name and
+  a keyword to give.
 - **Files gone since**: a copied file moved or deleted since is said
   when pasted (the others of the copy are pasted, ⇧↩ still pastes the
   paths); the preview marks each one no longer there.

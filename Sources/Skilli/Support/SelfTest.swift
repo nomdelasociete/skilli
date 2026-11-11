@@ -17384,6 +17384,69 @@ final class SelfTest {
             }
             // What was pasted joined the history; the copy it came from
             // is still there as copied.
+            // ⌘K → Save as Snippet… on a text copy: the snippet editor,
+            // the copy's text in it, nothing saved yet
+            // (docs/clipboard-save-as-snippet.md).
+            let signature = "Bien cordialement,\nCamille Wombat"
+            _ = try? store.add(.init(kind: .text, text: signature, app: "com.apple.Notes", appName: "Notes", hash: "selftest-save-snippet"))
+            let snippetsBefore = context.snippets.all.count
+            if await openHistory() {
+                for letter in "wombat" { await pressKey(letter) }
+                _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 1 }
+                await pressKey("k", flags: .maskCommand)
+                if await waitUntil(timeout: 1, { launcher.shownActions.contains { $0.title == "Save as Snippet…" } }) != nil {
+                    for letter in "snippet" { await pressKey(letter) }
+                    if await waitUntil(timeout: 1, { launcher.shownActions.first?.title == "Save as Snippet…" }) != nil {
+                        await pressKey(nil, code: CGKeyCode(kVK_Return))
+                        let settings = context.settings
+                        if await waitUntil(timeout: 3, { settings.isVisible && settings.pane == .snippets && settings.sheetShown }) == nil {
+                            problems.append("Save as Snippet… did not open the snippet editor (Settings open \(settings.isVisible), sheet \(settings.sheetShown))")
+                        } else {
+                            func fields(_ text: String) -> Int { Self.axElements(roles: [kAXTextAreaRole, kAXTextFieldRole], where: { $0 == text }).count }
+                            if fields("Bien cordialement,") != 1 || fields(signature) != 1 {
+                                problems.append("the editor has \(fields("Bien cordialement,")) field with the first line as a name, \(fields(signature)) with the copy's whole text")
+                            }
+                            await captureSettingsBothWays(as: "settings-snippet-from-copy")
+                            /// esc in the editor: its Cancel. False when the
+                            /// sheet did not take the keys or stayed open.
+                            func cancelled() async -> Bool {
+                                guard await waitUntil(timeout: 2, { settings.sheetIsKey }) != nil else { return false }
+                                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                                return await waitUntil(timeout: 2) { !settings.sheetShown } != nil
+                            }
+                            if await cancelled() {
+                                // Asked while another editor is open: it
+                                // waits, and comes with its text once that
+                                // one closed.
+                                settings.showNew(.snippet)
+                                if await waitUntil(timeout: 3, { settings.sheetShown }) != nil {
+                                    settings.showNew(.snippet, text: "Quokka waits its turn")
+                                    let first = await cancelled()
+                                    let came = await waitUntil(timeout: 3) { settings.sheetShown && fields("Quokka waits its turn") == 2 } != nil
+                                    if !first || !came { problems.append("a copy saved while an editor was open: that one closed \(first), its own came with its text \(came)") }
+                                    if settings.sheetShown, !(await cancelled()) { problems.append("esc did not close the editor that waited") }
+                                } else {
+                                    problems.append("New Snippet's editor did not open for the one that waits")
+                                }
+                            } else {
+                                problems.append("esc did not close the editor opened by Save as Snippet… (keys in it \(settings.sheetIsKey), open \(settings.sheetShown))")
+                            }
+                        }
+                        settings.close()
+                    } else {
+                        problems.append("“snippet” in ⌘K on a text copy: \(launcher.shownActions.map(\.title))")
+                        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                    }
+                } else {
+                    problems.append("⌘K on a text copy lacks Save as Snippet…: \(launcher.shownActions.map(\.title))")
+                }
+                if launcher.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+                if launcher.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+            } else {
+                problems.append("the history did not open again for Save as Snippet…")
+            }
+            if context.snippets.all.count != snippetsBefore { problems.append("a snippet was saved before Save was pressed") }
+            for item in store.search("wombat") { try? store.delete(item.id) }
             context.clipboard.poll()
             let texts = store.search("okapi").map(\.text)
             if !texts.contains("https://example.com/okapi?id=7") || !texts.contains("https://example.com/okapi?id=7&utm_source=mail&fbclid=abc") {

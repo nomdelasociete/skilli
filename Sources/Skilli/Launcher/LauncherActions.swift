@@ -363,6 +363,12 @@ extension LauncherController {
                 case .email(let address): does += [open("New Email", "envelope", URL(string: "mailto:\(address)"))].compactMap { $0 }
                 default: break
                 }
+                // Kept for good, with a name and a keyword to give: the
+                // snippet editor on it (docs/clipboard-save-as-snippet.md).
+                if clip.text.utf16.count <= Snippet.draftLimit {
+                    let text = clip.text
+                    does.append(act("Save as Snippet…", "text.badge.plus") { [weak self] in self?.onSaveAsSnippet?(text) })
+                }
             case .files:
                 let files = clip.text.split(separator: "\n").map { URL(fileURLWithPath: String($0)) }
                 // Looked for when asked, never while the list is drawn.

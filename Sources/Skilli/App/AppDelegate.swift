@@ -1040,6 +1040,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // ⌘K on a snippet, a quicklink, a command: the editor Settings opens
         // for it; deleted as there (`deletes`), an open pane reads it again.
         launcher.onEditSnippet = { [weak self] snippet in self?.settings.showNew(.snippet, id: snippet.id) }
+        launcher.onSaveAsSnippet = { [weak self] text in self?.settings.showNew(.snippet, text: text) }
         launcher.onEditQuicklink = { [weak self] link in self?.settings.showNew(.quicklink, id: link.id.uuidString) }
         launcher.onEditCommand = { [weak self] id in self?.settings.showNew(.command, id: id) }
         launcher.onDeleteSnippet = { [weak self] snippet in

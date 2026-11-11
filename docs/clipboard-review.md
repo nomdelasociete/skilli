@@ -77,6 +77,10 @@ since it was copied is said when pasted, the others pasted; the
 several-files preview marks the ones gone. Left of #12: finding where a
 moved file went.
 
+Then (docs/clipboard-save-as-snippet.md): of #7, ⌘K → Save as
+Snippet… on a text copy opens the snippet editor with its text. Left of
+#7: Quick Look large, drag out.
+
 ## Must (the history is behind the others here)
 
 | # | Gap | Proof | Others |
