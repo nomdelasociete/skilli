@@ -262,6 +262,9 @@ Everything you copy, and your screenshots, ready to paste again.
   the ways that change it: a color as Hex, RGB or HSL, a link without
   its tracking, JSON pretty or minified, URL-decoded, as one line,
   trimmed, UPPERCASE, lowercase, Title Case. The copy stays as it was.
+- **Files gone since**: a copied file moved or deleted since is said
+  when pasted (the others of the copy are pasted, ⇧↩ still pastes the
+  paths); the preview marks each one no longer there.
 - **A part of a copy**: drag over a text or code copy in the preview, ⌘C
   copies that part. A long copy shows whole (up to 200,000 characters):
   a word found far down it is marked and in view.

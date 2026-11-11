@@ -72,6 +72,11 @@ pastes it another way, only the ways that change it (a color's other
 forms, a link without tracking, JSON pretty or minified, one line,
 trimmed, its case).
 
+Then (docs/clipboard-missing-files.md): #12 a file moved or deleted
+since it was copied is said when pasted, the others pasted; the
+several-files preview marks the ones gone. Left of #12: finding where a
+moved file went.
+
 ## Must (the history is behind the others here)
 
 | # | Gap | Proof | Others |
@@ -171,4 +176,4 @@ list, ↩ to pasted, copy to kept.
 3. #3 pins and #5 kind filter: one spec, they share the header.
 4. #7 actions per kind (open link, show file, save as snippet).
 5. ~~Speed budget lines + the three measurements~~: done.
-6. ~~#13, #14, #16~~, ~~#15~~, ~~#10~~: done. Then #8, #9, #11, #12.
+6. ~~#13, #14, #16~~, ~~#15~~, ~~#10~~, ~~#12~~: done. Then #8, #9, #11.

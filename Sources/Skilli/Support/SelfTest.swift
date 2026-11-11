@@ -17109,6 +17109,47 @@ final class SelfTest {
             }
         }
 
+        // Files moved or deleted since they were copied
+        // (docs/clipboard-missing-files.md): the preview says which, a
+        // paste takes the ones still there, none when none is.
+        if let store = context.clipboard.store {
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-gone-\(UUID().uuidString.prefix(6))")
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let kept = dir.appendingPathComponent("kept.txt")
+            try? Data("kept".utf8).write(to: kept)
+            let three = [kept.path, dir.appendingPathComponent("moved.pdf").path, dir.appendingPathComponent("deleted.png").path].joined(separator: "\n")
+            let lost = dir.appendingPathComponent("lost.txt").path
+            if let some = try? store.add(.init(kind: .files, text: three, app: "com.apple.finder", appName: "Finder",
+                                               hash: ClipboardHistory.hash("files", Data(three.utf8)))),
+               let none = try? store.add(.init(kind: .files, text: lost, app: "com.apple.finder", appName: "Finder",
+                                               hash: ClipboardHistory.hash("files", Data(lost.utf8)))) {
+                guard await openHistory() else { return (problems + ["the history did not open again for the files gone"], note) }
+                for letter in "moved" { await pressKey(letter) }
+                _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 1 && preview.shown == .files }
+                let said = await waitUntil(timeout: 2) {
+                    preview.shownGoneFiles == 2 && preview.shownInfo.contains { $0.0 == "Content" && $0.1 == "3 Files · 2 no longer there" }
+                } != nil
+                if !said { problems.append("3 files, 2 gone: \(preview.shownGoneFiles) marked, \(preview.shownInfo.first { $0.0 == "Content" }?.1 ?? "no Content")") }
+                await captureLauncherBothWays(as: "launcher-clipboard-files-gone")
+                if launcher.isVisible, launcher.isInClipboard { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+                _ = await waitUntil(timeout: 1) { !launcher.isVisible }
+                let files = context.clipboard.files(of: some.item)
+                if files.there != [kept.path] || files.gone != ["moved.pdf", "deleted.png"] { problems.append("files there \(files.there.count), gone \(files.gone)") }
+                let wrote = context.clipboard.write(some.item, plain: false)
+                let pasted = (NSPasteboard.general.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+                if !wrote || pasted.map(\.lastPathComponent) != ["kept.txt"] { problems.append("pasting 3 files, 2 gone, put \(pasted.map(\.lastPathComponent)) on the clipboard") }
+                if context.clipboard.write(none.item, plain: false) { problems.append("a file no longer there was put on the clipboard") }
+                // What the write put on the clipboard joins the history:
+                // forgotten with the rest.
+                context.clipboard.poll()
+                NSPasteboard.general.clearContents()
+                for item in store.search("skilli-selftest-gone", limit: 20) where item.kind == .files { context.clipboard.delete(item) }
+            } else {
+                problems.append("the files copies could not be kept")
+            }
+        }
+
         // A key by its shape is not kept, and the history says so once as
         // it opens (docs/clipboard-secrets-drops-hint.md). Made here,
         // never a real one.

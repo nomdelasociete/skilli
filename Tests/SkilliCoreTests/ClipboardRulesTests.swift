@@ -171,6 +171,20 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertFalse(secret.isRecent(now: date.addingTimeInterval(90_000)))
     }
 
+    func testFilesGoneSinceAreSaid() {
+        XCTAssertNil(ClipboardFiles.line(gone: [], of: 3, done: "pasted"))
+        XCTAssertEqual(ClipboardFiles.line(gone: ["report.pdf"], of: 1, done: "pasted"),
+                       "“report.pdf” is no longer where it was copied: ⇧↩ pastes its path.")
+        XCTAssertEqual(ClipboardFiles.line(gone: ["a", "b", "c"], of: 3, done: "pasted"),
+                       "These 3 files are no longer where they were copied: ⇧↩ pastes their paths.")
+        XCTAssertEqual(ClipboardFiles.line(gone: ["a.png"], of: 2, done: "pasted"), "“a.png” is no longer there: the other was pasted.")
+        XCTAssertEqual(ClipboardFiles.line(gone: ["a.png"], of: 4, done: "copied"), "“a.png” is no longer there: the 3 others were copied.")
+        XCTAssertEqual(ClipboardFiles.line(gone: ["a", "b"], of: 5, done: "pasted"), "2 of 5 files are no longer there: the 3 others were pasted.")
+        XCTAssertEqual(ClipboardFiles.count(5, gone: 0), "5 Files")
+        XCTAssertEqual(ClipboardFiles.count(5, gone: 2), "5 Files · 2 no longer there")
+        XCTAssertEqual(ClipboardFiles.count(2, gone: 2), "2 Files · no longer there")
+    }
+
     /// Each run the next older copy, newest first; 30 s apart or a copy
     /// of the user's own in between starts again; past the oldest, none.
     func testPasteSequenceGoesOlderThenStartsAgain() {
