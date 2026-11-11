@@ -351,7 +351,13 @@ final class ClipboardStore: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         let old = forgotten.item
-        if let existing = try rows("SELECT \(Self.columns) FROM items WHERE hash = ?", [.text(forgotten.hash)]).first { return existing }
+        if let existing = try rows("SELECT \(Self.columns) FROM items WHERE hash = ?", [.text(forgotten.hash)]).first {
+            // Copied again meanwhile: that row stays, pinned as the
+            // forgotten one was.
+            guard let pinned = old.pinnedAt, !existing.isPinned else { return existing }
+            try run("UPDATE items SET pinned = ? WHERE id = ?", [.double(pinned.timeIntervalSince1970), .int(existing.id)])
+            return try rows("SELECT \(Self.columns) FROM items WHERE id = ?", [.int(existing.id)])[0]
+        }
         let idFree = try int64s("SELECT id FROM items WHERE id = ?", [.int(old.id)]).isEmpty
         if let name = old.image, let data = forgotten.imageData {
             try data.write(to: imagesFolder.appendingPathComponent(name), options: .atomic)
