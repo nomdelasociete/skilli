@@ -16877,8 +16877,8 @@ final class SelfTest {
             // ⌘K → Pin: the copy first, under "Pinned", its pin on the
             // row; ⌘K → Unpin: back at its date. A link's page, an
             // address's mail: offered.
-            _ = try? store.add(.init(kind: .text, text: "kept@example.com", app: "com.apple.Notes", appName: "Notes", hash: "selftest-act-mail"))
-            _ = try? store.add(.init(kind: .text, text: "https://example.com/selftest-open", app: "com.apple.Notes", appName: "Notes", hash: "selftest-act-link"))
+            _ = try? store.add(.init(kind: .text, text: "quagga@example.com", app: "com.apple.Notes", appName: "Notes", hash: "selftest-act-mail"))
+            _ = try? store.add(.init(kind: .text, text: "https://example.com/zebracrossing", app: "com.apple.Notes", appName: "Notes", hash: "selftest-act-link"))
             _ = try? store.add(.init(kind: .text, text: "12 rue des Lilas, à garder", app: "com.apple.Notes", appName: "Notes", hash: "selftest-pin-row"),
                                at: .now.addingTimeInterval(-2 * 86_400))
             if await openHistory() {
@@ -16890,11 +16890,16 @@ final class SelfTest {
                     await pause(150)
                     return titles
                 }
-                let onLink = await offered()
+                func offered(on word: String) async -> [String] {
+                    for letter in word { await pressKey(letter) }
+                    _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 1 }
+                    let titles = await offered()
+                    for _ in word { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+                    return titles
+                }
+                let onLink = await offered(on: "zebracross")
                 if !onLink.contains("Open in Browser") || !onLink.contains("Pin") { problems.append("⌘K on a link: \(onLink)") }
-                await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
-                await pause(150)
-                let onMail = await offered()
+                let onMail = await offered(on: "quagga")
                 if !onMail.contains("New Email") { problems.append("⌘K on an address: \(onMail)") }
                 for letter in "lilas" { await pressKey(letter) }
                 _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 1 }
@@ -16920,7 +16925,7 @@ final class SelfTest {
             } else {
                 problems.append("the history did not open again for a pin")
             }
-            for word in ["lilas", "selftest-open", "kept@example"] { for item in store.search(word) { try? store.delete(item.id) } }
+            for word in ["lilas", "zebracross", "quagga"] { for item in store.search(word) { try? store.delete(item.id) } }
 
             // Other words on the same copy: the preview goes to where the
             // new ones are, far down a long text.
