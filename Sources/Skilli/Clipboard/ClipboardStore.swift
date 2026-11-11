@@ -429,8 +429,14 @@ final class ClipboardStore: @unchecked Sendable {
             let read = unread.map { ($0.id, ClipboardKind.of(stored: $0.kind, text: $0.text).rawValue) }
             lock.lock()
             var failed = false
+            // One write to the disk for the lot.
+            try? execute("BEGIN;")
             for (id, value) in read {
                 do { try run("UPDATE items SET value = ? WHERE id = ?", [.text(value), .int(id)]) } catch { failed = true }
+            }
+            do { try execute("COMMIT;") } catch {
+                try? execute("ROLLBACK;")
+                failed = true
             }
             lock.unlock()
             // A write that fails would be read again for ever.
@@ -482,20 +488,21 @@ final class ClipboardStore: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         let trimmed = text.trimmingCharacters(in: .whitespaces)
-        // What narrows every way of searching: older than, one kind or app.
+        // What narrows every way of searching: bound than, one kind or app.
         var narrowed: [String] = []
-        var older: [Value] = []
+        /// Their values, in the same order.
+        var bound: [Value] = []
         if let before {
             narrowed.append("items.copied < ?")
-            older.append(.double(before.timeIntervalSince1970))
+            bound.append(.double(before.timeIntervalSince1970))
         }
         switch only {
         case .kind(let kind):
             narrowed.append("items.value = ?")
-            older.append(.text(kind.rawValue))
+            bound.append(.text(kind.rawValue))
         case .app(let id, _):
             narrowed.append("items.app = ?")
-            older.append(.text(id))
+            bound.append(.text(id))
         case nil:
             break
         }
@@ -504,7 +511,7 @@ final class ClipboardStore: @unchecked Sendable {
             if trimmed.isEmpty {
                 let conditions = narrowed + (unpinnedOnly ? ["pinned IS NULL"] : [])
                 let filter = conditions.isEmpty ? "" : "WHERE " + conditions.joined(separator: " AND ")
-                return try rows("SELECT \(Self.columns) FROM items \(filter) ORDER BY copied DESC LIMIT ?", older + [.int(Int64(limit))])
+                return try rows("SELECT \(Self.columns) FROM items \(filter) ORDER BY copied DESC LIMIT ?", bound + [.int(Int64(limit))])
             }
             // Every word of 3 letters or more: found inside words too,
             // and in the app's name.
@@ -512,19 +519,19 @@ final class ClipboardStore: @unchecked Sendable {
                 return try rows("""
                     SELECT \(Self.columnList("items")) FROM items_sub JOIN items ON items.id = items_sub.rowid
                     WHERE items_sub MATCH ? \(and) ORDER BY items.copied DESC LIMIT ?
-                    """, [.text(match)] + older + [.int(Int64(limit))])
+                    """, [.text(match)] + bound + [.int(Int64(limit))])
             }
             if let match = ClipboardSearch.ftsQuery(trimmed) {
                 return try rows("""
                     SELECT \(Self.columnList("items")) FROM items_fts JOIN items ON items.id = items_fts.rowid
                     WHERE items_fts MATCH ? \(and) ORDER BY items.copied DESC LIMIT ?
-                    """, [.text(match)] + older + [.int(Int64(limit))])
+                    """, [.text(match)] + bound + [.int(Int64(limit))])
             }
             // Only symbols ("€", "->"): plain substring.
             return try rows("""
                 SELECT \(Self.columns) FROM items WHERE (instr(text, ?) > 0 OR instr(coalesce(ocr, ''), ?) > 0)
                 \(and) ORDER BY copied DESC LIMIT ?
-                """, [.text(trimmed), .text(trimmed)] + older + [.int(Int64(limit))])
+                """, [.text(trimmed), .text(trimmed)] + bound + [.int(Int64(limit))])
         } catch {
             Log.actions.error("\(error.localizedDescription, privacy: .public)")
             return []
