@@ -137,6 +137,11 @@ final class ResultCellView: NSTableCellView {
         layoutLabels()
     }
 
+    /// Only its picture, made after the row was drawn (a copied image's).
+    func setIcon(_ icon: NSImage) {
+        if self.icon.image !== icon { self.icon.image = icon }
+    }
+
     /// A row that shows the same thing after a key (most do, typing on)
     /// is left as it is: nothing set, laid out or drawn again.
     func configure(title: String, accessory: String, icon: NSImage) {

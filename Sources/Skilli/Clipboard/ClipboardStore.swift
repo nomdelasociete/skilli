@@ -243,19 +243,67 @@ final class ClipboardStore: @unchecked Sendable {
     /// item and whether it is new (an image then wants OCR).
     @discardableResult
     func add(_ new: NewItem, at date: Date = .now) throws -> (item: Item, isNew: Bool) {
+        guard let added = try add(new, at: date, ifClears: nil) else { throw StoreError.sqlite("the copy was not kept") }
+        return added
+    }
+
+    /// How many times the history was cleared since it opened: a copy
+    /// being made off the main thread when Clear History ran is not
+    /// kept after it (`add(_:at:ifClears:)`).
+    var clears: Int {
         lock.lock()
         defer { lock.unlock() }
-        if let existing = try rows("SELECT \(Self.columns) FROM items WHERE hash = ?", [.text(new.hash)]).first {
+        return cleared
+    }
+
+    private var cleared = 0
+
+    /// The same content already kept, counted once more. It moves to
+    /// `date` with where it came from only when that is its latest copy:
+    /// two copies of it made off the main thread can end out of order.
+    private func again(_ new: NewItem, at date: Date) throws -> (item: Item, isNew: Bool)? {
+        guard let existing = try rows("SELECT \(Self.columns) FROM items WHERE hash = ?", [.text(new.hash)]).first else { return nil }
+        if date >= existing.copiedAt {
             try run("UPDATE items SET copied = ?, app = ?, app_name = ?, copies = copies + 1 WHERE id = ?",
                     [.double(date.timeIntervalSince1970), .optionalText(new.app), .optionalText(new.appName), .int(existing.id)])
-            return (try rows("SELECT \(Self.columns) FROM items WHERE id = ?", [.int(existing.id)])[0], false)
+        } else {
+            try run("UPDATE items SET copies = copies + 1 WHERE id = ?", [.int(existing.id)])
         }
+        return (try rows("SELECT \(Self.columns) FROM items WHERE id = ?", [.int(existing.id)])[0], false)
+    }
+
+    /// `add`, unless the history was cleared since `ifClears` was read
+    /// (nil then, nothing kept). A picture's file is written outside the
+    /// lock: a search on the main thread does not wait for it.
+    func add(_ new: NewItem, at date: Date, ifClears: Int?) throws -> (item: Item, isNew: Bool)? {
+        lock.lock()
+        do {
+            if let ifClears, ifClears != cleared {
+                lock.unlock()
+                return nil
+            }
+            if let existing = try again(new, at: date) {
+                lock.unlock()
+                return existing
+            }
+        } catch {
+            lock.unlock()
+            throw error
+        }
+        lock.unlock()
         var image: String?
         if let data = new.imageData {
             let name = UUID().uuidString + ".png"
             try data.write(to: imagesFolder.appendingPathComponent(name), options: .atomic)
             image = name
         }
+        lock.lock()
+        defer { lock.unlock() }
+        // Cleared, or the same content kept, while the file was written.
+        var inserted = false
+        defer { if !inserted, let image { removeImages([image]) } }
+        if let ifClears, ifClears != cleared { return nil }
+        if let existing = try again(new, at: date) { return existing }
         let formats = try new.formats.map { try PropertyListSerialization.data(fromPropertyList: $0, format: .binary, options: 0) }
         try run("""
             INSERT INTO items (kind, text, image, size, formats, app, app_name, hash, copied, value)
@@ -265,6 +313,7 @@ final class ClipboardStore: @unchecked Sendable {
                   .text(new.hash), .double(date.timeIntervalSince1970),
                   .text(ClipboardKind.of(stored: new.kind.rawValue, text: new.text).rawValue)])
         let id = sqlite3_last_insert_rowid(db)
+        inserted = true
         return (try rows("SELECT \(Self.columns) FROM items WHERE id = ?", [.int(id)])[0], true)
     }
 
@@ -404,6 +453,7 @@ final class ClipboardStore: @unchecked Sendable {
     func clear() throws {
         lock.lock()
         defer { lock.unlock() }
+        cleared += 1
         try run("DELETE FROM items", [])
         try execute("INSERT INTO items_fts (items_fts) VALUES ('rebuild');")
         if findsInsideWords { try execute("INSERT INTO items_sub (items_sub) VALUES ('rebuild');") }

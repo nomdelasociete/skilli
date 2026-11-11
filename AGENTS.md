@@ -54,7 +54,7 @@ scheme, menu search, contacts). macOS only.
 ./script/build_and_run.sh run         # build + open
 ./script/build_and_run.sh restart     # quit gracefully, rebuild, reopen
 ./script/build_and_run.sh daily       # the developer's own skil.li: Release, signed Developer ID as a release (Apple Development, with a warning, without the team's Developer ID in the keychain), dev traces kept (SKILLI_TRACE)
-CONFIGURATION=Release ./script/build_and_run.sh remote speed # typing speed, key by key, as shipped
+CONFIGURATION=Release ./script/build_and_run.sh remote speed # typing speed, key by key, and the clipboard history's, as shipped
 # Built copies go in DerivedData.noindex: Spotlight lists only the skil.li in /Applications.
 ./script/build_and_run.sh --telemetry # open + stream os_log for the bundle
 script/ai_bench.py                    # latency/tokens of the AI engines on the user's plans (spends tokens)
@@ -404,6 +404,9 @@ nobody is using — it flashed on a developer's screen, 2026-10-16):
 | Search, 171 apps | < 0.5 ms worst query | 0.003–0.41 ms (mini) |
 | Selection replaced after trigger (AX read) | < 10 ms | 1–4 ms (selftest) |
 | Memory idle / after use | < 25 MB / < 40 MB | 24.3–24.6 MB / 27.8–27.9 MB (mini) |
+| Copy → main thread held (a 2560×1600 picture, 1.6 MB of text; `remote speed`, Release) | < 16 ms worst | 0.26–0.35 ms; in the history 3 ms (PNG), 40 ms (text), 103 ms (TIFF) later (mini, 2026-11-11) |
+| Kept picture put back for ⌘V (`remote speed`) | < 8 ms median | 1.3 ms (mini, 2026-11-11) |
+| ✦C on 412 copies, 12 screen-size pictures first, drawn (`remote speed`) | < 30 ms the first time | 14.9 ms, its pictures 73 ms after; 9.5 ms once made (mini, 2026-11-11) |
 
 "(mini)": measured 2026-10-16 on the Mac mini, three runs each of
 `remote-benchmark` and `remote speed`, interleaved with main (a4af3f8:
@@ -430,6 +433,16 @@ per-show work.
   opens from a hotkey our tap consumed, so macOS may leave keyboard focus on
   the previous app; typing must never depend on window-server focus. A click
   in another app closes the launcher.
+- The clipboard is read on the main thread (the pasteboard's own calls)
+  and nothing heavy is made of it there: a picture (sized, converted to
+  PNG, hashed), a text over 100,000 characters and a screenshot from the
+  watched folder are made and stored off it (`ClipboardHistory.look`,
+  `keep`, `keepImageLater`), dated when copied; the open history takes
+  them when kept (`clipKept`). Before: 100 ms a picture copied as TIFF,
+  40 ms for 1.6 MB of text, no key drawn meanwhile. A row's small picture
+  is drawn off the main thread too (✦C on a page of screenshots: 249 →
+  15 ms), and a pasted picture's TIFF is made only when the app asks the
+  clipboard for it (`LateTIFF`: 32 → 1.3 ms before ⌘V).
 - Nothing on a keystroke reads a file, asks TCC or CoreAudio, or prepares
   names for matching: the launcher's other sources are read once per show
   (`LauncherController.Catalog`), sound devices are kept until CoreAudio

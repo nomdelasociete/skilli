@@ -494,7 +494,8 @@ final class SelfTest {
                                                        "cmd:killProcess", "system:lockScreen", "system:window.leftHalf", "catalog.timer",
                                                        "cmd:searchProjects", "si:ask"])
                 },
-                cardTypesFast
+                cardTypesFast,
+                clipboardHistoryIsFast
             ])
         }
         if scope == .control {
@@ -16275,6 +16276,233 @@ final class SelfTest {
         }
     }
 
+    /// A picture the size of a screen, each one different: what a
+    /// screenshot costs to keep, to put back and to draw small.
+    private static func screenPicture(_ index: Int) -> Data {
+        drawnPNG(width: 2_560, height: 1_600) { rect in
+            NSGradient(colors: [NSColor(srgbRed: 0.95, green: 0.96, blue: 0.98, alpha: 1),
+                                NSColor(srgbRed: 0.80, green: 0.86 - Double(index % 7) * 0.03, blue: 0.93, alpha: 1)])?.draw(in: rect, angle: 60)
+            for line in 0..<44 {
+                ("Speed \(index) · line \(line): the quick brown fox jumps over the lazy dog, 0123456789" as NSString)
+                    .draw(at: NSPoint(x: 60 + Double(line % 5) * 24, y: 1_540 - Double(line) * 34), withAttributes: [
+                        .font: NSFont.monospacedSystemFont(ofSize: 22, weight: line % 6 == 0 ? .bold : .regular),
+                        .foregroundColor: NSColor(white: 0.12, alpha: 1)
+                    ])
+            }
+        }
+    }
+
+    /// The history's own speed, on real sizes: a picture the size of a
+    /// screen kept when copied (as TIFF, as PNG), a long text kept, the
+    /// picture put back for ⌘V, and ✦C on a long history whose first rows
+    /// are such pictures. Timed: what the main thread is held for (a key
+    /// typed meanwhile waits that long), and beside it when the copy is
+    /// in the history, when the rows have their pictures.
+    private func clipboardHistoryIsFast() async {
+        let name = "Clipboard speed: a screen-size picture kept and put back, a long text kept, ✦C on a long history of pictures"
+        guard let real = context.clipboard.store else {
+            record(name, false, "no clipboard store", nil)
+            return
+        }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-clipboard-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        guard let store = try? ClipboardStore(folder: folder) else {
+            record(name, false, "could not open a scratch store", nil)
+            return
+        }
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("skilli-selftest-\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        let history = ClipboardHistory(preferences: context.preferences, store: store, pasteboard: pasteboard)
+        // Reading and tagging are not what is timed here.
+        let preferences = context.preferences
+        let was = (preferences.clipboardOCR, preferences.imageTagsClipboard)
+        (preferences.clipboardOCR, preferences.imageTagsClipboard) = (false, false)
+        defer { (preferences.clipboardOCR, preferences.imageTagsClipboard) = was }
+        func median(_ durations: [Duration]) -> Duration { durations.sorted()[durations.count / 2] }
+        func worst(_ durations: [Duration]) -> Duration { durations.max() ?? .zero }
+        var problems: [String] = []
+        /// Keeps what the clipboard holds as the app does: the main
+        /// thread's part, then all of it.
+        func keep(_ what: String) async -> (held: Duration, whole: Duration) {
+            let count = store.count
+            let start = ContinuousClock.now
+            history.keep()
+            let held = ContinuousClock.now - start
+            if await waitUntil(timeout: 5, { history.keepingLater == 0 && store.count == count + 1 }) == nil { problems.append("\(what) was not kept") }
+            return (held, .now - start)
+        }
+
+        var asTIFF: [(held: Duration, whole: Duration)] = [], asPNG: [(held: Duration, whole: Duration)] = []
+        var texts: [(held: Duration, whole: Duration)] = [], back: [Duration] = []
+        var pictures: [ClipboardStore.Item] = []
+        for index in 0..<5 {
+            let png = Self.screenPicture(index)
+            guard let tiff = NSBitmapImageRep(data: png)?.tiffRepresentation else { continue }
+            pasteboard.clearContents()
+            pasteboard.setData(tiff, forType: .tiff)
+            asTIFF.append(await keep("a TIFF picture"))
+            if let item = store.search("", limit: 1).first, item.kind == .image { pictures.append(item) }
+            pasteboard.clearContents()
+            pasteboard.setData(Self.screenPicture(100 + index), forType: .png)
+            asPNG.append(await keep("a PNG picture"))
+            let text = (0..<20_000).map { "Line \($0) of long copy \(index): the quick brown fox jumps over the lazy dog." }.joined(separator: "\n")
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            texts.append(await keep("a long text"))
+        }
+        // A picture, then a word right after: the word is kept at once,
+        // the picture a moment later, and still under it.
+        let before = store.count
+        let lastPicture = store.search("", limit: 20).first { $0.kind == .image }?.id
+        pasteboard.clearContents()
+        pasteboard.setData(Self.screenPicture(50), forType: .png)
+        history.keep()
+        pasteboard.clearContents()
+        pasteboard.setString("copied right after the picture", forType: .string)
+        history.keep()
+        _ = await waitUntil(timeout: 5) { history.keepingLater == 0 && store.count == before + 2 }
+        let newest = store.search("", limit: 2)
+        if store.count != before + 2 || newest.count != 2 || newest[0].text != "copied right after the picture" || newest[1].kind != .image
+            || newest[1].id == lastPicture {
+            problems.append("a picture, then a word copied right after: \(store.count - before) kept of 2, the newest two \(newest.map(\.kind.rawValue)) (the word first, its picture under it)")
+        }
+
+        // The same content kept twice, the older copy stored last: it
+        // stays where its latest copy put it. And a copy still being made
+        // when the history is cleared is not kept after it.
+        let twice = ClipboardStore.NewItem(kind: .text, text: "kept twice, out of order", app: "com.example.later", appName: "Later",
+                                           hash: ClipboardHistory.hash("text", Data("kept twice, out of order".utf8)))
+        var earlier = twice
+        (earlier.app, earlier.appName) = ("com.example.earlier", "Earlier")
+        let latest = Date.now
+        _ = try? store.add(twice, at: latest)
+        let merged = try? store.add(earlier, at: latest.addingTimeInterval(-60)).item
+        if merged?.copies != 2 || merged?.appName != "Later" || abs((merged?.copiedAt ?? .distantPast).timeIntervalSince(latest)) > 0.01 {
+            problems.append("an older copy of the same content stored last moved it back (\(merged?.appName ?? "nil"), \(merged?.copies ?? 0) copies)")
+        }
+
+        for item in pictures {
+            var wrote = false
+            let start = ContinuousClock.now
+            wrote = history.write(item, plain: false)
+            back.append(.now - start)
+            // The TIFF is made when asked for, as an app pasted into does.
+            let sizes = [NSPasteboard.PasteboardType.png, .tiff].map { type in
+                pasteboard.data(forType: type).flatMap(NSBitmapImageRep.init(data:)).map { "\($0.pixelsWide)×\($0.pixelsHigh)" } ?? "unreadable"
+            }
+            if !wrote || sizes != [item.size ?? "", item.size ?? ""] { problems.append("a \(item.size ?? "?") picture put back reads as PNG \(sizes[0]), TIFF \(sizes[1])") }
+        }
+        let clears = store.clears
+        try? store.clear()
+        let late = ClipboardStore.NewItem(kind: .text, text: "made while the history was cleared", app: nil, appName: nil,
+                                          hash: ClipboardHistory.hash("text", Data("made while the history was cleared".utf8)))
+        if (try? store.add(late, at: .now, ifClears: clears)) != nil || store.count != 0 {
+            problems.append("a copy being made when the history was cleared was kept after it")
+        }
+        guard !asTIFF.isEmpty, !back.isEmpty else {
+            record(name, false, "no picture could be made or kept: \(problems.joined(separator: "; "))", nil)
+            return
+        }
+
+        // The history as the launcher opens it: 400 texts, then 12
+        // pictures, the newest.
+        let top = Date.now
+        var seeded: [Int64] = [], seededPictures: [Int64] = []
+        defer { for id in seeded { try? real.delete(id) } }
+        for index in 0..<400 {
+            let text = "Speed copy \(index): a line of text as most copies are, kept to make the history long."
+            let new = ClipboardStore.NewItem(kind: .text, text: text, app: nil, appName: "Self-test", hash: ClipboardHistory.hash("text", Data(text.utf8)))
+            if let item = try? real.add(new, at: top.addingTimeInterval(-600 - Double(index))).item { seeded.append(item.id) }
+        }
+        for index in 0..<12 {
+            let png = Self.screenPicture(200 + index)
+            let new = ClipboardStore.NewItem(kind: .image, text: "", imageData: png, size: "2560×1600", app: nil, appName: "Self-test",
+                                             hash: ClipboardHistory.hash("image", png))
+            if let item = try? real.add(new, at: top.addingTimeInterval(-Double(index))).item {
+                seeded.append(item.id)
+                seededPictures.append(item.id)
+            }
+        }
+        guard seededPictures.count == 12, real.search("", limit: 12).map(\.id) == seededPictures else {
+            record(name, false, "the 12 pictures are not the newest copies of the history (\(seededPictures.count) kept)", nil)
+            return
+        }
+        guard await focusTestWindow() else { return }
+        let launcher = context.launcher
+        func close() async {
+            launcher.hide()
+            _ = await waitUntil(timeout: 1) { !launcher.isVisible }
+            await pause(60)
+        }
+        /// ✦C: until the list is drawn, then until its pictures are.
+        func open() async -> (drawn: Duration, pictures: Duration)? {
+            let start = ContinuousClock.now
+            launcher.toggle(into: .clipboard, triggeredAt: start)
+            launcher.window.displayIfNeeded()
+            let drawn = ContinuousClock.now - start
+            guard launcher.isInClipboard, launcher.resultTitles.count >= 12 else { return nil }
+            // The rows in sight: each with its own picture, not the symbol.
+            let shown = seededPictures.prefix(8)
+            if await waitUntil(timeout: 3, { shown.allSatisfy(launcher.clipHasThumbnail) }) == nil {
+                problems.append("\(shown.filter { !launcher.clipHasThumbnail($0) }.count) of the first \(shown.count) rows have no picture of their own after 3 s")
+            }
+            return (drawn, .now - start)
+        }
+        guard let first = await open() else {
+            record(name, false, "✦C did not open the history on its copies", nil)
+            await close()
+            return
+        }
+        await captureLauncherBothWays(as: "launcher-clipboard-pictures")
+        await close()
+        var again: [Duration] = []
+        for _ in 0..<5 {
+            if let took = await open() { again.append(took.drawn) }
+            await close()
+        }
+        // A copy kept a moment after the history opened joins its list.
+        var joined = false
+        // The app's own way: a long text on the clipboard, made off the
+        // main thread, and the list told when it is kept.
+        if await open() != nil {
+            let late = "Kept a moment after the history opened \(Int.random(in: 1000...9999))"
+            let general = NSPasteboard.general
+            general.clearContents()
+            general.setString(late + "\n" + String(repeating: "a long copy, made off the main thread. ", count: 4_000), forType: .string)
+            context.clipboard.keep()
+            let atOnce = launcher.resultTitles.first == late
+            joined = await waitUntil(timeout: 3) { launcher.resultTitles.first == late } != nil
+            if atOnce { problems.append("a long text was kept on the main thread") }
+            if let item = real.search(late, limit: 1).first { seeded.append(item.id) }
+            general.clearContents()
+        }
+        await close()
+        if !joined { problems.append("a copy kept after the history opened did not join its list") }
+        guard !again.isEmpty else {
+            record(name, false, "✦C did not open the history a second time", nil)
+            return
+        }
+        #if DEBUG
+        let slack = 5.0
+        #else
+        let slack = 1.0
+        #endif
+        let held = [worst(asTIFF.map(\.held)), worst(asPNG.map(\.held)), worst(texts.map(\.held))].max() ?? .zero
+        if held.milliseconds > 16 * slack { problems.append("a copy held the main thread \(held.compact) (bound \(Int(16 * slack)) ms)") }
+        if median(back).milliseconds > 8 * slack { problems.append("a picture put back in \(median(back).compact) (bound \(Int(8 * slack)) ms)") }
+        if first.drawn.milliseconds > 30 * slack { problems.append("✦C drawn in \(first.drawn.compact) the first time (bound \(Int(30 * slack)) ms)") }
+        func line(_ times: [(held: Duration, whole: Duration)]) -> String {
+            "main thread \(median(times.map(\.held)).compact) (worst \(worst(times.map(\.held)).compact)), kept after \(median(times.map(\.whole)).compact)"
+        }
+        record(name, problems.isEmpty,
+               "a 2560×1600 picture copied as TIFF: \(line(asTIFF)); as PNG: \(line(asPNG)); a 1.6 MB text: \(line(texts))"
+                   + "; put back for ⌘V \(median(back).compact) (worst \(worst(back).compact))"
+                   + "; ✦C on 412 copies, 12 pictures first: drawn in \(first.drawn.compact) the first time, its pictures after \(first.pictures.compact)"
+                   + "; \(median(again).compact) after"
+                   + (problems.isEmpty ? "" : "; " + problems.joined(separator: "; ")),
+               first.drawn.milliseconds)
+    }
+
     /// Keep screenshots too: a new image in the watched folder joins the
     /// history and its words are found, read on this Mac; with Jev's
     /// folder switch off, nothing asks for the key (nothing sent).
@@ -16306,7 +16534,8 @@ final class SelfTest {
             return nil
         }
         let watcher = ImageFolderWatcher()
-        watcher.onImage = { url, date in history.keepImage(at: url, made: date, from: "Screenshots") }
+        // As the app does: read and stored off the main thread.
+        watcher.onImage = { url, date in history.keepImageLater(at: url, made: date, from: "Screenshots") }
         defer { watcher.stop() }
         guard watcher.watch(folder) else {
             record(name, false, "cannot watch the scratch folder", nil)

@@ -1481,8 +1481,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             clipboard.start()
             clipboard.imageKey = { [weak self] in self?.ai.decisionKey(for: .typeSafe) }
             imageFolder.onImage = { [weak self] url, date in
-                self?.clipboard.keepImage(at: url, made: date, from: FileManager.default.displayName(atPath: url.deletingLastPathComponent().path))
+                self?.clipboard.keepImageLater(at: url, made: date, from: FileManager.default.displayName(atPath: url.deletingLastPathComponent().path))
             }
+            clipboard.onKeptLater = { [weak self] in self?.launcher.clipKept() }
             if case .normal = mode {
                 clipboard.tagUntagged()
                 watchImageFolder()

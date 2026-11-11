@@ -83,37 +83,97 @@ final class ClipboardHistory {
         guard !PasteboardSnapshot.isBorrowing else { return }
         lastChangeCount = count
         guard isRecording else { return }
-        capture()
+        keep()
     }
 
-    /// Keeps what is on the clipboard now. Self-test hook too.
+    /// A copy that took time to keep is in the history (the launcher's
+    /// list takes it if it shows).
+    @ObservationIgnored var onKeptLater: (() -> Void)?
+    /// Self-test hook: the copies being made off the main thread.
+    @ObservationIgnored private(set) var keepingLater = 0
+
+    /// Keeps what is on the clipboard now. The clipboard is read here, on
+    /// the main thread; a picture (sized, converted to PNG, hashed) or a
+    /// long text (hashed, indexed) is made and stored off it: 100 ms for
+    /// a screen copied as TIFF, 40 ms for 1.6 MB of text, measured
+    /// 2026-11-11, during which no key was drawn. Its place in the
+    /// history is when it was copied, whatever was kept meanwhile.
+    /// Self-test hook too.
+    func keep() {
+        guard let store else { return }
+        let front = NSWorkspace.shared.frontmostApplication
+        switch Self.look(pasteboard, app: front?.bundleIdentifier, appName: front?.localizedName, excluded: Set(preferences.clipboardExcludedApps)) {
+        case nil:
+            return
+        case .item(let new):
+            keepNow(new)
+        case .later(let make):
+            let date = Date.now
+            // Clear History while it is made: not kept after it.
+            let clears = store.clears
+            keepingLater += 1
+            Task.detached(priority: .userInitiated) { [weak self] in
+                var added: (item: ClipboardStore.Item, isNew: Bool)?
+                if let new = make() {
+                    do {
+                        added = try store.add(new, at: date, ifClears: clears)
+                    } catch {
+                        Log.actions.error("\(error.localizedDescription, privacy: .public)")
+                    }
+                }
+                await self?.keptLater(added)
+            }
+        }
+    }
+
+    private func keptLater(_ added: (item: ClipboardStore.Item, isNew: Bool)?) {
+        keepingLater -= 1
+        guard let added else { return }
+        kept(added.item, isNew: added.isNew, onClipboard: false)
+        onKeptLater?()
+    }
+
+    /// Keeps what is on the clipboard now, all of it before it returns:
+    /// the self-test's hook.
     @discardableResult
     func capture() -> ClipboardStore.Item? {
-        guard let store else { return nil }
         let front = NSWorkspace.shared.frontmostApplication
         guard let new = Self.read(pasteboard, app: front?.bundleIdentifier, appName: front?.localizedName,
                                   excluded: Set(preferences.clipboardExcludedApps))
         else { return nil }
+        return keepNow(new)
+    }
+
+    @discardableResult
+    private func keepNow(_ new: ClipboardStore.NewItem) -> ClipboardStore.Item? {
+        guard let store else { return nil }
         do {
             let (item, isNew) = try store.add(new)
-            revision += 1
-            // Never what was copied, even in Debug: only its shape.
-            Log.trace("Clipboard: kept \(item.kind.rawValue), \(item.text.count) characters, from \(item.appName ?? "?")\(isNew ? "" : ", again")")
-            if isNew, item.kind == .image, let url = store.imageURL(item) {
-                if preferences.clipboardOCR { readText(in: url, id: item.id) }
-                if preferences.imageTagsClipboard { tag(url, id: item.id) }
-            }
-            // The same picture copied as its file: read now when the app
-            // put the picture itself beside its file. Never from the
-            // file here: nobody asked to see it, and macOS would ask for
-            // its folder in skil.li's name (`readText(inPictureFile:)`).
-            if item.ocr == nil, preferences.clipboardOCR, item.pictureFile != nil, let data = Self.pictureData(on: pasteboard) {
-                readText(inCopied: data, id: item.id)
-            }
+            kept(item, isNew: isNew, onClipboard: true)
             return item
         } catch {
             Log.actions.error("\(error.localizedDescription, privacy: .public)")
             return nil
+        }
+    }
+
+    /// A copy is in the history: its words read, Jev told, as Settings
+    /// say. `onClipboard`: the clipboard still holds this copy (kept at
+    /// once), so the picture an app put beside a file can be read there.
+    private func kept(_ item: ClipboardStore.Item, isNew: Bool, onClipboard: Bool) {
+        revision += 1
+        // Never what was copied, even in Debug: only its shape.
+        Log.trace("Clipboard: kept \(item.kind.rawValue), \(item.text.count) characters, from \(item.appName ?? "?")\(isNew ? "" : ", again")")
+        if isNew, item.kind == .image, let url = store?.imageURL(item) {
+            if preferences.clipboardOCR { readText(in: url, id: item.id) }
+            if preferences.imageTagsClipboard { tag(url, id: item.id) }
+        }
+        // The same picture copied as its file: read now when the app
+        // put the picture itself beside its file. Never from the
+        // file here: nobody asked to see it, and macOS would ask for
+        // its folder in skil.li's name (`readText(inPictureFile:)`).
+        if item.ocr == nil, preferences.clipboardOCR, onClipboard, item.pictureFile != nil, let data = Self.pictureData(on: pasteboard) {
+            readText(inCopied: data, id: item.id)
         }
     }
 
@@ -121,27 +181,62 @@ final class ClipboardHistory {
     /// too): kept as if copied when it was made, its words read on this Mac
     /// (Read text in images), Jev told only with Screenshots, by what they
     /// show.
-    /// Nil when it is not an image or already kept.
+    /// Nil when it is not an image or already kept. All of it before it
+    /// returns: the self-test's hook (`keepImageLater` is the app's).
     @discardableResult
     func keepImage(at url: URL, made date: Date, from source: String) -> ClipboardStore.Item? {
-        guard let store, preferences.clipboardHistory, let image = NSImage(contentsOf: url),
-              let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
-        let png = url.pathExtension.lowercased() == "png" ? (try? Data(contentsOf: url)) : rep.representation(using: .png, properties: [:])
-        guard let png, png.count <= 40_000_000 else { return nil }
-        let new = ClipboardStore.NewItem(kind: .image, text: "", imageData: png, size: "\(rep.pixelsWide)×\(rep.pixelsHigh)",
-                                         app: nil, appName: source, hash: Self.hash("image", png))
+        guard let store, preferences.clipboardHistory, let new = Self.picture(at: url, from: source) else { return nil }
         do {
-            let (item, isNew) = try store.add(new, at: date)
-            revision += 1
-            guard isNew, let kept = store.imageURL(item) else { return item }
-            Log.trace("Image folder: kept an image from \(source)")
-            if preferences.clipboardOCR { readText(in: kept, id: item.id) }
-            if preferences.imageTagsFolder { tag(kept, id: item.id) }
-            return item
+            return keptImage(try store.add(new, at: date), from: source)
         } catch {
             Log.actions.error("\(error.localizedDescription, privacy: .public)")
             return nil
         }
+    }
+
+    /// The same, the picture read, converted and stored off the main
+    /// thread (a screenshot is as heavy as a copied picture).
+    func keepImageLater(at url: URL, made date: Date, from source: String) {
+        guard let store, preferences.clipboardHistory else { return }
+        let clears = store.clears
+        keepingLater += 1
+        Task.detached(priority: .utility) { [weak self] in
+            var added: (item: ClipboardStore.Item, isNew: Bool)?
+            if let new = Self.picture(at: url, from: source) {
+                do {
+                    added = try store.add(new, at: date, ifClears: clears)
+                } catch {
+                    Log.actions.error("\(error.localizedDescription, privacy: .public)")
+                }
+            }
+            await self?.keptImageLater(added, from: source)
+        }
+    }
+
+    private func keptImageLater(_ added: (item: ClipboardStore.Item, isNew: Bool)?, from source: String) {
+        keepingLater -= 1
+        guard let added else { return }
+        keptImage(added, from: source)
+        onKeptLater?()
+    }
+
+    /// A picture's file as the history keeps it: PNG, its size in pixels.
+    nonisolated private static func picture(at url: URL, from source: String) -> ClipboardStore.NewItem? {
+        guard let image = NSImage(contentsOf: url), let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        let png = url.pathExtension.lowercased() == "png" ? (try? Data(contentsOf: url)) : rep.representation(using: .png, properties: [:])
+        guard let png, png.count <= 40_000_000 else { return nil }
+        return ClipboardStore.NewItem(kind: .image, text: "", imageData: png, size: "\(rep.pixelsWide)×\(rep.pixelsHigh)",
+                                      app: nil, appName: source, hash: hash("image", png))
+    }
+
+    @discardableResult
+    private func keptImage(_ added: (item: ClipboardStore.Item, isNew: Bool), from source: String) -> ClipboardStore.Item {
+        revision += 1
+        guard added.isNew, let kept = store?.imageURL(added.item) else { return added.item }
+        Log.trace("Image folder: kept an image from \(source)")
+        if preferences.clipboardOCR { readText(in: kept, id: added.item.id) }
+        if preferences.imageTagsFolder { tag(kept, id: added.item.id) }
+        return added.item
     }
 
     /// Images kept before tagging (or while there was no key): the newest
@@ -366,9 +461,10 @@ final class ClipboardHistory {
             } else {
                 guard let url = store?.imageURL(item), let data = try? Data(contentsOf: url) else { return false }
                 entry.setData(data, forType: .png)
-                if let tiff = NSImage(data: data)?.tiffRepresentation {
-                    entry.setData(tiff, forType: .tiff)
-                }
+                // The TIFF only if the app pasted into asks for it (most
+                // take the PNG): making it here was 30 ms before ⌘V.
+                let late = LateTIFF(file: url)
+                if entry.setDataProvider(late, forTypes: [.tiff]) { lateTIFF = late }
             }
         case .files:
             if plain {
@@ -381,6 +477,26 @@ final class ClipboardHistory {
         }
         pasteboard.clearContents()
         return urls.isEmpty ? pasteboard.writeObjects([entry]) : pasteboard.writeObjects(urls)
+    }
+
+    /// The picture last put on the clipboard, for the TIFF asked later.
+    @ObservationIgnored private var lateTIFF: LateTIFF?
+
+    /// A kept picture's TIFF, made from its PNG when an app asks the
+    /// clipboard for it. Not asked before skil.li quits: the clipboard
+    /// keeps the PNG alone.
+    private final class LateTIFF: NSObject, NSPasteboardItemDataProvider {
+        /// The kept picture's PNG file.
+        private let file: URL
+
+        init(file: URL) {
+            self.file = file
+        }
+
+        func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType) {
+            guard type == .tiff, let data = try? Data(contentsOf: file), let tiff = NSImage(data: data)?.tiffRepresentation else { return }
+            item.setData(tiff, forType: .tiff)
+        }
     }
 
     // MARK: - Paste in Sequence
@@ -423,20 +539,42 @@ final class ClipboardHistory {
     /// What is on the clipboard, as the history keeps it; nil for nothing
     /// worth keeping, secrets and excluded apps.
     static func read(_ pasteboard: NSPasteboard, app: String?, appName: String?, excluded: Set<String>) -> ClipboardStore.NewItem? {
+        switch look(pasteboard, app: app, appName: appName, excluded: excluded) {
+        case nil: nil
+        case .item(let new): new
+        case .later(let make): make()
+        }
+    }
+
+    /// What `look` read on the clipboard: a copy ready to keep, or one
+    /// whose making is heavy and can run on any thread (nil from it: not
+    /// worth keeping after all).
+    enum Looked {
+        case item(ClipboardStore.NewItem)
+        case later(@Sendable () -> ClipboardStore.NewItem?)
+    }
+
+    /// A text longer than this is hashed and stored off the main thread.
+    static let longText = 100_000
+
+    /// Reads the clipboard: only the pasteboard's own calls and what is
+    /// short. Nil for nothing worth keeping, secrets and excluded apps.
+    static func look(_ pasteboard: NSPasteboard, app: String?, appName: String?, excluded: Set<String>) -> Looked? {
         let types = (pasteboard.types ?? []).map(\.rawValue)
         guard ClipboardPolicy.shouldRecord(types: types, app: app, excluded: excluded) else { return nil }
 
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
             let paths = urls.map(\.path).joined(separator: "\n")
-            return ClipboardStore.NewItem(kind: .files, text: paths, app: app, appName: appName, hash: hash("files", Data(paths.utf8)))
+            return .item(ClipboardStore.NewItem(kind: .files, text: paths, app: app, appName: appName, hash: hash("files", Data(paths.utf8))))
         }
 
         let string = pasteboard.string(forType: .string)
         // Office apps put a picture of the cells after their text: text
         // first means text.
         let imageFirst = types.first.map(imageTypes.contains) ?? false
-        if let string, !string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !imageFirst {
-            guard string.utf8.count <= 5_000_000 else { return nil }
+        // Stops at the first character that is not a space: a long text is
+        // not copied whole to be trimmed.
+        if let string, string.unicodeScalars.contains(where: { !CharacterSet.whitespacesAndNewlines.contains($0) }), !imageFirst {
             var formats: [String: Data] = [:]
             var total = 0
             if let first = pasteboard.pasteboardItems?.first {
@@ -447,14 +585,25 @@ final class ClipboardHistory {
                     }
                 }
             }
-            return ClipboardStore.NewItem(kind: .text, text: string, formats: formats.isEmpty ? nil : formats,
-                                          app: app, appName: appName, hash: hash("text", Data(string.utf8)))
+            let kept = formats.isEmpty ? nil : formats
+            let make: @Sendable () -> ClipboardStore.NewItem? = {
+                guard string.utf8.count <= 5_000_000 else { return nil }
+                return ClipboardStore.NewItem(kind: .text, text: string, formats: kept, app: app, appName: appName, hash: hash("text", Data(string.utf8)))
+            }
+            // `utf16.count` costs nothing on a string the pasteboard gave.
+            return string.utf16.count > longText ? .later(make) : make().map(Looked.item)
         }
 
-        guard let image = pngData(from: pasteboard) else { return nil }
-        // A copied web image keeps its address: searchable too.
-        return ClipboardStore.NewItem(kind: .image, text: string ?? "", imageData: image.png, size: image.size,
-                                      app: app, appName: appName, hash: hash("image", image.png))
+        // The picture as it is there; what is made of it is heavy.
+        let png = pasteboard.data(forType: .png)
+        guard let data = png ?? pasteboard.data(forType: .tiff) ?? NSImage(pasteboard: pasteboard)?.tiffRepresentation,
+              data.count <= 40_000_000 else { return nil }
+        return .later {
+            guard let rep = NSBitmapImageRep(data: data), let png = png ?? rep.representation(using: .png, properties: [:]) else { return nil }
+            // A copied web image keeps its address: searchable too.
+            return ClipboardStore.NewItem(kind: .image, text: string ?? "", imageData: png, size: "\(rep.pixelsWide)×\(rep.pixelsHigh)",
+                                          app: app, appName: appName, hash: hash("image", png))
+        }
     }
 
     /// The clipboard's image as it is there, for Vision to read
@@ -470,18 +619,8 @@ final class ClipboardHistory {
         return data
     }
 
-    /// The clipboard's image as PNG, with its size in pixels.
-    private static func pngData(from pasteboard: NSPasteboard) -> (png: Data, size: String)? {
-        let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
-            ?? NSImage(pasteboard: pasteboard)?.tiffRepresentation
-        guard let data, data.count <= 40_000_000, let rep = NSBitmapImageRep(data: data) else { return nil }
-        let png = pasteboard.data(forType: .png) ?? rep.representation(using: .png, properties: [:])
-        guard let png else { return nil }
-        return (png, "\(rep.pixelsWide)×\(rep.pixelsHigh)")
-    }
-
     /// Same content, same hash, whoever copied it (the self-test too).
-    static func hash(_ kind: String, _ data: Data) -> String {
+    nonisolated static func hash(_ kind: String, _ data: Data) -> String {
         var hasher = SHA256()
         hasher.update(data: Data(kind.utf8))
         hasher.update(data: data)
