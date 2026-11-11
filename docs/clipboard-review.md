@@ -67,6 +67,11 @@ Then (docs/clipboard-long-copies.md): #15 a long copy shows whole in
 the preview, up to 200,000 characters, a word found far down marked and
 in view, a part picked anywhere.
 
+Then (docs/clipboard-paste-transforms.md): #10 ⌘K on a text copy
+pastes it another way, only the ways that change it (a color's other
+forms, a link without tracking, JSON pretty or minified, one line,
+trimmed, its case).
+
 ## Must (the history is behind the others here)
 
 | # | Gap | Proof | Others |
@@ -166,4 +171,4 @@ list, ↩ to pasted, copy to kept.
 3. #3 pins and #5 kind filter: one spec, they share the header.
 4. #7 actions per kind (open link, show file, save as snippet).
 5. ~~Speed budget lines + the three measurements~~: done.
-6. ~~#13, #14, #16~~, ~~#15~~: done. Then #8–#12.
+6. ~~#13, #14, #16~~, ~~#15~~, ~~#10~~: done. Then #8, #9, #11, #12.

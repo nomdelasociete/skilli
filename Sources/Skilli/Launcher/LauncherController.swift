@@ -135,6 +135,9 @@ final class LauncherController: NSObject {
     private var clipsEnded = true
     /// Pastes, pastes as plain text or copies a row, after the launcher hid.
     var onClip: ((ClipboardStore.Item, ClipboardHistory.Use) -> Void)?
+    /// A copy pasted another way (⌘K → Paste as RGB, as One Line…): the
+    /// text to paste in the app that was in front.
+    var onClipText: ((String) -> Void)?
     /// ⌘⌫ (or ⌘K → Forget) on a copy: gone at once, ⌘Z brings it back.
     var onDeleteClip: ((ClipboardStore.Item) -> Void)?
     /// ⌘K → Pin, Unpin on a copy: pinned or not, the copy as it is now.

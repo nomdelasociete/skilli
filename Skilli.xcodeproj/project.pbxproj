@@ -245,6 +245,7 @@
 		A1E94CD8D13F41FA1063E10C /* AIAccountsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB63022DBB47B70E6F914593 /* AIAccountsPane.swift */; };
 		A246A96870E4A98EC51E2A1E /* TargetHighlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = E09DD4F64D0B4785BC7D1478 /* TargetHighlight.swift */; };
 		A2D21504ED0D1CBDAAA758E5 /* AppleShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFFAE2DCDD4BBDEC7BFAD584 /* AppleShortcuts.swift */; };
+		A3294AE5CC89BF7F186F145E /* ClipboardTransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3CA9C3480093DCA5228BCFF /* ClipboardTransform.swift */; };
 		A3298F585D31A726CB08A8B8 /* ActionRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB6EB38FA2E582FBA2D4B35C /* ActionRunner.swift */; };
 		A5F06C4A1DBB70A6B8E8B0AF /* AppUninstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A6D55308FEC6AE23E9689ED /* AppUninstaller.swift */; };
 		A6538E60D90762C43F069F45 /* ControlTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77684E985793CEC22D2C04A4 /* ControlTarget.swift */; };
@@ -766,6 +767,7 @@
 		D08402CB2DF9DA8B27C83D0C /* EnglishTyping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishTyping.swift; sourceTree = "<group>"; };
 		D0DF5D9C8356B74689D65260 /* FuzzyMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzyMatcher.swift; sourceTree = "<group>"; };
 		D216300F19E2A62AEA663F2E /* GitHubWorkflows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubWorkflows.swift; sourceTree = "<group>"; };
+		D3CA9C3480093DCA5228BCFF /* ClipboardTransform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTransform.swift; sourceTree = "<group>"; };
 		D5CF7732133464D29D4CE484 /* MicrophoneUse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneUse.swift; sourceTree = "<group>"; };
 		D691F5FFBC7BB5E3C283D27B /* LinkedAppFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedAppFile.swift; sourceTree = "<group>"; };
 		D7FBD03AE6A56783BEC47D00 /* RecorderSyncProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecorderSyncProbe.swift; sourceTree = "<group>"; };
@@ -883,6 +885,7 @@
 				21ABD4AD1E7BFB291A83F013 /* Chord.swift */,
 				32D06FAB8A11A15CD6F8EFE8 /* ClipboardMeaning.swift */,
 				25CAA8284FAB4B0E13B42626 /* ClipboardRules.swift */,
+				D3CA9C3480093DCA5228BCFF /* ClipboardTransform.swift */,
 				9DB39DA9DAA2EC70D2ABAF25 /* CodexExec.swift */,
 				A77341A5FCA38BCEA79D07DB /* CommandLink.swift */,
 				8C3814650F4988D15D917E44 /* ContactCard.swift */,
@@ -1669,6 +1672,7 @@
 				7BAC983EB96B47FE6D48611B /* Chord.swift in Sources */,
 				82492127EE6475FE93175810 /* ClipboardMeaning.swift in Sources */,
 				CF69A58D5DE3C7E6193DE53E /* ClipboardRules.swift in Sources */,
+				A3294AE5CC89BF7F186F145E /* ClipboardTransform.swift in Sources */,
 				53598371466634A543743CA2 /* CodexExec.swift in Sources */,
 				2E6CFB6A7AC16511C7CD75EB /* CommandLink.swift in Sources */,
 				222AFB10FE0D40E3EAF3CFAB /* ContactCard.swift in Sources */,

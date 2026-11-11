@@ -1171,6 +1171,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.selection.press("v", flags: .maskCommand)
             }
         }
+        launcher.onClipText = { [weak self] text in
+            guard let self else { return }
+            guard self.clipboard.write(text: text) else {
+                self.aiActions.notify("macOS did not take this text on the clipboard: try it again with ✦C.", caller: "Clipboard", run: nil)
+                return
+            }
+            // Never the text: only that it was pasted another way.
+            Log.trace("Clipboard: a copy pasted another way, \(text.count) characters")
+            // Let the app that was in front get its focus back first.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                self.selection.press("v", flags: .maskCommand)
+            }
+        }
         launcher.onQuitProcess = { [weak self] group, force in
             guard let self else { return }
             Task {

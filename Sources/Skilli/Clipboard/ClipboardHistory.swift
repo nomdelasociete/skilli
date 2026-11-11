@@ -514,6 +514,13 @@ final class ClipboardHistory {
         return urls.isEmpty ? pasteboard.writeObjects([entry]) : pasteboard.writeObjects(urls)
     }
 
+    /// A text put on the clipboard for ⌘V: a copy pasted another way
+    /// (`ClipboardTransform`). It joins the history as any copy.
+    func write(text: String) -> Bool {
+        pasteboard.clearContents()
+        return pasteboard.setString(text, forType: .string)
+    }
+
     /// The picture last put on the clipboard, for the TIFF asked later.
     @ObservationIgnored private var lateTIFF: LateTIFF?
 
