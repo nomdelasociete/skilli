@@ -15933,6 +15933,15 @@ final class SelfTest {
                 _ = try? store.add(.init(kind: .text, text: "Épinglé ancien", hash: "selftest-pin"))
                 if store.pinned().first?.copies != 2 { missed.append("copied again: \(store.pinned().first?.copies ?? 0) copies, pinned \(store.pinned().count)") }
                 if let forgotten = try? store.forget(keep.id), store.pinned().isEmpty, (try? store.restore(forgotten))?.isPinned == true {} else { missed.append("not pinned after forget and restore") }
+                // Forgotten, copied again, then ⌘Z: the new row, pinned.
+                if let id = store.pinned().first?.id, let forgotten = try? store.forget(id) {
+                    _ = try? store.add(.init(kind: .text, text: "Épinglé ancien", hash: "selftest-pin"))
+                    if (try? store.restore(forgotten))?.isPinned != true || store.pinned().count != 1 || store.search("pingl").count != 1 {
+                        missed.append("copied again before ⌘Z: pinned \(store.pinned().count), rows \(store.search("pingl").count)")
+                    }
+                } else {
+                    missed.append("nothing to forget a second time")
+                }
                 if let now = store.pinned().first { _ = try? store.setPinned(false, for: now.id) }
                 if !store.pinned().isEmpty { missed.append("still pinned after Unpin") }
             } else {
