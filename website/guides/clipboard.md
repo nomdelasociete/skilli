@@ -38,6 +38,10 @@ images, files, and your screenshots too.
   copies are. *Unpin* puts it back at its date.
 - **⌘K** also does what the copy is: *Open in Browser* for a link, *New
   Email* for an address, *Open* and *Show in Finder* for a file.
+- **One kind at a time**: **⌘K** on a link → *Show Only Links* (on an
+  image, *Show Only Images*, and so on), or *Show Only from* the app it
+  came from. What you type still searches among them. **⌫** in the empty
+  field shows everything again.
 - **⌘⌫** forgets one. Changed your mind? **⌘Z** brings it back for 10
   seconds.
 

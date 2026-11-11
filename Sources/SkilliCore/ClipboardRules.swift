@@ -205,6 +205,48 @@ public enum ClipboardDay {
     }
 }
 
+/// What a copy is, to show one kind at a time in the history (⌘K →
+/// Show Only Links: docs/clipboard-pins-filter-actions.md). The same
+/// reading as the preview's (`CopiedValue`), kept with the copy.
+public enum ClipboardKind: String, CaseIterable, Sendable {
+    case image, file, link, color, email, phone, address, code, text
+
+    /// "Show Only Links", "Clipboard · Links".
+    public var plural: String {
+        switch self {
+        case .image: "Images"
+        case .file: "Files"
+        case .link: "Links"
+        case .color: "Colors"
+        case .email: "Email Addresses"
+        case .phone: "Phone Numbers"
+        case .address: "Addresses"
+        case .code: "Code"
+        case .text: "Text"
+        }
+    }
+
+    /// `stored`: how the history keeps it ("text", "image", "files": the
+    /// files' paths in `text`, one a line). A picture copied as its file
+    /// is an image, as everywhere else in the history.
+    public static func of(stored: String, text: String) -> ClipboardKind {
+        switch stored {
+        case "image": return .image
+        case "files": return CopiedPicture.path(in: text) != nil ? .image : .file
+        default:
+            switch CopiedValue.read(text) {
+            case .text: return .text
+            case .link: return .link
+            case .color: return .color
+            case .email: return .email
+            case .phone: return .phone
+            case .address: return .address
+            case .code: return .code
+            }
+        }
+    }
+}
+
 /// A copy that is one file, and that file a picture (a screenshot copied
 /// in Finder or by a capture app): read and offered as an image copied as
 /// an image is (docs/clipboard-text-selection.md).

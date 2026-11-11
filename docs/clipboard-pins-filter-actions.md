@@ -9,8 +9,7 @@ Three of the gaps in `docs/clipboard-review.md` (#3, #5, #7):
 - A copied link cannot be opened, a copied file cannot be shown: ⌘K on
   a copy pastes, copies and forgets, whatever the copy is.
 
-Built in two steps: pins and actions first (this document's first two
-parts), the kind filter after (its third part, not built yet).
+Built in two steps: pins and actions first, then one kind at a time.
 
 ## Moment
 
@@ -78,22 +77,35 @@ it): never while the list is drawn.
 Not done here: Save as Snippet (the snippet editor takes no text from
 outside yet), Quick Look large, drag out, a phone number's call.
 
-## One kind at a time (not built yet)
+## One kind at a time
 
-- `items.value`: what the copy is, as the preview reads it: image (a
-  picture's file too), file, link, color, email, phone, address, code,
-  text. Written when copied; older rows read once, off the main thread.
-- ⌘K → *Show Only Links* on a link, *Show Only from Safari* on any
-  copy with an app; the field's chip says it ("Clipboard · Links");
-  ⌘K → *Show All*, or ⌫ in the empty field.
-- The filter and the words typed apply together; ⇥ by meaning ignores
-  the filter.
+- `items.value`: what the copy is (`ClipboardKind`), as the preview
+  reads it: image (a picture's file too), file, link, color, email,
+  phone, address, code, text. Written when copied; older rows read
+  once at launch, off the main thread (`fillKinds`): until then Show
+  Only misses them.
+- ⌘K → *Show Only Links* on a link (the kind of the row), *Show Only
+  from Safari* on a copy that came from an app; the field's chip says
+  it ("Clipboard · Links"); ⌘K → *Show All*, or ⌫ in the empty field,
+  shows the whole history again, still open. Leaving the history
+  forgets the filter.
+- The filter and the words typed apply together, newest first, the
+  older pages too. Narrowed, the pinned copies are at their date.
+- ⇥ by meaning ignores the filter.
+- The cost of this path: a kind can be asked for only from a row of
+  that kind in sight. No list of kinds, no key: to add if this is not
+  enough.
 
 ## Checks
 
 - Self-test (`clipboard`): a pinned copy survives a prune that removes
   its neighbours, comes back pinned after ⌘⌫ ⌘Z, is first in an empty
   search and at its date in a search by words.
+- Unit: what a copy is (`ClipboardKind.of`).
+- Self-test (`clipboard`): links alone, addresses alone, one app's
+  copies, with a word and paged; an old file's copies read once.
+- Self-test (`previews`): ⌘K → Show Only Links by keys, the chip, the
+  list, Show All offered, ⌫ in the empty field.
 - Self-test (`previews`): ⌘K lists Pin on a copy and Unpin once pinned,
   the row shows under "Pinned" with its pin; Open in Browser on a link,
   Show in Finder on a file.

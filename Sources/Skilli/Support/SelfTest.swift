@@ -15942,8 +15942,31 @@ final class SelfTest {
             pins = missed.isEmpty ? "true" : "missed \(missed)"
         }
 
-        record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true" && pins == "true",
-               "a pinned copy kept by the pass, first with no words, pinned after forget and restore: \(pins); found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
+        // One kind at a time, or one app's copies, with words or without.
+        var kinds = "true"
+        do {
+            var missed: [String] = []
+            let seeds: [(String, String, String?)] = [("https://example.com/okapi-one", "selftest-kind-1", "com.apple.Safari"),
+                                                      ("okapi notes, plain", "selftest-kind-2", "com.apple.Notes"),
+                                                      ("https://example.org/okapi-two", "selftest-kind-3", "com.apple.Notes"),
+                                                      ("okapi@example.com", "selftest-kind-4", "com.apple.Safari")]
+            for (text, hash, app) in seeds { _ = try? store.add(.init(kind: .text, text: text, app: app, appName: app?.components(separatedBy: ".").last, hash: hash)) }
+            let links = store.search("okapi", only: .kind(.link)).map(\.text)
+            if links != ["https://example.org/okapi-two", "https://example.com/okapi-one"] { missed.append("links with a word: \(links)") }
+            let allLinks = store.search("", only: .kind(.link))
+            if allLinks.count < 2 || allLinks.contains(where: { $0.what != .link }) { missed.append("links, no words: \(allLinks.map(\.text))") }
+            let mails = store.search("okapi", only: .kind(.email)).map(\.text)
+            if mails != ["okapi@example.com"] { missed.append("addresses: \(mails)") }
+            let fromSafari = store.search("okapi", only: .app(id: "com.apple.Safari", name: "Safari")).map(\.text)
+            if fromSafari != ["okapi@example.com", "https://example.com/okapi-one"] { missed.append("from Safari: \(fromSafari)") }
+            let older = store.search("okapi", before: store.search("okapi", only: .kind(.link)).first?.copiedAt, only: .kind(.link)).map(\.text)
+            if older != ["https://example.com/okapi-one"] { missed.append("the next page of links: \(older)") }
+            for item in store.search("okapi") { try? store.delete(item.id) }
+            kinds = missed.isEmpty ? "true" : "missed \(missed)"
+        }
+
+        record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true" && pins == "true" && kinds == "true",
+               "links alone, addresses alone, one app's copies, with a word and paged: \(kinds); a pinned copy kept by the pass, first with no words, pinned after forget and restore: \(pins); found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
                ocrMs)
     }
 
@@ -15969,10 +15992,15 @@ final class SelfTest {
         // list, and the index made for inside words holds them. Asked
         // before the copy is made again, which would index it anyway.
         let insideWords = store.findsInsideWords && store.search("cienne").first?.text == "ancienne copie"
+        // What an old copy is was never kept: read once, then Show Only
+        // finds it.
+        let unreadKind = store.search("").first?.value == nil && store.search("", only: .kind(.text)).isEmpty
+        store.fillKinds()
+        let kindRead = unreadKind && store.search("", only: .kind(.text)).first?.text == "ancienne copie" && store.search("", only: .kind(.link)).isEmpty
         _ = try? store.add(.init(kind: .text, text: "ancienne copie", hash: "old-hash"))
         let after = store.search("").first?.copies
-        record(name, before == 1 && after == 2 && insideWords,
-               "copies before: \(before.map(String.init) ?? "nil"), after copying again: \(after.map(String.init) ?? "nil"), found by “cienne”: \(insideWords)", nil)
+        record(name, before == 1 && after == 2 && insideWords && kindRead,
+               "copies before: \(before.map(String.init) ?? "nil"), after copying again: \(after.map(String.init) ?? "nil"), found by “cienne”: \(insideWords); what it is read once, then shown alone: \(kindRead)", nil)
     }
 
     /// Copies a person would look for, among 25 others, found from how they
@@ -16926,6 +16954,50 @@ final class SelfTest {
                 problems.append("the history did not open again for a pin")
             }
             for word in ["lilas", "zebracross", "quagga"] { for item in store.search(word) { try? store.delete(item.id) } }
+
+            // ⌘K → Show Only Links: the chip says it, the list holds links
+            // alone, the words typed still narrow it; ⌫ in the empty field
+            // shows all again, the history still open.
+            for (text, hash) in [("https://example.com/zebrafinch", "selftest-only-1"), ("zebra notes, plain", "selftest-only-2"),
+                                 ("https://example.org/zebracrossing", "selftest-only-3")] {
+                _ = try? store.add(.init(kind: .text, text: text, app: "com.apple.Notes", appName: "Notes", hash: hash))
+            }
+            if await openHistory() {
+                for letter in "zebracross" { await pressKey(letter) }
+                _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 1 }
+                await pressKey("k", flags: .maskCommand)
+                _ = await waitUntil(timeout: 1) { !launcher.shownActions.isEmpty }
+                let offered = launcher.shownActions.map(\.title)
+                if !offered.contains("Show Only Links") || !offered.contains("Show Only from Notes") { problems.append("⌘K on a link from Notes: \(offered)") }
+                for letter in "links" { await pressKey(letter) }
+                if await waitUntil(timeout: 1, { launcher.shownActions.first?.title == "Show Only Links" }) == nil { problems.append("“links” in ⌘K: \(launcher.shownActions.map(\.title))") }
+                await pressKey(nil, code: CGKeyCode(kVK_Return))
+                if await waitUntil(timeout: 1, { launcher.chipTitle == "Clipboard · Links" && launcher.isInClipboard }) == nil { problems.append("the chip says “\(launcher.chipTitle)” after Show Only Links") }
+                for _ in "cross" { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+                if await waitUntil(timeout: 2, { launcher.resultTitles == ["https://example.org/zebracrossing", "https://example.com/zebrafinch"] }) == nil {
+                    problems.append("links alone for “zebra”: \(launcher.resultTitles.prefix(4))")
+                }
+                await captureLauncherBothWays(as: "launcher-clipboard-only-links")
+                await pressKey("k", flags: .maskCommand)
+                _ = await waitUntil(timeout: 1) { !launcher.shownActions.isEmpty }
+                let narrowed = launcher.shownActions.map(\.title)
+                if !narrowed.contains("Show All") || narrowed.contains("Show Only Links") { problems.append("⌘K once narrowed: \(narrowed)") }
+                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                await pause(150)
+                for _ in "zebra" { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
+                await pause(200)
+                if launcher.chipTitle != "Clipboard · Links" { problems.append("emptying the field left the filter (“\(launcher.chipTitle)”)") }
+                await pressKey(nil, code: CGKeyCode(kVK_Delete))
+                if await waitUntil(timeout: 1, { launcher.chipTitle == "Clipboard" && launcher.isInClipboard }) == nil {
+                    problems.append("⌫ in the empty field: chip “\(launcher.chipTitle)”, history open \(launcher.isInClipboard)")
+                }
+                for letter in "zebra" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { launcher.shownRowCount == 3 }) == nil { problems.append("“zebra” with all shown again: \(launcher.shownRowCount) rows") }
+                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+            } else {
+                problems.append("the history did not open again for one kind")
+            }
+            for item in store.search("zebra") { try? store.delete(item.id) }
 
             // Other words on the same copy: the preview goes to where the
             // new ones are, far down a long text.
