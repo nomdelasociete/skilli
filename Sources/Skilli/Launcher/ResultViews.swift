@@ -121,6 +121,27 @@ final class ResultCellView: NSTableCellView {
         layoutLabels()
     }
 
+    /// Selected with others in the clipboard history: its place in the
+    /// order they paste (1 is the oldest), on a filled disc at the right
+    /// edge. Nil: not selected.
+    private var orderBadge: PlaceBadge?
+    private(set) var order: Int?
+
+    func setOrder(inSelection order: Int?) {
+        guard order != self.order else { return }
+        self.order = order
+        if let order {
+            let badge = orderBadge ?? PlaceBadge()
+            if orderBadge == nil {
+                addSubview(badge)
+                orderBadge = badge
+            }
+            badge.number = order
+        }
+        orderBadge?.isHidden = order == nil
+        layoutLabels()
+    }
+
     func setMaybe(_ maybe: Bool) {
         guard maybe != isMaybe else { return }
         isMaybe = maybe
@@ -191,6 +212,11 @@ final class ResultCellView: NSTableCellView {
     private func layoutLabels() {
         var right = bounds.width - 24
         var titleEnd = bounds.width - 16
+        if let orderBadge, order != nil {
+            orderBadge.frame.origin = NSPoint(x: right - orderBadge.frame.width, y: ((bounds.height - orderBadge.frame.height) / 2).rounded())
+            right = orderBadge.frame.minX - 10
+            titleEnd = right
+        }
         if let trailingCap, trailingText != nil {
             trailingCap.frame.origin = NSPoint(x: right - trailingCap.frame.width, y: (bounds.height - trailingCap.frame.height) / 2)
             right = trailingCap.frame.minX - 12
@@ -231,5 +257,40 @@ final class ResultCellView: NSTableCellView {
     override var backgroundStyle: NSView.BackgroundStyle {
         get { .normal }
         set {}
+    }
+}
+
+/// A selected copy's place among the selected: a number on the accent
+/// color's disc.
+final class PlaceBadge: NSView {
+    var number = 1 {
+        didSet {
+            guard number != oldValue else { return }
+            setAccessibilityLabel("Selected, number \(number)")
+            needsDisplay = true
+        }
+    }
+
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: 22, height: 22))
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityLabel("Selected, number 1")
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.controlAccentColor.setFill()
+        NSBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1)).fill()
+        let text = NSAttributedString(string: "\(number)", attributes: [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: number > 9 ? 10 : 12, weight: .semibold),
+            .foregroundColor: NSColor.white
+        ])
+        let size = text.size()
+        text.draw(at: NSPoint(x: ((bounds.width - size.width) / 2).rounded(), y: ((bounds.height - size.height) / 2).rounded()))
     }
 }

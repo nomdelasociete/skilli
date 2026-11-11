@@ -1178,6 +1178,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.selection.press("v", flags: .maskCommand)
             }
         }
+        launcher.onClips = { [weak self] paste, use in
+            guard let self else { return }
+            let (written, gone) = self.clipboard.write(paste, plain: use == .pastePlain)
+            var total = 0
+            if case .files(let paths) = paste { total = paths.count }
+            let line = ClipboardFiles.line(gone: gone, of: total, done: use == .copy ? "copied" : "pasted")
+            guard written else {
+                self.aiActions.notify(line ?? "macOS did not take these copies on the clipboard: try again with ✦C.", caller: "Clipboard", run: nil)
+                return
+            }
+            // Never what was copied: only how much.
+            Log.trace("Clipboard: several copies used as one, \(use)")
+            if let line { self.aiActions.notify(line, caller: "Clipboard", run: nil, seconds: 4) }
+            guard use != .copy else { return }
+            // The launcher never takes the front: the app in front now
+            // is the one the paste is for.
+            let target = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                guard !self.launcher.isVisible, NSWorkspace.shared.frontmostApplication?.processIdentifier == target else {
+                    self.aiActions.notify("The copies are on the clipboard: ⌘V pastes them.", caller: "Clipboard", run: nil, seconds: 3)
+                    return
+                }
+                self.selection.press("v", flags: .maskCommand)
+            }
+        }
         launcher.onClipText = { [weak self] text in
             guard let self else { return }
             guard self.clipboard.write(text: text) else {
