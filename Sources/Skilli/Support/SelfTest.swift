@@ -17402,9 +17402,16 @@ final class SelfTest {
                         if await waitUntil(timeout: 3, { settings.isVisible && settings.pane == .snippets && settings.sheetShown }) == nil {
                             problems.append("Save as Snippet… did not open the snippet editor (Settings open \(settings.isVisible), sheet \(settings.sheetShown))")
                         } else {
-                            func fields(_ text: String) -> Int { Self.axElements(roles: [kAXTextAreaRole, kAXTextFieldRole], where: { $0 == text }).count }
-                            if fields("Bien cordialement,") != 1 || fields(signature) != 1 {
-                                problems.append("the editor has \(fields("Bien cordialement,")) field with the first line as a name, \(fields(signature)) with the copy's whole text")
+                            // In the editor's sheet only, each field by its
+                            // kind: the name's one line, the text's area.
+                            func fields(_ text: String, _ roles: [String] = [kAXTextAreaRole, kAXTextFieldRole]) -> Int {
+                                guard let sheet = Self.axElements(role: kAXSheetRole).first else { return 0 }
+                                return Self.axElements(roles: roles, under: sheet, where: { $0 == text }).count
+                            }
+                            let named = fields("Bien cordialement,", [kAXTextFieldRole])
+                            let texted = fields(signature, [kAXTextAreaRole])
+                            if named != 1 || texted != 1 {
+                                problems.append("the editor has \(named) name field with the first line, \(texted) text area with the copy's whole text")
                             }
                             await captureSettingsBothWays(as: "settings-snippet-from-copy")
                             /// esc in the editor: its Cancel. False when the
