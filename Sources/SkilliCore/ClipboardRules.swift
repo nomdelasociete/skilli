@@ -310,15 +310,20 @@ public enum ClipboardPolicy {
 /// Paste in Sequence: each run pastes the next older copy, the newest
 /// first, from the history as it was when the sequence began. A pause of
 /// 30 s, or anything copied after skil.li's own paste, starts again from
-/// the newest.
+/// the newest. Begun on copies selected in the history (`begin`), it
+/// goes through those instead, in the order given (the order copied),
+/// under the same two rules.
 public struct PasteSequence: Sendable {
     /// How long a sequence waits for the next run.
     public static let pause: TimeInterval = 30
     /// How many copies one sequence goes through.
     public static let length = 50
 
-    /// The copies in order, newest first, as the sequence began.
+    /// The copies in the order they paste, as the sequence began: newest
+    /// first, or the selected ones as given.
     public private(set) var ids: [Int64] = []
+    /// The sequence under way goes through copies the user selected.
+    public private(set) var chosen = false
     /// The one pasted last; -1 before the first.
     public private(set) var position = -1
     private var last: Date?
@@ -336,6 +341,7 @@ public struct PasteSequence: Sendable {
         } else {
             ids = Array(newest().prefix(Self.length))
             position = 0
+            chosen = false
             self.changeCount = nil
         }
         last = now
@@ -345,6 +351,24 @@ public struct PasteSequence: Sendable {
             return nil
         }
         return ids[position]
+    }
+
+    /// A sequence on the copies selected in the history, in the order
+    /// they paste: the first one now, each `next` the one after. Nil for
+    /// none.
+    public mutating func begin(with ids: [Int64], now: Date) -> Int64? {
+        self.ids = Array(ids.prefix(Self.length))
+        position = 0
+        chosen = true
+        last = now
+        changeCount = nil
+        return self.ids.first
+    }
+
+    /// Said past the last copy of the sequence.
+    public var end: String {
+        guard chosen else { return "That was the oldest copy. Again starts from the newest." }
+        return ids.count == 1 ? "That was the only copy selected." : "That was the last of the \(ids.count) selected."
     }
 
     /// The clipboard's change count once skil.li put the copy on it: a
@@ -554,7 +578,7 @@ public enum ClipboardSelection {
     }
 
     /// Said when the selection makes no single paste.
-    public static let noSinglePaste = "These copies do not make one paste: only texts together, or files together."
+    public static let noSinglePaste = "These copies do not make one paste: only texts together, or files together. ⌘K → Paste in Sequence pastes them one key each."
 
     /// The chip beside the search field: "Clipboard · 3 selected", after
     /// the filter when there is one ("Clipboard · Links · 3 selected").

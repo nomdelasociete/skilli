@@ -596,8 +596,23 @@ final class ClipboardHistory {
             sequenceItems = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
             return items.map(\.id)
         }
+        return put(id)
+    }
+
+    /// Paste in Sequence on the copies selected in the history, in the
+    /// order they paste (the order copied): the first one put on the
+    /// clipboard for ⌘V, each Paste in Sequence after it the next. Nil
+    /// once it is there; else why nothing is, in one line.
+    func putFirstInSequence(of items: [ClipboardStore.Item], now: Date = .now) -> String? {
+        guard preferences.clipboardHistory, store != nil else { return "Clipboard History is off: turn it on in Settings → Clipboard." }
+        sequenceItems = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return put(sequence.begin(with: items.map(\.id), now: now))
+    }
+
+    /// The sequence's copy on the clipboard; nil once it is there.
+    private func put(_ id: Int64?) -> String? {
         guard let id, let item = sequenceItems[id] else {
-            return sequenceItems.isEmpty ? "Nothing copied yet." : "That was the oldest copy. Again starts from the newest."
+            return sequenceItems.isEmpty ? "Nothing copied yet." : sequence.end
         }
         guard write(item, plain: false) else {
             let files = files(of: item)
@@ -605,7 +620,7 @@ final class ClipboardHistory {
         }
         // Whatever changes the clipboard after this is the user's own copy.
         sequence.wrote(changeCount: pasteboard.changeCount)
-        Log.trace("Paste in Sequence: copy \(sequence.position + 1) of \(sequence.ids.count), \(item.kind.rawValue)")
+        Log.trace("Paste in Sequence: copy \(sequence.position + 1) of \(sequence.ids.count)\(sequence.chosen ? " selected" : ""), \(item.kind.rawValue)")
         return nil
     }
 

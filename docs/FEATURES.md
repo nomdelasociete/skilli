@@ -265,7 +265,9 @@ Everything you copy, and your screenshots, ready to paste again.
 - **Several copies at once**: ⇧↓ or ⇧↑ selects the copy and moves on
   (⌘K → Select for one further away); each shows its place in the order
   copied. ↩ pastes them all as one, a line each, oldest first (files:
-  all the files); ⌘↩ copies that instead. esc lets the selection go.
+  all the files); ⌘↩ copies that instead. ⌘K → Paste in Sequence pastes
+  the oldest now and the next at each Paste in Sequence (✦K V): any
+  kinds, one per field. esc lets the selection go.
 - **Saved as a snippet**: ⌘K → Save as Snippet… on a text copy (up to
   20,000 characters) opens the snippet editor with its text, a name and
   a keyword to give.
@@ -286,7 +288,8 @@ Everything you copy, and your screenshots, ready to paste again.
   swatch with Hex, RGB, HSL, an image with what SI sees and its words, a
   file's thumbnail, an email, phone or address, code, long text.
 - **Paste in Sequence** (✦K V): your last copies one after another, a key
-  each, newest first.
+  each, newest first. Started on copies selected in the history (⌘K):
+  those, in the order copied.
 - **Paste Latest Screenshot**: your last screenshot in the app in front.
 - Passwords marked secret by password managers are never kept. Nor a
   copy that is a key or a token by its shape (a GitHub, GitLab, Stripe,

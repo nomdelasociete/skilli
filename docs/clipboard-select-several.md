@@ -1,9 +1,9 @@
 # Clipboard History: several copies at once, in the order copied
 
-**Built in two steps.** Done: selecting, ↩ and ⌘↩ on a selection.
-To come: Paste in Sequence on a selection (its section below is still
-a proposal). Two gaps of `docs/clipboard-review.md`, taken together
-because one idea answers both:
+**Built, in two steps**: selecting, ↩ and ⌘↩ on a selection; then
+Paste in Sequence on a selection. Two gaps of
+`docs/clipboard-review.md`, taken together because one idea answers
+both:
 
 - **#8** Paste in Sequence goes newest first: copy A, B, C, then three
   keys paste C, B, A. Collecting in one place to paste in another wants
@@ -75,7 +75,7 @@ pasted in the order it was copied, all at once (↩) or one key each
 |---|---|
 | Texts (links, colors, addresses, code: all text) | One text, a line each, in the order copied. Plain: the fonts and colors a copy came with are not kept. |
 | Files | All the files, as one copy of several files (the ones still there: `docs/clipboard-missing-files.md`). |
-| Texts and files together, or any image | Nothing: "These copies do not make one paste: only texts together, or files together." Once Paste in Sequence takes a selection, the line will point to it. |
+| Texts and files together, or any image | Nothing: "These copies do not make one paste: only texts together, or files together. ⌘K → Paste in Sequence pastes them one key each." |
 
 ⇧↩ pastes the same as ↩ for texts, and the paths for files.
 
@@ -84,8 +84,6 @@ comma); an image's text standing for the image.
 
 ## Paste in Sequence on a selection: one key each
 
-Not built yet.
-
 - ⌘K → *Paste in Sequence* with a selection: the launcher closes, the
   oldest selected copy is pasted. Each Paste in Sequence after it
   pastes the next one, as copied: A, B, C.
@@ -93,6 +91,11 @@ Not built yet.
   the user's own, and it is over. Past the last: "That was the last of
   the 3 selected." The next Paste in Sequence is today's again (the
   newest copy, then older).
+- The app in front changed before the first paste, or the launcher is
+  still up: nothing is pasted, a line says the first copy is on the
+  clipboard (⌘V pastes it, Paste in Sequence the next).
+- `PasteSequence.begin(with:now:)` in SkilliCore;
+  `ClipboardHistory.putFirstInSequence(of:)`.
 - Images and mixed kinds are fine here: each is its own paste.
 - With nothing selected, Paste in Sequence does not change: newest
   first. Nobody's habit breaks.
@@ -142,14 +145,16 @@ selection.
 ## Checks
 
 - Unit: the order copied whatever the order selected; what makes one
-  paste (texts, files, neither); the chip. To come with the second
-  step: the sequence forward from given ids, its end, its 30 s.
+  paste (texts, files, neither); the chip; the sequence forward from
+  given ids, its end, its 30 s, a copy of the user's own in between.
 - Self-test (`previews`): ⇧↓ twice selects two rows, their places, the
   chip and the footer say so; ⌘K → Select adds the third; ↩ pastes the
   three in the app in front, a line each, oldest first; opened again,
   nothing is selected; esc lets a selection go before it closes the
-  history. To come: ⌘K → Paste in Sequence, then the command twice
-  more, pastes A, B, C.
+  history; ⌘K → Paste in Sequence on three selected, then ✦K V twice,
+  pastes one, two, three. Without keys (`clipboard`): two selected
+  paste in the order copied, then "the last of the 2 selected", then
+  the newest again.
 - Captures of the selected rows, light and dark, looked at.
 
 ## Questions (my answer first; built with these answers, 2026-11-11)

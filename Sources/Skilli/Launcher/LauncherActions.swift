@@ -402,6 +402,10 @@ extension LauncherController {
             let select = LauncherAction(title: chosen ? "Deselect" : "Select", symbol: chosen ? "circle" : "checkmark.circle") { [weak self] in
                 self?.toggleChosenClip()
             }
+            // The selected ones a key each, the oldest now: any kinds.
+            let sequence = chosenClipCount == 0 ? [] : [LauncherAction(title: "Paste in Sequence", symbol: "list.number") { [weak self] in
+                self?.pasteChosenClipsInSequence()
+            }]
             // One kind at a time, or one app's copies; the whole history
             // again once narrowed.
             var shows: [LauncherAction] = []
@@ -418,7 +422,7 @@ extension LauncherController {
                     })
                 }
             }
-            return [first] + plain + does + inApps + [select, pin] + shows + copies + [remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
+            return [first] + sequence + plain + does + inApps + [select, pin] + shows + copies + [remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
         // A snippet: its editor in Settings → Snippets, deleted at once.
         case .snippet(let snippet):
             return [first,

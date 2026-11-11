@@ -83,8 +83,9 @@ Snippet… on a text copy opens the snippet editor with its text. Left of
 
 Then (docs/clipboard-select-several.md): #9 several rows selected in
 the history (⇧↓, ⇧↑, ⌘K → Select), pasted as one in the order copied.
-#8, Paste in Sequence on a selection (A, B, C, one key each): specified
-there, to come.
+Then #8: ⌘K → Paste in Sequence on a selection pastes the oldest now,
+each Paste in Sequence after it the next (A, B, C, one key each). With
+nothing selected it is unchanged, newest first.
 
 ## Must (the history is behind the others here)
 

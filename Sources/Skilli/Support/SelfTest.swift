@@ -16588,7 +16588,7 @@ final class SelfTest {
     /// then each older one; past the oldest it says so; a copy of the
     /// user's own starts again from it.
     private func pasteSequenceGoesOlder() {
-        let name = "Paste in Sequence (no keys): the newest copy, then each older one, then “the oldest”; a new copy starts again"
+        let name = "Paste in Sequence (no keys): the newest copy, then each older one, then “the oldest”; a new copy starts again; on two selected, those in the order copied, then “the last of the 2”"
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-sequence-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         guard let store = try? ClipboardStore(folder: folder) else {
@@ -16613,8 +16613,17 @@ final class SelfTest {
         pasteboard.setString("quatre", forType: .string)
         _ = try? store.add(.init(kind: .text, text: "quatre", app: nil, appName: "Notes", hash: "sequence-quatre"))
         let again = history.putNextInSequence() == nil ? pasteboard.string(forType: .string) ?? "" : ""
-        record(name, got == ["trois", "deux", "un"] && end.hasPrefix("That was the oldest") && again == "quatre",
-               "pasted \(got), then “\(end)”, after a new copy “\(again)”", nil)
+        // On copies selected (the order copied, as the launcher gives
+        // them): those, then how many they were, then the newest again.
+        let chosen = store.search("", limit: 10).filter { ["un", "trois"].contains($0.text) }.sorted { $0.copiedAt < $1.copiedAt }
+        var selected: [String] = []
+        if history.putFirstInSequence(of: chosen) == nil { selected.append(pasteboard.string(forType: .string) ?? "") }
+        if history.putNextInSequence() == nil { selected.append(pasteboard.string(forType: .string) ?? "") }
+        let last = history.putNextInSequence() ?? ""
+        let after = history.putNextInSequence() == nil ? pasteboard.string(forType: .string) ?? "" : ""
+        record(name, got == ["trois", "deux", "un"] && end.hasPrefix("That was the oldest") && again == "quatre"
+                   && selected == ["un", "trois"] && last == "That was the last of the 2 selected." && after == "quatre",
+               "pasted \(got), then “\(end)”, after a new copy “\(again)”; two selected: \(selected), then “\(last)”, then “\(after)”", nil)
     }
 
     /// ✦C, "facture": the image row shows its picture and what is known
@@ -17462,6 +17471,48 @@ final class SelfTest {
                     }
                     if launcher.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
                     if await waitUntil(timeout: 1, { !launcher.isVisible }) == nil { problems.append("esc with nothing selected did not close the history") }
+                }
+                // ⌘K → Paste in Sequence on the three: the oldest now, ✦K V
+                // the next, then the last: one, two, three. The joined
+                // paste of before is another copy: out of the way.
+                context.clipboard.poll()
+                for item in store.search("pangolin") where item.text.contains("\n") { try? store.delete(item.id) }
+                if await openHistory() {
+                    for letter in "pangolin" { await pressKey(letter) }
+                    _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 3 }
+                    for _ in 0..<3 { await pressKey(nil, code: CGKeyCode(kVK_DownArrow), flags: .maskShift) }
+                    if await waitUntil(timeout: 1, { launcher.chosenClipCount == 3 }) == nil {
+                        problems.append("⇧↓ three times on \(launcher.shownRowCount) rows: \(launcher.chosenClipCount) selected")
+                    }
+                    await pressKey("k", flags: .maskCommand)
+                    if await waitUntil(timeout: 1, { launcher.shownActions.contains { $0.title == "Paste in Sequence" } }) != nil {
+                        for letter in "sequence" { await pressKey(letter) }
+                        _ = await waitUntil(timeout: 1) { launcher.shownActions.first?.title == "Paste in Sequence" }
+                        textView.string = ""
+                        await pressKey(nil, code: CGKeyCode(kVK_Return))
+                        var pasted: [String] = []
+                        if await waitUntil(timeout: 3, { !launcher.isVisible && !self.textView.string.isEmpty }) != nil {
+                            pasted.append(textView.string)
+                            for _ in 0..<2 {
+                                await pause(150)
+                                let before = textView.string
+                                _ = await hyperChord(["k", "v"], trigger: Self.ownTriggerKeyCode)
+                                _ = await waitUntil(timeout: 2) { self.textView.string != before }
+                                pasted.append(String(textView.string.dropFirst(before.count)))
+                            }
+                        }
+                        if pasted != ["pangolin one", "pangolin two", "pangolin three"] {
+                            problems.append("⌘K → Paste in Sequence on three selected, then ✦K V twice, pasted \(pasted)")
+                        }
+                        textView.string = ""
+                    } else {
+                        problems.append("⌘K with three selected lacks Paste in Sequence: \(launcher.shownActions.map(\.title))")
+                        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                    }
+                } else {
+                    problems.append("the history did not open again for Paste in Sequence on a selection")
                 }
             } else {
                 problems.append("the history did not open again for several copies")

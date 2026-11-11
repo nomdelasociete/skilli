@@ -1203,6 +1203,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.selection.press("v", flags: .maskCommand)
             }
         }
+        launcher.onClipsInSequence = { [weak self] items in
+            guard let self else { return }
+            if let problem = self.clipboard.putFirstInSequence(of: items) {
+                self.aiActions.notify(problem, caller: "Paste in Sequence", run: nil, seconds: 2.5)
+                return
+            }
+            // The launcher never takes the front: the app in front now
+            // is the one the paste is for.
+            let target = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                guard !self.launcher.isVisible, NSWorkspace.shared.frontmostApplication?.processIdentifier == target else {
+                    self.aiActions.notify("The first copy is on the clipboard: ⌘V pastes it, Paste in Sequence the next.", caller: "Paste in Sequence", run: nil, seconds: 3)
+                    return
+                }
+                self.selection.press("v", flags: .maskCommand)
+            }
+        }
         launcher.onClipText = { [weak self] text in
             guard let self else { return }
             guard self.clipboard.write(text: text) else {
