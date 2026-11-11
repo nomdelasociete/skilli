@@ -37,15 +37,18 @@ public enum LauncherTab: Equatable, Sendable {
 }
 
 /// The footer under the results: the selected row's ↩ (its first action,
-/// as ⌘K lists it), ⇥ where it does something, then ⌘K. Nothing else.
+/// as ⌘K lists it), ⇥ where it does something, then ⌘K. Nothing else,
+/// but for a row whose second key nothing on screen tells (`also`: an
+/// image whose words were read, ⇧↩ pastes them).
 public enum LauncherFooter {
     public static let actions = (label: "Actions", key: "⌘K")
 
     /// `main`: the selected row's ↩ title; nil when no row is selected
     /// (then no ⌘K either: there is nothing to act on).
-    public static func hints(main: String?, tab: LauncherTab) -> [(label: String, key: String)] {
+    public static func hints(main: String?, also: (label: String, key: String)? = nil, tab: LauncherTab) -> [(label: String, key: String)] {
         var hints: [(label: String, key: String)] = []
         if let main { hints.append((main, "↩")) }
+        if main != nil, let also { hints.append(also) }
         if let label = tab.hint { hints.append((label, "⇥")) }
         if main != nil { hints.append(actions) }
         return hints

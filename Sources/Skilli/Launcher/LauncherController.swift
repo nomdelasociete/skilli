@@ -547,8 +547,20 @@ final class LauncherController: NSObject {
         updateResults(query: searchField.stringValue)
     }
 
+    /// A copy not kept since the history was last open (a key by its
+    /// shape, too big): said once, in the footer's place, while the
+    /// history shows. As the mode opens, once the panel is up when the
+    /// mode was kept from last time, and when a long copy turns out not
+    /// kept while it is open.
+    func sayClipNotKept() {
+        guard clipboardMode, panel.isVisible, let line = clipboardNotKept?() else { return }
+        say(line)
+    }
+
     /// Clipboard mode opened: the history may need its permission.
     var onClipboardMode: (() -> Void)?
+    /// The copy not kept since this was last asked, as one line; then nil.
+    var clipboardNotKept: (() -> String?)?
     var clipboardImageURL: ((ClipboardStore.Item) -> URL?)?
     /// ⇥ in the history: the copies a decision model finds for what was
     /// typed, as a person would describe it. Nil: no key, or it failed.
@@ -914,6 +926,9 @@ final class LauncherController: NSObject {
         let orderStart = ContinuousClock.now
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(searchField)
+        // The history kept from last time entered its mode before the
+        // panel was up.
+        sayClipNotKept()
         // Words kept: selected, so typing replaces them (as Spotlight does).
         if restoring != nil { searchField.currentEditor()?.selectAll(nil) }
         let drawStart = ContinuousClock.now
@@ -3056,6 +3071,7 @@ final class LauncherController: NSObject {
             meaningAvailable = clipboardMeaningAvailable?() ?? false
             setSplit(.clipboard)
             onClipboardMode?()
+            sayClipNotKept()
         case .catalog:
             modeChip.set(title: "Catalog", color: .controlAccentColor)
             searchField.placeholderString = "Anything skil.li does: kill, timer, emoji, window…"
@@ -4252,9 +4268,17 @@ final class LauncherController: NSObject {
             ? [(label: "Settings", key: "↩")]
             // The "maybe?" row, not selected: ↓ reaches it.
             : isShowingSnippetMaybe && item == nil ? [(label: "Maybe", key: "↓")]
-            : LauncherFooter.hints(main: item.flatMap { mainAction(for: $0)?.title }, tab: tab(for: item))
+            : LauncherFooter.hints(main: item.flatMap { mainAction(for: $0)?.title }, also: secondKey(for: item), tab: tab(for: item))
         // Under ⌘K's list: put back as it closes.
         if actionPanel.isHidden { hints.setHints(footer) } else { footerBeforeActions = footer }
+    }
+
+    /// A row's second key that nothing else on screen tells: an image of
+    /// the history whose words were read pastes them on ⇧↩ (⌘K's Paste
+    /// Text in Image).
+    private func secondKey(for item: LauncherItem?) -> (label: String, key: String)? {
+        guard clipboardMode, case .clip(let clip)? = item, ClipboardPreviewView.imageText(clip) != nil else { return nil }
+        return ("Paste Text", "⇧↩")
     }
 
     /// What ⇥ does now on `item` (the selected row): Ask outside the

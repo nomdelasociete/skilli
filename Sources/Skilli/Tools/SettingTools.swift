@@ -1023,6 +1023,7 @@ final class SettingTools {
                                                   })
         bindings["clipboardMeaningSearch"] = toggle(\.clipboardMeaningSearch)
         bindings["clipboardLinkPreviews"] = toggle(\.clipboardLinkPreviews)
+        bindings["clipboardSkipSecrets"] = toggle(\.clipboardSkipSecrets)
         bindings["clipboardExcludedApps"] = apps(\.clipboardExcludedApps)
 
         // Snippets

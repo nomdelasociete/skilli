@@ -365,3 +365,109 @@ public enum ScreenshotName {
         return starts.contains { lower.hasPrefix($0) } || lower.contains("_screenshot")
     }
 }
+
+/// A copy that is a key or a token by its shape: never kept while
+/// Settings → Clipboard → Never keep keys and tokens is on. Only shapes
+/// that say what they are (a prefix its issuer documents, a JWT's three
+/// parts, a private key's header): a hash, a UUID or a long random word
+/// is kept, since nothing tells it from what the user wants back.
+public enum ClipboardSecret {
+    /// The whole copy is one such word (spaces around it aside), or holds
+    /// a private key. What it looks like, to say so ("a GitHub token");
+    /// nil for anything else.
+    public static func name(of text: String) -> String? {
+        // A private key is several lines, often with a certificate:
+        // anywhere in the copy, whatever its length (a long copy is read
+        // off the main thread, `ClipboardHistory.look`).
+        // Literal: Foundation's search. On 1.6 MB of text the whole check
+        // adds 21 ms off the main thread (33 with `contains`), measured
+        // 2026-11-11.
+        if text.range(of: "PRIVATE KEY-----", options: .literal) != nil, text.range(of: "-----BEGIN ", options: .literal) != nil {
+            return "a private key"
+        }
+        // The word between the spaces around it, without copying a long
+        // text to trim it.
+        let spaces = CharacterSet.whitespacesAndNewlines
+        let scalars = text.unicodeScalars
+        guard let first = scalars.firstIndex(where: { !spaces.contains($0) }),
+              let last = scalars.lastIndex(where: { !spaces.contains($0) }) else { return nil }
+        let inner = scalars[first...last]
+        // At most 8,192 characters looked at: longer is no key.
+        guard inner.prefix(8_193).count <= 8_192, !inner.contains(where: { spaces.contains($0) }) else { return nil }
+        let word = String(inner)
+        let length = word.utf16.count
+        guard length >= 20 else { return nil }
+        let range = NSRange(location: 0, length: length)
+        return shapes.first { $0.pattern.firstMatch(in: word, range: range) != nil }?.name
+    }
+
+    private struct Shape: Sendable {
+        let name: String
+        let pattern: NSRegularExpression
+    }
+
+    private static func shape(_ name: String, _ pattern: String) -> Shape {
+        Shape(name: name, pattern: try! NSRegularExpression(pattern: "^(?:\(pattern))$"))
+    }
+
+    // Built once; NSRegularExpression is immutable and Sendable.
+    private static let shapes: [Shape] = [
+        shape("a GitHub token", #"gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,}"#),
+        shape("a GitLab token", #"glpat-[A-Za-z0-9_-]{20,}"#),
+        shape("a Stripe key", #"[sr]k_(?:live|test)_[A-Za-z0-9]{16,}"#),
+        shape("an API key", #"sk-[A-Za-z0-9_-]{20,}"#),
+        shape("an AWS access key", #"(?:AKIA|ASIA)[A-Z0-9]{16}"#),
+        shape("a Slack token", #"xox[abeprs]-[A-Za-z0-9-]{16,}"#),
+        shape("a Google API key", #"AIza[A-Za-z0-9_-]{35}"#),
+        shape("an npm token", #"npm_[A-Za-z0-9]{36}"#),
+        shape("a sign-in token", #"eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"#)
+    ]
+}
+
+/// A copy the history did not keep, and why: said once when the history
+/// opens next, so a copy looked for and not there is never a riddle.
+/// Never what was copied: its kind, the app, when.
+public struct ClipboardNotKept: Equatable, Sendable {
+    public enum Reason: Equatable, Sendable {
+        /// A key or a token by its shape (`ClipboardSecret.name`).
+        case secret(String)
+        /// A text over `ClipboardPolicy.textLimit` bytes.
+        case longText
+        /// A picture over `ClipboardPolicy.pictureLimit` bytes.
+        case bigPicture
+    }
+
+    public let reason: Reason
+    public let appName: String?
+    public let date: Date
+
+    public init(reason: Reason, appName: String?, date: Date) {
+        self.reason = reason
+        self.appName = appName
+        self.date = date
+    }
+
+    /// Said for a day: after it, "at 14:02" names no day.
+    public func isRecent(now: Date) -> Bool { now.timeIntervalSince(date) < 86_400 }
+
+    /// One line for the launcher's footer: what, from where, when, and
+    /// what to do about it where something can be done.
+    public func line(time: String) -> String {
+        let from = appName.map { "\($0), \(time)" } ?? time
+        switch reason {
+        case .secret(let name):
+            return "Not kept: looks like \(name) (\(from)). To keep them: Settings → Clipboard → Advanced."
+        case .longText:
+            return "Not kept: a text over \(ClipboardPolicy.textLimit / 1_000_000) MB (\(from))."
+        case .bigPicture:
+            return "Not kept: a picture over \(ClipboardPolicy.pictureLimit / 1_000_000) MB (\(from))."
+        }
+    }
+}
+
+extension ClipboardPolicy {
+    /// A text copy is kept up to this many bytes (UTF-8).
+    public static let textLimit = 5_000_000
+    /// A picture copy is kept up to this many bytes, as copied.
+    public static let pictureLimit = 40_000_000
+}

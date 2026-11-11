@@ -47,7 +47,7 @@ was measured on the main thread on 2026-11-11 and what it is now.
 | Path | Before | Now |
 |---|---|---|
 | A 2560×1600 picture copied as TIFF, kept | 100 ms | 0.25 ms (in the history 103 ms later) |
-| 1.6 MB of text copied, kept | 40 ms | 0.2 ms (40 ms later) |
+| 1.6 MB of text copied, kept | 40 ms | 0.2 ms (64 ms later, its shape checked for a key since #129) |
 | A kept picture put back for ⌘V | 32 ms | 1.3 ms (its TIFF made if asked) |
 | ✦C on 412 copies, 12 such pictures first | 249 ms | 15 ms, the pictures 73 ms after |
 
@@ -55,6 +55,13 @@ Left of the speed: the 50 ms fixed wait before ⌘V (shared with emoji,
 snippets and the calculator: the app in front taking its focus back);
 a row's small picture is made again each run (not kept on disk), so a
 first page of pictures shows the symbol for a few frames once a run.
+
+Then (docs/clipboard-secrets-drops-hint.md): #13 a copy that is a key
+or a token by its shape is not kept (Never keep keys and tokens, on);
+#14 a copy not kept (a key, a text over 5 MB, a picture over 40 MB) is
+said in one line when the history opens next; #16 the footer of an image
+whose words were read says Paste Text ⇧↩. Left of #13: a key inside a
+longer text, expiry, the file not encrypted.
 
 ## Must (the history is behind the others here)
 
@@ -154,4 +161,5 @@ list, ↩ to pasted, copy to kept.
    and ranked search, app name): the history starts to feel fast.
 3. #3 pins and #5 kind filter: one spec, they share the header.
 4. #7 actions per kind (open link, show file, save as snippet).
-5. ~~Speed budget lines + the three measurements~~: done. Then #8–#16.
+5. ~~Speed budget lines + the three measurements~~: done.
+6. ~~#13, #14, #16~~: done. Then #8–#12 and #15.

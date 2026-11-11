@@ -884,6 +884,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self, self.preferences.clipboardHistory, !self.clipboard.mayRead else { return }
             self.permissions.needed(.pasteboard)
         }
+        clipboard.onNotKeptLater = { [weak self] in self?.launcher.sayClipNotKept() }
+        launcher.clipboardNotKept = { [weak self] in
+            self?.clipboard.takeNotKept().map { $0.line(time: $0.date.formatted(date: .omitted, time: .shortened)) }
+        }
         launcher.onDeleteClip = { [weak self] item in
             guard let self else { return }
             self.deletes.clip(item, in: self.clipboard) { [weak self] in

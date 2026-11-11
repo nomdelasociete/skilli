@@ -17047,12 +17047,49 @@ final class SelfTest {
             }
         }
 
+        // A key by its shape is not kept, and the history says so once as
+        // it opens (docs/clipboard-secrets-drops-hint.md). Made here,
+        // never a real one.
+        let skips = context.preferences.clipboardSkipSecrets
+        defer { context.preferences.clipboardSkipSecrets = skips }
+        context.preferences.clipboardSkipSecrets = true
+        let token = "ghp_" + String(repeating: "aB3dE6gH", count: 5)
+        func keptToken() -> ClipboardStore.Item? { context.clipboard.store?.search(token, limit: 5).first { $0.text == token } }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(token, forType: .string)
+        context.clipboard.keep()
+        if keptToken() != nil { problems.append("a copy shaped as a GitHub token was kept") }
+        guard await openHistory() else { return (problems + ["the history did not open again after a copy not kept"], note) }
+        let said = launcher.shownNote ?? ""
+        if !said.hasPrefix("Not kept: looks like a GitHub token") || said.contains(token) {
+            problems.append("the history opened after a token was copied says “\(said.prefix(80))”")
+        }
+        await captureLauncherBothWays(as: "launcher-clipboard-not-kept")
+        NSPasteboard.general.clearContents()
+        guard await openHistory() else { return (problems + ["the history did not open a second time after a copy not kept"], note) }
+        if let again = launcher.shownNote { problems.append("a copy not kept was said twice: “\(again.prefix(60))”") }
+        // Never keep keys and tokens off: kept as any text.
+        context.preferences.clipboardSkipSecrets = false
+        NSPasteboard.general.setString(token, forType: .string)
+        context.clipboard.keep()
+        if let kept = keptToken() {
+            context.clipboard.delete(kept)
+        } else {
+            problems.append("with Never keep keys and tokens off, the token was not kept")
+        }
+        // On again at once: nothing copied meanwhile is kept as a key.
+        context.preferences.clipboardSkipSecrets = true
+        NSPasteboard.general.clearContents()
+        _ = context.clipboard.takeNotKept()
+
         // The invoice: its text's actions, its whole text shown, copied.
         guard await openHistory() else { return (problems + ["the history did not open again for the image's text"], note) }
         for letter in "facture" { await pressKey(letter) }
         guard await waitUntil(timeout: 2, { preview.shown == .image && preview.hasPicture }) != nil else {
             return (problems + ["“facture” did not show the invoice (\(preview.shown.rawValue))"], note)
         }
+        // Its second key is said under it: nothing else tells ⇧↩.
+        if !launcher.shownFooter.contains("Paste Text ⇧↩") { problems.append("the invoice's footer does not say Paste Text ⇧↩: \(launcher.shownFooter)") }
         await pressKey("k", flags: .maskCommand)
         _ = await waitUntil(timeout: 1) { !launcher.shownActions.isEmpty }
         let listed = launcher.shownActions

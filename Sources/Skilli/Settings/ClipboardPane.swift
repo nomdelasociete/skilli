@@ -119,10 +119,10 @@ struct ClipboardPane: View {
                 }
             }
 
-            AdvancedSection(summary: "Search by meaning, link previews, words and kinds of images, apps never kept",
+            AdvancedSection(summary: "Search by meaning, link previews, words and kinds of images, keys and apps never kept",
                             footer: "Passwords that password managers mark as secret are never kept, whatever the app.",
                             anchors: ["clipboardMeaningSearch", "clipboardLinkPreviews", "clipboardOCR", "imageTagsClipboard", "imageTagsFolder",
-                                      "clipboardExcludedApps"]) {
+                                      "clipboardSkipSecrets", "clipboardExcludedApps"]) {
                 Toggle(isOn: $preferences.clipboardMeaningSearch) {
                     LabelDetail("Search by meaning with ⇥", "Type what you remember (“the electricity bill from yesterday”), then ⇥.")
                 }
@@ -152,6 +152,11 @@ struct ClipboardPane: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                Toggle(isOn: $preferences.clipboardSkipSecrets) {
+                    LabelDetail("Never keep keys and tokens",
+                                "A copy that is an API key, a token or a private key by its shape is not kept: the history says so when you open it.")
+                }
+                .settingAnchor("clipboardSkipSecrets")
                 LabelDetail("Never keep copies from", "What you copy in these apps never joins the history.")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .settingAnchor("clipboardExcludedApps")
