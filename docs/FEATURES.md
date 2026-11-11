@@ -407,7 +407,7 @@ pause") or a shortcut. Irreversible ones ask first.
 
 - **Power and screen**: **Lock Screen**, **Sleep**, **Sleep Displays**,
   **Restart**, **Shut Down**, **Log Out**, **Keep Awake** (until turned
-  off), **Keep Awake for a While** (`awake 2h`, `aw 2h`, "until 6pm"; a cup in the
+  off), **Keep Awake for a While** (`awake 2h`, "until 6pm", or your alias then `2h`; a cup in the
   menu bar, its menu: **Turn Off Keep Awake**). While it is kept awake,
   the cup shows at the right of the launcher's empty field, with the time
   left ("42 min") or alone when it has no end; under the pointer it says
@@ -824,7 +824,11 @@ Everything skil.li can do, and how you reach each one.
   Shortcut…, or the entry's popover here): Search Snippets opens
   straight in your snippets. What only types the start of words (Timer)
   or opens where the first of something is made takes none.
-- **Aliases**: your own short names for any result.
+- **Aliases**: your own short names for any result. On a command that
+  reads a value (Keep Awake, Timer, Set Volume, Record Meeting, Add an
+  Event, Remind Me), the alias then a space opens that command: the field
+  takes only the value, an example shown in it (`a 2h`, `t 10 tea`).
+  skil.li gives no alias of its own.
 - **Quicklinks**: search a site from the launcher (`g skilli`, `yt lofi`);
   the selection is the query when none is typed; a shortcut of its own
   opens the launcher with its keyword typed; Add from Library….

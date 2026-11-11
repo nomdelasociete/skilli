@@ -45,7 +45,11 @@ Every row has actions. Press **⌘K** on it to see them, with their keys:
   removes a snippet, a quicklink or a command of yours at once (⌘Z brings
   it back);
 - **Set Shortcut…**: give it a key of your own;
-- **Set Alias…**: a short name of yours ("cs" for CleanShot X);
+- **Set Alias…**: a short name of yours ("cs" for CleanShot X). On a
+  command that reads a value (Keep Awake, Timer, Set Volume, Record
+  Meeting, Add an Event, Remind Me), the alias then a space opens the
+  command with the field waiting for the value: `a 2h` with `a` on Keep
+  Awake;
 - **Pin**: keep it first;
 - **Copy Link**: a `skilli://` link that runs it from anywhere (Shortcuts,
   a Stream Deck, a web page).

@@ -293,13 +293,17 @@ final class FeatureCatalogTests: XCTestCase {
     }
 
     /// An alias reaches what is a launcher row of its own, as ⌘K → Set
-    /// Alias… in the "?" does.
+    /// Alias… in the "?" does, and the commands that say what they read
+    /// (`LauncherArgument`).
     func testOnlyRowsOfTheirOwnTakeAnAlias() throws {
         func entry(_ id: String) throws -> CatalogEntry { try XCTUnwrap(entries.first { $0.id == id }, id) }
         for id in ["cmd:emoji", "cmd:clipboardHistory", "system:lockScreen", "system:window.leftHalf", "si:ask"] {
             XCTAssertTrue(try entry(id).takesAlias, id)
         }
-        for id in ["catalog.timer", "catalog.calculator", "catalog.doItHere", "catalog.voice", "catalog.dictate", "catalog.text.lowercase",
+        for id in LauncherArgument.all.map(\.id) {
+            XCTAssertTrue(try entry(id).takesAlias, id)
+        }
+        for id in ["catalog.calculator", "catalog.doItHere", "catalog.voice", "catalog.dictate", "catalog.text.lowercase",
                    "catalog.snippets"] {
             XCTAssertFalse(try entry(id).takesAlias, id)
         }
