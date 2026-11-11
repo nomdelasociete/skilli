@@ -181,6 +181,29 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertEqual(Snippet.draft(from: "   ").name, "")
     }
 
+    func testSeveralCopiesGoInTheOrderCopied() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        func copy(_ id: Int64, _ after: TimeInterval, _ family: ClipboardSelection.Family, _ text: String) -> ClipboardSelection.Copy {
+            .init(id: id, copied: start.addingTimeInterval(after), family: family, text: text)
+        }
+        let a = copy(1, 0, .text, "A"), b = copy(2, 10, .text, "B\nb"), c = copy(3, 20, .text, "C")
+        // Selected C, A, B: pasted A, B, C.
+        XCTAssertEqual(ClipboardSelection.ordered([c, a, b]).map(\.id), [1, 2, 3])
+        XCTAssertEqual(ClipboardSelection.paste([c, a, b]), .text("A\nB\nb\nC"))
+        // The same instant: by id.
+        XCTAssertEqual(ClipboardSelection.ordered([copy(9, 0, .text, "z"), copy(4, 0, .text, "y")]).map(\.id), [4, 9])
+        XCTAssertEqual(ClipboardSelection.paste([copy(2, 5, .files, "/Users/me/b.txt\n/Users/me/c.txt"), copy(1, 0, .files, "/Users/me/a.txt")]),
+                       .files(["/Users/me/a.txt", "/Users/me/b.txt", "/Users/me/c.txt"]))
+        XCTAssertEqual(ClipboardSelection.paste([a, copy(5, 30, .files, "/Users/me/a.txt")]), ClipboardSelection.Paste.none)
+        XCTAssertEqual(ClipboardSelection.paste([copy(6, 0, .image, ""), copy(7, 1, .image, "")]), ClipboardSelection.Paste.none)
+        XCTAssertEqual(ClipboardSelection.paste([]), ClipboardSelection.Paste.none)
+        XCTAssertEqual(ClipboardSelection.paste([a]), .text("A"))
+        XCTAssertEqual(ClipboardSelection.chip(filter: nil, selected: 0), "Clipboard")
+        XCTAssertEqual(ClipboardSelection.chip(filter: nil, selected: 3), "Clipboard · 3 selected")
+        XCTAssertEqual(ClipboardSelection.chip(filter: "Links", selected: 2), "Clipboard · Links · 2 selected")
+        XCTAssertEqual(ClipboardSelection.chip(filter: "Links", selected: 0), "Clipboard · Links")
+    }
+
     func testFilesGoneSinceAreSaid() {
         XCTAssertNil(ClipboardFiles.line(gone: [], of: 3, done: "pasted"))
         XCTAssertEqual(ClipboardFiles.line(gone: ["report.pdf"], of: 1, done: "pasted"),

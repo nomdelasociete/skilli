@@ -81,6 +81,11 @@ Then (docs/clipboard-save-as-snippet.md): of #7, ⌘K → Save as
 Snippet… on a text copy opens the snippet editor with its text. Left of
 #7: Quick Look large, drag out.
 
+Then (docs/clipboard-select-several.md): #9 several rows selected in
+the history (⇧↓, ⇧↑, ⌘K → Select), pasted as one in the order copied.
+#8, Paste in Sequence on a selection (A, B, C, one key each): specified
+there, to come.
+
 ## Must (the history is behind the others here)
 
 | # | Gap | Proof | Others |

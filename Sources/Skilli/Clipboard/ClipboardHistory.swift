@@ -534,6 +534,25 @@ final class ClipboardHistory {
         return (there, gone)
     }
 
+    /// Several copies as one, put on the clipboard: one text, or the
+    /// files still there (`gone`: the names of the others). False when
+    /// nothing could be put there.
+    func write(_ paste: ClipboardSelection.Paste, plain: Bool) -> (written: Bool, gone: [String]) {
+        switch paste {
+        case .text(let text):
+            return (write(text: text), [])
+        case .files(let paths):
+            if plain { return (write(text: paths.joined(separator: "\n")), []) }
+            let there = paths.filter { FileManager.default.fileExists(atPath: $0) }
+            let gone = paths.filter { !there.contains($0) }.map { ($0 as NSString).lastPathComponent }
+            guard !there.isEmpty else { return (false, gone) }
+            pasteboard.clearContents()
+            return (pasteboard.writeObjects(there.map { NSURL(fileURLWithPath: $0) }), gone)
+        case .none:
+            return (false, [])
+        }
+    }
+
     /// A text put on the clipboard for ⌘V: a copy pasted another way
     /// (`ClipboardTransform`). It joins the history as any copy.
     func write(text: String) -> Bool {

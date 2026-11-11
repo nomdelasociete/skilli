@@ -138,6 +138,9 @@ final class LauncherController: NSObject {
     private var clipsEnded = true
     /// Pastes, pastes as plain text or copies a row, after the launcher hid.
     var onClip: ((ClipboardStore.Item, ClipboardHistory.Use) -> Void)?
+    /// Several copies selected, used as one (↩ pastes, ⌘↩ copies): what
+    /// they make together, in the order copied.
+    var onClips: ((ClipboardSelection.Paste, ClipboardHistory.Use) -> Void)?
     /// A copy pasted another way (⌘K → Paste as RGB, as One Line…): the
     /// text to paste in the app that was in front.
     var onClipText: ((String) -> Void)?
@@ -1129,6 +1132,8 @@ final class LauncherController: NSObject {
             return
         }
         tableView.selectRowIndexes(IndexSet(integer: rows[number - 1]), byExtendingSelection: false)
+        // That row alone, whatever is selected with others.
+        chosenClips = [:]
         launchSelected(flags: [])
     }
 
@@ -3071,6 +3076,7 @@ final class LauncherController: NSObject {
             modeChip.set(title: "Clipboard", color: .systemBlue)
             searchField.placeholderString = "Search what you copied"
             clipOnly = nil
+            chosenClips = [:]
             meaning = nil
             meaningAvailable = clipboardMeaningAvailable?() ?? false
             setSplit(.clipboard)
@@ -3293,11 +3299,118 @@ final class LauncherController: NSObject {
         guard clipboardMode, only != clipOnly else { return }
         clipOnly = only
         closeActions()
-        modeChip.set(title: only.map { "Clipboard · \($0.title)" } ?? "Clipboard", color: .systemBlue)
+        showClipboardChip()
+        updateResults(query: searchField.stringValue)
+    }
+
+    // MARK: - Several copies selected (docs/clipboard-select-several.md)
+
+    /// The copies selected to be used together, by id: kept while the
+    /// history is open, whatever is typed meanwhile.
+    private var chosenClips: [Int64: ClipboardStore.Item] = [:]
+
+    /// Self-test hooks: how many are selected; the place shown on a row.
+    var chosenClipCount: Int { chosenClips.count }
+    func orderShown(row: Int) -> Int? {
+        (tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView)?.order
+    }
+
+    private func selectionCopy(_ item: ClipboardStore.Item) -> ClipboardSelection.Copy {
+        let family: ClipboardSelection.Family = switch item.kind {
+        case .text: .text
+        case .files: .files
+        case .image: .image
+        }
+        return .init(id: item.id, copied: item.copiedAt, family: family, text: item.text)
+    }
+
+    /// A selected copy's place in the order they paste: 1 is the oldest.
+    private func place(of item: ClipboardStore.Item) -> Int? {
+        guard chosenClips[item.id] != nil else { return nil }
+        return ClipboardSelection.ordered(chosenClips.values.map(selectionCopy)).firstIndex { $0.id == item.id }.map { $0 + 1 }
+    }
+
+    /// The copy under the keys is selected with the others.
+    var selectedClipIsChosen: Bool {
+        let row = tableView.selectedRow
+        guard results.indices.contains(row), case .clip(let item) = results[row] else { return false }
+        return chosenClips[item.id] != nil
+    }
+
+    /// ⌘K → Select, Deselect: the copy under the keys joins the selected
+    /// ones, or leaves them.
+    func toggleChosenClip() {
+        let row = tableView.selectedRow
+        guard clipboardMode, results.indices.contains(row), case .clip(let item) = results[row] else { return }
+        closeActions()
+        if chosenClips[item.id] != nil {
+            chosenClips[item.id] = nil
+        } else if !choose(item) {
+            return
+        }
+        chosenChanged()
+    }
+
+    private func choose(_ item: ClipboardStore.Item) -> Bool {
+        guard chosenClips[item.id] != nil || chosenClips.count < ClipboardSelection.limit else {
+            say("\(ClipboardSelection.limit) copies are selected already: ↩ pastes them, esc lets them go.")
+            return false
+        }
+        chosenClips[item.id] = item
+        return true
+    }
+
+    /// ⇧↓, ⇧↑: the copy under the keys is selected and the next one comes
+    /// under them, as in a Finder list.
+    private func chooseAndMove(by delta: Int) {
+        let row = tableView.selectedRow
+        guard clipboardMode, results.indices.contains(row), case .clip(let item) = results[row] else {
+            moveSelection(by: delta)
+            return
+        }
+        guard choose(item) else { return }
+        moveSelection(by: delta)
+        chosenChanged()
+    }
+
+    /// The rows' numbers, the chip and the footer follow what is selected.
+    private func chosenChanged() {
+        for row in 0..<tableView.numberOfRows {
+            guard results.indices.contains(row), case .clip(let item) = results[row],
+                  let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView else { continue }
+            cell.setOrder(inSelection: place(of: item))
+        }
+        showClipboardChip()
+        updateFooter()
+    }
+
+    private func showClipboardChip() {
+        modeChip.set(title: ClipboardSelection.chip(filter: clipOnly?.title, selected: chosenClips.count), color: .systemBlue)
         // The field starts after the chip, as wide as it is now.
         let shift = modeChip.frame.width + 10
         searchField.frame = NSRect(x: fieldFrame.minX + shift, y: fieldFrame.minY, width: fieldFrame.width - shift, height: fieldFrame.height)
-        updateResults(query: searchField.stringValue)
+    }
+
+    /// Nothing selected any more. `true` when something was.
+    @discardableResult
+    private func clearChosenClips() -> Bool {
+        guard !chosenClips.isEmpty else { return false }
+        chosenClips = [:]
+        if clipboardMode { chosenChanged() }
+        return true
+    }
+
+    /// ↩ (⇧↩ the same), ⌘↩ on a selection: all of it as one, in the order
+    /// copied; what does not make one paste is said, nothing pasted.
+    private func useChosenClips(flags: NSEvent.ModifierFlags) {
+        let paste = ClipboardSelection.paste(chosenClips.values.map(selectionCopy))
+        guard paste != .none else {
+            say(ClipboardSelection.noSinglePaste)
+            return
+        }
+        // Hide first: the paste goes to the app that was in front.
+        hide()
+        onClips?(paste, flags.contains(.command) ? .copy : flags.contains(.shift) ? .pastePlain : .paste)
     }
 
     /// ⌘K → Pin, Unpin on the selected copy: it goes under "Pinned" at
@@ -3341,6 +3454,11 @@ final class LauncherController: NSObject {
         if mode == .github, github?.isSignedIn != true {
             hide()
             onGitHubSettings?()
+            return
+        }
+        // Several copies selected: all of them as one.
+        if clipboardMode, !chosenClips.isEmpty {
+            useChosenClips(flags: flags)
             return
         }
         guard results.indices.contains(row) else { return }
@@ -4339,6 +4457,8 @@ final class LauncherController: NSObject {
         let item = results.indices.contains(row) ? results[row] : nil
         let footer = mode == .github && github?.isSignedIn != true
             ? [(label: "Settings", key: "↩")]
+            // Several copies selected: ↩ is all of them.
+            : clipboardMode && !chosenClips.isEmpty ? [(label: "Paste \(chosenClips.count)", key: "↩"), LauncherFooter.actions]
             // The "maybe?" row, not selected: ↓ reaches it.
             : isShowingSnippetMaybe && item == nil ? [(label: "Maybe", key: "↓")]
             : LauncherFooter.hints(main: item.flatMap { mainAction(for: $0)?.title }, also: secondKey(for: item), tab: tab(for: item))
@@ -4424,6 +4544,8 @@ final class LauncherController: NSObject {
     func escape() {
         // A part picked in the history's preview: esc lets it go first.
         if actionPanel.isHidden, clipboardMode, clipPreview.clearSelection() { return }
+        // Several copies selected: esc lets them go, the history stays.
+        if actionPanel.isHidden, clipboardMode, clearChosenClips() { return }
         switch LauncherEscape.of(showingActions: !actionPanel.isHidden, unfolded: unfolded != nil, inMode: mode != nil, back: modeBack) {
         case .closeActions:
             closeActions()
@@ -4937,6 +5059,10 @@ extension LauncherController: NSTextFieldDelegate {
             moveInGrid(.up)
         case #selector(NSResponder.moveDown(_:)) where mode == .emoji || mode == .gifs:
             moveInGrid(.down)
+        case #selector(NSResponder.moveUpAndModifySelection(_:)) where clipboardMode:
+            chooseAndMove(by: -1)
+        case #selector(NSResponder.moveDownAndModifySelection(_:)) where clipboardMode:
+            chooseAndMove(by: 1)
         case #selector(NSResponder.moveUp(_:)):
             if !recallOlder() { moveSelection(by: -1) }
         case #selector(NSResponder.moveDown(_:)):
@@ -5007,7 +5133,9 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             cell.setAlias(beside == nil ? aliasByID[id] : nil)
             if case .clip(let clip) = results[row] {
                 cell.setPinned(clip.isPinned)
+                cell.setOrder(inSelection: chosenClips.isEmpty ? nil : place(of: clip))
             } else {
+                cell.setOrder(inSelection: nil)
                 cell.setPinned(mode == nil && pinsNow.ids.contains(id))
             }
             cell.setPlace(mode == nil && searchField.stringValue.isEmpty && placeShown.contains(id) ? shownApp?.name : nil)

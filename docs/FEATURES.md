@@ -262,6 +262,10 @@ Everything you copy, and your screenshots, ready to paste again.
   the ways that change it: a color as Hex, RGB or HSL, a link without
   its tracking, JSON pretty or minified, URL-decoded, as one line,
   trimmed, UPPERCASE, lowercase, Title Case. The copy stays as it was.
+- **Several copies at once**: ⇧↓ or ⇧↑ selects the copy and moves on
+  (⌘K → Select for one further away); each shows its place in the order
+  copied. ↩ pastes them all as one, a line each, oldest first (files:
+  all the files); ⌘↩ copies that instead. esc lets the selection go.
 - **Saved as a snippet**: ⌘K → Save as Snippet… on a text copy (up to
   20,000 characters) opens the snippet editor with its text, a name and
   a keyword to give.

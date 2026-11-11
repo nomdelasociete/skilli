@@ -17404,6 +17404,72 @@ final class SelfTest {
             }
             // What was pasted joined the history; the copy it came from
             // is still there as copied.
+            // Several copies selected (docs/clipboard-select-several.md):
+            // ⇧↓ selects and moves, the rows say their place in the order
+            // copied, ↩ pastes them all as one, oldest first; esc lets the
+            // selection go before it closes the history.
+            for (index, word) in ["one", "two", "three"].enumerated() {
+                _ = try? store.add(.init(kind: .text, text: "pangolin \(word)", app: "com.apple.Notes", appName: "Notes", hash: "selftest-several-\(word)"),
+                                   at: .now.addingTimeInterval(TimeInterval(index * 10 - 40)))
+            }
+            if await openHistory() {
+                for letter in "pangolin" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { launcher.shownRowCount == 3 && launcher.titleShown(row: 0) == "pangolin three" }) == nil {
+                    problems.append("“pangolin”: \(launcher.shownRowCount) rows, the first “\(launcher.titleShown(row: 0) ?? "")”")
+                } else {
+                    await pressKey(nil, code: CGKeyCode(kVK_DownArrow), flags: .maskShift)
+                    await pressKey(nil, code: CGKeyCode(kVK_DownArrow), flags: .maskShift)
+                    let two = await waitUntil(timeout: 1) {
+                        launcher.chosenClipCount == 2 && launcher.orderShown(row: 0) == 2 && launcher.orderShown(row: 1) == 1
+                            && launcher.orderShown(row: 2) == nil && launcher.chipTitle == "Clipboard · 2 selected"
+                            && launcher.shownFooter.first == "Paste 2 ↩"
+                    } != nil
+                    if !two {
+                        problems.append("⇧↓ twice: \(launcher.chosenClipCount) selected, places \((0..<3).map { launcher.orderShown(row: $0) }), chip “\(launcher.chipTitle)”, footer \(launcher.shownFooter)")
+                    }
+                    await captureLauncherBothWays(as: "launcher-clipboard-several")
+                    // The third by ⌘K → Select: the oldest, so it is 1.
+                    if launcher.isVisible, launcher.isInClipboard {
+                        await pressKey("k", flags: .maskCommand)
+                        if await waitUntil(timeout: 1, { launcher.shownActions.contains { $0.title == "Select" } }) != nil {
+                            for letter in "select" { await pressKey(letter) }
+                            _ = await waitUntil(timeout: 1) { launcher.shownActions.first?.title == "Select" }
+                            await pressKey(nil, code: CGKeyCode(kVK_Return))
+                        } else {
+                            problems.append("⌘K on a copy lacks Select: \(launcher.shownActions.map(\.title))")
+                            await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                        }
+                        if await waitUntil(timeout: 1, { launcher.chosenClipCount == 3 && (0..<3).map { launcher.orderShown(row: $0) } == [3, 2, 1] }) == nil {
+                            problems.append("⌘K → Select on the third: \(launcher.chosenClipCount) selected, places \((0..<3).map { launcher.orderShown(row: $0) })")
+                        }
+                        textView.string = ""
+                        await pressKey(nil, code: CGKeyCode(kVK_Return))
+                        if await waitUntil(timeout: 3, { !launcher.isVisible && self.textView.string == "pangolin one\npangolin two\npangolin three" }) == nil {
+                            problems.append("↩ on three selected pasted “\(textView.string.prefix(80))”")
+                        }
+                        textView.string = ""
+                    }
+                }
+                // Opened again: nothing selected; one selected, esc lets it
+                // go and the history stays, esc again closes it.
+                if await openHistory() {
+                    if launcher.chosenClipCount != 0 { problems.append("\(launcher.chosenClipCount) copies still selected in a history opened again") }
+                    await pressKey(nil, code: CGKeyCode(kVK_DownArrow), flags: .maskShift)
+                    _ = await waitUntil(timeout: 1) { launcher.chosenClipCount == 1 }
+                    await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                    if await waitUntil(timeout: 1, { launcher.chosenClipCount == 0 }) == nil || !launcher.isVisible || !launcher.isInClipboard {
+                        problems.append("esc with one selected: \(launcher.chosenClipCount) selected, history open \(launcher.isVisible && launcher.isInClipboard)")
+                    }
+                    if launcher.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+                    if await waitUntil(timeout: 1, { !launcher.isVisible }) == nil { problems.append("esc with nothing selected did not close the history") }
+                }
+            } else {
+                problems.append("the history did not open again for several copies")
+            }
+            context.clipboard.poll()
+            NSPasteboard.general.clearContents()
+            for item in store.search("pangolin") { try? store.delete(item.id) }
+
             // ⌘K → Save as Snippet… on a text copy: the snippet editor,
             // the copy's text in it, nothing saved yet
             // (docs/clipboard-save-as-snippet.md).

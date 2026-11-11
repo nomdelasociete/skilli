@@ -396,6 +396,12 @@ extension LauncherController {
             let pin = LauncherAction(title: clip.isPinned ? "Unpin" : "Pin", symbol: clip.isPinned ? "pin.slash" : "pin") { [weak self] in
                 self?.togglePinOfSelectedClip()
             }
+            // With others, to use them as one (↩ pastes them in the order
+            // copied): docs/clipboard-select-several.md.
+            let chosen = selectedClipIsChosen
+            let select = LauncherAction(title: chosen ? "Deselect" : "Select", symbol: chosen ? "circle" : "checkmark.circle") { [weak self] in
+                self?.toggleChosenClip()
+            }
             // One kind at a time, or one app's copies; the whole history
             // again once narrowed.
             var shows: [LauncherAction] = []
@@ -412,7 +418,7 @@ extension LauncherController {
                     })
                 }
             }
-            return [first] + plain + does + inApps + [pin] + shows + copies + [remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
+            return [first] + plain + does + inApps + [select, pin] + shows + copies + [remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
         // A snippet: its editor in Settings → Snippets, deleted at once.
         case .snippet(let snippet):
             return [first,

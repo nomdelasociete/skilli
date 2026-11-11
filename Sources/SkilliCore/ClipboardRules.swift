@@ -497,3 +497,68 @@ public enum ClipboardFiles {
         gone == 0 ? "\(total) Files" : gone == total ? "\(total) Files · no longer there" : "\(total) Files · \(gone) no longer there"
     }
 }
+
+/// Several copies selected in the history and used as one
+/// (docs/clipboard-select-several.md): the order they go in, and what
+/// one paste can be made of.
+public enum ClipboardSelection {
+    /// At most this many copies selected: a sequence's length.
+    public static let limit = PasteSequence.length
+
+    /// What a selected copy is, for joining.
+    public enum Family: Equatable, Sendable {
+        case text, files, image
+    }
+
+    /// One selected copy: its id, when it was copied, what it is, its
+    /// text (a files copy's paths, one a line).
+    public struct Copy: Equatable, Sendable {
+        public let id: Int64
+        public let copied: Date
+        public let family: Family
+        public let text: String
+
+        public init(id: Int64, copied: Date, family: Family, text: String) {
+            self.id = id
+            self.copied = copied
+            self.family = family
+            self.text = text
+        }
+    }
+
+    /// What the selection puts on the clipboard.
+    public enum Paste: Equatable, Sendable {
+        /// Texts: one text, a line each.
+        case text(String)
+        /// Files: all their paths.
+        case files([String])
+        /// Texts and files together, or an image: no single paste.
+        case none
+    }
+
+    /// The order copied, oldest first, whatever the order selected; two
+    /// copied at the same instant by their ids.
+    public static func ordered(_ copies: [Copy]) -> [Copy] {
+        copies.sorted { ($0.copied, $0.id) < ($1.copied, $1.id) }
+    }
+
+    /// The selection as one paste, in the order copied.
+    public static func paste(_ copies: [Copy]) -> Paste {
+        let copies = ordered(copies)
+        guard let first = copies.first, copies.allSatisfy({ $0.family == first.family }) else { return .none }
+        switch first.family {
+        case .text: return .text(copies.map(\.text).joined(separator: "\n"))
+        case .files: return .files(copies.flatMap { $0.text.split(separator: "\n").map(String.init) })
+        case .image: return .none
+        }
+    }
+
+    /// Said when the selection makes no single paste.
+    public static let noSinglePaste = "These copies do not make one paste: only texts together, or files together."
+
+    /// The chip beside the search field: "Clipboard · 3 selected", after
+    /// the filter when there is one ("Clipboard · Links · 3 selected").
+    public static func chip(filter: String?, selected: Int) -> String {
+        (["Clipboard"] + [filter].compactMap { $0 } + (selected > 0 ? ["\(selected) selected"] : [])).joined(separator: " · ")
+    }
+}
