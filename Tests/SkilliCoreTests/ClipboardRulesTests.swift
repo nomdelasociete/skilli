@@ -171,6 +171,16 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertFalse(secret.isRecent(now: date.addingTimeInterval(90_000)))
     }
 
+    func testACopySavedAsASnippetStartsFromItsFirstLine() {
+        let draft = Snippet.draft(from: "\n  Bien cordialement,\nCamille Martin\n")
+        XCTAssertEqual(draft.id, "")
+        XCTAssertEqual(draft.name, "Bien cordialement,")
+        XCTAssertEqual(draft.keyword, "")
+        XCTAssertEqual(draft.text, "\n  Bien cordialement,\nCamille Martin\n")
+        XCTAssertEqual(Snippet.draft(from: String(repeating: "word ", count: 30)).name.count, 39)
+        XCTAssertEqual(Snippet.draft(from: "   ").name, "")
+    }
+
     func testFilesGoneSinceAreSaid() {
         XCTAssertNil(ClipboardFiles.line(gone: [], of: 3, done: "pasted"))
         XCTAssertEqual(ClipboardFiles.line(gone: ["report.pdf"], of: 1, done: "pasted"),

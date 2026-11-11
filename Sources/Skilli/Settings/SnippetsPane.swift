@@ -138,7 +138,14 @@ struct SnippetsPane: View {
     /// ⌘K → Edit Snippet…: that snippet's (deleted meanwhile: the list).
     private func startAsked() {
         guard let asked = navigation?.take(.snippet), editing == nil else { return }
-        editing = if let id = asked.id { library.snippet(id) } else { Self.new }
+        editing = if let id = asked.id {
+            library.snippet(id)
+        } else if let text = asked.text {
+            // A copy saved as a snippet: its text there, the rest to give.
+            Snippet.draft(from: text)
+        } else {
+            Self.new
+        }
     }
 
     /// Rule 6: a permission expansion needs, only while it is not granted.

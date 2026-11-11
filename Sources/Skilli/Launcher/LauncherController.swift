@@ -229,6 +229,9 @@ final class LauncherController: NSObject {
     /// ⌘K on what the user made (a snippet, a quicklink, a command): its
     /// editor in Settings; Delete at once, ⌘Z in the card puts it back.
     var onEditSnippet: ((Snippet) -> Void)?
+    /// ⌘K → Save as Snippet… on a text copy: the snippet editor on a new
+    /// one with this text.
+    var onSaveAsSnippet: ((String) -> Void)?
     var onDeleteSnippet: ((Snippet) -> Void)?
     var onEditQuicklink: ((Quicklink) -> Void)?
     var onDeleteQuicklink: ((Quicklink) -> Void)?

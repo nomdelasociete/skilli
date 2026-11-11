@@ -136,8 +136,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// Snippet…), on that one. An editor open already, on any pane, keeps
     /// its edits: the one asked waits until it closes (Save, Cancel), the
     /// window brought forward meanwhile.
-    func showNew(_ item: SettingsNew, id: String? = nil) {
-        let asked = SettingsAsk(item: item, id: id)
+    func showNew(_ item: SettingsNew, id: String? = nil, text: String? = nil) {
+        let asked = SettingsAsk(item: item, id: id, text: text)
         if window?.attachedSheet != nil {
             waitingNew = asked
             show()

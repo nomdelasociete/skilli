@@ -27,6 +27,18 @@ public struct Snippet: Equatable, Sendable, Identifiable {
 
     public static let cursorToken = "{cursor}"
 
+    /// A text copied this long or less can be saved as a snippet: a
+    /// snippet is typed, not a file pasted.
+    public static let draftLimit = 20_000
+
+    /// A new snippet made of a copied text (⌘K → Save as Snippet…): the
+    /// text whole, its first line as a name to change, no keyword. Not
+    /// saved yet: the editor opens on it.
+    public static func draft(from text: String) -> Snippet {
+        let line = text.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? ""
+        return Snippet(id: "", name: String(line.prefix(40)).trimmingCharacters(in: .whitespaces), text: text)
+    }
+
     public init(id: String, parsing file: String) {
         self.id = id
         var name = ""

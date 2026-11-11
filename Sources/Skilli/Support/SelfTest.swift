@@ -17384,6 +17384,47 @@ final class SelfTest {
             }
             // What was pasted joined the history; the copy it came from
             // is still there as copied.
+            // ⌘K → Save as Snippet… on a text copy: the snippet editor,
+            // the copy's text in it, nothing saved yet
+            // (docs/clipboard-save-as-snippet.md).
+            let signature = "Bien cordialement,\nCamille Wombat"
+            _ = try? store.add(.init(kind: .text, text: signature, app: "com.apple.Notes", appName: "Notes", hash: "selftest-save-snippet"))
+            let snippetsBefore = context.snippets.all.count
+            if await openHistory() {
+                for letter in "wombat" { await pressKey(letter) }
+                _ = await waitUntil(timeout: 2) { launcher.shownRowCount == 1 }
+                await pressKey("k", flags: .maskCommand)
+                if await waitUntil(timeout: 1, { launcher.shownActions.contains { $0.title == "Save as Snippet…" } }) != nil {
+                    for letter in "snippet" { await pressKey(letter) }
+                    if await waitUntil(timeout: 1, { launcher.shownActions.first?.title == "Save as Snippet…" }) != nil {
+                        await pressKey(nil, code: CGKeyCode(kVK_Return))
+                        let settings = context.settings
+                        if await waitUntil(timeout: 3, { settings.isVisible && settings.pane == .snippets && settings.sheetShown }) == nil {
+                            problems.append("Save as Snippet… did not open the snippet editor (Settings open \(settings.isVisible), sheet \(settings.sheetShown))")
+                        } else {
+                            let fields = Self.axElements(roles: [kAXTextAreaRole, kAXTextFieldRole], where: { $0.contains("Wombat") || $0 == "Bien cordialement," })
+                            if fields.count < 2 { problems.append("the editor shows \(fields.count) of the copy's text and its first line as a name") }
+                            await captureSettingsBothWays(as: "settings-snippet-from-copy")
+                            if await waitUntil(timeout: 1, { settings.sheetIsKey }) != nil {
+                                await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                                _ = await waitUntil(timeout: 2) { !settings.sheetShown }
+                            }
+                        }
+                        settings.close()
+                    } else {
+                        problems.append("“snippet” in ⌘K on a text copy: \(launcher.shownActions.map(\.title))")
+                        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                    }
+                } else {
+                    problems.append("⌘K on a text copy lacks Save as Snippet…: \(launcher.shownActions.map(\.title))")
+                }
+                if launcher.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+                if launcher.isVisible { await pressKey(nil, code: CGKeyCode(kVK_Escape)) }
+            } else {
+                problems.append("the history did not open again for Save as Snippet…")
+            }
+            if context.snippets.all.count != snippetsBefore { problems.append("a snippet was saved before Save was pressed") }
+            for item in store.search("wombat") { try? store.delete(item.id) }
             context.clipboard.poll()
             let texts = store.search("okapi").map(\.text)
             if !texts.contains("https://example.com/okapi?id=7") || !texts.contains("https://example.com/okapi?id=7&utm_source=mail&fbclid=abc") {
