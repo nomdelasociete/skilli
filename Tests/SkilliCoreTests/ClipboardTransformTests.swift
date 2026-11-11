@@ -16,6 +16,8 @@ final class ClipboardTransformTests: XCTestCase {
         XCTAssertEqual(result("Paste Without Tracking", "https://example.com/a?id=7&utm_source=mail&utm_medium=x&fbclid=abc#top"),
                        "https://example.com/a?id=7#top")
         XCTAssertEqual(result("Paste Without Tracking", "https://example.com/a?utm_campaign=x"), "https://example.com/a")
+        // A name written percent-encoded is the same name.
+        XCTAssertEqual(result("Paste Without Tracking", "https://example.com/a?%75tm_source=mail&q=a%20b"), "https://example.com/a?q=a%20b")
         // Nothing to remove: not offered.
         XCTAssertEqual(titles("https://example.com/a?id=7"), [])
     }
@@ -44,6 +46,11 @@ final class ClipboardTransformTests: XCTestCase {
         // Not JSON: neither.
         XCTAssertFalse(titles("{not json}").contains("Paste as Pretty JSON"))
         XCTAssertEqual(result("Paste as Minified JSON", #"[ "a \" b" , 2 ]"#), #"["a \" b",2]"#)
+        // A combining mark right after the quote: still a string, its
+        // space kept.
+        let marked = "[ \"\u{0301}a b\" ]"
+        XCTAssertEqual(result("Paste as Minified JSON", marked), "[\"\u{0301}a b\"]")
+        XCTAssertEqual(result("Paste as Pretty JSON", marked), "[\n  \"\u{0301}a b\"\n]")
     }
 
     func testLinesSpacesAndCase() {

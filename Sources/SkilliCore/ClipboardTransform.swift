@@ -78,7 +78,8 @@ public struct ClipboardTransform: Equatable, Sendable {
     public static func withoutTracking(_ url: URL) -> String? {
         guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false), let items = parts.percentEncodedQueryItems else { return nil }
         let kept = items.filter { item in
-            let name = item.name.lowercased()
+            // The names come percent-encoded ("%75tm_source").
+            let name = (item.name.removingPercentEncoding ?? item.name).lowercased()
             return !name.hasPrefix("utm_") && !trackers.contains(name)
         }
         guard kept.count < items.count else { return nil }
@@ -95,16 +96,18 @@ struct JSONLayout {
 
     /// Nil when `text` is not a JSON object or array.
     init?(_ text: String) {
-        guard let first = text.first, first == "{" || first == "[", let data = text.data(using: .utf8),
+        guard let first = text.unicodeScalars.first, first == "{" || first == "[", let data = text.data(using: .utf8),
               (try? JSONSerialization.jsonObject(with: data)) != nil else { return nil }
-        var pretty = ""
-        var minified = ""
+        // Scalar by scalar: a combining mark right after a quote makes
+        // one character of the two, and the string would not be seen.
+        var pretty = String.UnicodeScalarView()
+        var minified = String.UnicodeScalarView()
         var depth = 0
         var inString = false
         var escaped = false
         var afterOpen = false
-        func line(_ depth: Int) -> String { "\n" + String(repeating: "  ", count: depth) }
-        for character in text {
+        func line(_ depth: Int) -> String.UnicodeScalarView { ("\n" + String(repeating: "  ", count: depth)).unicodeScalars }
+        for character in text.unicodeScalars {
             if inString {
                 pretty.append(character)
                 minified.append(character)
@@ -117,7 +120,8 @@ struct JSONLayout {
                 }
                 continue
             }
-            if character.isWhitespace { continue }
+            // JSON's own four: anything else outside a string is not JSON.
+            if character == " " || character == "\n" || character == "\t" || character == "\r" { continue }
             minified.append(character)
             switch character {
             case "{", "[":
@@ -135,7 +139,7 @@ struct JSONLayout {
                 pretty.append(character)
                 pretty += line(depth)
             case ":":
-                pretty += ": "
+                pretty += ": ".unicodeScalars
             default:
                 if afterOpen { pretty += line(depth) }
                 if character == "\"" { inString = true }
@@ -143,7 +147,7 @@ struct JSONLayout {
             }
             afterOpen = false
         }
-        self.pretty = pretty
-        self.minified = minified
+        self.pretty = String(pretty)
+        self.minified = String(minified)
     }
 }

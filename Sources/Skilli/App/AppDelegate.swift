@@ -1179,8 +1179,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             // Never the text: only that it was pasted another way.
             Log.trace("Clipboard: a copy pasted another way, \(text.count) characters")
-            // Let the app that was in front get its focus back first.
+            // The launcher never takes the front: the app in front now
+            // is the one the paste is for.
+            let target = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            // Let it get its focus back first.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                // Another app in front meanwhile, or the launcher open
+                // again: ⌘V would land there. Left on the clipboard.
+                guard !self.launcher.isVisible, NSWorkspace.shared.frontmostApplication?.processIdentifier == target else {
+                    self.aiActions.notify("The text is on the clipboard: ⌘V pastes it.", caller: "Clipboard", run: nil, seconds: 3)
+                    return
+                }
                 self.selection.press("v", flags: .maskCommand)
             }
         }
