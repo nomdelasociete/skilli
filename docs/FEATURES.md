@@ -259,7 +259,8 @@ Everything you copy, and your screenshots, ready to paste again.
   all again. With CleanShot X, ⌘K on an image
   annotates it, pins it or adds it to Quick Access.
 - **A part of a copy**: drag over a text or code copy in the preview, ⌘C
-  copies that part.
+  copies that part. A long copy shows whole (up to 200,000 characters):
+  a word found far down it is marked and in view.
 - **Text in an image**: ⌘K → Show Text in Image (all its words in the
   picture's place, selectable), Copy Text in Image (⇧⌘C), Paste Text in
   Image (⇧↩). The same for a picture copied as its file (from Finder or

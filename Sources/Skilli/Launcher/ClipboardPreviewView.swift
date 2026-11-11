@@ -76,6 +76,11 @@ final class ClipboardPreviewView: NSView {
     /// The text shown in the tile (a text or code copy, an image's whole
     /// text), and the part of it picked with the pointer.
     var shownText: String { text.isHidden ? "" : text.string }
+    /// Self-test hooks: a long copy's rest is still to come; how long
+    /// joining the last one held the main thread.
+    var restPending: Bool { text.restPending }
+    var restTook: Duration { text.restTook }
+    var restLaps: String { text.restLaps }
     var selectedText: String? { text.selectedText }
     @discardableResult
     func clearSelection() -> Bool { text.isHidden ? false : text.clearSelection() }
@@ -226,6 +231,8 @@ final class ClipboardPreviewView: NSView {
         if !sameAsShown {
             textShownFor = nil
             lastMarked = nil
+            // Another copy, or none: the rest of a long one stops coming.
+            text.stop()
         }
         self.item = item
         self.imageURL = imageURL
@@ -342,7 +349,9 @@ final class ClipboardPreviewView: NSView {
     }
 
     private func showPlain(_ string: String, code: Bool, language: String?) {
-        text.show(string, code: code, language: language, keeping: sameAsShown)
+        // A long copy whole: found words past its start are marked, a
+        // part picked anywhere in it (docs/clipboard-long-copies.md).
+        text.show(string, code: code, language: language, whole: PreviewText.wholeLimit, keeping: sameAsShown)
         text.isHidden = false
         markFound(inWholeText: false)
     }

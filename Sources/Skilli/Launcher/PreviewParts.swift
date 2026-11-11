@@ -32,6 +32,9 @@ final class PreviewText: NSView {
         // TextKit 1, for the washes (`WashLayoutManager`).
         let storage = NSTextStorage()
         let layout = WashLayoutManager()
+        // A long text is laid out where it is looked at, not from its
+        // first line down to there.
+        layout.allowsNonContiguousLayout = true
         storage.addLayoutManager(layout)
         let container = NSTextContainer(size: NSSize(width: frame.width, height: .greatestFiniteMagnitude))
         container.widthTracksTextView = true
@@ -135,37 +138,124 @@ final class PreviewText: NSView {
         let found = words.isEmpty ? [] : ClipboardSearch.ranges(of: words, in: string).map { NSRange($0, in: string) }
         markedCount = found.count
         firstMarked = found.first
+        markedWords = words
         for range in found {
             layout.addTemporaryAttribute(.backgroundColor, value: NSColor.systemYellow.withAlphaComponent(0.35), forCharacterRange: range)
         }
         if moving, let first = found.first { textView.scrollRangeToVisible(first) }
     }
 
+    /// A long copy shows whole up to this many characters: its start at
+    /// once, the rest right after (`show`, `whole`).
+    static let wholeLimit = 200_000
+
+    /// The words marked last, to mark them in the rest of a long text.
+    private var markedWords = ""
+    /// The text asked for last, as given: the same again keeps its place.
+    private var source: NSAttributedString?
+    /// One more for each text shown: a rest that comes for another is dropped.
+    private var shows = 0
+    /// Self-test hooks: the rest of a long text is still to come; the
+    /// longest one piece of the last one held the main thread; how many
+    /// pieces in how long.
+    private(set) var restPending = false
+    private(set) var restTook: Duration = .zero
+    private(set) var restLaps = ""
+
     /// Plain text, monospaced when it is code. `keeping`: the same copy
     /// shown again keeps its place and what is picked in it.
-    func show(_ text: String, code: Bool, language: String?, limit: Int = 4_000, keeping: Bool = false) {
-        show(NSAttributedString(string: text, attributes: Self.attributes(code: code)), language: language, limit: limit, keeping: keeping)
+    func show(_ text: String, code: Bool, language: String?, limit: Int = 4_000, whole: Int = 0, keeping: Bool = false) {
+        show(NSAttributedString(string: text, attributes: Self.attributes(code: code)), language: language, limit: limit, whole: whole,
+             keeping: keeping)
     }
 
-    func show(_ text: NSAttributedString, language name: String?, limit: Int = 4_000, keeping: Bool = false) {
+    /// `limit` characters at once (the preview shows in well under a
+    /// frame whatever the copy). With `whole` over `limit`, the rest up
+    /// to `whole` joins them piece by piece on the main thread's next
+    /// turns, in place: nothing in view moves, what is picked stays
+    /// picked, and the words marked are marked in it too (the first
+    /// scrolled to when nothing before it held one).
+    func show(_ text: NSAttributedString, language name: String?, limit: Int = 4_000, whole: Int = 0, keeping: Bool = false) {
         language.stringValue = name ?? ""
         language.isHidden = name == nil
         languageLine.isHidden = name == nil
         needsLayout = true
-        if keeping, let shown = textView.textStorage, shown.isEqual(to: Self.cut(text, at: limit)) { return }
-        textView.textStorage?.setAttributedString(Self.cut(text, at: limit))
+        if keeping, let source, source.isEqual(to: text) { return }
+        source = text
+        shows += 1
+        restPending = false
+        let head = Self.cut(text, at: limit)
+        textView.textStorage?.setAttributedString(head)
         textView.setSelectedRange(NSRange(location: 0, length: 0))
         textView.scroll(.zero)
+        // `head !== text`: it was cut, and ends with "…".
+        guard whole > limit, head !== text else { return }
+        restPending = true
+        restTook = .zero
+        join(Self.cut(text, at: whole), from: head.length - 1, show: shows, began: .now, pieces: 0)
     }
 
-    /// Past `limit` characters (4,000: nobody reads more here) the start,
-    /// then "…".
+    /// Another preview takes the text's place (a picture, a card, no
+    /// row): the pieces still to come are dropped, and the same text
+    /// asked for again is shown anew.
+    func stop() {
+        shows += 1
+        restPending = false
+        source = nil
+    }
+
+    /// A piece of the rest joins the text on each turn of the main
+    /// thread: all at once held it 36 ms for 140,000 characters (measured
+    /// 2026-11-11), a key not drawn meanwhile.
+    /// Each piece is laid out as it comes: left for later, the whole
+    /// layout fell on the turn that scrolled to a word far down (31 ms).
+    private static let piece = 8_000
+
+    /// `from`: where the text shown ends ("…", which gives way to what
+    /// follows). Stops when another text is shown.
+    private func join(_ all: NSAttributedString, from: Int, show: Int, began: ContinuousClock.Instant, pieces: Int) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.shows == show, let storage = self.textView.textStorage, storage.length == from + 1 else { return }
+            let start = ContinuousClock.now
+            var end = min(all.length, from + Self.piece)
+            if end < all.length { end = Self.edge(in: all, near: end, after: from) }
+            let part = NSMutableAttributedString(attributedString: all.attributedSubstring(from: NSRange(location: from, length: end - from)))
+            let last = end == all.length
+            if !last { part.append(NSAttributedString(string: "…", attributes: all.attributes(at: end - 1, effectiveRange: nil))) }
+            storage.replaceCharacters(in: NSRange(location: from, length: 1), with: part)
+            self.textView.layoutManager?.ensureLayout(forCharacterRange: NSRange(location: from, length: part.length))
+            // The words marked, in what just came too; the first scrolled
+            // to when nothing before held one.
+            let hadMark = self.firstMarked != nil
+            if !self.markedWords.isEmpty, !hadMark || last { self.mark(self.markedWords, moving: !hadMark) }
+            self.needsLayout = true
+            self.restTook = max(self.restTook, ContinuousClock.now - start)
+            guard !last else {
+                self.restPending = false
+                self.restLaps = "\(pieces + 1) pieces in \((ContinuousClock.now - began).compact)"
+                return
+            }
+            self.join(all, from: end, show: show, began: began, pieces: pieces + 1)
+        }
+    }
+
+    /// Past `limit` characters the start, then "…".
     private static func cut(_ text: NSAttributedString, at limit: Int) -> NSAttributedString {
         guard text.length > limit else { return text }
-        let end = (text.string as NSString).rangeOfComposedCharacterSequence(at: limit).location
+        let end = edge(in: text, near: limit, after: 0)
+        guard end < text.length else { return text }
         let cut = NSMutableAttributedString(attributedString: text.attributedSubstring(from: NSRange(location: 0, length: end)))
         cut.append(NSAttributedString(string: "…", attributes: text.attributes(at: end - 1, effectiveRange: nil)))
         return cut
+    }
+
+    /// Where to cut `text` near `place` without splitting a character
+    /// made of several (a letter and its marks, an emoji): before it,
+    /// or after it when that would not go past `start` (a letter with
+    /// thousands of marks: a cut before it would never advance).
+    static func edge(in text: NSAttributedString, near place: Int, after start: Int) -> Int {
+        let whole = (text.string as NSString).rangeOfComposedCharacterSequence(at: place)
+        return whole.location > start ? whole.location : min(text.length, NSMaxRange(whole))
     }
 
     static func attributes(code: Bool) -> [NSAttributedString.Key: Any] {

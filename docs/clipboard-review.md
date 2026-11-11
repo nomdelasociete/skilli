@@ -63,6 +63,10 @@ said in one line when the history opens next; #16 the footer of an image
 whose words were read says Paste Text ⇧↩. Left of #13: a key inside a
 longer text, expiry, the file not encrypted.
 
+Then (docs/clipboard-long-copies.md): #15 a long copy shows whole in
+the preview, up to 200,000 characters, a word found far down marked and
+in view, a part picked anywhere.
+
 ## Must (the history is behind the others here)
 
 | # | Gap | Proof | Others |
@@ -162,4 +166,4 @@ list, ↩ to pasted, copy to kept.
 3. #3 pins and #5 kind filter: one spec, they share the header.
 4. #7 actions per kind (open link, show file, save as snippet).
 5. ~~Speed budget lines + the three measurements~~: done.
-6. ~~#13, #14, #16~~: done. Then #8–#12 and #15.
+6. ~~#13, #14, #16~~, ~~#15~~: done. Then #8–#12.
