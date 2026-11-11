@@ -376,12 +376,22 @@ public enum ClipboardSecret {
     /// a private key. What it looks like, to say so ("a GitHub token");
     /// nil for anything else.
     public static func name(of text: String) -> String? {
-        // A private key is several lines, often with a certificate.
-        if text.utf16.count <= 20_000, text.contains("PRIVATE KEY-----"), text.contains("-----BEGIN ") { return "a private key" }
-        let word = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A private key is several lines, often with a certificate:
+        // anywhere in the copy, whatever its length (a long copy is read
+        // off the main thread, `ClipboardHistory.look`).
+        if text.contains("PRIVATE KEY-----"), text.contains("-----BEGIN ") { return "a private key" }
+        // The word between the spaces around it, without copying a long
+        // text to trim it.
+        let spaces = CharacterSet.whitespacesAndNewlines
+        let scalars = text.unicodeScalars
+        guard let first = scalars.firstIndex(where: { !spaces.contains($0) }),
+              let last = scalars.lastIndex(where: { !spaces.contains($0) }) else { return nil }
+        let inner = scalars[first...last]
+        // At most 8,192 characters looked at: longer is no key.
+        guard inner.prefix(8_193).count <= 8_192, !inner.contains(where: { spaces.contains($0) }) else { return nil }
+        let word = String(inner)
         let length = word.utf16.count
-        guard length >= 20, length <= 8_192, !word.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.contains($0) })
-        else { return nil }
+        guard length >= 20 else { return nil }
         let range = NSRange(location: 0, length: length)
         return shapes.first { $0.pattern.firstMatch(in: word, range: range) != nil }?.name
     }

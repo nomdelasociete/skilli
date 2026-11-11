@@ -139,6 +139,11 @@ final class ClipboardRulesTests: XCTestCase {
         // In two pieces: the repo's hygiene check refuses the header whole.
         let header = "-----BEGIN OPENSSH " + "PRIVATE KEY-----"
         XCTAssertEqual(ClipboardSecret.name(of: header + "\n" + letters + "\n-----END OPENSSH " + "PRIVATE KEY-----\n"), "a private key")
+        // Whatever is around it: a long copy, a word lost in spaces.
+        let long = String(repeating: "a line of a long file\n", count: 6_000)
+        XCTAssertEqual(ClipboardSecret.name(of: long + header + "\n" + letters), "a private key")
+        XCTAssertEqual(ClipboardSecret.name(of: String(repeating: " ", count: 120_000) + "ghp_" + letters.prefix(36)), "a GitHub token")
+        XCTAssertNil(ClipboardSecret.name(of: long))
     }
 
     /// What the user wants back from the history is kept: a hash, a UUID,

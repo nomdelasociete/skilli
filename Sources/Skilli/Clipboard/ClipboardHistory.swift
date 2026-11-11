@@ -110,7 +110,7 @@ final class ClipboardHistory {
             keepNow(new)
         case .notKept(let reason):
             note(reason, from: front?.localizedName)
-        case .later(let make, let ifNot):
+        case .later(let make):
             let date = Date.now
             let appName = front?.localizedName
             // Clear History while it is made: not kept after it.
@@ -118,14 +118,17 @@ final class ClipboardHistory {
             keepingLater += 1
             Task.detached(priority: .userInitiated) { [weak self] in
                 var added: (item: ClipboardStore.Item, isNew: Bool)?
-                if let new = make() {
+                switch make() {
+                case .item(let new):
                     do {
                         added = try store.add(new, at: date, ifClears: clears)
                     } catch {
                         Log.actions.error("\(error.localizedDescription, privacy: .public)")
                     }
-                } else if let ifNot {
-                    await self?.note(ifNot, from: appName, at: date)
+                case .notKept(let reason):
+                    await self?.notedLater(reason, from: appName, at: date)
+                case nil:
+                    break
                 }
                 await self?.keptLater(added)
             }
@@ -135,6 +138,15 @@ final class ClipboardHistory {
     /// The last copy not kept and why, until the history says it
     /// (`takeNotKept`). In memory only, never what was copied.
     @ObservationIgnored private(set) var notKept: ClipboardNotKept?
+
+    /// A copy that took time to look at is not kept: the history says it
+    /// now if it is open (the launcher asked before this was known).
+    @ObservationIgnored var onNotKeptLater: (() -> Void)?
+
+    private func notedLater(_ reason: ClipboardNotKept.Reason, from appName: String?, at date: Date) {
+        note(reason, from: appName, at: date)
+        onNotKeptLater?()
+    }
 
     private func note(_ reason: ClipboardNotKept.Reason, from appName: String?, at date: Date = .now) {
         notKept = ClipboardNotKept(reason: reason, appName: appName, date: date)
@@ -566,17 +578,23 @@ final class ClipboardHistory {
         switch look(pasteboard, app: app, appName: appName, excluded: excluded, keepsSecrets: keepsSecrets) {
         case nil, .notKept: nil
         case .item(let new): new
-        case .later(let make, _): make()
+        case .later(let make): if case .item(let new) = make() { new } else { nil }
         }
     }
 
-    /// What `look` read on the clipboard: a copy ready to keep, one
-    /// whose making is heavy and can run on any thread (nil from it: not
-    /// kept after all, for `ifNot` when the user is to be told), or one
-    /// not kept that the history says.
+    /// What `look` read on the clipboard: a copy ready to keep, one not
+    /// kept that the history says, or one whose making is heavy and can
+    /// run on any thread (then one of the first two, or nil: not worth
+    /// keeping after all).
     enum Looked {
         case item(ClipboardStore.NewItem)
-        case later(@Sendable () -> ClipboardStore.NewItem?, ifNot: ClipboardNotKept.Reason?)
+        case notKept(ClipboardNotKept.Reason)
+        case later(@Sendable () -> Made?)
+    }
+
+    /// What a heavy copy turned out to be.
+    enum Made: Sendable {
+        case item(ClipboardStore.NewItem)
         case notKept(ClipboardNotKept.Reason)
     }
 
@@ -614,27 +632,33 @@ final class ClipboardHistory {
                 }
             }
             let kept = formats.isEmpty ? nil : formats
-            let make: @Sendable () -> ClipboardStore.NewItem? = {
-                guard string.utf8.count <= ClipboardPolicy.textLimit else { return nil }
-                return ClipboardStore.NewItem(kind: .text, text: string, formats: kept, app: app, appName: appName, hash: hash("text", Data(string.utf8)))
+            // A key or a token by its shape (a few patterns on one word,
+            // a private key's header), then the size, then the copy.
+            let make: @Sendable () -> Made? = {
+                if !keepsSecrets, let name = ClipboardSecret.name(of: string) { return .notKept(.secret(name)) }
+                guard string.utf8.count <= ClipboardPolicy.textLimit else { return .notKept(.longText) }
+                return .item(ClipboardStore.NewItem(kind: .text, text: string, formats: kept, app: app, appName: appName,
+                                                    hash: hash("text", Data(string.utf8))))
             }
             // `utf16.count` costs nothing on a string the pasteboard gave.
-            if string.utf16.count > longText { return .later(make, ifNot: .longText) }
-            // A key or a token by its shape: a few patterns on one word.
-            if !keepsSecrets, let name = ClipboardSecret.name(of: string) { return .notKept(.secret(name)) }
-            return make().map(Looked.item)
+            if string.utf16.count > longText { return .later(make) }
+            switch make() {
+            case .item(let new): return .item(new)
+            case .notKept(let reason): return .notKept(reason)
+            case nil: return nil
+            }
         }
 
         // The picture as it is there; what is made of it is heavy.
         let png = pasteboard.data(forType: .png)
         guard let data = png ?? pasteboard.data(forType: .tiff) ?? NSImage(pasteboard: pasteboard)?.tiffRepresentation else { return nil }
         guard data.count <= ClipboardPolicy.pictureLimit else { return .notKept(.bigPicture) }
-        return .later({
+        return .later {
             guard let rep = NSBitmapImageRep(data: data), let png = png ?? rep.representation(using: .png, properties: [:]) else { return nil }
             // A copied web image keeps its address: searchable too.
-            return ClipboardStore.NewItem(kind: .image, text: string ?? "", imageData: png, size: "\(rep.pixelsWide)×\(rep.pixelsHigh)",
-                                          app: app, appName: appName, hash: hash("image", png))
-        }, ifNot: nil)
+            return .item(ClipboardStore.NewItem(kind: .image, text: string ?? "", imageData: png, size: "\(rep.pixelsWide)×\(rep.pixelsHigh)",
+                                                app: app, appName: appName, hash: hash("image", png)))
+        }
     }
 
     /// The clipboard's image as it is there, for Vision to read

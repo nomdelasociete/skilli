@@ -547,6 +547,16 @@ final class LauncherController: NSObject {
         updateResults(query: searchField.stringValue)
     }
 
+    /// A copy not kept since the history was last open (a key by its
+    /// shape, too big): said once, in the footer's place, while the
+    /// history shows. As the mode opens, once the panel is up when the
+    /// mode was kept from last time, and when a long copy turns out not
+    /// kept while it is open.
+    func sayClipNotKept() {
+        guard clipboardMode, panel.isVisible, let line = clipboardNotKept?() else { return }
+        say(line)
+    }
+
     /// Clipboard mode opened: the history may need its permission.
     var onClipboardMode: (() -> Void)?
     /// The copy not kept since this was last asked, as one line; then nil.
@@ -916,6 +926,9 @@ final class LauncherController: NSObject {
         let orderStart = ContinuousClock.now
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(searchField)
+        // The history kept from last time entered its mode before the
+        // panel was up.
+        sayClipNotKept()
         // Words kept: selected, so typing replaces them (as Spotlight does).
         if restoring != nil { searchField.currentEditor()?.selectAll(nil) }
         let drawStart = ContinuousClock.now
@@ -3058,9 +3071,7 @@ final class LauncherController: NSObject {
             meaningAvailable = clipboardMeaningAvailable?() ?? false
             setSplit(.clipboard)
             onClipboardMode?()
-            // A copy not kept since the history was last open (a key by
-            // its shape, too big): said once, in the footer's place.
-            if panel.isVisible, let line = clipboardNotKept?() { say(line) }
+            sayClipNotKept()
         case .catalog:
             modeChip.set(title: "Catalog", color: .controlAccentColor)
             searchField.placeholderString = "Anything skil.li does: kill, timer, emoji, window…"

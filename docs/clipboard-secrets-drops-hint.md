@@ -62,14 +62,15 @@ key's header:
 | `AIza` + 35 | a Google API key |
 | `npm_` + 36 | an npm token |
 | three base64url parts, the first two starting `eyJ` | a sign-in token |
-| `-----BEGIN … PRIVATE KEY-----` anywhere in a copy of at most 20,000 characters | a private key |
+| `-----BEGIN … PRIVATE KEY-----` anywhere in the copy, whatever its length | a private key |
 
 - Settings → Clipboard → Advanced → **Never keep keys and tokens**, on
   out of the box, as the password managers' apps are excluded out of
   the box; `clipboardSkipSecrets` for skillies and agents
   (`set_setting`).
-- Checked on the main thread when copied: a few patterns on one word of
-  at most 8,192 characters, only for copies under 100,000 characters.
+- Checked when copied: a few patterns on one word of at most 8,192
+  characters, and the header looked for. On the main thread for a copy
+  up to 100,000 characters, off it for a longer one (with its hash).
 - Not kept means nowhere: no row, no file, no log of its text. The log
   says its shape's name only.
 - Nothing leaves the Mac.
@@ -83,8 +84,10 @@ file is not encrypted.
 - `ClipboardNotKept`: the reason (a key's shape name, a text over 5 MB,
   a picture over 40 MB), the app's name, the time. In memory, the last
   one only, for a day; never the copy.
-- Said by `LauncherController.say` as clipboard mode opens, after the
-  clipboard was read (a copy made a moment before ✦C is said too).
+- Said by `LauncherController.sayClipNotKept` as clipboard mode opens,
+  after the clipboard was read (a copy made a moment before ✦C is said
+  too); once the panel is up when the history was kept from last time;
+  and at once in an open history when a long copy turns out not kept.
 - Not said: a screenshot of the watched folder over 40 MB, a copy from
   an excluded app, a copy a password manager marked secret (those are
   the user's own choice or the app's).

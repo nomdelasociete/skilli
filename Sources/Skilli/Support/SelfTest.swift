@@ -17077,6 +17077,8 @@ final class SelfTest {
         } else {
             problems.append("with Never keep keys and tokens off, the token was not kept")
         }
+        // On again at once: nothing copied meanwhile is kept as a key.
+        context.preferences.clipboardSkipSecrets = true
         NSPasteboard.general.clearContents()
         _ = context.clipboard.takeNotKept()
 
