@@ -25,8 +25,15 @@ SkilliCore): the word its parser reads, the chip's name, an example.
   field holds only the argument, its example as the placeholder. The row
   says what was read ("Keep Awake · 2 h (until 16:05)"); ↩ does it. Inside
   the chip the words are an argument, never a search: nothing overlaps.
-- **Without an alias**: ↩ on the command in the Catalog ("?") opens the
-  same chip.
+- **The alias alone**: the command comes first, its Catalog row for
+  those with no row of their own (Timer, Set Volume…); ↩ on it opens the
+  chip.
+- **Without an alias**: ↩ in the Catalog ("?") on a command that only
+  reads a value (Keep Awake for a While, Timer, Set Volume, Add an Event,
+  Remind Me) opens the same chip. Keep Awake and Record Meeting do
+  something with no value: ↩ on them there does it, as on their row.
+- **Off in Settings → Catalog**: the command's rows leave the search; its
+  alias and the "?" still open its chip, as for any entry turned off.
 - **One field**, read by the command's own parser (`2h`, `90 min`,
   `until 6pm`): no field per unit, no command per way of saying it.
 - **Nothing typed**: the command's plain row where it has one (Keep Awake:
@@ -41,18 +48,39 @@ SkilliCore): the word its parser reads, the chip's name, an example.
 
 ## Moment
 
-- **When**: in the launcher, in a hurry, for a command used often enough to
-  have been given an alias, when the value is what is left to say.
+- **When**, each case apart. All in the launcher, hands on the keys, the
+  value the only thing left to say:
+  - *Keep Awake*: before leaving a long task running (a build, a
+    download), for a length or until an hour.
+  - *Timer*: something started away from the Mac (tea, a break).
+  - *Set Volume*: a call or a video about to start, a known level wanted.
+  - *Record Meeting*: a meeting starting, a name worth giving it now.
+  - *Add an Event*, *Remind Me*: a thought in the middle of other work,
+    written before it is lost.
 - **Path**: the alias, a space, the value, ↩. Or "?" → the command → ↩ →
-  the value, ↩.
+  the value, ↩. The alias alone puts the command first.
 - **Hint / push**: the chip names the command and the placeholder shows an
   example, so what to type is read, not learnt. No push: nobody is told to
-  set an alias.
-- **Deterministic or AI**: deterministic, the parsers of the whole words
-  (`LauncherArgument.text`). No model.
-- **Cost of wrong**: low. Nothing is done before ↩, and the row says what
-  was read. Giving up the words cut short costs those who typed them: they
-  set an alias once.
+  set an alias, none is given.
+- **Deterministic or AI**: deterministic for all six, the parsers of the
+  whole words (`LauncherArgument.text`). No model, and the chip sends
+  nothing off the Mac: a length, a level and a recording's name stay
+  here; an event or a reminder goes to the user's own Calendar or
+  Reminders, which sync as the user set them.
+- **Wrong**: nothing is done before ↩, and the row says what was read
+  first ("Keep Awake · 2 h (until 16:05)"); not read, no row. After ↩:
+  - *Keep Awake*: the cup in the menu bar says until when; the chip or
+    "awake" shows it running, ↩ lets the Mac sleep.
+  - *Timer*: it counts down in the menu bar; the Timer chip, empty, lists
+    the timers running.
+  - *Set Volume*: heard at once; set again.
+  - *Record Meeting*: a recording is never automatic, and the chip shows
+    the one running, ↩ stops it; a recording kept by mistake is deleted
+    in Recordings (⌘Z brings it back).
+  - *Add an Event*, *Remind Me*: the card says where it was added, ⌘Z
+    takes it back.
+  Giving up the words cut short costs those who typed them: they set an
+  alias once.
 
 ## Where
 
@@ -61,10 +89,13 @@ SkilliCore): the word its parser reads, the chip's name, an example.
 - `CatalogEntry.takesAlias`: true for an entry that declares an argument,
   even one with no launcher row of its own (`catalog.timer`).
 - `LauncherController`: `Mode.argument`, `openAlias`, `argumentRows`,
-  `runCatalog`.
+  `argumentShown` (wired, not the Catalog's switch), `argumentEntry` (the
+  alias alone), `runCatalog`.
+- Self-tests: `calc` (the alias, alone and with a value, ⌫ out of the
+  chip), `catalog` (Timer ↩ in the "?").
 
 ## Not done
 
-- These commands' alias typed alone (no space) puts nothing first for the
-  five that have no row of their own in the root search.
+- A field for the recording's name from the "?" without an alias: Record
+  Meeting ↩ records at once there; "rec <name>" typed does it.
 - More than one argument for a built-in command: none needs it yet.

@@ -3815,14 +3815,10 @@ final class LauncherController: NSObject {
         }
     }
 
-    /// The Catalog entry a command's value rows go by: off, no chip either.
-    private static func catalogID(_ argument: LauncherArgument) -> String {
-        argument.id == "system:keepAwake" ? "catalog.awake" : argument.id
-    }
-
-    /// Whether the command can run now: on in the Catalog, and wired.
+    /// Whether the command can run now: wired, its calendar or reminders
+    /// usable. Off in Settings → Catalog only takes its rows out of the
+    /// search: the alias and the "?" are asked for, they still open it.
     private func argumentShown(_ argument: LauncherArgument) -> Bool {
-        guard currentCatalog().shows(Self.catalogID(argument)) else { return false }
         switch argument.word {
         case AwakeRequest.word: return onKeepAwake != nil
         case TimerRequest.word: return onStartTimer != nil
@@ -3870,10 +3866,17 @@ final class LauncherController: NSObject {
     /// The item the text's alias names: alone ("e") or with a space and
     /// more ("g rust": a quicklink with its query).
     private func aliasedItem(_ text: String) -> LauncherItem? {
-        if let alias = LauncherAliases.exact(text, among: aliases()) { return resolve(learnedID: alias.id) }
+        if let alias = LauncherAliases.exact(text, among: aliases()) { return resolve(learnedID: alias.id) ?? argumentEntry(alias.id) }
         guard let (alias, rest) = LauncherAliases.split(text, among: aliases()), let item = resolve(learnedID: alias.id) else { return nil }
         if case .quicklink(let link, _, _) = item { return .quicklink(link, query: rest) }
         return item
+    }
+
+    /// The alias of a command that reads a value and has no row of its own
+    /// ("Timer"), typed alone: its Catalog row, first; ↩ opens its chip.
+    private func argumentEntry(_ id: String) -> LauncherItem? {
+        guard let argument = LauncherArgument.of(id), argumentShown(argument) else { return nil }
+        return FeatureCatalog.entries(catalogInput?() ?? FeatureCatalog.Input()).first { $0.id == id }.map(LauncherItem.catalog)
     }
 
     /// The items an alias can open: what the launcher finds again by id.
@@ -4129,12 +4132,13 @@ final class LauncherController: NSObject {
     }
 
     /// How to reach `entry`, one array of keycaps per way: the prefix, the
-    /// user's alias (only on an entry that is a launcher row of its own),
-    /// the shortcut.
+    /// user's alias (only on an entry that is a launcher row of its own,
+    /// or that reads a value with no row: `LauncherArgument`), the shortcut.
     private func catalogKeys(_ entry: CatalogEntry) -> [[String]] {
         var ways: [[String]] = []
         if let prefix = entry.prefix?.trimmingCharacters(in: .whitespaces), !prefix.isEmpty { ways.append([prefix]) }
-        if catalogItems[entry.id]?.learningID == entry.id, let alias = aliasByID[entry.id] { ways.append([alias]) }
+        let aliased = catalogItems[entry.id]?.learningID == entry.id || (catalogItems[entry.id] == nil && LauncherArgument.of(entry.id) != nil)
+        if aliased, let alias = aliasByID[entry.id] { ways.append([alias]) }
         if let chords = catalogShortcut(entry) { ways.append(chords.map(\.description)) }
         return ways
     }

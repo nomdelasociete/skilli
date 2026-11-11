@@ -1112,13 +1112,18 @@ mode or skillie returns. Three runs (faded, `placeWeight` 2.5) and the empty
   SkilliCore, spec `docs/launcher-arguments.md`): Keep Awake and Keep
   Awake for a While, Timer, Set Volume, Record Meeting, Add an Event,
   Remind Me declare the word their parser reads, a chip and an example.
-  The user's alias then a space, or ↩ on the entry in the "?", turns the
-  launcher into that chip (`Mode.argument`): the field holds only the
+  The user's alias then a space turns the launcher into that chip
+  (`Mode.argument`), and so does ↩ in the "?" on an entry that only reads
+  a value (`run: .type`; Keep Awake and Record Meeting do their plain
+  action there, as on their row): the field holds only the
   value, the example as its placeholder, the row says what was read
   (`argumentRows`, the parsers of the whole words), ↩ does it. Nothing
   typed: the command's plain row where it has one (Keep Awake, Record
   Meeting, the timers running). These entries take an alias even without
-  a row of their own (`CatalogEntry.takesAlias`). skil.li gives no alias
+  a row of their own (`CatalogEntry.takesAlias`); typed alone it puts
+  their Catalog row first (`argumentEntry`), ↩ opens the chip. Off in
+  Settings → Catalog, the alias and the "?" still open the chip
+  (`argumentShown` checks what is wired, not the switch). skil.li gives no alias
   and cuts no word short ("awa 2h" is a search): one system, the user's.
   A new command that reads a value: one line in `LauncherArgument.all`,
   its rows in `argumentRows`.

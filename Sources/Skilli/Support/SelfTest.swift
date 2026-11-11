@@ -12340,8 +12340,8 @@ final class SelfTest {
         let killMode = await waitUntil(timeout: 1) { launcher.isKilling } != nil
         await closeLauncher()
 
-        // Found by its name, the command opens it; a row that needs words
-        // puts their start in the field.
+        // Found by its name, the command opens it; a row that reads a
+        // value opens its chip (`LauncherArgument`).
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
         _ = await waitUntil(timeout: 1) { launcher.isVisible }
@@ -12352,8 +12352,8 @@ final class SelfTest {
         for character in "timer" { await pressKey(character) }
         _ = await waitUntil(timeout: 1) { launcher.selectedResultTitle == "Timer" }
         await pressKey(nil, code: CGKeyCode(kVK_Return))
-        let typed = await waitUntil(timeout: 1) { !launcher.isInCatalog && launcher.query == "timer " } != nil
-        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+        let typed = await waitUntil(timeout: 1) { !launcher.isInCatalog && launcher.chipTitle == "Timer" && launcher.query.isEmpty } != nil
+        await closeLauncher()
 
         guard await focusTestWindow() else { return }
         _ = await hyperChord([" "], trigger: Self.ownTriggerKeyCode)
@@ -12399,7 +12399,7 @@ final class SelfTest {
         record(name, passed,
                "opened: \(opened), \(rows) rows; groups \(groups); header “\(topHeader)”; rows that are not their launcher row: \(mismatches); drawn as another at the top: \(misdrawnTop); "
                + "↓ over the Do header to Kill a Process: \(overHeader), rows drawn as another: \(misdrawn), header followed to Do: \(followed), headers skipped: \(skippedHeaders); “? kill” first: \(killFirst), drawn as another: \(misdrawnKill), keys \(killKeys); ↩ → Kill: \(killMode); "
-               + "“help” finds the command: \(command), ↩ opens the Catalog: \(fromCommand); Timer ↩ types “timer ”: \(typed); "
+               + "“help” finds the command: \(command), ↩ opens the Catalog: \(fromCommand); Timer ↩ opens its chip, the field empty: \(typed); "
                + "Clipboard History keys \(clipKeys): \(keycaps); ⌘K \(shownActions): \(actions); “zqxj” lists nothing: \(nothing), footer empty: \(emptyFooter), ⇥ asked nothing: \(tabStayed), ⌘K said a line: \(said), gone with ⌫: \(noteGone); ⌫ left: \(left); launcher-note-light/-dark.png", nil)
     }
 
@@ -15013,7 +15013,7 @@ final class SelfTest {
         // No word cut short: "awa 3h" is a search, no alias is given.
         for character in "awa 3h" { await pressKey(character) }
         await pause(300)
-        let shortened = !(context.launcher.topResultName ?? "").hasPrefix("Keep Awake · 3 h") && context.launcher.chipTitle.isEmpty
+        let shortened = !context.launcher.resultTitles.contains { $0.hasPrefix("Keep Awake · 3 h") } && context.launcher.chipTitle.isEmpty
         for _ in 0..<6 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
         // The user's alias then a space: the command's chip, the field
         // holds only the length (`LauncherArgument`), its row says it.
@@ -15026,9 +15026,13 @@ final class SelfTest {
         let chipLeft = await waitUntil(timeout: 1) { self.context.launcher.chipTitle.isEmpty } != nil
         for _ in 0..<3 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
         // A command with no row of its own takes an alias too: Timer.
-        for character in "zt 10 tea" { await pressKey(character) }
+        // The alias alone: its Catalog row first, no chip yet.
+        for character in "zt" { await pressKey(character) }
+        let timerFirst = await waitUntil(timeout: 1) { self.context.launcher.topResultName == "Timer" } != nil && context.launcher.chipTitle.isEmpty
+        for character in " 10 tea" { await pressKey(character) }
         let timerChip = await waitUntil(timeout: 1) {
-            self.context.launcher.chipTitle == "Timer" && (self.context.launcher.topResultName ?? "").hasPrefix("Start Timer")
+            let row = self.context.launcher.topResultName ?? ""
+            return self.context.launcher.chipTitle == "Timer" && row.hasPrefix("Start Timer") && row.contains("Tea") && row.contains("10 min")
         } != nil
         let timerRow = context.launcher.topResultName ?? "none"
         for _ in 0..<7 { await pressKey(nil, code: CGKeyCode(kVK_Delete)) }
@@ -15114,9 +15118,9 @@ final class SelfTest {
         await pause(300)
         await pressKey(nil, code: CGKeyCode(kVK_Escape))
         let cupGone = context.awakeIndicator.shown == nil
-        record(name, hours && shortened && aliased && chipLeft && timerChip && listed && held && anHour && cup && quiet && saidAnHour && checked && keptAfterReturn && released && cupGone && commands.awakeUntil == nil
+        record(name, hours && shortened && aliased && chipLeft && timerFirst && timerChip && listed && held && anHour && cup && quiet && saidAnHour && checked && keptAfterReturn && released && cupGone && commands.awakeUntil == nil
                    && unreadSaid && unreadKept,
-               "“do not sleep 2” → 2 h: \(hours); “awa 3h” a search: \(shortened); “zk 4h” → chip, 4 h: \(aliased), left with ⌫: \(chipLeft); “zt 10 tea” → Timer chip “\(timerRow)”: \(timerChip); listed “\(title)”: \(listed); held: \(held), \(Int(left)) s left; cup in the menu bar “\(cupShown)”: \(cup), no card: \(quiet); "
+               "“do not sleep 2” → 2 h: \(hours); “awa 3h” a search: \(shortened); “zk 4h” → chip, 4 h: \(aliased), left with ⌫: \(chipLeft); “zt” → Timer first: \(timerFirst); “zt 10 tea” → Timer chip “\(timerRow)”: \(timerChip); listed “\(title)”: \(listed); held: \(held), \(Int(left)) s left; cup in the menu bar “\(cupShown)”: \(cup), no card: \(quiet); "
                    + "Ask “… une heure trente” → 1 h 30: \(saidAnHour); unsure, done at once with Undo: \(checked), ⌘Z let it sleep: \(keptAfterReturn); "
                    + "Keep Awake again with no time released it: \(released), cup gone: \(cupGone); nothing read: said \(unreadSaid), left on \(unreadKept)", nil)
     }
