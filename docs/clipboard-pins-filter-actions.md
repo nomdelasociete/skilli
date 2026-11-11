@@ -102,6 +102,8 @@ outside yet), Quick Look large, drag out, a phone number's call.
 - The filter and the words typed apply together, newest first, the
   older pages too. Narrowed, the pinned copies are at their date.
 - ⇥ by meaning ignores the filter.
+- Nothing leaves the Mac: the kinds are read by code here, kept in
+  the history's own file.
 - The cost of this path: a kind can be asked for only from a row of
   that kind in sight. No list of kinds, no key: to add if this is not
   enough.
