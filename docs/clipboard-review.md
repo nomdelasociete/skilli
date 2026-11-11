@@ -38,8 +38,8 @@ separators inside the list, "+n lines".
 Then (docs/clipboard-pins-filter-actions.md): #3 pins (⌘K → Pin, first
 under "Pinned", kept past the retention), and of #7 a link opens, an
 address starts a mail, a file opens or shows in Finder. Left of #7:
-Save as Snippet, Quick Look large, drag out. #5 (one kind at a time) is
-specified there, not built.
+Save as Snippet, Quick Look large, drag out. #5: ⌘K → Show Only Links
+(the row's kind) or from its app, the chip says it, ⌫ shows all again.
 
 ## Must (the history is behind the others here)
 

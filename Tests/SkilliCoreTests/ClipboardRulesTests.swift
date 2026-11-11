@@ -55,6 +55,22 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertEqual(header(date(2026, 11, 11)), "Copied today")
     }
 
+    func testWhatACopyIs() {
+        XCTAssertEqual(ClipboardKind.of(stored: "image", text: ""), .image)
+        XCTAssertEqual(ClipboardKind.of(stored: "files", text: "/tmp/Scan.png"), .image)
+        XCTAssertEqual(ClipboardKind.of(stored: "files", text: "/tmp/notes.txt"), .file)
+        XCTAssertEqual(ClipboardKind.of(stored: "files", text: "/tmp/a.png\n/tmp/b.png"), .file)
+        XCTAssertEqual(ClipboardKind.of(stored: "text", text: "https://example.com/page"), .link)
+        XCTAssertEqual(ClipboardKind.of(stored: "text", text: "someone@example.com"), .email)
+        XCTAssertEqual(ClipboardKind.of(stored: "text", text: "#3E8E7E"), .color)
+        XCTAssertEqual(ClipboardKind.of(stored: "text", text: "Lunch on Thursday?"), .text)
+        // Every kind has a name, and is kept under its own word.
+        for kind in ClipboardKind.allCases {
+            XCTAssertFalse(kind.plural.isEmpty)
+            XCTAssertEqual(ClipboardKind(rawValue: kind.rawValue), kind)
+        }
+    }
+
     func testOneCopiedPictureFileIsAPicture() {
         XCTAssertEqual(CopiedPicture.path(in: "/tmp/CleanShot 2026-11-10 at 18.16.45@2x.jpg"), "/tmp/CleanShot 2026-11-10 at 18.16.45@2x.jpg")
         XCTAssertEqual(CopiedPicture.path(in: "/tmp/Scan.HEIC"), "/tmp/Scan.HEIC")

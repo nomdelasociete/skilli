@@ -377,7 +377,23 @@ extension LauncherController {
             let pin = LauncherAction(title: clip.isPinned ? "Unpin" : "Pin", symbol: clip.isPinned ? "pin.slash" : "pin") { [weak self] in
                 self?.togglePinOfSelectedClip()
             }
-            return [first] + plain + does + inApps + [pin] + copies + [remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
+            // One kind at a time, or one app's copies; the whole history
+            // again once narrowed.
+            var shows: [LauncherAction] = []
+            if clipOnly != nil {
+                shows = [LauncherAction(title: "Show All", symbol: "line.3.horizontal.decrease.circle") { [weak self] in self?.showClips(only: nil) }]
+            } else {
+                let kind = clip.what
+                shows = [LauncherAction(title: "Show Only \(kind.plural)", symbol: "line.3.horizontal.decrease.circle") { [weak self] in
+                    self?.showClips(only: .kind(kind))
+                }]
+                if let app = clip.app, let name = clip.appName, !name.isEmpty {
+                    shows.append(LauncherAction(title: "Show Only from \(name)", symbol: "app") { [weak self] in
+                        self?.showClips(only: .app(id: app, name: name))
+                    })
+                }
+            }
+            return [first] + plain + does + inApps + [pin] + shows + copies + [remove("Forget") { [weak self] in self?.forgetSelectedClip() }]
         // A snippet: its editor in Settings → Snippets, deleted at once.
         case .snippet(let snippet):
             return [first,

@@ -4022,7 +4022,12 @@ re-investigating.
   pinned again after ⌘⌫ ⌘Z; Clear History removes it too. No key: the
   user's to give. ⌘K also does what the copy is: Open in Browser (a
   link), New Email (an address), Open and Show in Finder (files, looked
-  for only when asked: "… is no longer there"). The list narrows to
+  for only when asked: "… is no longer there"). One kind at a time: ⌘K →
+  Show Only Links (the row's kind, `ClipboardKind`, kept in
+  `items.value` when copied, older rows read once by `fillKinds`), Show
+  Only from Safari (the row's app); the chip says "Clipboard · Links";
+  the words typed still narrow; ⌘K → Show All or ⌫ in the empty field
+  shows all again (`showClips(only:)`, `ClipboardStore.Only`). The list narrows to
   290 pt beside a preview (`ClipboardPreviewView`, its parts in
   `PreviewParts.swift`, shared with Search Snippets') made for each kind of
   copy (below), then Information (copied as a relative date, times copied:

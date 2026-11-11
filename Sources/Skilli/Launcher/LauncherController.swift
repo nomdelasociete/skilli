@@ -124,7 +124,12 @@ final class LauncherController: NSObject {
     var isInClipboard: Bool { clipboardMode }
     /// Clipboard history: the rows for a filter, newest first, a page of
     /// them: the first, or those copied before a date (`showOlderClips`).
-    var clipboardItems: ((String, Date?) -> [ClipboardStore.Item])?
+    var clipboardItems: ((String, Date?, ClipboardStore.Only?) -> [ClipboardStore.Item])?
+    /// The history narrowed to one kind or one app (⌘K → Show Only…),
+    /// until Show All, ⌫ in the empty field, or the mode is left.
+    private(set) var clipOnly: ClipboardStore.Only?
+    /// Self-test hook: the mode's chip as it reads.
+    var chipTitle: String { modeChip.isHidden ? "" : modeChip.title }
     /// The history's list holds every copy the filter finds: no older
     /// page to ask for.
     private var clipsEnded = true
@@ -1543,7 +1548,7 @@ final class LauncherController: NSObject {
             } else {
                 // SQLite FTS5 on this Mac: well under a millisecond.
                 meaning = nil
-                let page = clipboardItems?(text, nil) ?? []
+                let page = clipboardItems?(text, nil, clipOnly) ?? []
                 results = page.map(LauncherItem.clip)
                 clipsEnded = page.count < Layout.resultLimit
             }
@@ -3029,6 +3034,7 @@ final class LauncherController: NSObject {
         case .clipboard:
             modeChip.set(title: "Clipboard", color: .systemBlue)
             searchField.placeholderString = "Search what you copied"
+            clipOnly = nil
             meaning = nil
             meaningAvailable = clipboardMeaningAvailable?() ?? false
             setSplit(.clipboard)
@@ -3241,6 +3247,20 @@ final class LauncherController: NSObject {
         thumbnails[item.id] = nil
         updateResults(query: searchField.stringValue)
         moveSelection(by: row)
+    }
+
+    /// ⌘K → Show Only Links, Show Only from Safari, Show All: the history
+    /// narrowed or whole again, the field's chip saying which ("Clipboard
+    /// · Links"), the words typed kept.
+    func showClips(only: ClipboardStore.Only?) {
+        guard clipboardMode, only != clipOnly else { return }
+        clipOnly = only
+        closeActions()
+        modeChip.set(title: only.map { "Clipboard · \($0.title)" } ?? "Clipboard", color: .systemBlue)
+        // The field starts after the chip, as wide as it is now.
+        let shift = modeChip.frame.width + 10
+        searchField.frame = NSRect(x: fieldFrame.minX + shift, y: fieldFrame.minY, width: fieldFrame.width - shift, height: fieldFrame.height)
+        updateResults(query: searchField.stringValue)
     }
 
     /// ⌘K → Pin, Unpin on the selected copy: it goes under "Pinned" at
@@ -3952,7 +3972,7 @@ final class LauncherController: NSObject {
         guard clipboardMode, !clipsEnded, meaningPending == nil, meaning == nil, !results.isEmpty else { return }
         let last = max(tableView.selectedRow, tableView.row(at: NSPoint(x: 1, y: tableView.visibleRect.maxY - 1)))
         guard last >= results.count - 10, case .clip(let oldest) = results[results.count - 1] else { return }
-        let page = clipboardItems?(searchField.stringValue, oldest.copiedAt) ?? []
+        let page = clipboardItems?(searchField.stringValue, oldest.copiedAt, clipOnly) ?? []
         clipsEnded = page.count < Layout.resultLimit
         guard !page.isEmpty else { return }
         let shown = results.count
@@ -3965,7 +3985,7 @@ final class LauncherController: NSObject {
     private func clipDay(atRow row: Int) -> String? {
         guard results.indices.contains(row), case .clip(let item) = results[row] else { return nil }
         // The empty field starts with the pinned copies.
-        if item.isPinned, searchField.stringValue.trimmingCharacters(in: .whitespaces).isEmpty { return "Pinned" }
+        if item.isPinned, clipOnly == nil, searchField.stringValue.trimmingCharacters(in: .whitespaces).isEmpty { return "Pinned" }
         return ClipboardDay.header(item.copiedAt)
     }
 
@@ -4814,8 +4834,11 @@ extension LauncherController: NSTextFieldDelegate {
             // processes, an event's details) or the row's actions.
             pressTab()
         case #selector(NSResponder.deleteBackward(_:)) where mode != nil && searchField.stringValue.isEmpty:
-            // ⌫ on nothing: back to the launcher (or out of the unfolded app).
-            if unfolded != nil {
+            // ⌫ on nothing: back to the launcher (or out of the unfolded app,
+            // or of the one kind the history shows).
+            if clipboardMode, clipOnly != nil {
+                showClips(only: nil)
+            } else if unfolded != nil {
                 unfolded = nil
                 updateResults(query: "")
             } else {
@@ -5210,6 +5233,8 @@ final class ModeChip: NSView {
         layer?.cornerCurve = .continuous
         set(title: title, color: color)
     }
+
+    var title: String { label.stringValue }
 
     /// Another mode: its name and color; the width follows the name.
     func set(title: String, color: NSColor) {

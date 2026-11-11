@@ -62,7 +62,10 @@ final class ClipboardHistory {
         prune()
         // Previews whose copy went while skil.li was not running.
         let store = self.store
-        Task.detached(priority: .utility) { store?.sweepPreviews() }
+        Task.detached(priority: .utility) {
+            store?.sweepPreviews()
+            store?.fillKinds()
+        }
     }
 
     func stop() {
@@ -217,9 +220,11 @@ final class ClipboardHistory {
     /// first page starts with the pinned copies, in the order pinned,
     /// and the pages by date leave them out; with words, one list by
     /// date.
-    func page(_ text: String, before: Date? = nil) -> [ClipboardStore.Item] {
+    /// `only` (⌘K → Show Only…): one list by date, with the words or
+    /// without.
+    func page(_ text: String, before: Date? = nil, only: ClipboardStore.Only? = nil) -> [ClipboardStore.Item] {
         guard let store else { return [] }
-        guard text.trimmingCharacters(in: .whitespaces).isEmpty else { return store.search(text, before: before) }
+        guard only == nil, text.trimmingCharacters(in: .whitespaces).isEmpty else { return store.search(text, before: before, only: only) }
         return (before == nil ? store.pinned() : []) + store.search("", before: before, unpinnedOnly: true)
     }
 

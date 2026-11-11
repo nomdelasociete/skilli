@@ -38,6 +38,25 @@ final class ClipboardStore: @unchecked Sendable {
         /// removed by Keep copies for. Nil: not pinned.
         var pinnedAt: Date?
         var isPinned: Bool { pinnedAt != nil }
+        /// What it is (`ClipboardKind`), kept when copied; nil on a copy
+        /// of before, until `fillKinds` reads it.
+        var value: String?
+        /// What it is: as kept, or read now.
+        var what: ClipboardKind { value.flatMap(ClipboardKind.init(rawValue:)) ?? .of(stored: kind.rawValue, text: text) }
+    }
+
+    /// The list narrowed (⌘K → Show Only…): one kind, or one app's copies.
+    enum Only: Equatable, Sendable {
+        case kind(ClipboardKind)
+        case app(id: String, name: String)
+
+        /// "Links", "Safari": after "Clipboard ·" in the field's chip.
+        var title: String {
+            switch self {
+            case .kind(let kind): kind.plural
+            case .app(_, let name): name
+            }
+        }
     }
 
     /// What the history saw on the pasteboard, before it has an id.
@@ -129,6 +148,10 @@ final class ClipboardStore: @unchecked Sendable {
         // Added later: when a copy was pinned (docs/clipboard-pins-filter-actions.md).
         if try !strings("SELECT name FROM pragma_table_info('items')", []).contains("pinned") {
             try execute("ALTER TABLE items ADD COLUMN pinned REAL;")
+        }
+        // Added later: what the copy is, to show one kind at a time.
+        if try !strings("SELECT name FROM pragma_table_info('items')", []).contains("value") {
+            try execute("ALTER TABLE items ADD COLUMN value TEXT;")
         }
         // Added later: what Jev tagged an image as, searched like its text.
         if try !strings("SELECT name FROM pragma_table_info('items')", []).contains("tags") {
@@ -235,11 +258,12 @@ final class ClipboardStore: @unchecked Sendable {
         }
         let formats = try new.formats.map { try PropertyListSerialization.data(fromPropertyList: $0, format: .binary, options: 0) }
         try run("""
-            INSERT INTO items (kind, text, image, size, formats, app, app_name, hash, copied)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO items (kind, text, image, size, formats, app, app_name, hash, copied, value)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, [.text(new.kind.rawValue), .text(new.text), .optionalText(image), .optionalText(new.size),
                   formats.map(Value.blob) ?? .null, .optionalText(new.app), .optionalText(new.appName),
-                  .text(new.hash), .double(date.timeIntervalSince1970)])
+                  .text(new.hash), .double(date.timeIntervalSince1970),
+                  .text(ClipboardKind.of(stored: new.kind.rawValue, text: new.text).rawValue)])
         let id = sqlite3_last_insert_rowid(db)
         return (try rows("SELECT \(Self.columns) FROM items WHERE id = ?", [.int(id)])[0], true)
     }
@@ -339,12 +363,12 @@ final class ClipboardStore: @unchecked Sendable {
             try data.write(to: imagesFolder.appendingPathComponent(name), options: .atomic)
         }
         try run("""
-            INSERT INTO items (id, kind, text, ocr, image, size, formats, app, app_name, hash, copied, copies, tags, pinned)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO items (id, kind, text, ocr, image, size, formats, app, app_name, hash, copied, copies, tags, pinned, value)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, [idFree ? .int(old.id) : .null, .text(old.kind.rawValue), .text(old.text), .optionalText(old.ocr), .optionalText(old.image),
                   .optionalText(old.size), forgotten.formats.map(Value.blob) ?? .null, .optionalText(old.app), .optionalText(old.appName),
                   .text(forgotten.hash), .double(old.copiedAt.timeIntervalSince1970), .int(Int64(old.copies)), .optionalText(old.tags),
-                  old.pinnedAt.map { .double($0.timeIntervalSince1970) } ?? .null])
+                  old.pinnedAt.map { .double($0.timeIntervalSince1970) } ?? .null, .text(old.what.rawValue)])
         let id = sqlite3_last_insert_rowid(db)
         if idFree {
             for (name, data) in forgotten.previews {
@@ -391,6 +415,41 @@ final class ClipboardStore: @unchecked Sendable {
         }
     }
 
+    /// The copies of before `value` was kept: what each is, read once, a
+    /// couple of hundred at a time. Off the main thread; until it is
+    /// done, Show Only misses the ones not read yet.
+    func fillKinds() {
+        while true {
+            lock.lock()
+            var unread: [(id: Int64, kind: String, text: String)] = []
+            if let statement = try? prepare("SELECT id, kind, substr(text, 1, 4100) FROM items WHERE value IS NULL LIMIT 200", []) {
+                while sqlite3_step(statement) == SQLITE_ROW {
+                    unread.append((sqlite3_column_int64(statement, 0),
+                                   sqlite3_column_text(statement, 1).map { String(cString: $0) } ?? "text",
+                                   sqlite3_column_text(statement, 2).map { String(cString: $0) } ?? ""))
+                }
+                sqlite3_finalize(statement)
+            }
+            lock.unlock()
+            guard !unread.isEmpty else { return }
+            let read = unread.map { ($0.id, ClipboardKind.of(stored: $0.kind, text: $0.text).rawValue) }
+            lock.lock()
+            var failed = false
+            // One write to the disk for the lot.
+            try? execute("BEGIN;")
+            for (id, value) in read {
+                do { try run("UPDATE items SET value = ? WHERE id = ?", [.text(value), .int(id)]) } catch { failed = true }
+            }
+            do { try execute("COMMIT;") } catch {
+                try? execute("ROLLBACK;")
+                failed = true
+            }
+            lock.unlock()
+            // A write that fails would be read again for ever.
+            if failed { return }
+        }
+    }
+
     /// Link previews whose copy is gone (removed while skil.li was not
     /// running, or by an older version): removed. Off the main thread.
     func sweepPreviews() {
@@ -429,36 +488,56 @@ final class ClipboardStore: @unchecked Sendable {
     /// nears its end).
     /// `unpinnedOnly`, with no words: the pinned copies left out (the
     /// list shows them first, from `pinned()`).
-    func search(_ text: String, limit: Int = 50, before: Date? = nil, unpinnedOnly: Bool = false) -> [Item] {
+    /// `only`: one kind, or one app's copies (⌘K → Show Only…), with
+    /// the words or without.
+    func search(_ text: String, limit: Int = 50, before: Date? = nil, unpinnedOnly: Bool = false, only: Only? = nil) -> [Item] {
         lock.lock()
         defer { lock.unlock() }
         let trimmed = text.trimmingCharacters(in: .whitespaces)
-        let older = before.map { [Value.double($0.timeIntervalSince1970)] } ?? []
+        // What narrows every way of searching: bound than, one kind or app.
+        var narrowed: [String] = []
+        /// Their values, in the same order.
+        var bound: [Value] = []
+        if let before {
+            narrowed.append("items.copied < ?")
+            bound.append(.double(before.timeIntervalSince1970))
+        }
+        switch only {
+        case .kind(let kind):
+            narrowed.append("items.value = ?")
+            bound.append(.text(kind.rawValue))
+        case .app(let id, _):
+            narrowed.append("items.app = ?")
+            bound.append(.text(id))
+        case nil:
+            break
+        }
+        let and = narrowed.map { "AND \($0)" }.joined(separator: " ")
         do {
             if trimmed.isEmpty {
-                let conditions = (before == nil ? [] : ["copied < ?"]) + (unpinnedOnly ? ["pinned IS NULL"] : [])
+                let conditions = narrowed + (unpinnedOnly ? ["pinned IS NULL"] : [])
                 let filter = conditions.isEmpty ? "" : "WHERE " + conditions.joined(separator: " AND ")
-                return try rows("SELECT \(Self.columns) FROM items \(filter) ORDER BY copied DESC LIMIT ?", older + [.int(Int64(limit))])
+                return try rows("SELECT \(Self.columns) FROM items \(filter) ORDER BY copied DESC LIMIT ?", bound + [.int(Int64(limit))])
             }
             // Every word of 3 letters or more: found inside words too,
             // and in the app's name.
             if findsInsideWords, let match = ClipboardSearch.substringQuery(trimmed) {
                 return try rows("""
                     SELECT \(Self.columnList("items")) FROM items_sub JOIN items ON items.id = items_sub.rowid
-                    WHERE items_sub MATCH ? \(before == nil ? "" : "AND items.copied < ?") ORDER BY items.copied DESC LIMIT ?
-                    """, [.text(match)] + older + [.int(Int64(limit))])
+                    WHERE items_sub MATCH ? \(and) ORDER BY items.copied DESC LIMIT ?
+                    """, [.text(match)] + bound + [.int(Int64(limit))])
             }
             if let match = ClipboardSearch.ftsQuery(trimmed) {
                 return try rows("""
                     SELECT \(Self.columnList("items")) FROM items_fts JOIN items ON items.id = items_fts.rowid
-                    WHERE items_fts MATCH ? \(before == nil ? "" : "AND items.copied < ?") ORDER BY items.copied DESC LIMIT ?
-                    """, [.text(match)] + older + [.int(Int64(limit))])
+                    WHERE items_fts MATCH ? \(and) ORDER BY items.copied DESC LIMIT ?
+                    """, [.text(match)] + bound + [.int(Int64(limit))])
             }
             // Only symbols ("€", "->"): plain substring.
             return try rows("""
                 SELECT \(Self.columns) FROM items WHERE (instr(text, ?) > 0 OR instr(coalesce(ocr, ''), ?) > 0)
-                \(before == nil ? "" : "AND copied < ?") ORDER BY copied DESC LIMIT ?
-                """, [.text(trimmed), .text(trimmed)] + older + [.int(Int64(limit))])
+                \(and) ORDER BY copied DESC LIMIT ?
+                """, [.text(trimmed), .text(trimmed)] + bound + [.int(Int64(limit))])
         } catch {
             Log.actions.error("\(error.localizedDescription, privacy: .public)")
             return []
@@ -534,7 +613,7 @@ final class ClipboardStore: @unchecked Sendable {
 
     private static func columnList(_ table: String?) -> String {
         let prefix = table.map { "\($0)." } ?? ""
-        return ["id", "kind", "text", "ocr", "image", "size", "app", "app_name", "copied", "copies", "tags", "pinned"]
+        return ["id", "kind", "text", "ocr", "image", "size", "app", "app_name", "copied", "copies", "tags", "pinned", "value"]
             .map { prefix + $0 }
             .joined(separator: ", ")
     }
@@ -629,7 +708,8 @@ final class ClipboardStore: @unchecked Sendable {
                 copiedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 8)),
                 copies: Int(sqlite3_column_int64(statement, 9)),
                 tags: text(10),
-                pinnedAt: sqlite3_column_type(statement, 11) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: sqlite3_column_double(statement, 11))
+                pinnedAt: sqlite3_column_type(statement, 11) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: sqlite3_column_double(statement, 11)),
+                value: text(12)
             ))
         }
         return items
