@@ -240,7 +240,8 @@ final class ClipboardHistory {
     /// and who decided ("Jev · 0.42 s"). `unanswered`: no model answered
     /// in time ("Jev did not answer"), and nothing was found.
     struct MeaningResult: Sendable {
-        let items: [ClipboardStore.Item]
+        /// `var`: a copy pinned while they show is shown as it is now.
+        var items: [ClipboardStore.Item]
         let label: String
         var unanswered: String?
         /// The copies the model read (the history narrowed), and the

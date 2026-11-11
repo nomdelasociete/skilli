@@ -74,6 +74,16 @@ After Paste and its variants, before the copies:
 The file is looked for only when the action runs (the user asked for
 it): never while the list is drawn.
 
+What leaves the Mac, and when:
+
+- *Pin*, *Unpin*, *Open* and *Show in Finder*: nothing.
+- *Open in Browser*: skil.li sends nothing itself; it hands the link to
+  the default browser, which then loads the page, so the site is
+  contacted as if the link were clicked. Only when the action is
+  chosen: a link is never opened or read by showing its row or its ⌘K.
+- *New Email*: a new message opens in the mail app, addressed; nothing
+  is sent until the user sends it.
+
 Not done here: Save as Snippet (the snippet editor takes no text from
 outside yet), Quick Look large, drag out, a phone number's call.
 

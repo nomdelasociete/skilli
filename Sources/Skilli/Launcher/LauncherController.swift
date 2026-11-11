@@ -3268,7 +3268,12 @@ final class LauncherController: NSObject {
     func togglePinOfSelectedClip() {
         let row = tableView.selectedRow
         guard results.indices.contains(row), case .clip(let item) = results[row] else { return }
-        _ = onPinClip?(item, !item.isPinned)
+        let now = onPinClip?(item, !item.isPinned)
+        // A search by meaning holds its copies as they were found: this
+        // one as it is now, or its pin and its action would stay as before.
+        if let now, let held = meaning?.result.items {
+            meaning?.result.items = held.map { $0.id == now.id ? now : $0 }
+        }
         closeActions()
         updateResults(query: searchField.stringValue)
         guard let now = results.firstIndex(where: { if case .clip(let shown) = $0 { shown.id == item.id } else { false } }) else { return }
