@@ -15963,12 +15963,14 @@ final class SelfTest {
             try? Data([0x89, 0x50, 0x4E, 0x47]).write(to: source)
             let first = ClipboardDragExports.make(from: source, named: "Copied Image one.png", id: 910_001)
             let second = ClipboardDragExports.make(from: source, named: "Copied Image two.png", id: 910_002)
-            func there(_ url: URL?) -> Bool { url.map { FileManager.default.fileExists(atPath: $0.path) } ?? false }
-            let both = there(first) && there(second)
+            func there(_ made: (file: URL, made: Bool)?) -> Bool { made.map { FileManager.default.fileExists(atPath: $0.file.path) } ?? false }
+            let both = there(first) && there(second) && first?.made == true && second?.made == true
             ClipboardDragExports.remove(910_001)
             let other = !there(first) && there(second)
+            // Dragged again while its file is there: the same file, not
+            // this drag's to remove.
             let again = ClipboardDragExports.make(from: source, named: "Copied Image two.png", id: 910_002)
-            let remade = there(again)
+            let remade = there(again) && again?.made == false && again?.file == second?.file
             // What Clear History and the app's start call.
             ClipboardDragExports.removeAll()
             exportsFollow = both && other && remade && !there(again)

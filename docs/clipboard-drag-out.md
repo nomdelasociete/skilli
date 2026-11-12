@@ -41,7 +41,8 @@ goes where the cursor is, a drag goes where the pointer says.
   copies for, when its drag is let go over nothing, when the history is
   cleared, and when the app starts. Another copy dragged or removed
   leaves it, so an app that reads the dropped file a moment later
-  still finds it.
+  still finds it. Dragged again while its file is there, the same
+  file is given, and that drag let go over nothing leaves it.
 - A copied file is looked for as the drag begins, never while the list
   is drawn.
 - While the drag is on, the launcher is off the screen (ordered out,

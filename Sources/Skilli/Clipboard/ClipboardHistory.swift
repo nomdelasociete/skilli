@@ -921,16 +921,18 @@ enum ClipboardDragExports {
         folder.appendingPathComponent(String(id), isDirectory: true)
     }
 
-    /// The picture of copy `id`, at `stored`, copied under `name`; nil
-    /// when it could not be.
-    static func make(from stored: URL, named name: String, id: Int64) -> URL? {
-        remove(id)
+    /// The picture of copy `id`, at `stored`, as a file under `name`:
+    /// the one made for an earlier drag of it when it is still there
+    /// (`made` false: an app may be reading it, it is not this drag's to
+    /// remove), else a new copy. Nil when it could not be made.
+    static func make(from stored: URL, named name: String, id: Int64) -> (file: URL, made: Bool)? {
         let named = folder(of: id).appendingPathComponent(name)
+        if FileManager.default.fileExists(atPath: named.path) { return (named, false) }
         do {
             try FileManager.default.createDirectory(at: folder(of: id), withIntermediateDirectories: true)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path)
             try FileManager.default.copyItem(at: stored, to: named)
-            return named
+            return (named, true)
         } catch {
             return nil
         }

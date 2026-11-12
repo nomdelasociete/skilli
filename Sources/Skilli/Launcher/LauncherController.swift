@@ -5235,9 +5235,11 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             guard let stored = clipboardImageURL?(clip) else { return nil }
             // Its own file is named by the history; dropped in a folder,
             // the copy wants a name a person reads (`ClipboardDragExports`).
-            let named = ClipboardDragExports.make(from: stored, named: ClipboardDrag.pictureName(size: clip.size, copied: clip.copiedAt), id: clip.id)
-            clipDragExport = named == nil ? nil : clip.id
-            return (named ?? stored) as NSURL
+            let export = ClipboardDragExports.make(from: stored, named: ClipboardDrag.pictureName(size: clip.size, copied: clip.copiedAt), id: clip.id)
+            // Only a file this drag made is its to remove when let go
+            // over nothing: one from an earlier drop may still be read.
+            clipDragExport = export?.made == true ? clip.id : nil
+            return (export?.file ?? stored) as NSURL
         case .file(let path):
             // Looked for now, as the drag begins: never as the list is drawn.
             guard FileManager.default.fileExists(atPath: path) else {
