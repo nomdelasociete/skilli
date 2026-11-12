@@ -26,6 +26,11 @@ final class LauncherAliasTests: XCTestCase {
         XCTAssertFalse(moved.contains { $0.id == "cmd:emoji" })
         let removed = LauncherAliases.setting("", id: "cmd:clipboardHistory", title: "Clipboard History", in: aliases)
         XCTAssertEqual(removed.map(\.id), ["cmd:emoji"])
+        // Taken from another item: who had it is known first, to say it.
+        XCTAssertEqual(LauncherAliases.holder(of: " E", otherThan: "app:/Applications/Emacs.app", in: aliases)?.title, "Emoji")
+        XCTAssertNil(LauncherAliases.holder(of: "e", otherThan: "cmd:emoji", in: aliases), "its own alias, set again")
+        XCTAssertNil(LauncherAliases.holder(of: "zz", otherThan: "cmd:emoji", in: aliases))
+        XCTAssertNil(LauncherAliases.holder(of: "", otherThan: "cmd:emoji", in: aliases))
         XCTAssertTrue(LauncherAliases.isValid("cl"))
         XCTAssertFalse(LauncherAliases.isValid("c l"))
         XCTAssertFalse(LauncherAliases.isValid(""))

@@ -32,10 +32,19 @@ SkilliCore): the word its parser reads, the chip's name, an example.
   reads a value (Keep Awake for a While, Timer, Set Volume, Add an Event,
   Remind Me) opens the same chip. Keep Awake and Record Meeting do
   something with no value: ↩ on them there does it, as on their row.
+- **⌘K on those two** (their row in the search, their entry in the "?"):
+  "Keep Awake for a While…", "Name the Recording…" open the chip
+  (`LauncherArgument.ask`, `argumentActions`). So every chip is reached
+  without an alias.
 - **Off in Settings → Catalog**: the command's rows leave the search; its
   alias and the "?" still open its chip, as for any entry turned off.
 - **One field**, read by the command's own parser (`2h`, `90 min`,
-  `until 6pm`): no field per unit, no command per way of saying it.
+  `until 6pm`): no field per unit, no command per way of saying it. A
+  timer's length and its name, an event's title and its hour are one
+  sentence ("10 min tea"), not two fields to walk with ⇥: what is typed
+  in the chip is what is typed after the whole word in the search.
+  Several fields are a skillie's (`@raycast.argument1…3`, asked one after
+  the other): a built-in command has a parser instead.
 - **Nothing typed**: the command's plain row where it has one (Keep Awake:
   ↩ toggles; Record Meeting: ↩ records; Timer: the timers running), else
   the example. Typed but not read: no row, the example again.
@@ -81,6 +90,12 @@ SkilliCore): the word its parser reads, the chip's name, an example.
     takes it back.
   Giving up the words cut short costs those who typed them: they set an
   alias once.
+- **An alias another item has** (set from ⌘K or the Catalog popover): a
+  slip of one letter would leave a command without its alias, unseen
+  until it is typed. It is said before anything moves ("“e” opens Emoji:
+  ↩ again gives it to Timer"); the same word again is the user's yes,
+  anything else typed starts over, esc keeps both as they were. To take
+  it back: set it again on the first item.
 
 ## Where
 
@@ -91,11 +106,14 @@ SkilliCore): the word its parser reads, the chip's name, an example.
 - `LauncherController`: `Mode.argument`, `openAlias`, `argumentRows`,
   `argumentShown` (wired, not the Catalog's switch), `argumentEntry` (the
   alias alone), `runCatalog`.
-- Self-tests: `calc` (the alias, alone and with a value, ⌫ out of the
-  chip), `catalog` (Timer ↩ in the "?").
+- `LauncherAliases.holder`: who has an alias already; `askAlias` (⌘K) and
+  `CatalogPaneModel.commitAlias` (Settings) say it before it moves.
+- Self-tests: `calc` (`keepAwakeForAWhile`: the alias, alone and with a
+  value, ⌫ out of the chip; `argumentChips`: the Volume, Record, Event
+  and Remind Me chips, Name the Recording… from ⌘K, an alias taken said
+  then moved), `catalog` (Timer ↩ in the "?").
 
 ## Not done
 
-- A field for the recording's name from the "?" without an alias: Record
-  Meeting ↩ records at once there; "rec <name>" typed does it.
-- More than one argument for a built-in command: none needs it yet.
+- The Catalog popover's "Done again" for an alias taken has no self-test
+  (the ⌘K path has; both ask `LauncherAliases.holder`).

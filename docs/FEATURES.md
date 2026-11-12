@@ -835,7 +835,10 @@ Everything skil.li can do, and how you reach each one.
   reads a value (Keep Awake, Timer, Set Volume, Record Meeting, Add an
   Event, Remind Me), the alias then a space opens that command: the field
   takes only the value, an example shown in it (`a 2h`, `t 10 tea`).
-  skil.li gives no alias of its own.
+  skil.li gives no alias of its own. Without one, ⌘K on Keep Awake
+  ("Keep Awake for a While…") or Record Meeting ("Name the Recording…")
+  opens the same field. An alias another result has is said before it
+  moves: ↩ again gives it.
 - **Quicklinks**: search a site from the launcher (`g skilli`, `yt lofi`);
   the selection is the query when none is typed; a shortcut of its own
   opens the launcher with its keyword typed; Add from Library….

@@ -20,7 +20,7 @@ extension LauncherController {
         }
         guard takesAlias(item) else { return list }
         let at = list.firstIndex { $0.group != .act } ?? list.count
-        list.insert(contentsOf: aliasActions(for: item) + (mode == nil && takesPin(item) ? [pinAction(for: item)] : []), at: at)
+        list.insert(contentsOf: argumentActions(id: item.learningID) + aliasActions(for: item) + (mode == nil && takesPin(item) ? [pinAction(for: item)] : []), at: at)
         return list
     }
 

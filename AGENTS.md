@@ -1099,8 +1099,12 @@ mode or skillie returns. Three runs (faded, `placeWeight` 2.5) and the empty
   list becomes a field, ↩ saves, empty removes), or typed in place in
   Settings → Catalog (the entry's popover; the same normalizing and check);
   aliases no row holds (apps, a sound device, a pane) are listed and
-  removed under Catalog → Aliases. An alias belongs to one item: given to
-  another, it moves.
+  removed under Catalog → Aliases. An alias belongs to one item. Given to
+  another, it is never taken silently (`LauncherAliases.holder`): ⌘K's
+  header says "“e” opens Emoji: ↩ again gives it to Timer" and the same
+  word sent again moves it; the popover says it in red and Done again
+  moves it (closed otherwise, it stays where it was); `set_alias` says
+  "It opened Emoji" in its plan.
 - Typed then a space (`LauncherAliases.split`): a command that turns the
   launcher into a mode opens it with the rest as its filter ("e smile",
   `LauncherController.mode(for:)`); a skillie with arguments asks its first

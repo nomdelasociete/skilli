@@ -44,6 +44,13 @@ public enum LauncherAliases {
         return typed.isEmpty ? nil : aliases.first { $0.alias == typed }
     }
 
+    /// The other item `alias` opens already, when there is one: setting it
+    /// for `id` takes it from that item, which is said before it is done.
+    public static func holder(of alias: String, otherThan id: String, in list: [LauncherAlias]) -> LauncherAlias? {
+        let alias = normalized(alias)
+        return alias.isEmpty ? nil : list.first { $0.alias == alias && $0.id != id }
+    }
+
     /// `alias` for the item `id`; an empty one removes it. An alias belongs
     /// to one item: whoever had it loses it.
     public static func setting(_ alias: String, id: String, title: String, in list: [LauncherAlias]) -> [LauncherAlias] {

@@ -4010,6 +4010,18 @@ final class LauncherController: NSObject {
         return FeatureCatalog.entries(catalogInput?() ?? FeatureCatalog.Input()).first { $0.id == id }.map(LauncherItem.catalog)
     }
 
+    /// ⌘K on a command that does something with no value (Keep Awake,
+    /// Record Meeting), in the search or in the "?": its chip, for the
+    /// value. Not in the chip itself, where the field is already it.
+    func argumentActions(id: String) -> [LauncherAction] {
+        guard mode == nil || mode == .catalog, let argument = LauncherArgument.of(id), let title = argument.ask,
+              argumentShown(argument) else { return [] }
+        return [LauncherAction(title: title, symbol: "text.cursor") { [weak self] in
+            self?.leaveMode(update: false)
+            self?.enterMode(.argument(argument), filter: "")
+        }]
+    }
+
     /// The items an alias can open: what the launcher finds again by id.
     func takesAlias(_ item: LauncherItem) -> Bool {
         switch item {
@@ -4052,15 +4064,26 @@ final class LauncherController: NSObject {
     }
 
     /// ⌘K → Set Alias…: the list becomes a field; ↩ saves (empty removes).
-    /// One not taken asks again, with what was typed.
-    func askAlias(id: String, title: String, retry typed: String? = nil) {
-        let header = typed == nil ? "Alias for \(title)" : "Alias for \(title): one word, 12 letters at most"
+    /// One not taken asks again, with what was typed. One another item
+    /// has (`taken`) asks again too, naming it: ↩ on the same word moves it.
+    func askAlias(id: String, title: String, retry typed: String? = nil, taken: LauncherAlias? = nil) {
+        let header = if let taken {
+            "“\(taken.alias)” opens \(taken.title): ↩ again gives it to \(title)"
+        } else {
+            typed == nil ? "Alias for \(title)" : "Alias for \(title): one word, 12 letters at most"
+        }
         actionPanel.ask(header, initial: typed ?? aliasByID[id] ?? "") { [weak self] typed in
             guard let self else { return }
             let alias = LauncherAliases.normalized(typed)
             // Asked again, the list's header saying what an alias is.
             guard alias.isEmpty || LauncherAliases.isValid(alias) else {
                 self.askAlias(id: id, title: title, retry: String(alias.filter { !$0.isWhitespace }.prefix(12)))
+                return
+            }
+            // Another item's: never taken from it without a word. Said,
+            // and the same word sent again is the user's yes.
+            if let holder = LauncherAliases.holder(of: alias, otherThan: id, in: self.aliases()), taken?.alias != alias {
+                self.askAlias(id: id, title: title, retry: alias, taken: holder)
                 return
             }
             self.onSetAlias?(id, title, alias)
@@ -4300,6 +4323,7 @@ final class LauncherController: NSObject {
             self?.launchSelected(flags: [])
         }]
         if let edit = catalogItems[entry.id].flatMap(editAction) { list.append(edit) }
+        list += argumentActions(id: entry.id)
         if let item = catalogItems[entry.id], item.learningID == entry.id, takesAlias(item) {
             list += aliasActions(for: item)
             if takesPin(item) { list.append(pinAction(for: item)) }
@@ -4602,6 +4626,8 @@ final class LauncherController: NSObject {
     }
     var shownNote: String? { footerNote.isHidden ? nil : footerNote.stringValue }
     var shownActionsNote: String? { actionPanel.note }
+    /// ⌘K's header: the row's name, or what a prompt asks.
+    var shownActionsHeader: String { actionPanel.headerTitle }
 
     /// Self-test hooks: ⌘K's list as shown, each action with its key.
     var isShowingActions: Bool { !actionPanel.isHidden }

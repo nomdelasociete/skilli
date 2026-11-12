@@ -131,6 +131,8 @@ final class ActionPanelView: NSView {
     /// `placeholder` shows in the empty field, `line` in place of the rows.
     private var prompt: (title: String, placeholder: String, line: String, submit: (String) -> Void)?
     var isPrompting: Bool { prompt != nil }
+    /// Self-test hook: the header as shown.
+    var headerTitle: String { header.stringValue }
     /// The prompt's text all selected, as a rename's field opens: the next
     /// letter replaces it, ⌫ clears it, ← or → keeps it to edit.
     private(set) var selectsAll = false
