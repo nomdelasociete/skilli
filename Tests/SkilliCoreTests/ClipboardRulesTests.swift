@@ -168,6 +168,8 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertEqual(ClipboardSecret.held(in: "set GITHUB_TOKEN to \(github) in the file"), "a GitHub token")
         XCTAssertEqual(ClipboardSecret.held(in: "PORT=8080\nSTRIPE_KEY=sk_live_\(letters.prefix(24))\nDEBUG=1\n"), "a Stripe key")
         XCTAssertEqual(ClipboardSecret.held(in: "export OPENAI_API_KEY=\"sk-proj-\(letters)\""), "an API key")
+        // All lowercase: a key by its long hexadecimal end.
+        XCTAssertEqual(ClipboardSecret.held(in: "OPENROUTER_API_KEY=sk-or-v1-" + String(repeating: "0a1b2c3d", count: 8) + "\nDEBUG=1"), "an API key")
         XCTAssertEqual(ClipboardSecret.held(in: "aws_access_key_id = AKIA" + "ABCDEFGH12345678"), "an AWS access key")
         XCTAssertEqual(ClipboardSecret.held(in: "curl -H 'Authorization: Bearer \(github)' https://example.com/api"), "a GitHub token")
         XCTAssertEqual(ClipboardSecret.held(in: "curl -H \"Authorization: Bearer 9f86d081884c7d659a2feaa0c55ad015\" https://example.com"), "a sign-in header")

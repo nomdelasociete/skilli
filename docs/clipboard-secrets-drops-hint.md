@@ -93,7 +93,8 @@ only, the same switch.
   sentence; a header with a placeholder (`Bearer $TOKEN`, `Bearer
   YOUR_TOKEN_GOES_HERE`); `sk-` followed by plain lowercase words (a
   class name, a slug): inside a text `sk-…` counts with a digit and a
-  capital in it.
+  capital in it, or ending in 32 or more hexadecimal characters
+  (`sk-or-v1-…`).
 - Wrong one way: a page of documentation with an example key, a log
   with a sign-in token in it are not kept; the line says so, the copy
   is still on the clipboard, the switch keeps them. Wrong the other

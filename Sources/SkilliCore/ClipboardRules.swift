@@ -453,11 +453,12 @@ public enum ClipboardSecret {
 
     /// Every shape at once, each a whole word of the text. `sk-` alone
     /// starts many words that are no key (a class name, a slug): inside
-    /// a text it counts with a digit and a capital in it. A header's
+    /// a text it counts with a digit and a capital in it, or ending in
+    /// 32 or more hexadecimal characters ("sk-or-v1-" and 64). A header's
     /// value counts with a digit in it: "Bearer YOUR_TOKEN_GOES_HERE" is
     /// kept.
     private static let inside: NSRegularExpression = {
-        let named = shapes.map { $0.name == "an API key" ? #"sk-(?=[A-Za-z0-9_-]*[0-9])(?=[A-Za-z0-9_-]*[A-Z])[A-Za-z0-9_-]{20,}"# : $0.source }
+        let named = shapes.map { $0.name == "an API key" ? #"sk-(?=[A-Za-z0-9_-]*[0-9])(?=[A-Za-z0-9_-]*[A-Z])[A-Za-z0-9_-]{20,}|sk-(?:[a-z0-9]+-)*(?=[a-f0-9]*[0-9])[a-f0-9]{32,}"# : $0.source }
         let words = "(?<![.\(wordCharacters)])(?:\(named.joined(separator: "|")))(?![\(wordCharacters)])"
         return try! NSRegularExpression(pattern: words + "|" + header)
     }()
