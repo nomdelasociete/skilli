@@ -70,10 +70,37 @@ below are what holds them.
 
 - Unit: what is kept and what is not, by name; the stored list read back
   in order; a copy of before read as RTF first.
+- Unit: several items' formats joined and read back apart; a copy of
+  one unchanged.
+- Self-test (`clipboard`): three objects copied together, the middle
+  one plain, come back as three, each its own; ⇧↩ one text; two
+  pictures come back as two.
 - Self-test (`clipboard`): cells copied with their own format, RTF, text
   and a mark come back with the format first, without the mark; ⇧↩ the
   text alone; copied plain before and after, the cells keep their
   format; a shape copied with its picture comes back before its PNG.
 
-Not done: several items copied together (only the first is kept, as
-before); the real apps named above.
+## Several items
+
+Since 2026-11-12. The moment: three shapes selected in a drawing and
+copied, two pictures copied from a photo library, and pasted back
+later from the history. Nothing to learn: ↩ pastes what was copied.
+Code only. Before, the copy's text was every item's, joined, but only
+the first item's formats were kept: a rich paste gave the first object
+alone, and of several pictures only the first.
+
+- A copy of several items keeps each item's formats apart, with the
+  item's own text or picture among them (`ClipboardFormats.joined`: one
+  list, a mark between two items; a copy of one item is as before, no
+  mark). 24 items at most, the same 4 MB and 50 ms for all of them.
+- ↩ puts back as many items, each with its formats. ⇧↩ pastes one
+  text, every item's joined, as before.
+- The row, the search and the preview are the copy's as before: its
+  text is all items' joined; a copy of pictures shows the first.
+- Wrong: when the items do not all fit or took too long to read, none
+  is kept apart: a text pastes as its joined text (no format, rather
+  than the first object alone), pictures as the first one, as before.
+
+Not done: the preview and the row do not say "3 items"; the pictures
+after the first are not read for their words; cells from Numbers, an
+object from Keynote or Figma not tried in the real apps.

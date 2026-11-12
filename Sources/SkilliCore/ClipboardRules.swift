@@ -633,7 +633,30 @@ public enum ClipboardFormats {
 
     /// Whether a format is kept beside the copy.
     public static func keeps(_ type: String) -> Bool {
-        !plainText.contains(type) && !pictures.contains(type) && !markers.contains { type.hasPrefix($0) }
+        !plainText.contains(type) && !pictures.contains(type) && type != nextItem && !markers.contains { type.hasPrefix($0) }
+    }
+
+    /// Several items copied together (three pictures, objects each with
+    /// its own formats): between two items' formats in the list, this
+    /// mark. One item, as nearly every copy is: no mark.
+    public static let nextItem = "li.skil.clipboard.next-item"
+    /// At most this many items of one copy are kept apart.
+    public static let itemLimit = 24
+    /// An item's own text and picture among its formats, when the copy
+    /// has several: the copy's text is all of them joined and its
+    /// picture the first one's.
+    public static let itemText = "public.utf8-plain-text"
+    public static let itemPictures = ["public.png", "public.tiff"]
+
+    /// One list for several items' formats, a mark between two.
+    public static func joined(_ items: [[Format]]) -> [Format] {
+        items.enumerated().flatMap { index, formats in (index == 0 ? [] : [Format(type: nextItem, data: Data())]) + formats }
+    }
+
+    /// Each item's formats, from a list as kept: one item for a copy of
+    /// one (and every copy of before).
+    public static func items(_ formats: [Format]) -> [[Format]] {
+        formats.split(omittingEmptySubsequences: false) { $0.type == nextItem }.map(Array.init)
     }
 
     /// The formats as one value to store, in their order; nil for none.

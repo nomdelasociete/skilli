@@ -489,10 +489,24 @@ final class ClipboardHistory {
     func write(_ item: ClipboardStore.Item, plain: Bool) -> Bool {
         let entry = NSPasteboardItem()
         var urls: [NSURL] = []
+        // Copied as several items: pasted back as that many, each with
+        // its own formats; the first one is `entry`.
+        var others: [NSPasteboardItem] = []
+        func setSeveral(_ formats: [ClipboardFormats.Format]?) {
+            let items = ClipboardFormats.items(formats ?? [])
+            set(items.first, on: entry)
+            others = items.dropFirst().map { formats in
+                let other = NSPasteboardItem()
+                set(formats, on: other)
+                return other
+            }
+        }
         switch item.kind {
         case .text:
-            if !plain { set(store?.formats(of: item.id), on: entry) }
-            entry.setString(item.text, forType: .string)
+            if !plain { setSeveral(store?.formats(of: item.id)) }
+            // One item: its text. Several: each has its own among its
+            // formats, and the copy's text is all of them.
+            if others.isEmpty { entry.setString(item.text, forType: .string) }
         case .image:
             if plain {
                 guard let text = item.ocr, !text.isEmpty else { return false }
@@ -502,7 +516,7 @@ final class ClipboardHistory {
                 // What the app copied with the picture (a slide's object,
                 // a drawing's shapes) first, as it was: the app pasted
                 // into takes the first it knows.
-                set(store?.formats(of: item.id), on: entry)
+                setSeveral(store?.formats(of: item.id))
                 entry.setData(data, forType: .png)
                 // The TIFF only if the app pasted into asks for it (most
                 // take the PNG): making it here was 30 ms before ⌘V.
@@ -522,7 +536,7 @@ final class ClipboardHistory {
             }
         }
         pasteboard.clearContents()
-        return urls.isEmpty ? pasteboard.writeObjects([entry]) : pasteboard.writeObjects(urls)
+        return urls.isEmpty ? pasteboard.writeObjects([entry] + others) : pasteboard.writeObjects(urls)
     }
 
     /// The formats kept with a copy, on the item to paste, in their order.
@@ -656,7 +670,8 @@ final class ClipboardHistory {
     /// of the app copied from, until they no longer fit or took too long.
     /// Nil for none.
     private static func formats(on pasteboard: NSPasteboard) -> [ClipboardFormats.Format]? {
-        guard let first = pasteboard.pasteboardItems?.first else { return nil }
+        guard let all = pasteboard.pasteboardItems, let first = all.first else { return nil }
+        if all.count > 1 { return formats(ofSeveral: all) }
         let start = ContinuousClock.now
         var kept: [ClipboardFormats.Format] = []
         var total = 0
@@ -667,6 +682,42 @@ final class ClipboardHistory {
             total += data.count
         }
         return kept.isEmpty ? nil : kept
+    }
+
+    /// Several items copied together: each one's formats, with its own
+    /// text or picture among them, so that it pastes back as that many
+    /// items (docs/clipboard-kept-formats.md → Several items). Nil when
+    /// they do not all fit or took too long: the copy then pastes as its
+    /// text, all items' joined, or its first picture, as before.
+    private static func formats(ofSeveral all: [NSPasteboardItem]) -> [ClipboardFormats.Format]? {
+        guard all.count <= ClipboardFormats.itemLimit else { return nil }
+        let start = ContinuousClock.now
+        var items: [[ClipboardFormats.Format]] = []
+        var total = 0
+        for item in all {
+            var kept: [ClipboardFormats.Format] = []
+            // What makes the item: its text, or its picture. Without it
+            // the item would paste empty.
+            var own: [NSPasteboard.PasteboardType] = []
+            if item.types.contains(.string) {
+                own = [.string]
+            } else if let picture = ClipboardFormats.itemPictures.map({ NSPasteboard.PasteboardType($0) }).first(where: { item.types.contains($0) }) {
+                own = [picture]
+            }
+            for type in item.types where ClipboardFormats.keeps(type.rawValue) || own.contains(type) {
+                guard ContinuousClock.now - start < ClipboardFormats.readBudget else { return nil }
+                guard let data = item.data(forType: type), !data.isEmpty else { continue }
+                guard total + data.count <= ClipboardFormats.limit else {
+                    if own.contains(type) { return nil }
+                    continue
+                }
+                kept.append(.init(type: type == .string ? ClipboardFormats.itemText : type.rawValue, data: data))
+                total += data.count
+            }
+            guard !kept.isEmpty else { continue }
+            items.append(kept)
+        }
+        return items.count > 1 ? ClipboardFormats.joined(items) : items.first
     }
 
     private static let imageTypes: Set<String> = [
@@ -750,8 +801,15 @@ final class ClipboardHistory {
         guard data.count <= ClipboardPolicy.pictureLimit else { return .notKept(.bigPicture) }
         // What the app put with the picture: a shape or a slide's object
         // pastes back as one, not as its picture.
-        let kept = formats(on: pasteboard)
-        return .later {
+        // Of several items, the first one's picture is the copy's own:
+        // not kept a second time among its formats.
+        var kept = formats(on: pasteboard)
+        if let all = kept, all.contains(where: { $0.type == ClipboardFormats.nextItem }) {
+            var items = ClipboardFormats.items(all)
+            items[0].removeAll { ClipboardFormats.itemPictures.contains($0.type) }
+            kept = ClipboardFormats.joined(items)
+        }
+        return .later { [kept] in
             guard let rep = NSBitmapImageRep(data: data), let png = png ?? rep.representation(using: .png, properties: [:]) else { return nil }
             // A copied web image keeps its address: searchable too.
             return .item(ClipboardStore.NewItem(kind: .image, text: string ?? "", imageData: png, size: "\(rep.pixelsWide)×\(rep.pixelsHigh)",
