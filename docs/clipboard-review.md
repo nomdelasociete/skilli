@@ -87,6 +87,11 @@ Then #8: ⌘K → Paste in Sequence on a selection pastes the oldest now,
 each Paste in Sequence after it the next (A, B, C, one key each). With
 nothing selected it is unchanged, newest first.
 
+Then (docs/clipboard-kept-formats.md): #11 a copy is kept with every
+format its app gave it, in the app's order, up to 4 MB, and pastes back
+with them. Left of #11: several items copied together; cells from
+Numbers, an object from Keynote or Figma not tried in the real apps.
+
 ## Must (the history is behind the others here)
 
 | # | Gap | Proof | Others |
@@ -186,4 +191,5 @@ list, ↩ to pasted, copy to kept.
 3. #3 pins and #5 kind filter: one spec, they share the header.
 4. #7 actions per kind (open link, show file, save as snippet).
 5. ~~Speed budget lines + the three measurements~~: done.
-6. ~~#13, #14, #16~~, ~~#15~~, ~~#10~~, ~~#12~~: done. Then #8, #9, #11.
+6. ~~#13, #14, #16~~, ~~#15~~, ~~#10~~, ~~#12~~, ~~#8~~, ~~#9~~, ~~#11~~: done.
+   Left: of #7, Quick Look large and drag out.

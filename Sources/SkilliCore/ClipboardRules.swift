@@ -586,3 +586,76 @@ public enum ClipboardSelection {
         (["Clipboard"] + [filter].compactMap { $0 } + (selected > 0 ? ["\(selected) selected"] : [])).joined(separator: " · ")
     }
 }
+
+/// What a copy is kept with beside its text or its picture: every format
+/// the app put there (cells, a slide's object, a web archive), so it
+/// pastes back as it was copied. Bounded in size; what the copy already
+/// is (its plain text, its picture) and what only marks the clipboard
+/// are left out.
+public enum ClipboardFormats {
+    /// One format as the app gave it.
+    public struct Format: Sendable, Equatable {
+        public var type: String
+        public var data: Data
+
+        public init(type: String, data: Data) {
+            self.type = type
+            self.data = data
+        }
+    }
+
+    /// All of a copy's formats together stay under this: one that does
+    /// not fit is left out, the next smaller ones kept.
+    public static let limit = 4_000_000
+
+    /// Reading asks the app copied from for each format: past this long
+    /// in all, the rest is left out (the main thread is the one waiting).
+    public static let readBudget: Duration = .milliseconds(50)
+
+    /// The copy's text under its other names: kept once, as the text.
+    static let plainText: Set<String> = [
+        "public.utf8-plain-text", "public.utf16-external-plain-text", "public.utf16-plain-text",
+        "public.plain-text", "public.text", "NSStringPboardType", "com.apple.traditional-mac-plain-text"
+    ]
+
+    /// A picture of the copy: kept once, as a PNG, when the copy is a
+    /// picture; beside a text (the cells drawn), not kept, as before.
+    static let pictures: Set<String> = [
+        "public.png", "public.tiff", "public.jpeg", "public.heic", "NeXT TIFF v4.0 pasteboard type", "com.apple.icns"
+    ]
+
+    /// Marks an app leaves for itself or for macOS, and files promised
+    /// (written only when dropped somewhere): nothing to paste back.
+    static let markers: [String] = [
+        "org.nspasteboard.", "com.apple.is-remote-clipboard", "org.chromium.internal.", "com.apple.pasteboard.promised",
+        "com.apple.NSFilePromise", "NSPromiseContentsPboardType", "Apple files promise pasteboard type"
+    ]
+
+    /// Whether a format is kept beside the copy.
+    public static func keeps(_ type: String) -> Bool {
+        !plainText.contains(type) && !pictures.contains(type) && !markers.contains { type.hasPrefix($0) }
+    }
+
+    /// The formats as one value to store, in their order; nil for none.
+    public static func encoded(_ formats: [Format]) -> Data? {
+        guard !formats.isEmpty else { return nil }
+        let list: [Any] = formats.flatMap { [$0.type, $0.data] as [Any] }
+        return try? PropertyListSerialization.data(fromPropertyList: list, format: .binary, options: 0)
+    }
+
+    /// What `encoded` stored. A copy of before (RTF, RTFD and HTML by
+    /// name, no order kept) reads in that order.
+    public static func decoded(_ data: Data) -> [Format] {
+        guard let list = try? PropertyListSerialization.propertyList(from: data, format: nil) else { return [] }
+        if let before = list as? [String: Data] {
+            let order = ["public.rtf", "com.apple.flat-rtfd", "public.html"]
+            return before.sorted { (order.firstIndex(of: $0.key) ?? order.count, $0.key) < (order.firstIndex(of: $1.key) ?? order.count, $1.key) }
+                .map { Format(type: $0.key, data: $0.value) }
+        }
+        guard let pairs = list as? [Any], pairs.count.isMultiple(of: 2) else { return [] }
+        return stride(from: 0, to: pairs.count, by: 2).compactMap { index in
+            guard let type = pairs[index] as? String, let data = pairs[index + 1] as? Data else { return nil }
+            return Format(type: type, data: data)
+        }
+    }
+}

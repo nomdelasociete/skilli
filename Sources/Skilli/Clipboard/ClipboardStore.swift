@@ -66,8 +66,10 @@ final class ClipboardStore: @unchecked Sendable {
         /// PNG, for an image.
         var imageData: Data?
         var size: String?
-        /// Every format of a text copy (RTF, HTML…) to paste it back as it was.
-        var formats: [String: Data]?
+        /// Every format the app copied it with (RTF, cells, a slide's
+        /// object…), in its order, to paste it back as it was
+        /// (`ClipboardFormats`).
+        var formats: [ClipboardFormats.Format]?
         var app: String?
         var appName: String?
         /// Same content, same hash: copying it again moves it to the top.
@@ -304,7 +306,7 @@ final class ClipboardStore: @unchecked Sendable {
         defer { if !inserted, let image { removeImages([image]) } }
         if let ifClears, ifClears != cleared { return nil }
         if let existing = try again(new, at: date) { return existing }
-        let formats = try new.formats.map { try PropertyListSerialization.data(fromPropertyList: $0, format: .binary, options: 0) }
+        let formats = new.formats.flatMap(ClipboardFormats.encoded)
         try run("""
             INSERT INTO items (kind, text, image, size, formats, app, app_name, hash, copied, value)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -624,15 +626,17 @@ final class ClipboardStore: @unchecked Sendable {
                           [.int(Int64(limit))])) ?? []
     }
 
-    /// Every saved format of a text copy, to paste it as it was copied.
-    func formats(of id: Int64) -> [String: Data]? {
+    /// Every format kept with a copy, in the order the app gave them, to
+    /// paste it as it was copied.
+    func formats(of id: Int64) -> [ClipboardFormats.Format]? {
         lock.lock()
         defer { lock.unlock() }
         guard let statement = try? prepare("SELECT formats FROM items WHERE id = ?", [.int(id)]) else { return nil }
         defer { sqlite3_finalize(statement) }
         guard sqlite3_step(statement) == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else { return nil }
         let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0)))
-        return try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Data]
+        let formats = ClipboardFormats.decoded(data)
+        return formats.isEmpty ? nil : formats
     }
 
     var count: Int {

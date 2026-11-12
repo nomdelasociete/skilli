@@ -483,11 +483,7 @@ final class ClipboardHistory {
         var urls: [NSURL] = []
         switch item.kind {
         case .text:
-            if !plain, let formats = store?.formats(of: item.id) {
-                for (type, data) in formats {
-                    entry.setData(data, forType: NSPasteboard.PasteboardType(type))
-                }
-            }
+            if !plain { set(store?.formats(of: item.id), on: entry) }
             entry.setString(item.text, forType: .string)
         case .image:
             if plain {
@@ -495,6 +491,10 @@ final class ClipboardHistory {
                 entry.setString(text, forType: .string)
             } else {
                 guard let url = store?.imageURL(item), let data = try? Data(contentsOf: url) else { return false }
+                // What the app copied with the picture (a slide's object,
+                // a drawing's shapes) first, as it was: the app pasted
+                // into takes the first it knows.
+                set(store?.formats(of: item.id), on: entry)
                 entry.setData(data, forType: .png)
                 // The TIFF only if the app pasted into asks for it (most
                 // take the PNG): making it here was 30 ms before ⌘V.
@@ -515,6 +515,13 @@ final class ClipboardHistory {
         }
         pasteboard.clearContents()
         return urls.isEmpty ? pasteboard.writeObjects([entry]) : pasteboard.writeObjects(urls)
+    }
+
+    /// The formats kept with a copy, on the item to paste, in their order.
+    private func set(_ formats: [ClipboardFormats.Format]?, on entry: NSPasteboardItem) {
+        for format in formats ?? [] {
+            entry.setData(format.data, forType: NSPasteboard.PasteboardType(format.type))
+        }
     }
 
     /// A files copy's paths: those still there, and the names of those
@@ -636,8 +643,24 @@ final class ClipboardHistory {
 
     // MARK: - Reading the clipboard
 
-    /// Formats worth keeping to paste a text back as it was copied.
-    private static let richTypes: [NSPasteboard.PasteboardType] = [.rtf, .rtfd, .html]
+    /// Every format of the clipboard's first item worth keeping with the
+    /// copy (`ClipboardFormats`): read in the app's order, each one asked
+    /// of the app copied from, until they no longer fit or took too long.
+    /// Nil for none.
+    private static func formats(on pasteboard: NSPasteboard) -> [ClipboardFormats.Format]? {
+        guard let first = pasteboard.pasteboardItems?.first else { return nil }
+        let start = ContinuousClock.now
+        var kept: [ClipboardFormats.Format] = []
+        var total = 0
+        for type in first.types where ClipboardFormats.keeps(type.rawValue) {
+            guard ContinuousClock.now - start < ClipboardFormats.readBudget else { break }
+            guard let data = first.data(forType: type), !data.isEmpty, total + data.count <= ClipboardFormats.limit else { continue }
+            kept.append(.init(type: type.rawValue, data: data))
+            total += data.count
+        }
+        return kept.isEmpty ? nil : kept
+    }
+
     private static let imageTypes: Set<String> = [
         NSPasteboard.PasteboardType.png.rawValue,
         NSPasteboard.PasteboardType.tiff.rawValue,
@@ -695,17 +718,7 @@ final class ClipboardHistory {
         // Stops at the first character that is not a space: a long text is
         // not copied whole to be trimmed.
         if let string, string.unicodeScalars.contains(where: { !CharacterSet.whitespacesAndNewlines.contains($0) }), !imageFirst {
-            var formats: [String: Data] = [:]
-            var total = 0
-            if let first = pasteboard.pasteboardItems?.first {
-                for type in richTypes where first.types.contains(type) {
-                    if let data = first.data(forType: type), total + data.count <= 2_000_000 {
-                        formats[type.rawValue] = data
-                        total += data.count
-                    }
-                }
-            }
-            let kept = formats.isEmpty ? nil : formats
+            let kept = formats(on: pasteboard)
             // A key or a token by its shape (a few patterns on one word,
             // a private key's header), then the size, then the copy.
             let make: @Sendable () -> Made? = {
@@ -727,11 +740,14 @@ final class ClipboardHistory {
         let png = pasteboard.data(forType: .png)
         guard let data = png ?? pasteboard.data(forType: .tiff) ?? NSImage(pasteboard: pasteboard)?.tiffRepresentation else { return nil }
         guard data.count <= ClipboardPolicy.pictureLimit else { return .notKept(.bigPicture) }
+        // What the app put with the picture: a shape or a slide's object
+        // pastes back as one, not as its picture.
+        let kept = formats(on: pasteboard)
         return .later {
             guard let rep = NSBitmapImageRep(data: data), let png = png ?? rep.representation(using: .png, properties: [:]) else { return nil }
             // A copied web image keeps its address: searchable too.
             return .item(ClipboardStore.NewItem(kind: .image, text: string ?? "", imageData: png, size: "\(rep.pixelsWide)×\(rep.pixelsHigh)",
-                                                app: app, appName: appName, hash: hash("image", png)))
+                                                formats: kept, app: app, appName: appName, hash: hash("image", png)))
         }
     }
 
