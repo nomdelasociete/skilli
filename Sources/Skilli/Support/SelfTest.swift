@@ -15954,6 +15954,26 @@ final class SelfTest {
         }
         let formatsBack = cellsBack == "cells with their own format true, as text alone true, kept after a plain copy of them true, a shape with its picture true"
 
+        // A picture dragged out is a file made for it, kept as long as
+        // its copy: another copy's removed or made leaves it, its own
+        // removed is gone, all removed leaves none.
+        var exportsFollow = false
+        do {
+            let source = folder.appendingPathComponent("drag-source.png")
+            try? Data([0x89, 0x50, 0x4E, 0x47]).write(to: source)
+            let first = ClipboardDragExports.make(from: source, named: "Copied Image one.png", id: 910_001)
+            let second = ClipboardDragExports.make(from: source, named: "Copied Image two.png", id: 910_002)
+            func there(_ url: URL?) -> Bool { url.map { FileManager.default.fileExists(atPath: $0.path) } ?? false }
+            let both = there(first) && there(second)
+            ClipboardDragExports.remove(910_001)
+            let other = !there(first) && there(second)
+            let again = ClipboardDragExports.make(from: source, named: "Copied Image two.png", id: 910_002)
+            let remade = there(again)
+            // What Clear History and the app's start call.
+            ClipboardDragExports.removeAll()
+            exportsFollow = both && other && remade && !there(again)
+        }
+
         // An image with words, read by Vision.
         let picture = NSImage(size: NSSize(width: 900, height: 220), flipped: false) { rect in
             NSColor.white.setFill()
@@ -16142,8 +16162,8 @@ final class SelfTest {
             kinds = missed.isEmpty ? "true" : "missed \(missed)"
         }
 
-        record(name, found && movedUp && secret && excluded && richBack && plainBack && formatsBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true" && pins == "true" && kinds == "true",
-               "links alone, addresses alone, one app's copies, with a word and paged: \(kinds); a pinned copy kept by the pass, first with no words, pinned after forget and restore: \(pins); found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); \(cellsBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
+        record(name, found && movedUp && secret && excluded && richBack && plainBack && formatsBack && exportsFollow && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true" && pins == "true" && kinds == "true",
+               "links alone, addresses alone, one app's copies, with a word and paged: \(kinds); a pinned copy kept by the pass, first with no words, pinned after forget and restore: \(pins); found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); \(cellsBack); a dragged picture's file goes with its copy, not with another's: \(exportsFollow); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
                ocrMs)
     }
 

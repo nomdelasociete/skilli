@@ -3328,6 +3328,8 @@ final class LauncherController: NSObject {
     private(set) var isDraggingClip = false
     /// Where the launcher was when the drag of a copy began.
     private var clipDragOrigin: NSPoint?
+    /// The picture copy whose file was made for the drag under way.
+    private var clipDragExport: Int64?
     /// Self-test hook: how the last drag of a copy ended.
     private(set) var lastClipDrag: NSDragOperation?
     /// Self-test hook: where a row is on the screen.
@@ -5233,7 +5235,8 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             guard let stored = clipboardImageURL?(clip) else { return nil }
             // Its own file is named by the history; dropped in a folder,
             // the copy wants a name a person reads (`ClipboardDragExports`).
-            let named = ClipboardDragExports.make(from: stored, named: ClipboardDrag.pictureName(size: clip.size, copied: clip.copiedAt))
+            let named = ClipboardDragExports.make(from: stored, named: ClipboardDrag.pictureName(size: clip.size, copied: clip.copiedAt), id: clip.id)
+            clipDragExport = named == nil ? nil : clip.id
             return (named ?? stored) as NSURL
         case .file(let path):
             // Looked for now, as the drag begins: never as the list is drawn.
@@ -5269,7 +5272,8 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
         isDraggingClip = false
         lastClipDrag = operation
         // Let go over nothing: the picture's copy made for it goes.
-        if operation == [] { ClipboardDragExports.removeAll() }
+        if operation == [], let clipDragExport { ClipboardDragExports.remove(clipDragExport) }
+        clipDragExport = nil
         // Back as it was, unseen for the instant before it closes when
         // the copy was dropped: `hide` closes a launcher that shows.
         panel.alphaValue = operation == [] ? 1 : 0

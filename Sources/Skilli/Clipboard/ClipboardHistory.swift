@@ -303,8 +303,10 @@ final class ClipboardHistory {
         guard let store, let cutoff = preferences.clipboardRetention.cutoff() else { return }
         if let removed = try? store.prune(before: cutoff), !removed.isEmpty {
             Log.trace("Clipboard: \(removed.count) items older than \(preferences.clipboardRetention.rawValue) removed")
-            for id in removed { links?.forget(id) }
-            ClipboardDragExports.removeAll()
+            for id in removed {
+                links?.forget(id)
+                ClipboardDragExports.remove(id)
+            }
             revision += 1
         }
     }
@@ -327,7 +329,7 @@ final class ClipboardHistory {
     func delete(_ item: ClipboardStore.Item) {
         try? store?.delete(item.id)
         links?.forget(item.id)
-        ClipboardDragExports.removeAll()
+        ClipboardDragExports.remove(item.id)
         revision += 1
     }
 
@@ -336,7 +338,7 @@ final class ClipboardHistory {
     func forget(_ item: ClipboardStore.Item) -> ClipboardStore.Forgotten? {
         let forgotten = try? store?.forget(item.id)
         links?.forget(item.id)
-        ClipboardDragExports.removeAll()
+        ClipboardDragExports.remove(item.id)
         revision += 1
         return forgotten ?? nil
     }
@@ -904,27 +906,39 @@ final class ClipboardHistory {
 
 /// A picture copy dragged out of the history is given as a file under a
 /// name a person reads: a copy of the history's own, in the temporary
-/// folder. One at a time, and never longer than the history keeps the
-/// picture: removed when another is dragged, when a drag is let go over
-/// nothing, when any copy is forgotten, removed by Keep copies for or
-/// cleared, and when the app starts.
+/// folder, in a folder of its own named by the copy's id. It lives as
+/// long as the history keeps that picture and no longer: removed when
+/// that copy is forgotten or removed by Keep copies for, when its drag is
+/// let go over nothing, when the history is cleared, and when the app
+/// starts. Another copy dragged or removed leaves it: an app that reads
+/// the dropped file a moment later still finds it.
 enum ClipboardDragExports {
     static var folder: URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("skilli-drag", isDirectory: true)
     }
 
-    /// The picture at `stored` copied under `name`; nil when it could not be.
-    static func make(from stored: URL, named name: String) -> URL? {
-        removeAll()
-        let named = folder.appendingPathComponent(name)
+    private static func folder(of id: Int64) -> URL {
+        folder.appendingPathComponent(String(id), isDirectory: true)
+    }
+
+    /// The picture of copy `id`, at `stored`, copied under `name`; nil
+    /// when it could not be.
+    static func make(from stored: URL, named name: String, id: Int64) -> URL? {
+        remove(id)
+        let named = folder(of: id).appendingPathComponent(name)
         do {
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: folder(of: id), withIntermediateDirectories: true)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path)
             try FileManager.default.copyItem(at: stored, to: named)
             return named
         } catch {
             return nil
         }
+    }
+
+    /// The file made for copy `id`, gone.
+    static func remove(_ id: Int64) {
+        try? FileManager.default.removeItem(at: folder(of: id))
     }
 
     static func removeAll() {
