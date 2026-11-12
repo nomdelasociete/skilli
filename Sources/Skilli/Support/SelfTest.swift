@@ -15954,6 +15954,28 @@ final class SelfTest {
         }
         let formatsBack = cellsBack == "cells with their own format true, as text alone true, kept after a plain copy of them true, a shape with its picture true"
 
+        // A picture dragged out is a file made for it, kept as long as
+        // its copy: another copy's removed or made leaves it, its own
+        // removed is gone, all removed leaves none.
+        var exportsFollow = false
+        do {
+            let source = folder.appendingPathComponent("drag-source.png")
+            try? Data([0x89, 0x50, 0x4E, 0x47]).write(to: source)
+            let first = ClipboardDragExports.make(from: source, named: "Copied Image one.png", id: 910_001)
+            let second = ClipboardDragExports.make(from: source, named: "Copied Image two.png", id: 910_002)
+            func there(_ made: (file: URL, made: Bool)?) -> Bool { made.map { FileManager.default.fileExists(atPath: $0.file.path) } ?? false }
+            let both = there(first) && there(second) && first?.made == true && second?.made == true
+            ClipboardDragExports.remove(910_001)
+            let other = !there(first) && there(second)
+            // Dragged again while its file is there: the same file, not
+            // this drag's to remove.
+            let again = ClipboardDragExports.make(from: source, named: "Copied Image two.png", id: 910_002)
+            let remade = there(again) && again?.made == false && again?.file == second?.file
+            // What Clear History and the app's start call.
+            ClipboardDragExports.removeAll()
+            exportsFollow = both && other && remade && !there(again)
+        }
+
         // An image with words, read by Vision.
         let picture = NSImage(size: NSSize(width: 900, height: 220), flipped: false) { rect in
             NSColor.white.setFill()
@@ -16142,8 +16164,8 @@ final class SelfTest {
             kinds = missed.isEmpty ? "true" : "missed \(missed)"
         }
 
-        record(name, found && movedUp && secret && excluded && richBack && plainBack && formatsBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true" && pins == "true" && kinds == "true",
-               "links alone, addresses alone, one app's copies, with a word and paged: \(kinds); a pinned copy kept by the pass, first with no words, pinned after forget and restore: \(pins); found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); \(cellsBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
+        record(name, found && movedUp && secret && excluded && richBack && plainBack && formatsBack && exportsFollow && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true" && pins == "true" && kinds == "true",
+               "links alone, addresses alone, one app's copies, with a word and paged: \(kinds); a pinned copy kept by the pass, first with no words, pinned after forget and restore: \(pins); found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); \(cellsBack); a dragged picture's file goes with its copy, not with another's: \(exportsFollow); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
                ocrMs)
     }
 
@@ -17761,6 +17783,87 @@ final class SelfTest {
                 problems.append("the history did not open again for Quick Look")
             }
             for item in store.search("quagga") { try? store.delete(item.id) }
+
+            // A text copy dragged by the pointer out of the history onto
+            // a view that takes drops, beside the launcher then under
+            // where it was: the launcher leaves the screen, the text is
+            // dropped there, the launcher closes
+            // (docs/clipboard-drag-out.md).
+            _ = try? store.add(.init(kind: .text, text: "numbat dragged out", app: "com.apple.Notes", appName: "Notes", hash: "selftest-drag-text"))
+            do {
+                let screenHeight = NSScreen.screens.first?.frame.height ?? 0
+                let pointer = CGEventSource(stateID: .hidSystemState)
+                func mouse(_ type: CGEventType, _ point: NSPoint) async {
+                    CGEvent(mouseEventSource: pointer, mouseType: type, mouseCursorPosition: CGPoint(x: point.x, y: screenHeight - point.y), mouseButton: .left)?
+                        .post(tap: .cghidEventTap)
+                    await pause(type == .leftMouseDragged ? 16 : 80)
+                }
+                // What takes the drop: a view over the test window's text,
+                // which says what came (any app's drop zone does the same).
+                let probe = DropProbe(frame: window.contentView?.bounds ?? .zero)
+                probe.autoresizingMask = [.width, .height]
+                window.contentView?.addSubview(probe)
+                defer { probe.removeFromSuperview() }
+                for place in ["beside the launcher", "under the launcher"] {
+                    probe.reset()
+                    guard await openHistory() else {
+                        problems.append("the history did not open again for the drag \(place)")
+                        continue
+                    }
+                    for letter in "numbat" { await pressKey(letter) }
+                    let target = window.contentView.map { window.convertToScreen($0.convert($0.bounds, to: nil)) }
+                    if await waitUntil(timeout: 2, { launcher.shownRowCount == 1 }) != nil, let row = launcher.rowScreenFrame(0), let target {
+                        let panel = launcher.window.frame
+                        let from = NSPoint(x: row.minX + 120, y: row.midY)
+                        // Beside: in the test window, above the launcher's top.
+                        // Under: near the corner of where it was, not the
+                        // screen's middle (other apps' alerts show there).
+                        let to = place == "beside the launcher" ? NSPoint(x: target.midX, y: (panel.maxY + target.maxY) / 2)
+                            : NSPoint(x: max(panel.minX, target.minX) + 90, y: max(panel.minY, target.minY) + 90)
+                        await mouse(.mouseMoved, from)
+                        await mouse(.leftMouseDown, from)
+                        for step in 1...12 { await mouse(.leftMouseDragged, NSPoint(x: from.x + CGFloat(step) * 4, y: from.y + CGFloat(step) * 2)) }
+                        let began = await waitUntil(timeout: 2) { launcher.isDraggingClip } != nil
+                        let hidden = !launcher.window.isVisible
+                        for step in 1...20 {
+                            let done = CGFloat(step) / 20
+                            await mouse(.leftMouseDragged, NSPoint(x: from.x + 48 + (to.x - from.x - 48) * done, y: from.y + 24 + (to.y - from.y - 24) * done))
+                        }
+                        // The place takes the drag before it is let go: let go
+                        // at once, the drop was not offered (one run of two).
+                        _ = await waitUntil(timeout: 2) { probe.entered }
+                        await pause(600)
+                        // What of skil.li's is at the place just before letting go.
+                        var there = NSApp.windows.filter { $0.isVisible && $0.frame.contains(to) }
+                            .map { "\(type(of: $0)) level \($0.level.rawValue) alpha \($0.alphaValue)" }
+                        // And every window of the screen there, front first.
+                        let flipped = CGPoint(x: to.x, y: screenHeight - to.y)
+                        for info in (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? [] {
+                            guard let bounds = (info[kCGWindowBounds as String] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0) }),
+                                  bounds.contains(flipped) else { continue }
+                            there.append("\(info[kCGWindowOwnerName as String] as? String ?? "?") layer \(info[kCGWindowLayer as String] as? Int ?? 0) "
+                                         + "\(Int(bounds.width))×\(Int(bounds.height)) alpha \(info[kCGWindowAlpha as String] as? Double ?? 1)")
+                        }
+                        await mouse(.leftMouseUp, to)
+                        let dropped = await waitUntil(timeout: 3) { probe.dropped == "numbat dragged out" && !launcher.isVisible } != nil
+                        if !began || !hidden || !dropped || launcher.window.alphaValue != 1 {
+                            problems.append("a text copy dragged out \(place): drag began \(began), launcher off the screen \(hidden), "
+                                            + "dropped “\(probe.dropped ?? "nothing")” (entered \(probe.entered), left \(probe.left), asked \(probe.asked)), "
+                                            + "launcher open \(launcher.isVisible), ended \(String(describing: launcher.lastClipDrag?.rawValue)), "
+                                            + "to \(to), launcher \(panel), the window \(target), skil.li's windows there before letting go: \(there)")
+                        }
+                    } else {
+                        problems.append("“numbat”: \(launcher.shownRowCount) rows for the drag")
+                    }
+                    for _ in 0..<3 where launcher.isVisible {
+                        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                        _ = await waitUntil(timeout: 1) { !launcher.isVisible }
+                    }
+                }
+            }
+            textView.string = ""
+            context.clipboard.poll()
+            for item in store.search("numbat") { try? store.delete(item.id) }
 
             // ⌘K → Save as Snippet… on a text copy: the snippet editor,
             // the copy's text in it, nothing saved yet
@@ -33248,6 +33351,51 @@ extension SelfTest.Report {
         let skipped = checks.filter(\.skipped).count
         let passed = checks.filter { $0.passed && !$0.skipped }.count
         self.init(passed: passed, failed: checks.count - passed - skipped, skipped: skipped, checks: checks)
+    }
+}
+
+/// Self-test: a view that takes a dragged text or file and says what came.
+private final class DropProbe: NSView {
+    private(set) var entered = false
+    /// The drop was offered (`prepareForDragOperation`).
+    private(set) var asked = false
+    private(set) var dropped: String?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        registerForDraggedTypes([.string, .fileURL])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// The drag left the view (`draggingExited`).
+    private(set) var left = false
+
+    func reset() {
+        (entered, asked, left, dropped) = (false, false, false, nil)
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        left = true
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        entered = true
+        return .copy
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        asked = true
+        return true
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let pasteboard = sender.draggingPasteboard
+        dropped = pasteboard.string(forType: .string) ?? pasteboard.string(forType: .fileURL)
+        return dropped != nil
     }
 }
 #endif

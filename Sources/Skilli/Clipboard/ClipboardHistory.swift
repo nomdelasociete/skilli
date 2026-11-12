@@ -42,6 +42,8 @@ final class ClipboardHistory {
         lastChangeCount = pasteboard.changeCount
         links = store.map { ClipboardLinks(folder: $0.previewsFolder) }
         links?.isOn = { [preferences] in preferences.clipboardLinkPreviews }
+        // A picture dragged out before the app last quit: its copy goes.
+        ClipboardDragExports.removeAll()
     }
 
     /// The user's choice for skil.li in Paste from Other Apps.
@@ -301,7 +303,10 @@ final class ClipboardHistory {
         guard let store, let cutoff = preferences.clipboardRetention.cutoff() else { return }
         if let removed = try? store.prune(before: cutoff), !removed.isEmpty {
             Log.trace("Clipboard: \(removed.count) items older than \(preferences.clipboardRetention.rawValue) removed")
-            for id in removed { links?.forget(id) }
+            for id in removed {
+                links?.forget(id)
+                ClipboardDragExports.remove(id)
+            }
             revision += 1
         }
     }
@@ -317,12 +322,14 @@ final class ClipboardHistory {
     func clear() {
         try? store?.clear()
         links?.forgetAll()
+        ClipboardDragExports.removeAll()
         revision += 1
     }
 
     func delete(_ item: ClipboardStore.Item) {
         try? store?.delete(item.id)
         links?.forget(item.id)
+        ClipboardDragExports.remove(item.id)
         revision += 1
     }
 
@@ -331,6 +338,7 @@ final class ClipboardHistory {
     func forget(_ item: ClipboardStore.Item) -> ClipboardStore.Forgotten? {
         let forgotten = try? store?.forget(item.id)
         links?.forget(item.id)
+        ClipboardDragExports.remove(item.id)
         revision += 1
         return forgotten ?? nil
     }
@@ -893,5 +901,49 @@ final class ClipboardHistory {
         guard let observations else { return nil }
         let text = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
         return text.isEmpty ? nil : text
+    }
+}
+
+/// A picture copy dragged out of the history is given as a file under a
+/// name a person reads: a copy of the history's own, in the temporary
+/// folder, in a folder of its own named by the copy's id. It lives as
+/// long as the history keeps that picture and no longer: removed when
+/// that copy is forgotten or removed by Keep copies for, when its drag is
+/// let go over nothing, when the history is cleared, and when the app
+/// starts. Another copy dragged or removed leaves it: an app that reads
+/// the dropped file a moment later still finds it.
+enum ClipboardDragExports {
+    static var folder: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("skilli-drag", isDirectory: true)
+    }
+
+    private static func folder(of id: Int64) -> URL {
+        folder.appendingPathComponent(String(id), isDirectory: true)
+    }
+
+    /// The picture of copy `id`, at `stored`, as a file under `name`:
+    /// the one made for an earlier drag of it when it is still there
+    /// (`made` false: an app may be reading it, it is not this drag's to
+    /// remove), else a new copy. Nil when it could not be made.
+    static func make(from stored: URL, named name: String, id: Int64) -> (file: URL, made: Bool)? {
+        let named = folder(of: id).appendingPathComponent(name)
+        if FileManager.default.fileExists(atPath: named.path) { return (named, false) }
+        do {
+            try FileManager.default.createDirectory(at: folder(of: id), withIntermediateDirectories: true)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path)
+            try FileManager.default.copyItem(at: stored, to: named)
+            return (named, true)
+        } catch {
+            return nil
+        }
+    }
+
+    /// The file made for copy `id`, gone.
+    static func remove(_ id: Int64) {
+        try? FileManager.default.removeItem(at: folder(of: id))
+    }
+
+    static func removeAll() {
+        try? FileManager.default.removeItem(at: folder)
     }
 }

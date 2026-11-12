@@ -890,6 +890,10 @@ final class LauncherController: NSObject {
     /// → Launcher → Starts again empty), by its mode: a shortcut straight
     /// into a mode takes back only that mode.
     func show(triggeredAt: ContinuousClock.Instant, keeping: (Mode?) -> Bool = { _ in true }) {
+        // A drag of a copy whose end was never told: opened again, the
+        // launcher is no longer held open by it.
+        isDraggingClip = false
+        clipDragOrigin = nil
         // The GitHub strip as GitHub said last; read again if it is older
         // than 15 s (the answer redraws it).
         let strip = showsGitHubStrip() && github?.isSignedIn == true
@@ -3320,6 +3324,20 @@ final class LauncherController: NSObject {
     /// Self-test hooks: how many are selected; the place shown on a row.
     var chosenClipCount: Int { chosenClips.count }
 
+    /// Self-test hook: a copy is being dragged out of the history.
+    private(set) var isDraggingClip = false
+    /// Where the launcher was when the drag of a copy began.
+    private var clipDragOrigin: NSPoint?
+    /// The picture copy whose file was made for the drag under way.
+    private var clipDragExport: Int64?
+    /// Self-test hook: how the last drag of a copy ended.
+    private(set) var lastClipDrag: NSDragOperation?
+    /// Self-test hook: where a row is on the screen.
+    func rowScreenFrame(_ row: Int) -> NSRect? {
+        guard tableView.numberOfRows > row, let window = tableView.window else { return nil }
+        return window.convertToScreen(tableView.convert(tableView.rect(ofRow: row), to: nil))
+    }
+
     // MARK: - A copy seen large
 
     private lazy var lookPanel = LookPanel()
@@ -5028,6 +5046,11 @@ final class LauncherController: NSObject {
         tableView.delegate = self
         tableView.target = self
         tableView.doubleAction = #selector(rowDoubleClicked)
+        // A copy dragged out of the history: into another app, or a
+        // window of skil.li's own (a field in Settings). Never into the
+        // launcher, off the screen while the drag is on.
+        tableView.setDraggingSourceOperationMask(.copy, forLocal: false)
+        tableView.setDraggingSourceOperationMask(.copy, forLocal: true)
         scrollView.documentView = tableView
         card.addSubview(scrollView)
         // The Catalog's header follows the group at the top of the list.
@@ -5196,6 +5219,72 @@ extension LauncherController: NSTextFieldDelegate {
 extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
     func numberOfRows(in tableView: NSTableView) -> Int {
         results.count
+    }
+
+    // MARK: A copy dragged out (docs/clipboard-drag-out.md)
+
+    /// What a row of the history gives when dragged: a text, a picture's
+    /// file under a name worth keeping, the one file of a files copy
+    /// still there. Nil for the rest: the row does not drag.
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        guard clipboardMode, results.indices.contains(row), case .clip(let clip) = results[row] else { return nil }
+        switch ClipboardDrag.of(kind: clip.kind.rawValue, text: clip.text) {
+        case .text(let text):
+            return text as NSString
+        case .picture:
+            guard let stored = clipboardImageURL?(clip) else { return nil }
+            // Its own file is named by the history; dropped in a folder,
+            // the copy wants a name a person reads (`ClipboardDragExports`).
+            let export = ClipboardDragExports.make(from: stored, named: ClipboardDrag.pictureName(size: clip.size, copied: clip.copiedAt), id: clip.id)
+            // Only a file this drag made is its to remove when let go
+            // over nothing: one from an earlier drop may still be read.
+            clipDragExport = export?.made == true ? clip.id : nil
+            return (export?.file ?? stored) as NSURL
+        case .file(let path):
+            // Looked for now, as the drag begins: never as the list is drawn.
+            guard FileManager.default.fileExists(atPath: path) else {
+                say("“\((path as NSString).lastPathComponent)” is no longer where it was copied.")
+                return nil
+            }
+            return URL(fileURLWithPath: path) as NSURL
+        case .none:
+            return nil
+        }
+    }
+
+    /// The launcher leaves the screen while a copy is dragged: what is
+    /// under it is where it goes.
+    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, willBeginAt screenPoint: NSPoint,
+                   forRowIndexes rowIndexes: IndexSet) {
+        closeLook()
+        isDraggingClip = true
+        // Off the screen, and its frame away from where it was: ordered
+        // out only, a drop inside its old frame was entered then left by
+        // the window under it and never offered (3 runs of 4 on the test
+        // Mac; beside the old frame it always was).
+        clipDragOrigin = panel.frame.origin
+        panel.orderOut(nil)
+        panel.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+    }
+
+    /// Dropped somewhere: the launcher closes, as after a paste. Let go
+    /// over nothing: it is back as it was.
+    func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint,
+                   operation: NSDragOperation) {
+        isDraggingClip = false
+        lastClipDrag = operation
+        // Let go over nothing: the picture's copy made for it goes.
+        if operation == [], let clipDragExport { ClipboardDragExports.remove(clipDragExport) }
+        clipDragExport = nil
+        // Back as it was, unseen for the instant before it closes when
+        // the copy was dropped: `hide` closes a launcher that shows.
+        panel.alphaValue = operation == [] ? 1 : 0
+        if let clipDragOrigin { panel.setFrameOrigin(clipDragOrigin) }
+        clipDragOrigin = nil
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(searchField)
+        if operation != [] { hide() }
+        panel.alphaValue = 1
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -5578,6 +5667,8 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
 
 extension LauncherController: NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) {
+        // Off the screen while a copy is dragged out of it: not closed.
+        if isDraggingClip { return }
         hide()
     }
 }

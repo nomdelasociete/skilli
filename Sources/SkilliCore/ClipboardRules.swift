@@ -659,3 +659,41 @@ public enum ClipboardFormats {
         }
     }
 }
+
+/// What a copy gives when dragged out of the history into another app.
+public enum ClipboardDrag: Equatable, Sendable {
+    /// A text copy: its text.
+    case text(String)
+    /// A picture copy: its file.
+    case picture
+    /// A files copy of one file: that file, at this path.
+    case file(String)
+    /// Nothing to drag: several files copied together.
+    case none
+
+    /// `kind`: "text", "image" or "files", as the history keeps it;
+    /// `text`: the copy's text, or its paths one per line.
+    public static func of(kind: String, text: String) -> ClipboardDrag {
+        switch kind {
+        case "text":
+            return text.isEmpty ? .none : .text(text)
+        case "image":
+            return .picture
+        case "files":
+            let paths = text.split(separator: "\n", omittingEmptySubsequences: true)
+            return paths.count == 1 ? .file(String(paths[0])) : .none
+        default:
+            return .none
+        }
+    }
+
+    /// The name of a dragged picture's file: "Copied Image 2026-11-12 at
+    /// 09.41.05 (1280×720).png". No ":" or "/" (a file's name).
+    public static func pictureName(size: String?, copied: Date, calendar: Calendar = .current) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: copied)
+        let stamp = String(format: "%04d-%02d-%02d at %02d.%02d.%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0,
+                           parts.hour ?? 0, parts.minute ?? 0, parts.second ?? 0)
+        let pixels = size.flatMap { $0.isEmpty ? nil : " (\($0.replacingOccurrences(of: "/", with: "×").replacingOccurrences(of: ":", with: "×")))" } ?? ""
+        return "Copied Image \(stamp)\(pixels).png"
+    }
+}
