@@ -248,7 +248,9 @@ Everything you copy, and your screenshots, ready to paste again.
   accents, inside words too ("board" finds "clipboard"; from 3 letters,
   a shorter word in the search finds from words' starts only), by a piece of a
   link, by the app it came from, even words inside images; a copy found
-  shows the line found, its words marked in the preview; ⇥ by meaning, through the
+  shows the line found, its words marked in the preview; a word mistyped
+  ("invocie") finds the copies holding the close one when nothing is
+  found as typed, under "Close to “invocie”"; ⇥ by meaning, through the
   whole history kept ("my train ticket from yesterday") or by what a copy
   is ("email", "a link"). ↩ pastes, ⇧↩ plain text, ⌘↩ copies, ⌘⌫ forgets
   (⌘Z brings it back for 10 s). A copy is kept with every format its app

@@ -366,6 +366,12 @@ final class ClipboardHistory {
         return (before == nil ? store.pinned() : []) + store.search("", before: before, unpinnedOnly: true)
     }
 
+    /// When the words as typed find nothing: the copies holding words
+    /// close to them (a word mistyped), and those words.
+    func close(to text: String, only: ClipboardStore.Only? = nil) -> (items: [ClipboardStore.Item], words: String)? {
+        store?.close(to: text, only: only)
+    }
+
     /// ⌘K → Pin, Unpin. The copy as it is now.
     @discardableResult
     func setPinned(_ pinned: Bool, _ item: ClipboardStore.Item) -> ClipboardStore.Item? {

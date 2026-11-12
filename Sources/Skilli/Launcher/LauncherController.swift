@@ -128,6 +128,18 @@ final class LauncherController: NSObject {
     /// Clipboard history: the rows for a filter, newest first, a page of
     /// them: the first, or those copied before a date (`showOlderClips`).
     var clipboardItems: ((String, Date?, ClipboardStore.Only?) -> [ClipboardStore.Item])?
+    /// The copies holding words close to the ones typed, and those
+    /// words: asked when the words as typed find nothing.
+    var clipboardClose: ((String, ClipboardStore.Only?) -> (items: [ClipboardStore.Item], words: String)?)?
+    /// The words found in place of the ones typed (one mistyped), while
+    /// the list shows their copies; nil for a list found as typed.
+    private(set) var clipCloseWords: String?
+    /// What the rows' titles and the preview mark: the words typed, or
+    /// the close ones found in their place.
+    private var clipWordsShown: String {
+        guard meaning == nil, meaningPending == nil else { return "" }
+        return clipCloseWords ?? searchField.stringValue.trimmingCharacters(in: .whitespaces)
+    }
     /// The history narrowed to one kind or one app (⌘K → Show Only…),
     /// until Show All, ⌫ in the empty field, or the mode is left.
     private(set) var clipOnly: ClipboardStore.Only?
@@ -1605,9 +1617,17 @@ final class LauncherController: NSObject {
             } else {
                 // SQLite FTS5 on this Mac: well under a millisecond.
                 meaning = nil
-                let page = clipboardItems?(text, nil, clipOnly) ?? []
-                results = page.map(LauncherItem.clip)
+                var page = clipboardItems?(text, nil, clipOnly) ?? []
                 clipsEnded = page.count < Layout.resultLimit
+                clipCloseWords = nil
+                // Nothing as typed: a word mistyped finds the close ones,
+                // one page of them.
+                if page.isEmpty, !text.trimmingCharacters(in: .whitespaces).isEmpty, let close = clipboardClose?(text, clipOnly) {
+                    page = close.items
+                    clipCloseWords = close.words
+                    clipsEnded = true
+                }
+                results = page.map(LauncherItem.clip)
             }
         } else if query.isEmpty {
             let apps = index.search("", usage: usage, limit: Layout.resultLimit).map(LauncherItem.app)
@@ -2116,7 +2136,7 @@ final class LauncherController: NSObject {
                 clipPreview.show(nil, imageURL: nil)
                 return
             }
-            clipPreview.searched = meaning == nil && meaningPending == nil ? searchField.stringValue.trimmingCharacters(in: .whitespaces) : ""
+            clipPreview.searched = clipWordsShown
             clipPreview.show(clip, imageURL: clip.kind == .image ? clipboardImageURL?(clip) : nil)
         } else if mode == .snippets {
             guard case .snippet(let snippet) = item else {
@@ -4315,6 +4335,8 @@ final class LauncherController: NSObject {
         guard results.indices.contains(row), case .clip(let item) = results[row] else { return nil }
         // The empty field starts with the pinned copies.
         if item.isPinned, clipOnly == nil, searchField.stringValue.trimmingCharacters(in: .whitespaces).isEmpty { return "Pinned" }
+        // Found by a close word: said, with the word typed.
+        if clipCloseWords != nil { return "Close to “\(searchField.stringValue.trimmingCharacters(in: .whitespaces))”" }
         return ClipboardDay.header(item.copiedAt)
     }
 
@@ -5532,8 +5554,7 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             // Beside the preview, which says the rest: when it was copied,
             // and the line a search found it by.
             cell.fitsAccessory = true
-            let words = meaning == nil && meaningPending == nil ? searchField.stringValue.trimmingCharacters(in: .whitespaces) : ""
-            cell.configure(title: item.title(searched: words), accessory: ClipboardDay.short(item.copiedAt), icon: icon(for: item))
+            cell.configure(title: item.title(searched: clipWordsShown), accessory: ClipboardDay.short(item.copiedAt), icon: icon(for: item))
         case .setup(let permission):
             // Only Accessibility's opens the setup window; the others ask
             // right here (D7).
