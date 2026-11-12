@@ -419,7 +419,7 @@ public enum FeatureCatalog {
                                     symbol: "text.quote", prefix: snippet.keyword.isEmpty ? nil : snippet.keyword, run: .snippet(snippet.id))
             }
         let search = [command(.searchSnippets, .write, "Types a snippet found by its name, or by what you need with ⇥"),
-                      command(.pasteInSequence, .write, "Pastes your last copies one after another, a key each, newest first")]
+                      command(.pasteInSequence, .write, "Pastes copies a key each: the ones selected in order, else the newest first")]
         // After what the user made, as Settings puts its Add button.
         let newCommand = command(.newCommand, .write, "Starts a new \(input.intelligence) command in Settings, to run on the text you select")
         let newSnippet = command(.newSnippet, .write, "Starts a new snippet in Settings: a text its keyword types anywhere")

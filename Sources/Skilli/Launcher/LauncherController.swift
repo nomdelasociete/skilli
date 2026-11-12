@@ -141,6 +141,9 @@ final class LauncherController: NSObject {
     /// Several copies selected, used as one (↩ pastes, ⌘↩ copies): what
     /// they make together, in the order copied.
     var onClips: ((ClipboardSelection.Paste, ClipboardHistory.Use) -> Void)?
+    /// ⌘K → Paste in Sequence on a selection: the copies in the order
+    /// they paste, the first one now.
+    var onClipsInSequence: (([ClipboardStore.Item]) -> Void)?
     /// A copy pasted another way (⌘K → Paste as RGB, as One Line…): the
     /// text to paste in the app that was in front.
     var onClipText: ((String) -> Void)?
@@ -3411,6 +3414,16 @@ final class LauncherController: NSObject {
         // Hide first: the paste goes to the app that was in front.
         hide()
         onClips?(paste, flags.contains(.command) ? .copy : flags.contains(.shift) ? .pastePlain : .paste)
+    }
+
+    /// ⌘K → Paste in Sequence on a selection: the oldest pasted now, each
+    /// Paste in Sequence after it the next one, any kinds together.
+    func pasteChosenClipsInSequence() {
+        let items = ClipboardSelection.ordered(chosenClips.values.map(selectionCopy)).compactMap { chosenClips[$0.id] }
+        guard !items.isEmpty else { return }
+        // Hide first: the paste goes to the app that was in front.
+        hide()
+        onClipsInSequence?(items)
     }
 
     /// ⌘K → Pin, Unpin on the selected copy: it goes under "Pinned" at

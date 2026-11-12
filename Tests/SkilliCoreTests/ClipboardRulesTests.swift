@@ -251,6 +251,44 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertNil(empty.next(now: start, changeCount: 1, newest: { [] }))
     }
 
+    /// Begun on selected copies: those, in the order given, under the
+    /// same rules; past the last it says how many; then today's again.
+    func testPasteSequenceOnSelectedCopies() {
+        var sequence = PasteSequence()
+        let history: [Int64] = [40, 30, 20, 10]
+        let start = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(sequence.begin(with: [10, 30, 40], now: start), 10)
+        XCTAssertTrue(sequence.chosen)
+        sequence.wrote(changeCount: 6)
+        XCTAssertEqual(sequence.next(now: start + 3, changeCount: 6, newest: { history }), 30)
+        sequence.wrote(changeCount: 7)
+        XCTAssertEqual(sequence.next(now: start + 6, changeCount: 7, newest: { history }), 40)
+        sequence.wrote(changeCount: 8)
+        XCTAssertNil(sequence.next(now: start + 8, changeCount: 8, newest: { history }), "past the last selected")
+        XCTAssertEqual(sequence.end, "That was the last of the 3 selected.")
+        // The next run is today's: the newest copy, then older.
+        XCTAssertEqual(sequence.next(now: start + 9, changeCount: 8, newest: { history }), 40)
+        XCTAssertFalse(sequence.chosen)
+        XCTAssertEqual(sequence.end, "That was the oldest copy. Again starts from the newest.")
+
+        // A copy of the user's own in between: the selection is over.
+        XCTAssertEqual(sequence.begin(with: [10, 20], now: start + 20), 10)
+        sequence.wrote(changeCount: 9)
+        XCTAssertEqual(sequence.next(now: start + 22, changeCount: 10, newest: { history }), 40)
+        XCTAssertFalse(sequence.chosen)
+        // 30 s without a key: over too.
+        XCTAssertEqual(sequence.begin(with: [10, 20], now: start + 30), 10)
+        sequence.wrote(changeCount: 11)
+        XCTAssertEqual(sequence.next(now: start + 31 + PasteSequence.pause, changeCount: 11, newest: { history }), 40)
+
+        // One selected; none; more than a sequence holds.
+        XCTAssertEqual(sequence.begin(with: [20], now: start), 20)
+        XCTAssertEqual(sequence.end, "That was the only copy selected.")
+        XCTAssertNil(sequence.begin(with: [], now: start))
+        XCTAssertEqual(sequence.begin(with: Array(1...80), now: start), 1)
+        XCTAssertEqual(sequence.ids.count, PasteSequence.length)
+    }
+
     func testScreenshotNames() {
         XCTAssertTrue(ScreenshotName.looksLikeScreenshot("Screenshot 2026-10-15 at 09.05.12.png"))
         XCTAssertTrue(ScreenshotName.looksLikeScreenshot("Capture d’écran 2026-10-15 à 09.05.12.png"))
