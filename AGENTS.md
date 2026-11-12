@@ -1510,7 +1510,9 @@ the launcher and the self-test call:
 - While the launcher is open (a copy forgotten), the card shows right
   under its glass, as wide (`AIActionController.openLauncherFrame`,
   `UndoDelete.spot`: above it when the screen has no room below), never
-  over its rows; the `.selection` rule, which pins for the tallest card,
+  over its rows; on a screen too short for either (a 514-point launcher
+  in 670 points), at the screen's foot, over the launcher's foot only,
+  never its field and first rows; the `.selection` rule, which pins for the tallest card,
   put it over them on the mini's 1080p screen. It takes ⌘Z there
   (`AppDelegate`'s `interceptForAI` → `AIActionController.undoKey`);
   every other key stays the launcher's.

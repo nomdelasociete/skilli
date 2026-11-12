@@ -2910,7 +2910,13 @@ final class SelfTest {
         let forgot = await waitUntil(timeout: 1) { !kept() && launcher.resultTitles.first != marker } != nil
         let offered = await waitUntil(timeout: 2) { popover.isVisible && popover.shownTitle == "Copy Forgotten" && popover.hintKeys == ["⌘Z", "esc"] } != nil
         let cardGlass = popover.window.frame.insetBy(dx: Theme.glassMargin, dy: Theme.glassMargin)
-        let under = launcher.isVisible && !cardGlass.intersects(launcher.glassFrame)
+        // Clear of the launcher; on a screen too short for that, at the
+        // screen's foot, clear of the field and the first row.
+        let cardScreen = NSScreen.screens.first { $0.frame.intersects(launcher.glassFrame) }?.visibleFrame ?? .zero
+        let hasRoom = UndoDelete.hasRoom(around: launcher.glassFrame, in: cardScreen)
+        let atTheFoot = cardGlass.minY >= cardScreen.minY && cardGlass.maxY <= cardScreen.minY + UndoDelete.cardRoom
+            && cardGlass.maxY < launcher.glassFrame.midY
+        let under = launcher.isVisible && (hasRoom ? !cardGlass.intersects(launcher.glassFrame) : atTheFoot)
         // Both on the test window, so nothing of the user's shows through.
         let original = window.frame
         window.setFrame(original.union(launcher.window.frame.insetBy(dx: -24, dy: -24)).union(popover.window.frame.insetBy(dx: -24, dy: -24)),
@@ -2937,7 +2943,7 @@ final class SelfTest {
             kept()
         }
         record(name, found && forgot && offered && under && backInLauncher && undo.passed,
-               "found: \(found), forgotten: \(forgot), card: \(offered), under the launcher: \(under), ⌘Z in the launcher brought the row back: \(backInLauncher); launcher closed: \(undo.detail); launcher-clipboard-forgotten.png, card-copy-forgotten.png", nil)
+               "found: \(found), forgotten: \(forgot), card: \(offered), under the launcher: \(under) (room for it: \(hasRoom)), ⌘Z in the launcher brought the row back: \(backInLauncher); launcher closed: \(undo.detail); launcher-clipboard-forgotten.png, card-copy-forgotten.png", nil)
     }
 
     /// ⌘K → Move to Trash on a file: in the Trash at once, ⌘Z moves it back
@@ -20186,6 +20192,11 @@ final class SelfTest {
         settings.show(pane: .clipboard)
         await pause(500)
         let noLineAtFirst = line() == nil
+        // In the middle of its screen, whole across (a window centred before
+        // it had its size grew off a small display, its menus out of reach).
+        let settingsFrame = settings.frame ?? .zero
+        let settingsScreen = NSScreen.screens.first { $0.frame.intersects(settingsFrame) }?.visibleFrame ?? .zero
+        let centred = abs(settingsFrame.midX - settingsScreen.midX) <= 2 && settingsFrame.maxY <= settingsScreen.maxY
 
         // "1 week" from the menu, as a click: the binding the pane runs.
         var menu = await openMenu(titled: "Keep copies for", capture: "settings-clipboard-keep-menu.png", pick: "1 week")
@@ -20216,9 +20227,9 @@ final class SelfTest {
         let removed = await waitUntil(timeout: 2) { older() == 0 && line() == nil } != nil
         record(
             name,
-            noLineAtFirst && menu.opened && weekKept && weekSaid && custom.opened && customFromWeek && stepped && customKept
+            noLineAtFirst && centred && menu.opened && weekKept && weekSaid && custom.opened && customFromWeek && stepped && customKept
                 && customLine?.contains("older than 6 days") == true && removed,
-            "no line on a month: \(noLineAtFirst); “1 week” picked: \(menu.opened), nothing deleted: \(weekKept) (\(older()) older than 9 days now), line: “\(weekLine ?? "none")” \(weekSaid); Custom picked: \(custom.opened), from the week: \(customFromWeek) (\(preferences.clipboardRetention.rawValue)), stepper down: \(stepped), nothing deleted: \(customKept), line: “\(customLine ?? "none")”; hourly pass removed them and the line: \(removed)",
+            "no line on a month: \(noLineAtFirst); window centred: \(centred) (\(NSStringFromRect(settingsFrame))); “1 week” picked: \(menu.opened), nothing deleted: \(weekKept) (\(older()) older than 9 days now), line: “\(weekLine ?? "none")” \(weekSaid); Custom picked: \(custom.opened), from the week: \(customFromWeek) (\(preferences.clipboardRetention.rawValue)), stepper down: \(stepped), nothing deleted: \(customKept), line: “\(customLine ?? "none")”; hourly pass removed them and the line: \(removed)",
             nil
         )
     }
@@ -24910,7 +24921,18 @@ final class SelfTest {
     private func openMenu(titled title: String, capture: String, pick: String? = nil) async -> (titles: [String], opened: Bool) {
         guard let button = Self.axElements(roles: [kAXMenuButtonRole, kAXPopUpButtonRole], where: { $0.hasPrefix(title) }).first,
               let frame = Self.axFrame(button) else {
-            Log.actions.error("SELFTEST no menu button “\(title, privacy: .public)”")
+            // What is there instead, so a miss says why: every button-like
+            // element skil.li shows, with its role and what it reads.
+            var seen: [String] = []
+            Self.walkAX(from: AXUIElementCreateApplication(getpid())) { element in
+                var role: CFTypeRef?
+                AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
+                if let role = role as? String, role.contains("Button") || role == (kAXMenuItemRole as String) {
+                    seen.append("\(role) “\(Self.axTitle(element) ?? "")”")
+                }
+                return seen.count < 80
+            }
+            Log.actions.error("SELFTEST no menu button “\(title, privacy: .public)”; there: \(seen.joined(separator: ", "), privacy: .public)")
             return ([], false)
         }
         let source = CGEventSource(stateID: .hidSystemState)
@@ -24931,6 +24953,24 @@ final class SelfTest {
         await pause(700)
         let items = Self.axElements(roles: [kAXMenuItemRole], under: button) { _ in true }
         let titles = items.compactMap { Self.axTitle($0) }.filter { !$0.isEmpty }
+        if titles.isEmpty {
+            // Found and clicked, no menu: what the click landed on says why
+            // (another app's window over it, the button off the screen).
+            var under: AXUIElement?
+            AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(point.x), Float(point.y), &under)
+            var pid: pid_t = 0
+            var role: CFTypeRef?
+            if let under {
+                AXUIElementGetPid(under, &pid)
+                AXUIElementCopyAttributeValue(under, kAXRoleAttribute as CFString, &role)
+            }
+            let owner = NSRunningApplication(processIdentifier: pid)?.localizedName ?? "nobody"
+            let screen = NSScreen.main?.frame ?? .zero
+            let screens = NSScreen.screens.map { "\(NSStringFromRect($0.frame)) ×\($0.backingScaleFactor)" }.joined(separator: " | ")
+            let windows = NSApp.windows.filter(\.isVisible).map { "\($0.title.isEmpty ? String(describing: type(of: $0)) : $0.title) \(NSStringFromRect($0.frame))" }.joined(separator: " | ")
+            Log.actions.error("SELFTEST menu “\(title, privacy: .public)” button \(NSStringFromRect(frame), privacy: .public); screens: \(screens, privacy: .public); windows: \(windows, privacy: .public)")
+            Log.actions.error("SELFTEST menu “\(title, privacy: .public)” did not open: clicked \(NSStringFromPoint(point), privacy: .public) in a screen of \(NSStringFromSize(screen.size), privacy: .public); there: \(role as? String ?? "nothing", privacy: .public) “\(under.flatMap { Self.axTitle($0) } ?? "", privacy: .public)” of \(owner, privacy: .public) (skil.li active: \(NSApp.isActive, privacy: .public))")
+        }
         if let directory = context.snapshotDirectory, let image = await WindowCapture.openMenuImage(),
            let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
             try? png.write(to: directory.appendingPathComponent(capture))

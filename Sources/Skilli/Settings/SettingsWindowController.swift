@@ -103,7 +103,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         }
         // SwiftUI retitles the window after its first pass; no "Untitled".
         window.title = navigation.pane == .apps ? apps.title ?? SettingsPane.apps.title : (navigation.pane ?? .general).title
-        if isNew { window.center() }
+        if isNew { centre(window) }
         // In the Dock and ⌘⇥ while Settings is open, as an app with a
         // window is; an accessory again once it closes (`windowWillClose`)
         // and no recording's window keeps it there.
@@ -370,6 +370,32 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             skillies.newShortcut.recordingEnded(store, leaving: true)
         }
     }
+
+    /// In the middle of the screen, at the size it will have. SwiftUI
+    /// gives a new window its size after it shows: centred before that it
+    /// is one point wide, and then grows right and down from the middle
+    /// of the screen, its right and its foot off a small display (seen:
+    /// at x 492, y −210 on a 986×700 screen). So: its content laid out and
+    /// its size taken first; and centred once more on its first resize,
+    /// should the size still come later.
+    private func centre(_ window: NSWindow) {
+        if let view = window.contentViewController?.view {
+            view.layoutSubtreeIfNeeded()
+            let size = view.fittingSize
+            if size.width > 1, size.height > 1 { window.setContentSize(size) }
+        }
+        window.center()
+        guard window.frame.width < 100 else { return }
+        sizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let window = self.window, window.frame.width >= 100 else { return }
+                if let observer = self.sizeObserver { NotificationCenter.default.removeObserver(observer) }
+                self.sizeObserver = nil
+                window.center()
+            }
+        }
+    }
+    private var sizeObserver: NSObjectProtocol?
 
     private func makeWindow() -> NSWindow {
         let context = makeContext()
