@@ -15950,9 +15950,51 @@ final class SelfTest {
                     try? store.delete(kept.id)
                 }
             }
+            // Three objects copied together, the middle one with no
+            // format of its own: three items back, each its own; ⇧↩ one
+            // text, the three joined. Then two pictures: two back.
+            pasteboard.clearContents()
+            let objects = ["quoll one", "quoll two", "quoll three"].enumerated().map { index, name in
+                let object = NSPasteboardItem()
+                if index != 1 { object.setData(Data([UInt8(index)] + native), forType: shape) }
+                object.setString(name, forType: .string)
+                return object
+            }
+            pasteboard.writeObjects(objects)
+            if let kept = history.capture() {
+                history.write(kept, plain: false)
+                let back = pasteboard.pasteboardItems ?? []
+                let each = back.count == 3 && back.map { $0.string(forType: .string) } == ["quoll one", "quoll two", "quoll three"]
+                    && back[0].data(forType: shape) == Data([0] + native) && back[1].data(forType: shape) == nil
+                    && back[2].data(forType: shape) == Data([2] + native)
+                history.write(kept, plain: true)
+                let joined = pasteboard.pasteboardItems?.count == 1 && pasteboard.string(forType: .string) == "quoll one\nquoll two\nquoll three"
+                said.append("three objects copied together back as three \(each && kept.text == "quoll one\nquoll two\nquoll three"), as one text \(joined)")
+                try? store.delete(kept.id)
+            }
+            func square(_ gray: CGFloat) -> Data? {
+                let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 6, pixelsHigh: 6, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                           isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+                for x in 0..<6 { for y in 0..<6 { rep?.setColor(NSColor(deviceWhite: gray, alpha: 1), atX: x, y: y) } }
+                return rep?.representation(using: .png, properties: [:])
+            }
+            if let light = square(0.9), let dark = square(0.2) {
+                pasteboard.clearContents()
+                pasteboard.writeObjects([light, dark].map { png in
+                    let picture = NSPasteboardItem()
+                    picture.setData(png, forType: .png)
+                    return picture
+                })
+                if let kept = history.capture(), kept.kind == .image {
+                    history.write(kept, plain: false)
+                    let back = pasteboard.pasteboardItems ?? []
+                    said.append("two pictures back as two \(back.count == 2 && back[0].data(forType: .png) == light && back[1].data(forType: .png) == dark)")
+                    try? store.delete(kept.id)
+                }
+            }
             if !said.isEmpty { cellsBack = said.joined(separator: ", ") }
         }
-        let formatsBack = cellsBack == "cells with their own format true, as text alone true, kept after a plain copy of them true, a shape with its picture true"
+        let formatsBack = cellsBack == "cells with their own format true, as text alone true, kept after a plain copy of them true, a shape with its picture true, three objects copied together back as three true, as one text true, two pictures back as two true"
 
         // A picture dragged out is a file made for it, kept as long as
         // its copy: another copy's removed or made leaves it, its own
