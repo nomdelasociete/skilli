@@ -33331,7 +33331,6 @@ extension SelfTest.Report {
         self.init(passed: passed, failed: checks.count - passed - skipped, skipped: skipped, checks: checks)
     }
 }
-#endif
 
 /// Self-test: a view that takes a dragged text or file and says what came.
 private final class DropProbe: NSView {
@@ -33377,3 +33376,4 @@ private final class DropProbe: NSView {
         return dropped != nil
     }
 }
+#endif

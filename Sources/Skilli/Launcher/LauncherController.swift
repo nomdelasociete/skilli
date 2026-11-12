@@ -5232,17 +5232,9 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
         case .picture:
             guard let stored = clipboardImageURL?(clip) else { return nil }
             // Its own file is named by the history; dropped in a folder,
-            // the copy wants a name a person reads.
-            let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-drag", isDirectory: true)
-            let named = folder.appendingPathComponent(ClipboardDrag.pictureName(size: clip.size, copied: clip.copiedAt))
-            do {
-                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                try? FileManager.default.removeItem(at: named)
-                try FileManager.default.copyItem(at: stored, to: named)
-                return named as NSURL
-            } catch {
-                return stored as NSURL
-            }
+            // the copy wants a name a person reads (`ClipboardDragExports`).
+            let named = ClipboardDragExports.make(from: stored, named: ClipboardDrag.pictureName(size: clip.size, copied: clip.copiedAt))
+            return (named ?? stored) as NSURL
         case .file(let path):
             // Looked for now, as the drag begins: never as the list is drawn.
             guard FileManager.default.fileExists(atPath: path) else {
@@ -5276,6 +5268,8 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
                    operation: NSDragOperation) {
         isDraggingClip = false
         lastClipDrag = operation
+        // Let go over nothing: the picture's copy made for it goes.
+        if operation == [] { ClipboardDragExports.removeAll() }
         // Back as it was, unseen for the instant before it closes when
         // the copy was dropped: `hide` closes a launcher that shows.
         panel.alphaValue = operation == [] ? 1 : 0

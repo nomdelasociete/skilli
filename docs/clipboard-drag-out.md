@@ -35,7 +35,11 @@ goes where the cursor is, a drag goes where the pointer says.
   picture, its one file, or nothing (several files copied together).
 - A picture's own file is named by the history: a copy of it under a
   name a person reads is made in the temporary folder as the drag
-  begins, and that one is dragged.
+  begins, and that one is dragged (`ClipboardDragExports`). One at a
+  time, never kept longer than the history keeps the picture: removed
+  when another is dragged, when the drag is let go over nothing, when
+  any copy is forgotten, removed by Keep copies for or cleared, and
+  when the app starts.
 - A copied file is looked for as the drag begins, never while the list
   is drawn.
 - While the drag is on, the launcher is off the screen (ordered out,
