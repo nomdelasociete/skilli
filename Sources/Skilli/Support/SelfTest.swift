@@ -16067,6 +16067,7 @@ final class SelfTest {
         // found line is the row's title. Then a key among 3,000 copies.
         var inside = "no copy"
         var insideMs: Double?
+        var closeMs: Double?
         let insideText = "Notes de réunion\nMerci d'envoyer la facture signée : https://github.com/acme/billing/pull/42"
         if let slack = try? store.add(.init(kind: .text, text: insideText, app: "com.tinyspeck.slackmacgap", appName: "Slack", hash: "selftest-inside"),
                                       at: .now.addingTimeInterval(-60)).item {
@@ -16094,6 +16095,22 @@ final class SelfTest {
             }
             insideMs = times.max()
             if let slowest = insideMs, slowest > 16 { missed.append("a key took \(String(format: "%.1f", slowest)) ms among 3,000 copies") }
+            // A word mistyped finds nothing as typed, then the copies
+            // holding the close word, which is said
+            // (docs/clipboard-rows-and-search.md → Mistyped).
+            var closeTimes: [Double] = []
+            for (typed, meant) in [("facutration", "facturation"), ("jeuid lot", "jeudi"), ("copei", "copie"), ("exmaple", "example")] {
+                if !store.search(typed).isEmpty { missed.append("“\(typed)” found as typed") }
+                let start = ContinuousClock.now
+                let close = store.close(to: typed)
+                closeTimes.append((ContinuousClock.now - start).milliseconds)
+                if close?.items.isEmpty != false || close?.words.split(separator: " ").contains(Substring(meant)) != true {
+                    missed.append("“\(typed)” close to “\(close?.words ?? "nothing")” (\(close?.items.count ?? 0) copies), not “\(meant)”")
+                }
+            }
+            for far in ["zzqqxxw", "fac", "girafe"] where store.close(to: far) != nil { missed.append("“\(far)” found something close") }
+            closeMs = closeTimes.max()
+            if let slowest = closeMs, slowest > 16 { missed.append("a mistyped word took \(String(format: "%.1f", slowest)) ms among 3,000 copies") }
             try? store.clear()
             inside = missed.isEmpty ? "true" : "missed \(missed)"
         }
@@ -16165,7 +16182,7 @@ final class SelfTest {
         }
 
         record(name, found && movedUp && secret && excluded && richBack && plainBack && formatsBack && exportsFollow && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true" && pins == "true" && kinds == "true",
-               "links alone, addresses alone, one app's copies, with a word and paged: \(kinds); a pinned copy kept by the pass, first with no words, pinned after forget and restore: \(pins); found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); \(cellsBack); a dragged picture's file goes with its copy, not with another's: \(exportsFollow); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
+               "links alone, addresses alone, one app's copies, with a word and paged: \(kinds); a pinned copy kept by the pass, first with no words, pinned after forget and restore: \(pins); found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"), a mistyped word found by the close one in \(closeMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); \(cellsBack); a dragged picture's file goes with its copy, not with another's: \(exportsFollow); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
                ocrMs)
     }
 
@@ -17860,6 +17877,27 @@ final class SelfTest {
                         _ = await waitUntil(timeout: 1) { !launcher.isVisible }
                     }
                 }
+            }
+            // A word mistyped ("numabt"): nothing as typed, the copy
+            // found by the close word, the header saying so, the row
+            // pasting as any (docs/clipboard-rows-and-search.md → Mistyped).
+            if await openHistory() {
+                for letter in "numabt" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { launcher.shownRowCount == 1 && launcher.headerText == "Close to “numabt”" }) == nil {
+                    problems.append("“numabt” shows \(launcher.shownRowCount) rows under “\(launcher.headerText)”, not the numbat copy under Close to “numabt”")
+                }
+                await captureLauncherBothWays(as: "launcher-clipboard-close-word")
+                // One more letter no word is close to: the list empties.
+                for letter in "zzq" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { launcher.shownRowCount == 0 }) == nil {
+                    problems.append("“numabtzzq” still shows \(launcher.shownRowCount) rows")
+                }
+                for _ in 0..<3 where launcher.isVisible {
+                    await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                    _ = await waitUntil(timeout: 1) { !launcher.isVisible }
+                }
+            } else {
+                problems.append("the history did not open for the mistyped word")
             }
             textView.string = ""
             context.clipboard.poll()

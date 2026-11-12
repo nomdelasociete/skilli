@@ -68,11 +68,49 @@ Two of the gaps in `docs/clipboard-review.md` (#4, #6):
   view. Past the 4,000 characters the preview shows, the row's title is
   what says where.
 
+## Mistyped
+
+Since 2026-11-12 (was "Left of #4: typo tolerance").
+
+- **When.** The user types a word they remember and one finger slips:
+  "invocie", "facutration". The list is empty and nothing says why.
+- **The path.** None: the same field. Only when the words as typed find
+  nothing, the copies holding a close word are shown, newest first, one
+  page, under the header "Close to “invocie”". The row's title and the
+  preview mark the close word found.
+- **Hint or push.** Neither.
+- **Deterministic or AI.** Code. ⇥ by meaning is as it was.
+- **Wrong.** A copy shown that was not meant: only where the list would
+  have been empty, and the header says these are close ones. A slip not
+  undone (the first letter wrong, three slips, a word under four
+  letters): the empty list, as before.
+
+How:
+
+- A word of 4 to 7 letters may hold one slip, from 8 two: two letters
+  swapped, another letter, one too many, one left out. Its first letter
+  is right. The word typed may be the start of the kept word
+  ("invocie" finds "invoices").
+- Close to what: the words of the history itself, read from the word
+  index (`items_words`, an `fts5vocab` over `items_fts`: nothing more
+  on disk), those starting with the same letter. The six closest, then
+  the ones in the most copies (`ClipboardSearch.close`).
+- The search is then the word index's: each word as typed or one of
+  its close ones, all words required (`closeQuery`). Not inside words,
+  not the app's name: whole words of the text, an image's words, its
+  tags.
+- ⌘K → Show Only… narrows it as any search.
+
+Not done: ranking (the order stays newest first on purpose: a wider
+match cannot bury the recent copy); a slip in the first letter; a slip
+inside a longer word ("clipbaord" is found, "pbaord" is not).
+
 ## Speed
 
 One indexed query a key, as before; the trigram index costs about three
 times the text on disk. Measured by `remote clipboard`: the search over
-3,000 copies, a key.
+3,000 copies, a key. A mistyped word reads the index's words of one
+letter and compares them: measured there too, among 3,000 copies.
 
 ## Checked by
 
