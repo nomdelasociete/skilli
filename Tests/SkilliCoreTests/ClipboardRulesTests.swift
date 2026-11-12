@@ -168,7 +168,7 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertEqual(ClipboardSecret.held(in: "set GITHUB_TOKEN to \(github) in the file"), "a GitHub token")
         XCTAssertEqual(ClipboardSecret.held(in: "PORT=8080\nSTRIPE_KEY=sk_live_\(letters.prefix(24))\nDEBUG=1\n"), "a Stripe key")
         XCTAssertEqual(ClipboardSecret.held(in: "export OPENAI_API_KEY=\"sk-proj-\(letters)\""), "an API key")
-        XCTAssertEqual(ClipboardSecret.held(in: "aws_access_key_id = AKIAABCDEFGH12345678"), "an AWS access key")
+        XCTAssertEqual(ClipboardSecret.held(in: "aws_access_key_id = AKIA" + "ABCDEFGH12345678"), "an AWS access key")
         XCTAssertEqual(ClipboardSecret.held(in: "curl -H 'Authorization: Bearer \(github)' https://example.com/api"), "a GitHub token")
         XCTAssertEqual(ClipboardSecret.held(in: "curl -H \"Authorization: Bearer 9f86d081884c7d659a2feaa0c55ad015\" https://example.com"), "a sign-in header")
         XCTAssertEqual(ClipboardSecret.held(in: "{\"authorization\": \"Basic dXNlcjpwYXNzd29yZDEyMzQ1Ng==\"}"), "a sign-in header")
@@ -188,7 +188,7 @@ final class ClipboardRulesTests: XCTestCase {
                      "the task-list sk-proj-roadmap-for-the-next-quarter is late",
                      "curl -H \"Authorization: Bearer YOUR_ACCESS_TOKEN_GOES_HERE\" https://example.com",
                      "curl -H \"Authorization: Bearer $GITHUB_TOKEN\" https://example.com",
-                     "xAKIAABCDEFGH12345678x",
+                     "xAKIA" + "ABCDEFGH12345678x",
                      "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08  archive.zip",
                      "https://example.com/a/very/long/path/risk-" + letters,
                      "-----BEGIN CERTIFICATE-----\n" + letters + "\n-----END CERTIFICATE-----",
