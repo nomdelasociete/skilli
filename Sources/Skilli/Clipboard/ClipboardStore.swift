@@ -208,6 +208,14 @@ final class ClipboardStore: @unchecked Sendable {
         } catch {
             Log.actions.error("Clipboard history, no search inside words: \(error.localizedDescription, privacy: .public)")
         }
+        // The words the word index holds, read from it (nothing stored):
+        // what a mistyped word is compared with (`close`).
+        do {
+            try execute("CREATE VIRTUAL TABLE IF NOT EXISTS items_words USING fts5vocab(items_fts, row);")
+            findsCloseWords = true
+        } catch {
+            Log.actions.error("Clipboard history, no close words: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private static let insideWordsIndex = """
@@ -234,6 +242,8 @@ final class ClipboardStore: @unchecked Sendable {
 
     /// The trigram index is there: words are found from inside too.
     private(set) var findsInsideWords = false
+    /// The index's own words can be read (`items_words`).
+    private(set) var findsCloseWords = false
 
     deinit {
         sqlite3_close(db)
@@ -725,6 +735,65 @@ final class ClipboardStore: @unchecked Sendable {
         defer { sqlite3_finalize(statement) }
         guard sqlite3_step(statement) == SQLITE_DONE else {
             throw StoreError.sqlite(String(cString: sqlite3_errmsg(db)))
+        }
+    }
+
+    /// Copies holding words close to the ones typed, when the words as
+    /// typed find nothing: each word of four letters or more may be
+    /// mistyped once (twice from eight), its first letter right
+    /// (docs/clipboard-rows-and-search.md → Mistyped). Newest first, one
+    /// page. `words`: what was found instead, to mark and to say; nil
+    /// when nothing is close.
+    func close(to text: String, limit: Int = 50, only: Only? = nil) -> (items: [Item], words: String)? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard findsCloseWords else { return nil }
+        let typed = ClipboardSearch.foldedWords(text)
+        guard !typed.isEmpty else { return nil }
+        do {
+            var words: [(typed: String, close: [String])] = []
+            for word in typed {
+                guard ClipboardSearch.slipsAllowed(in: word) > 0, let first = word.unicodeScalars.first else {
+                    words.append((word, []))
+                    continue
+                }
+                // The index's words with the same first letter, not
+                // shorter than a slip allows.
+                let statement = try prepare("""
+                    SELECT term, doc FROM items_words WHERE term >= ? AND term < ? AND length(term) >= ?
+                    """, [.text(String(first)), .text(String(first) + "\u{10FFFF}"),
+                          .int(Int64(word.unicodeScalars.count - ClipboardSearch.slipsAllowed(in: word)))])
+                defer { sqlite3_finalize(statement) }
+                var kept: [(word: String, copies: Int)] = []
+                while sqlite3_step(statement) == SQLITE_ROW {
+                    if let term = sqlite3_column_text(statement, 0) { kept.append((String(cString: term), Int(sqlite3_column_int64(statement, 1)))) }
+                }
+                words.append((word, ClipboardSearch.close(to: word, among: kept)))
+            }
+            guard let match = ClipboardSearch.closeQuery(words) else { return nil }
+            var narrowed = ""
+            var bound: [Value] = []
+            switch only {
+            case .kind(let kind):
+                narrowed = "AND items.value = ?"
+                bound.append(.text(kind.rawValue))
+            case .app(let id, _):
+                narrowed = "AND items.app = ?"
+                bound.append(.text(id))
+            case nil:
+                break
+            }
+            let items = try rows("""
+                SELECT \(Self.columnList("items")) FROM items_fts JOIN items ON items.id = items_fts.rowid
+                WHERE items_fts MATCH ? \(narrowed) ORDER BY items.copied DESC LIMIT ?
+                """, [.text(match)] + bound + [.int(Int64(limit))])
+            guard !items.isEmpty else { return nil }
+            // What to mark: each word's close ones, the closest first,
+            // or the word as typed.
+            return (items, words.flatMap { $0.close.isEmpty ? [$0.typed] : $0.close }.prefix(8).joined(separator: " "))
+        } catch {
+            Log.actions.error("\(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
 

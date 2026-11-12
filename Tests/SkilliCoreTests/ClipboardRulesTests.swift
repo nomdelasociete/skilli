@@ -213,6 +213,38 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertLessThan(best, 20)
     }
 
+    func testAMistypedWordFindsTheCloseOnes() {
+        func slips(_ a: String, _ b: String, _ limit: Int = 2) -> Int? {
+            ClipboardSearch.slips(from: Array(a.unicodeScalars), toStartOf: Array(b.unicodeScalars), limit: limit)
+        }
+        XCTAssertEqual(slips("invocie", "invoice"), 1)       // two letters swapped
+        XCTAssertEqual(slips("invocie", "invoices"), 1)      // the start of a longer word
+        XCTAssertEqual(slips("invoce", "invoice"), 1)        // one left out
+        XCTAssertEqual(slips("invoiice", "invoice"), 1)      // one too many
+        XCTAssertEqual(slips("invoize", "invoice"), 1)       // another letter
+        XCTAssertEqual(slips("invoice", "invoice"), 0)
+        XCTAssertEqual(slips("elecrticte", "electricite"), 2)
+        XCTAssertNil(slips("invoice", "inventory", 1))
+        XCTAssertNil(slips("invoice", "in", 2))
+
+        XCTAssertEqual(ClipboardSearch.slipsAllowed(in: "bud"), 0)
+        XCTAssertEqual(ClipboardSearch.slipsAllowed(in: "budg"), 1)
+        XCTAssertEqual(ClipboardSearch.slipsAllowed(in: "reunions"), 2)
+        XCTAssertEqual(ClipboardSearch.foldedWords("Facture d'Électricité, 2026"), ["facture", "d", "electricite", "2026"])
+
+        let kept: [(word: String, copies: Int)] = [("invoice", 3), ("invoices", 9), ("inventory", 20), ("involve", 1), ("in", 50), ("invite", 4)]
+        // The closest first, then the one in the most copies; never the word itself.
+        XCTAssertEqual(ClipboardSearch.close(to: "invocie", among: kept), ["invoices", "invoice"])
+        XCTAssertEqual(ClipboardSearch.close(to: "invoice", among: kept), [])
+        XCTAssertEqual(ClipboardSearch.close(to: "invote", among: kept), ["invite"])
+        XCTAssertEqual(ClipboardSearch.close(to: "inv", among: kept), [])
+
+        XCTAssertEqual(ClipboardSearch.closeQuery([(typed: "invocie", close: ["invoices", "invoice"]), (typed: "oct", close: [])]),
+                       "(\"invocie\"* OR \"invoices\" OR \"invoice\") AND \"oct\"*")
+        XCTAssertNil(ClipboardSearch.closeQuery([(typed: "oct", close: [])]))
+        XCTAssertNil(ClipboardSearch.closeQuery([]))
+    }
+
     func testSeveralItemsFormatsAreKeptApart() {
         typealias Format = ClipboardFormats.Format
         let a = [Format(type: "com.example.shape", data: Data([1])), Format(type: ClipboardFormats.itemText, data: Data("one".utf8))]

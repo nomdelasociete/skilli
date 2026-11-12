@@ -870,6 +870,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.onShow = { [weak self] in self?.refreshRadios() }
         launcher.bluetoothAskable = { BluetoothDevices.authorization == .notDetermined }
         launcher.clipboardItems = { [weak self] text, before, only in self?.clipboard.page(text, before: before, only: only) ?? [] }
+        launcher.clipboardClose = { [weak self] text, only in self?.clipboard.close(to: text, only: only) }
         launcher.onPinClip = { [weak self] item, pinned in self?.clipboard.setPinned(pinned, item) }
         launcher.clipboardImageURL = { [weak self] item in self?.clipboard.store?.imageURL(item) }
         launcher.clipboardPreview.links = clipboard.links

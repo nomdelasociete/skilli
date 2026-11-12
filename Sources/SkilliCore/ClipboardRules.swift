@@ -150,6 +150,79 @@ public enum ClipboardSearch {
         return start == lineStart ? cut : "…" + cut
     }
 
+    // MARK: Close words (docs/clipboard-rows-and-search.md → Mistyped)
+
+    /// What is typed as the word index keeps words: letters and digits,
+    /// lowercase, without accents, eight at most.
+    public static func foldedWords(_ text: String) -> [String] {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .prefix(8).map { $0 }
+    }
+
+    /// How many slips a word typed may hold: none under four letters (one
+    /// slip there leads to any word), one up to seven, two from eight.
+    public static func slipsAllowed(in word: String) -> Int {
+        let length = word.unicodeScalars.count
+        return length < 4 ? 0 : length < 8 ? 1 : 2
+    }
+
+    /// The slips between a word typed and the start of a kept word: a
+    /// letter swapped with the next, another letter, one too many, one
+    /// left out, each one slip. The word typed may be the kept word's
+    /// start only ("invocie" for "invoices"). Nil past `limit`.
+    public static func slips(from typed: [Unicode.Scalar], toStartOf kept: [Unicode.Scalar], limit: Int) -> Int? {
+        let n = typed.count, m = min(kept.count, typed.count + limit)
+        guard n > 0, m >= n - limit else { return nil }
+        var before = [Int](repeating: 0, count: m + 1)
+        var row = Array(0...m)
+        var next = [Int](repeating: 0, count: m + 1)
+        for i in 1...n {
+            next[0] = i
+            var least = i
+            for j in stride(from: 1, through: m, by: 1) {
+                var cost = min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (typed[i - 1] == kept[j - 1] ? 0 : 1))
+                if i > 1, j > 1, typed[i - 1] == kept[j - 2], typed[i - 2] == kept[j - 1] { cost = min(cost, before[j - 2] + 1) }
+                next[j] = cost
+                least = min(least, cost)
+            }
+            if least > limit { return nil }
+            (before, row, next) = (row, next, before)
+        }
+        // The whole word typed against any start of the kept word.
+        let best = row.min() ?? limit + 1
+        return best <= limit ? best : nil
+    }
+
+    /// The kept words a word typed is close to, the closest first, then
+    /// the ones in the most copies; `limit` at most. `kept`: words of the
+    /// history starting with the same letter, and how many copies hold
+    /// each. Empty for a word too short to be mistyped safely.
+    public static func close(to typed: String, among kept: [(word: String, copies: Int)], limit: Int = 6) -> [String] {
+        let allowed = slipsAllowed(in: typed)
+        guard allowed > 0 else { return [] }
+        let scalars = Array(typed.unicodeScalars)
+        var found: [(word: String, slips: Int, copies: Int)] = []
+        for (word, copies) in kept {
+            let other = Array(word.unicodeScalars)
+            guard other.count >= scalars.count - allowed, let slips = slips(from: scalars, toStartOf: other, limit: allowed), slips > 0 else { continue }
+            found.append((word, slips, copies))
+        }
+        return found.sorted { ($0.slips, -$0.copies, $0.word) < ($1.slips, -$1.copies, $1.word) }.prefix(limit).map(\.word)
+    }
+
+    /// The word index's query for words with their close ones: each word
+    /// as typed (a start) or one of its close words, all required. Nil
+    /// when no word has a close one: nothing more to find.
+    public static func closeQuery(_ words: [(typed: String, close: [String])]) -> String? {
+        guard !words.isEmpty, words.contains(where: { !$0.close.isEmpty }) else { return nil }
+        return words.map { word in
+            let any = ["\"\(word.typed)\"*"] + word.close.map { "\"\($0)\"" }
+            return any.count == 1 ? any[0] : "(" + any.joined(separator: " OR ") + ")"
+        }.joined(separator: " AND ")
+    }
+
     public static func ftsQuery(_ text: String) -> String? {
         let words = text
             .components(separatedBy: CharacterSet.alphanumerics.inverted)

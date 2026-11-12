@@ -31,8 +31,10 @@ when its row shows; reading it when copied made macOS ask for the folder).
 
 Then (docs/clipboard-rows-and-search.md): #6 rows say when and the
 header the day, #4 words are found inside words, by a piece of a link
-and by the app, the found line shown and marked. Left of #4: typo
-tolerance and ranking (the order stays newest first). Left of #6: day
+and by the app, the found line shown and marked. Since: a word
+mistyped finds the copies holding a close word when nothing is found as
+typed. Left of #4: ranking (the order stays newest first, on purpose).
+Left of #6: day
 separators inside the list, "+n lines".
 
 Then (docs/clipboard-pins-filter-actions.md): #3 pins (⌘K → Pin, first
