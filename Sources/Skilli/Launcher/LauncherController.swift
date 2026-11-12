@@ -3350,6 +3350,9 @@ final class LauncherController: NSObject {
     private var clipDragOrigin: NSPoint?
     /// The picture copy whose file was made for the drag under way.
     private var clipDragExport: Int64?
+    /// The files of a dragged row after its first (a copy of several
+    /// files, several files copies selected), until the drag begins.
+    private var clipDragMore: [NSURL] = []
     /// Self-test hook: how the last drag of a copy ended.
     private(set) var lastClipDrag: NSDragOperation?
     /// Self-test hook: where a row is on the screen.
@@ -5250,6 +5253,32 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
     /// still there. Nil for the rest: the row does not drag.
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
         guard clipboardMode, results.indices.contains(row), case .clip(let clip) = results[row] else { return nil }
+        clipDragMore = []
+        // The files still there, looked for now, as the drag begins: the
+        // first is the row's, the others join it as the drag starts.
+        func files(_ paths: [String]) -> NSPasteboardWriting? {
+            let there = paths.filter { FileManager.default.fileExists(atPath: $0) }
+            guard let first = there.first else {
+                say(paths.count == 1 ? "“\((paths[0] as NSString).lastPathComponent)” is no longer where it was copied."
+                    : "None of these \(paths.count) files is where it was copied.")
+                return nil
+            }
+            clipDragMore = there.dropFirst().map { URL(fileURLWithPath: $0) as NSURL }
+            return URL(fileURLWithPath: first) as NSURL
+        }
+        // One of several selected copies: all of them as one, in the
+        // order copied, as ↩ pastes them.
+        if chosenClips.count > 1, chosenClips[clip.id] != nil {
+            switch ClipboardSelection.paste(chosenClips.values.map(selectionCopy)) {
+            case .text(let text):
+                return text as NSString
+            case .files(let paths):
+                return files(paths)
+            case .none:
+                say(ClipboardSelection.noSingleDrop)
+                return nil
+            }
+        }
         switch ClipboardDrag.of(kind: clip.kind.rawValue, text: clip.text) {
         case .text(let text):
             return text as NSString
@@ -5263,12 +5292,9 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
             clipDragExport = export?.made == true ? clip.id : nil
             return (export?.file ?? stored) as NSURL
         case .file(let path):
-            // Looked for now, as the drag begins: never as the list is drawn.
-            guard FileManager.default.fileExists(atPath: path) else {
-                say("“\((path as NSString).lastPathComponent)” is no longer where it was copied.")
-                return nil
-            }
-            return URL(fileURLWithPath: path) as NSURL
+            return files([path])
+        case .files(let paths):
+            return files(paths)
         case .none:
             return nil
         }
@@ -5280,6 +5306,12 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
                    forRowIndexes rowIndexes: IndexSet) {
         closeLook()
         isDraggingClip = true
+        // Several files in one row: the row gave the first, the others
+        // go with it.
+        if !clipDragMore.isEmpty {
+            session.draggingPasteboard.writeObjects(clipDragMore)
+            clipDragMore = []
+        }
         // Off the screen, and its frame away from where it was: ordered
         // out only, a drop inside its old frame was entered then left by
         // the window under it and never offered (3 runs of 4 on the test

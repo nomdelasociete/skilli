@@ -689,6 +689,9 @@ public enum ClipboardSelection {
         }
     }
 
+    /// Said when the selection is dragged and makes no single drop.
+    public static let noSingleDrop = "These copies do not drop as one: only texts together, or files together."
+
     /// Said when the selection makes no single paste.
     public static let noSinglePaste = "These copies do not make one paste: only texts together, or files together. ⌘K → Paste in Sequence pastes them one key each."
 
@@ -803,7 +806,9 @@ public enum ClipboardDrag: Equatable, Sendable {
     case picture
     /// A files copy of one file: that file, at this path.
     case file(String)
-    /// Nothing to drag: several files copied together.
+    /// A files copy of several: those files, at these paths.
+    case files([String])
+    /// Nothing to drag: a copy with nothing in it.
     case none
 
     /// `kind`: "text", "image" or "files", as the history keeps it;
@@ -816,7 +821,7 @@ public enum ClipboardDrag: Equatable, Sendable {
             return .picture
         case "files":
             let paths = text.split(separator: "\n", omittingEmptySubsequences: true)
-            return paths.count == 1 ? .file(String(paths[0])) : .none
+            return paths.isEmpty ? .none : paths.count == 1 ? .file(String(paths[0])) : .files(paths.map(String.init))
         default:
             return .none
         }
