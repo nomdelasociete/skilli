@@ -24921,17 +24921,12 @@ final class SelfTest {
     private func openMenu(titled title: String, capture: String, pick: String? = nil) async -> (titles: [String], opened: Bool) {
         guard let button = Self.axElements(roles: [kAXMenuButtonRole, kAXPopUpButtonRole], where: { $0.hasPrefix(title) }).first,
               let frame = Self.axFrame(button) else {
-            // What is there instead, so a miss says why: every button-like
-            // element skil.li shows, with its role and what it reads.
-            var seen: [String] = []
-            Self.walkAX(from: AXUIElementCreateApplication(getpid())) { element in
-                var role: CFTypeRef?
-                AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
-                if let role = role as? String, role.contains("Button") || role == (kAXMenuItemRole as String) {
-                    seen.append("\(role) “\(Self.axTitle(element) ?? "")”")
-                }
-                return seen.count < 80
-            }
+            // What is there instead, so a miss says why: the menu and
+            // pop-up buttons skil.li's own windows show, with what they
+            // read. Never the menu bar's items (the Apple menu names
+            // recent apps and documents) nor plain buttons.
+            let seen = Self.axElements(roles: [kAXMenuButtonRole, kAXPopUpButtonRole]) { _ in true }.prefix(20)
+                .map { "“\(Self.axTitle($0) ?? "")”" }
             Log.actions.error("SELFTEST no menu button “\(title, privacy: .public)”; there: \(seen.joined(separator: ", "), privacy: .public)")
             return ([], false)
         }
@@ -24955,7 +24950,8 @@ final class SelfTest {
         let titles = items.compactMap { Self.axTitle($0) }.filter { !$0.isEmpty }
         if titles.isEmpty {
             // Found and clicked, no menu: what the click landed on says why
-            // (another app's window over it, the button off the screen).
+            // (another app's window over it, the button off the screen):
+            // its role and whose it is, never what it reads.
             var under: AXUIElement?
             AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(point.x), Float(point.y), &under)
             var pid: pid_t = 0
@@ -24967,9 +24963,9 @@ final class SelfTest {
             let owner = NSRunningApplication(processIdentifier: pid)?.localizedName ?? "nobody"
             let screen = NSScreen.main?.frame ?? .zero
             let screens = NSScreen.screens.map { "\(NSStringFromRect($0.frame)) ×\($0.backingScaleFactor)" }.joined(separator: " | ")
-            let windows = NSApp.windows.filter(\.isVisible).map { "\($0.title.isEmpty ? String(describing: type(of: $0)) : $0.title) \(NSStringFromRect($0.frame))" }.joined(separator: " | ")
+            let windows = NSApp.windows.filter(\.isVisible).map { "\(type(of: $0)) \(NSStringFromRect($0.frame))" }.joined(separator: " | ")
             Log.actions.error("SELFTEST menu “\(title, privacy: .public)” button \(NSStringFromRect(frame), privacy: .public); screens: \(screens, privacy: .public); windows: \(windows, privacy: .public)")
-            Log.actions.error("SELFTEST menu “\(title, privacy: .public)” did not open: clicked \(NSStringFromPoint(point), privacy: .public) in a screen of \(NSStringFromSize(screen.size), privacy: .public); there: \(role as? String ?? "nothing", privacy: .public) “\(under.flatMap { Self.axTitle($0) } ?? "", privacy: .public)” of \(owner, privacy: .public) (skil.li active: \(NSApp.isActive, privacy: .public))")
+            Log.actions.error("SELFTEST menu “\(title, privacy: .public)” did not open: clicked \(NSStringFromPoint(point), privacy: .public) in a screen of \(NSStringFromSize(screen.size), privacy: .public); there: \(role as? String ?? "nothing", privacy: .public) of \(owner, privacy: .public) (skil.li active: \(NSApp.isActive, privacy: .public))")
         }
         if let directory = context.snapshotDirectory, let image = await WindowCapture.openMenuImage(),
            let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
