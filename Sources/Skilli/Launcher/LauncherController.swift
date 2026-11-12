@@ -890,6 +890,10 @@ final class LauncherController: NSObject {
     /// → Launcher → Starts again empty), by its mode: a shortcut straight
     /// into a mode takes back only that mode.
     func show(triggeredAt: ContinuousClock.Instant, keeping: (Mode?) -> Bool = { _ in true }) {
+        // A drag of a copy whose end was never told: opened again, the
+        // launcher is no longer held open by it.
+        isDraggingClip = false
+        clipDragOrigin = nil
         // The GitHub strip as GitHub said last; read again if it is older
         // than 15 s (the answer redraws it).
         let strip = showsGitHubStrip() && github?.isSignedIn == true
