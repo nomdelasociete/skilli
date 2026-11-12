@@ -17762,6 +17762,87 @@ final class SelfTest {
             }
             for item in store.search("quagga") { try? store.delete(item.id) }
 
+            // A text copy dragged by the pointer out of the history onto
+            // a view that takes drops, beside the launcher then under
+            // where it was: the launcher leaves the screen, the text is
+            // dropped there, the launcher closes
+            // (docs/clipboard-drag-out.md).
+            _ = try? store.add(.init(kind: .text, text: "numbat dragged out", app: "com.apple.Notes", appName: "Notes", hash: "selftest-drag-text"))
+            do {
+                let screenHeight = NSScreen.screens.first?.frame.height ?? 0
+                let pointer = CGEventSource(stateID: .hidSystemState)
+                func mouse(_ type: CGEventType, _ point: NSPoint) async {
+                    CGEvent(mouseEventSource: pointer, mouseType: type, mouseCursorPosition: CGPoint(x: point.x, y: screenHeight - point.y), mouseButton: .left)?
+                        .post(tap: .cghidEventTap)
+                    await pause(type == .leftMouseDragged ? 16 : 80)
+                }
+                // What takes the drop: a view over the test window's text,
+                // which says what came (any app's drop zone does the same).
+                let probe = DropProbe(frame: window.contentView?.bounds ?? .zero)
+                probe.autoresizingMask = [.width, .height]
+                window.contentView?.addSubview(probe)
+                defer { probe.removeFromSuperview() }
+                for place in ["beside the launcher", "under the launcher"] {
+                    probe.reset()
+                    guard await openHistory() else {
+                        problems.append("the history did not open again for the drag \(place)")
+                        continue
+                    }
+                    for letter in "numbat" { await pressKey(letter) }
+                    let target = window.contentView.map { window.convertToScreen($0.convert($0.bounds, to: nil)) }
+                    if await waitUntil(timeout: 2, { launcher.shownRowCount == 1 }) != nil, let row = launcher.rowScreenFrame(0), let target {
+                        let panel = launcher.window.frame
+                        let from = NSPoint(x: row.minX + 120, y: row.midY)
+                        // Beside: in the test window, above the launcher's top.
+                        // Under: near the corner of where it was, not the
+                        // screen's middle (other apps' alerts show there).
+                        let to = place == "beside the launcher" ? NSPoint(x: target.midX, y: (panel.maxY + target.maxY) / 2)
+                            : NSPoint(x: max(panel.minX, target.minX) + 90, y: max(panel.minY, target.minY) + 90)
+                        await mouse(.mouseMoved, from)
+                        await mouse(.leftMouseDown, from)
+                        for step in 1...12 { await mouse(.leftMouseDragged, NSPoint(x: from.x + CGFloat(step) * 4, y: from.y + CGFloat(step) * 2)) }
+                        let began = await waitUntil(timeout: 2) { launcher.isDraggingClip } != nil
+                        let hidden = !launcher.window.isVisible
+                        for step in 1...20 {
+                            let done = CGFloat(step) / 20
+                            await mouse(.leftMouseDragged, NSPoint(x: from.x + 48 + (to.x - from.x - 48) * done, y: from.y + 24 + (to.y - from.y - 24) * done))
+                        }
+                        // The place takes the drag before it is let go: let go
+                        // at once, the drop was not offered (one run of two).
+                        _ = await waitUntil(timeout: 2) { probe.entered }
+                        await pause(600)
+                        // What of skil.li's is at the place just before letting go.
+                        var there = NSApp.windows.filter { $0.isVisible && $0.frame.contains(to) }
+                            .map { "\(type(of: $0)) level \($0.level.rawValue) alpha \($0.alphaValue)" }
+                        // And every window of the screen there, front first.
+                        let flipped = CGPoint(x: to.x, y: screenHeight - to.y)
+                        for info in (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? [] {
+                            guard let bounds = (info[kCGWindowBounds as String] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0) }),
+                                  bounds.contains(flipped) else { continue }
+                            there.append("\(info[kCGWindowOwnerName as String] as? String ?? "?") layer \(info[kCGWindowLayer as String] as? Int ?? 0) "
+                                         + "\(Int(bounds.width))×\(Int(bounds.height)) alpha \(info[kCGWindowAlpha as String] as? Double ?? 1)")
+                        }
+                        await mouse(.leftMouseUp, to)
+                        let dropped = await waitUntil(timeout: 3) { probe.dropped == "numbat dragged out" && !launcher.isVisible } != nil
+                        if !began || !hidden || !dropped || launcher.window.alphaValue != 1 {
+                            problems.append("a text copy dragged out \(place): drag began \(began), launcher off the screen \(hidden), "
+                                            + "dropped “\(probe.dropped ?? "nothing")” (entered \(probe.entered), left \(probe.left), asked \(probe.asked)), "
+                                            + "launcher open \(launcher.isVisible), ended \(String(describing: launcher.lastClipDrag?.rawValue)), "
+                                            + "to \(to), launcher \(panel), the window \(target), skil.li's windows there before letting go: \(there)")
+                        }
+                    } else {
+                        problems.append("“numbat”: \(launcher.shownRowCount) rows for the drag")
+                    }
+                    for _ in 0..<3 where launcher.isVisible {
+                        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                        _ = await waitUntil(timeout: 1) { !launcher.isVisible }
+                    }
+                }
+            }
+            textView.string = ""
+            context.clipboard.poll()
+            for item in store.search("numbat") { try? store.delete(item.id) }
+
             // ⌘K → Save as Snippet… on a text copy: the snippet editor,
             // the copy's text in it, nothing saved yet
             // (docs/clipboard-save-as-snippet.md).
@@ -33251,3 +33332,48 @@ extension SelfTest.Report {
     }
 }
 #endif
+
+/// Self-test: a view that takes a dragged text or file and says what came.
+private final class DropProbe: NSView {
+    private(set) var entered = false
+    /// The drop was offered (`prepareForDragOperation`).
+    private(set) var asked = false
+    private(set) var dropped: String?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        registerForDraggedTypes([.string, .fileURL])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    /// The drag left the view (`draggingExited`).
+    private(set) var left = false
+
+    func reset() {
+        (entered, asked, left, dropped) = (false, false, false, nil)
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        left = true
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        entered = true
+        return .copy
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        asked = true
+        return true
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let pasteboard = sender.draggingPasteboard
+        dropped = pasteboard.string(forType: .string) ?? pasteboard.string(forType: .fileURL)
+        return dropped != nil
+    }
+}

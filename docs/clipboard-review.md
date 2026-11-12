@@ -93,7 +93,10 @@ with them. Left of #11: several items copied together; cells from
 Numbers, an object from Keynote or Figma not tried in the real apps.
 
 Then (docs/clipboard-quick-look.md): of #7, ⌘Y shows a picture or a
-copied file large over the launcher. Left of #7: drag out.
+copied file large over the launcher.
+
+Then (docs/clipboard-drag-out.md): the last of #7, a row dragged out
+of the history drops the copy in another app.
 
 ## Must (the history is behind the others here)
 
@@ -195,4 +198,4 @@ list, ↩ to pasted, copy to kept.
 4. #7 actions per kind (open link, show file, save as snippet).
 5. ~~Speed budget lines + the three measurements~~: done.
 6. ~~#13, #14, #16~~, ~~#15~~, ~~#10~~, ~~#12~~, ~~#8~~, ~~#9~~, ~~#11~~: done.
-   Left: of #7, drag out.
+   #7 is done too. Left: the parts each spec lists under "Not done".

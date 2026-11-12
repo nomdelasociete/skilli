@@ -254,7 +254,9 @@ Everything you copy, and your screenshots, ready to paste again.
   (⌘Z brings it back for 10 s). A copy is kept with every format its app
   gave it (a table's cells, a shape, a web page's part; up to 4 MB), so ↩
   pastes it as it was copied. ⌘Y shows a picture or a copied file large
-  over the launcher (↑ ↓ the next copy, esc closes it). ⌘K → Pin keeps a copy at the top, under
+  over the launcher (↑ ↓ the next copy, esc closes it). A row dragged with the
+  pointer drops the copy where it is let go: a text, a picture as a
+  file, a copied file. ⌘K → Pin keeps a copy at the top, under
   "Pinned", past Keep copies for; ⌘K opens a copied link in the browser,
   starts a mail to a copied address, opens a copied file or shows it in
   Finder. ⌘K → Show Only Links (or Images, Files… the kind of the row)

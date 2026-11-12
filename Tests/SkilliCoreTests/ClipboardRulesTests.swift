@@ -253,6 +253,24 @@ final class ClipboardRulesTests: XCTestCase {
 
     /// Begun on selected copies: those, in the order given, under the
     /// same rules; past the last it says how many; then today's again.
+    func testDraggedOut() {
+        XCTAssertEqual(ClipboardDrag.of(kind: "text", text: "wombat"), .text("wombat"))
+        XCTAssertEqual(ClipboardDrag.of(kind: "text", text: ""), .none)
+        XCTAssertEqual(ClipboardDrag.of(kind: "image", text: "https://example.com/a.png"), .picture)
+        XCTAssertEqual(ClipboardDrag.of(kind: "files", text: "/Users/me/Documents/report.pdf"), .file("/Users/me/Documents/report.pdf"))
+        XCTAssertEqual(ClipboardDrag.of(kind: "files", text: "/Users/me/a.txt\n/Users/me/b.txt"), .none)
+        XCTAssertEqual(ClipboardDrag.of(kind: "other", text: "x"), .none)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let copied = Date(timeIntervalSince1970: 1_794_476_465)
+        let name = ClipboardDrag.pictureName(size: "1280×720", copied: copied, calendar: calendar)
+        XCTAssertTrue(name.hasPrefix("Copied Image 20"), name)
+        XCTAssertTrue(name.hasSuffix(" (1280×720).png"), name)
+        XCTAssertFalse(name.contains(":") || name.contains("/"), name)
+        XCTAssertFalse(ClipboardDrag.pictureName(size: nil, copied: copied, calendar: calendar).contains("("))
+    }
+
     func testKeptFormats() throws {
         // What the app made: kept. The text's other names, a picture of
         // it, marks and promised files: not.
