@@ -91,8 +91,9 @@ nothing selected it is unchanged, newest first.
 
 Then (docs/clipboard-kept-formats.md): #11 a copy is kept with every
 format its app gave it, in the app's order, up to 4 MB, and pastes back
-with them. Left of #11: several items copied together; cells from
-Numbers, an object from Keynote or Figma not tried in the real apps.
+with them. Since: several items copied together come back as that
+many, each with its formats. Left of #11: cells from Numbers, an
+object from Keynote or Figma not tried in the real apps.
 
 Then (docs/clipboard-quick-look.md): of #7, ⌘Y shows a picture or a
 copied file large over the launcher.

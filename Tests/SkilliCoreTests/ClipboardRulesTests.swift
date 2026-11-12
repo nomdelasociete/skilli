@@ -213,6 +213,27 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertLessThan(best, 20)
     }
 
+    func testSeveralItemsFormatsAreKeptApart() {
+        typealias Format = ClipboardFormats.Format
+        let a = [Format(type: "com.example.shape", data: Data([1])), Format(type: ClipboardFormats.itemText, data: Data("one".utf8))]
+        let b = [Format(type: ClipboardFormats.itemText, data: Data("two".utf8))]
+        let joined = ClipboardFormats.joined([a, b])
+        XCTAssertEqual(joined.map(\.type), ["com.example.shape", ClipboardFormats.itemText, ClipboardFormats.nextItem, ClipboardFormats.itemText])
+        XCTAssertEqual(ClipboardFormats.items(joined), [a, b])
+        // Stored and read back, the items are still apart.
+        XCTAssertEqual(ClipboardFormats.encoded(joined).map(ClipboardFormats.decoded).map(ClipboardFormats.items), [a, b])
+        // One item, and a copy of before: one list, no mark.
+        XCTAssertEqual(ClipboardFormats.joined([a]), a)
+        XCTAssertEqual(ClipboardFormats.items(a), [a])
+        XCTAssertEqual(ClipboardFormats.items([]), [[]])
+        // A first item with nothing of its own left (its picture is the
+        // copy's): still the first of two.
+        XCTAssertEqual(ClipboardFormats.items(ClipboardFormats.joined([[], b])), [[], b])
+        // The mark itself is never read as a format to keep from an app.
+        XCTAssertTrue(ClipboardFormats.keeps("com.example.shape"))
+        XCTAssertFalse(ClipboardFormats.keeps(ClipboardFormats.nextItem))
+    }
+
     func testACopyNotKeptSaysWhatFromWhereAndWhen() {
         let date = Date(timeIntervalSince1970: 1_000)
         let secret = ClipboardNotKept(reason: .secret("a GitHub token"), appName: "Terminal", date: date)
