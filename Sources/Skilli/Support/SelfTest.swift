@@ -15906,6 +15906,11 @@ final class SelfTest {
             let shape = NSPasteboard.PasteboardType("com.example.selftest.shape")
             let mark = NSPasteboard.PasteboardType("com.apple.is-remote-clipboard")
             let native = Data((0..<4_096).map { UInt8($0 % 251) })
+            // The same text copied plain first: the cells copied after
+            // bring their formats to it.
+            pasteboard.clearContents()
+            pasteboard.setString("Wombat\t12", forType: .string)
+            let plainFirst = history.capture()
             pasteboard.clearContents()
             let item = NSPasteboardItem()
             item.setData(native, forType: cells)
@@ -15922,7 +15927,12 @@ final class SelfTest {
                 history.write(kept, plain: true)
                 let plain = pasteboard.data(forType: cells) == nil && pasteboard.data(forType: .rtf) == nil
                     && pasteboard.string(forType: .string) == "Wombat\t12"
-                said.append("cells with their own format \(whole), as text alone \(plain)")
+                // That text alone, read back as a copy (skil.li's own
+                // ⇧↩): the cells keep their formats.
+                let again = history.capture()
+                history.write(kept, plain: false)
+                let stays = again?.id == kept.id && plainFirst?.id == kept.id && pasteboard.data(forType: cells) == native
+                said.append("cells with their own format \(whole), as text alone \(plain), kept after a plain copy of them \(stays)")
                 try? store.delete(kept.id)
             }
             let dot = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 4, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
@@ -15942,7 +15952,7 @@ final class SelfTest {
             }
             if !said.isEmpty { cellsBack = said.joined(separator: ", ") }
         }
-        let formatsBack = cellsBack == "cells with their own format true, as text alone true, a shape with its picture true"
+        let formatsBack = cellsBack == "cells with their own format true, as text alone true, kept after a plain copy of them true, a shape with its picture true"
 
         // An image with words, read by Vision.
         let picture = NSImage(size: NSSize(width: 900, height: 220), flipped: false) { rect in

@@ -263,11 +263,17 @@ final class ClipboardStore: @unchecked Sendable {
     /// The same content already kept, counted once more. It moves to
     /// `date` with where it came from only when that is its latest copy:
     /// two copies of it made off the main thread can end out of order.
+    /// Its formats are then this copy's, when it has some: the same text
+    /// copied plain first, then from a table, pastes back as cells. A
+    /// plain copy of it after (skil.li's own ⇧↩ is one) keeps those it
+    /// had.
     private func again(_ new: NewItem, at date: Date) throws -> (item: Item, isNew: Bool)? {
         guard let existing = try rows("SELECT \(Self.columns) FROM items WHERE hash = ?", [.text(new.hash)]).first else { return nil }
         if date >= existing.copiedAt {
-            try run("UPDATE items SET copied = ?, app = ?, app_name = ?, copies = copies + 1 WHERE id = ?",
-                    [.double(date.timeIntervalSince1970), .optionalText(new.app), .optionalText(new.appName), .int(existing.id)])
+            let formats = new.formats.flatMap(ClipboardFormats.encoded)
+            try run("UPDATE items SET copied = ?, app = ?, app_name = ?, formats = coalesce(?, formats), copies = copies + 1 WHERE id = ?",
+                    [.double(date.timeIntervalSince1970), .optionalText(new.app), .optionalText(new.appName),
+                     formats.map(Value.blob) ?? .null, .int(existing.id)])
         } else {
             try run("UPDATE items SET copies = copies + 1 WHERE id = ?", [.int(existing.id)])
         }

@@ -61,8 +61,10 @@ below are what holds them.
   PNG: the app pasted into takes the first it knows.
 - A picture copy keeps its other formats too (a shape copied with its
   picture pastes back as a shape where the app reads it).
-- The same content copied again moves up as before; its formats are
-  those of the first time.
+- The same content copied again moves up as before, and takes that
+  copy's formats when it has some (a text copied plain, then from a
+  table, pastes back as cells). A plain copy of it after keeps the
+  formats it had: skil.li's own ⇧↩ is such a copy.
 
 ## Checks
 
@@ -70,7 +72,8 @@ below are what holds them.
   in order; a copy of before read as RTF first.
 - Self-test (`clipboard`): cells copied with their own format, RTF, text
   and a mark come back with the format first, without the mark; ⇧↩ the
-  text alone; a shape copied with its picture comes back before its PNG.
+  text alone; copied plain before and after, the cells keep their
+  format; a shape copied with its picture comes back before its PNG.
 
 Not done: several items copied together (only the first is kept, as
 before); the real apps named above.
