@@ -17684,6 +17684,84 @@ final class SelfTest {
             NSPasteboard.general.clearContents()
             for item in store.search("pangolin") { try? store.delete(item.id) }
 
+            // ⌘Y on a picture, then on a file: seen large over the launcher,
+            // which stays open with the keys (↓ shows the next copy, a
+            // text closes the view); esc closes the view, not the history
+            // (docs/clipboard-quick-look.md).
+            let lookPicture = Self.drawnPNG(width: 2_400, height: 1_500) { rect in
+                NSGradient(colors: [NSColor(srgbRed: 0.93, green: 0.56, blue: 0.24, alpha: 1),
+                                    NSColor(srgbRed: 0.42, green: 0.16, blue: 0.36, alpha: 1)])?.draw(in: rect, angle: -30)
+                ("Quagga ridge, 06:40" as NSString).draw(at: NSPoint(x: 160, y: 700), withAttributes: [
+                    .font: NSFont.systemFont(ofSize: 190, weight: .bold), .foregroundColor: NSColor.white
+                ])
+                ("small print only read when seen large" as NSString).draw(at: NSPoint(x: 168, y: 600), withAttributes: [
+                    .font: NSFont.systemFont(ofSize: 36, weight: .regular), .foregroundColor: NSColor.white.withAlphaComponent(0.85)
+                ])
+            }
+            let lookFolder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-look-\(UUID().uuidString)", isDirectory: true)
+            try? FileManager.default.createDirectory(at: lookFolder, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: lookFolder) }
+            let lookFile = lookFolder.appendingPathComponent("quagga notes.txt")
+            try? Data((1...60).map { "Line \($0): the quagga keeps to the ridge until the light is up." }.joined(separator: "\n").utf8).write(to: lookFile)
+            _ = try? store.add(.init(kind: .text, text: "quagga words", app: "com.apple.Notes", appName: "Notes", hash: "selftest-look-text"),
+                               at: .now.addingTimeInterval(-30))
+            _ = try? store.add(.init(kind: .files, text: lookFile.path, app: "com.apple.finder", appName: "Finder", hash: "selftest-look-file"),
+                               at: .now.addingTimeInterval(-20))
+            let lookImage = (try? store.add(.init(kind: .image, text: "quagga picture", imageData: lookPicture, size: "2400×1500", app: "com.apple.Safari",
+                                                  appName: "Safari", hash: "selftest-look-image"), at: .now.addingTimeInterval(-10)))?.item
+            if await openHistory() {
+                for letter in "quagga" { await pressKey(letter) }
+                if await waitUntil(timeout: 2, { launcher.shownRowCount == 3 }) == nil {
+                    problems.append("“quagga”: \(launcher.shownRowCount) rows for Quick Look")
+                } else {
+                    await pressKey("y", flags: .maskCommand)
+                    let image = lookImage.flatMap { store.imageURL($0) }
+                    if await waitUntil(timeout: 2, { launcher.lookingAt != nil && launcher.lookingAt == image && launcher.lookWindow.isVisible }) == nil {
+                        problems.append("⌘Y on a picture: looking at \(launcher.lookingAt?.lastPathComponent ?? "nothing")")
+                    } else {
+                        let large = launcher.lookWindow.frame.width > launcher.window.frame.width && launcher.lookWindow.frame.height >= launcher.window.frame.height
+                        if !large || !launcher.isVisible { problems.append("the large view \(launcher.lookWindow.frame.size) over a launcher \(launcher.window.frame.size), open \(launcher.isVisible)") }
+                        // The capture wants the test window behind all of it.
+                        let frame = window.frame
+                        if let visible = window.screen?.visibleFrame { window.setFrame(visible, display: true) }
+                        await pause(700)
+                        await saveScreenshot(of: launcher.lookWindow, as: "clipboard-look-image.png")
+                        await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
+                        if await waitUntil(timeout: 2, { launcher.lookingAt == lookFile }) == nil {
+                            problems.append("↓ while a picture shows large: looking at \(launcher.lookingAt?.lastPathComponent ?? "nothing")")
+                        }
+                        await pause(700)
+                        await saveScreenshot(of: launcher.lookWindow, as: "clipboard-look-file.png")
+                        window.setFrame(frame, display: true)
+                        await pressKey(nil, code: CGKeyCode(kVK_DownArrow))
+                        if await waitUntil(timeout: 2, { !launcher.isLooking }) == nil || !launcher.isVisible {
+                            problems.append("↓ to a text while a file shows large: still looking \(launcher.isLooking), launcher open \(launcher.isVisible)")
+                        }
+                        await pressKey(nil, code: CGKeyCode(kVK_UpArrow))
+                        await pressKey("k", flags: .maskCommand)
+                        if await waitUntil(timeout: 1, { launcher.shownActions.contains { $0.title == "Quick Look" && $0.key == "⌘Y" } }) == nil {
+                            problems.append("⌘K on a copied file lacks Quick Look ⌘Y: \(launcher.shownActions.map(\.title))")
+                        }
+                        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                        await pressKey("y", flags: .maskCommand)
+                        if await waitUntil(timeout: 2, { launcher.lookingAt == lookFile }) == nil {
+                            problems.append("⌘Y on a copied file: looking at \(launcher.lookingAt?.lastPathComponent ?? "nothing")")
+                        }
+                        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                        if await waitUntil(timeout: 1, { !launcher.isLooking }) == nil || !launcher.isVisible || launcher.chipTitle != "Clipboard" {
+                            problems.append("esc while a file shows large: looking \(launcher.isLooking), launcher open \(launcher.isVisible), chip “\(launcher.chipTitle)”")
+                        }
+                    }
+                }
+                for _ in 0..<3 where launcher.isVisible {
+                    await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                    _ = await waitUntil(timeout: 1) { !launcher.isVisible }
+                }
+            } else {
+                problems.append("the history did not open again for Quick Look")
+            }
+            for item in store.search("quagga") { try? store.delete(item.id) }
+
             // ⌘K → Save as Snippet… on a text copy: the snippet editor,
             // the copy's text in it, nothing saved yet
             // (docs/clipboard-save-as-snippet.md).

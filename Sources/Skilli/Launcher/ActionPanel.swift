@@ -5,9 +5,10 @@ import Carbon.HIToolbox
 struct LauncherAction {
     /// The keys an action can have. Each means the same everywhere: ↩ the
     /// row's own action, ⌘↩ and ⇧↩ its next two, ⌘C copies its main value,
-    /// ⇧⌘C its second, ⌘⌫ removes it, ⌘R records (a meeting).
+    /// ⇧⌘C its second, ⌘⌫ removes it, ⌘R records (a meeting), ⌘Y shows it
+    /// large (a copy in the history).
     enum Key: Equatable {
-        case open, openSecond, openThird, copy, copySecond, delete, record
+        case open, openSecond, openThird, copy, copySecond, delete, record, look
 
         var label: String {
             switch self {
@@ -18,6 +19,7 @@ struct LauncherAction {
             case .copySecond: "⇧⌘C"
             case .delete: "⌘⌫"
             case .record: "⌘R"
+            case .look: "⌘Y"
             }
         }
 
@@ -35,6 +37,7 @@ struct LauncherAction {
             case .command where event.charactersIgnoringModifiers?.lowercased() == "c": self = .copy
             case [.command, .shift] where event.charactersIgnoringModifiers?.lowercased() == "c": self = .copySecond
             case .command where event.charactersIgnoringModifiers?.lowercased() == "r": self = .record
+            case .command where event.charactersIgnoringModifiers?.lowercased() == "y": self = .look
             default: return nil
             }
         }

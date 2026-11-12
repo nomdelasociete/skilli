@@ -1031,6 +1031,7 @@ final class LauncherController: NSObject {
     }
 
     func hide() {
+        closeLook()
         let wasVisible = panel.isVisible
         if wasVisible { keep() }
         closeActions()
@@ -1271,6 +1272,10 @@ final class LauncherController: NSObject {
         // ⌘⌫ in a mode removes the selected row (the card asks first where
         // it cannot be undone). Outside the modes it edits the field.
         if mode != nil, LauncherAction.Key(keyEvent) == .delete, runSelectedAction(.delete) {
+            return true
+        }
+        // ⌘Y shows the selected copy large, and closes it.
+        if clipboardMode, LauncherAction.Key(keyEvent) == .look, runSelectedAction(.look) {
             return true
         }
         // ⌘R records the selected meeting (on now or starting soon).
@@ -3314,6 +3319,56 @@ final class LauncherController: NSObject {
 
     /// Self-test hooks: how many are selected; the place shown on a row.
     var chosenClipCount: Int { chosenClips.count }
+
+    // MARK: - A copy seen large
+
+    private lazy var lookPanel = LookPanel()
+    /// The file of the copy seen large (⌘Y); nil when none is.
+    var lookingAt: URL? { lookPanel.file }
+    var isLooking: Bool { lookPanel.file != nil }
+    /// Self-test hook: the large view's window.
+    var lookWindow: NSWindow { lookPanel }
+
+    /// The selected copy's picture or file, and what to call it.
+    private func lookable() -> (file: URL, name: String, gone: Bool)? {
+        let row = tableView.selectedRow
+        guard clipboardMode, results.indices.contains(row), case .clip(let clip) = results[row], let file = clipFile(clip) else { return nil }
+        // A file is looked for now, when asked: never as the list is drawn.
+        let gone = clip.kind == .files && !FileManager.default.fileExists(atPath: file.path)
+        let name = clip.kind == .image ? ["Image", clip.size, clip.appName].compactMap { $0 }.joined(separator: " · ") : file.lastPathComponent
+        return (file, name, gone)
+    }
+
+    /// ⌘Y, ⌘K → Quick Look: the selected copy large over the launcher, or
+    /// closed when it shows.
+    func toggleLook() {
+        if closeLook() { return }
+        guard let look = lookable() else { return }
+        guard !look.gone else {
+            say("“\(look.name)” is no longer where it was copied.")
+            return
+        }
+        lookPanel.show(look.file, named: look.name, over: panel)
+    }
+
+    /// The selection moved while a copy shows large: the new one shows,
+    /// or the view closes (a text, several files, a file gone).
+    private func followLook() {
+        guard isLooking else { return }
+        guard let look = lookable(), !look.gone else {
+            closeLook()
+            return
+        }
+        if look.file != lookPanel.file { lookPanel.show(look.file, named: look.name, over: panel) }
+    }
+
+    /// True when a copy was showing large.
+    @discardableResult
+    private func closeLook() -> Bool {
+        guard isLooking else { return false }
+        lookPanel.close(from: panel)
+        return true
+    }
     func orderShown(row: Int) -> Int? {
         (tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? ResultCellView)?.order
     }
@@ -4579,6 +4634,8 @@ final class LauncherController: NSObject {
     /// goes back to the root search as it was before it, then the
     /// launcher closes. A mode opened straight (✦C) closes at once.
     func escape() {
+        // A copy seen large: esc closes that, the history stays.
+        if closeLook() { return }
         // A part picked in the history's preview: esc lets it go first.
         if actionPanel.isHidden, clipboardMode, clipPreview.clearSelection() { return }
         // Several copies selected: esc lets them go, the history stays.
@@ -5405,6 +5462,7 @@ extension LauncherController: NSTableViewDataSource, NSTableViewDelegate {
         if mode == .gifs { showGIFSelection() }
         updatePreview()
         updateFooter()
+        followLook()
     }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
