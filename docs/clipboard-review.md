@@ -92,6 +92,9 @@ format its app gave it, in the app's order, up to 4 MB, and pastes back
 with them. Left of #11: several items copied together; cells from
 Numbers, an object from Keynote or Figma not tried in the real apps.
 
+Then (docs/clipboard-quick-look.md): of #7, ⌘Y shows a picture or a
+copied file large over the launcher. Left of #7: drag out.
+
 ## Must (the history is behind the others here)
 
 | # | Gap | Proof | Others |
@@ -192,4 +195,4 @@ list, ↩ to pasted, copy to kept.
 4. #7 actions per kind (open link, show file, save as snippet).
 5. ~~Speed budget lines + the three measurements~~: done.
 6. ~~#13, #14, #16~~, ~~#15~~, ~~#10~~, ~~#12~~, ~~#8~~, ~~#9~~, ~~#11~~: done.
-   Left: of #7, Quick Look large and drag out.
+   Left: of #7, drag out.

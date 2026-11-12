@@ -166,7 +166,7 @@ extension LauncherController {
 
     /// The file a copy is: an image's in the history's own folder, or the
     /// one file copied in Finder.
-    private func clipFile(_ clip: ClipboardStore.Item) -> URL? {
+    func clipFile(_ clip: ClipboardStore.Item) -> URL? {
         switch clip.kind {
         case .image:
             return clipboardImageURL?(clip)
@@ -362,6 +362,13 @@ extension LauncherController {
             // What the copy is, not a paste of it: the page, a new mail,
             // the file itself (docs/clipboard-pins-filter-actions.md).
             var does: [LauncherAction] = []
+            // A picture or one file, large over the launcher
+            // (docs/clipboard-quick-look.md).
+            if clipFile(clip) != nil {
+                does.append(LauncherAction(title: isLooking ? "Close Quick Look" : "Quick Look", symbol: "eye", key: .look) { [weak self] in
+                    self?.toggleLook()
+                })
+            }
             switch clip.kind {
             case .text:
                 switch CopiedValue.read(clip.text) {
