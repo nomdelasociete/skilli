@@ -57,9 +57,20 @@ final class UndoDeleteTests: XCTestCase {
         let spot = UndoDelete.spot(under: glass, in: visible)
         XCTAssertEqual(spot.maxY, glass.maxY + 10 + UndoDelete.cardRoom)
         XCTAssertGreaterThan(spot.maxY - UndoDelete.cardRoom, glass.maxY, "a card of its room stays clear of the glass")
-        // No room above either: kept on the screen.
-        let tall = CGRect(x: 610, y: 60, width: 700, height: 960)
-        XCTAssertEqual(UndoDelete.spot(under: tall, in: visible).maxY, visible.maxY)
+        XCTAssertTrue(UndoDelete.hasRoom(around: glass, in: visible))
+    }
+
+    func testOnAScreenTooShortTheCardSitsAtItsFoot() {
+        // A small display: 670 points to show in, a launcher 514 tall.
+        let visible = CGRect(x: 0, y: 0, width: 986, height: 670)
+        let glass = CGRect(x: 143, y: 78, width: 700, height: 514)
+        XCTAssertFalse(UndoDelete.hasRoom(around: glass, in: visible))
+        let spot = UndoDelete.spot(under: glass, in: visible)
+        XCTAssertEqual(spot.maxY - UndoDelete.cardRoom, visible.minY, "a card of its room ends at the screen's foot")
+        XCTAssertLessThan(spot.maxY, glass.midY, "over the launcher's foot, never its field and first rows")
+        // The menu bar's screen starts higher: the foot is the visible one.
+        let raised = visible.offsetBy(dx: 0, dy: 30)
+        XCTAssertEqual(UndoDelete.spot(under: glass.offsetBy(dx: 0, dy: 30), in: raised).maxY, 30 + UndoDelete.cardRoom)
     }
 
     private struct Item: Identifiable, Equatable {

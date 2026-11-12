@@ -55,15 +55,27 @@ public enum UndoDelete {
     /// Where the undo card's top-left goes while the launcher is open (a
     /// copy forgotten with ⌘⌫): right under the launcher's glass, as wide,
     /// so it never covers the rows; above it when the screen has no room
-    /// below (the launcher dragged low). The rect is the card's top edge
-    /// (no height): the card grows down from it.
+    /// below (the launcher dragged low). A screen too short for either (a
+    /// tall launcher on a small display): at the foot of the screen, over
+    /// the launcher's foot by the least there can be, never over the
+    /// field and the first rows. The rect is the card's top edge (no
+    /// height): the card grows down from it.
     public static func spot(under glass: CGRect, in visible: CGRect, gap: CGFloat = 10) -> CGRect {
         let below = glass.minY - gap
         if below - cardRoom >= visible.minY {
             return CGRect(x: glass.minX, y: below, width: glass.width, height: 0)
         }
-        let above = min(glass.maxY + gap + cardRoom, visible.maxY)
-        return CGRect(x: glass.minX, y: above, width: glass.width, height: 0)
+        let above = glass.maxY + gap + cardRoom
+        if above <= visible.maxY {
+            return CGRect(x: glass.minX, y: above, width: glass.width, height: 0)
+        }
+        return CGRect(x: glass.minX, y: visible.minY + cardRoom, width: glass.width, height: 0)
+    }
+
+    /// Whether a card of `cardRoom` stays clear of the glass, under it or
+    /// above: false on a screen too short for both.
+    public static func hasRoom(around glass: CGRect, in visible: CGRect, gap: CGFloat = 10) -> Bool {
+        glass.minY - gap - cardRoom >= visible.minY || glass.maxY + gap + cardRoom <= visible.maxY
     }
 
     /// The name a file put back takes when its place got taken meanwhile,
