@@ -204,3 +204,36 @@ list, ↩ to pasted, copy to kept.
 5. ~~Speed budget lines + the three measurements~~: done.
 6. ~~#13, #14, #16~~, ~~#15~~, ~~#10~~, ~~#12~~, ~~#8~~, ~~#9~~, ~~#11~~: done.
    #7 is done too. Left: the parts each spec lists under "Not done".
+
+## The "Not done" parts, gone through (2026-11-12)
+
+Built since: a key inside a longer copy (#143), a word mistyped (#144),
+several items copied together (#145), several files and several copies
+dragged out as one (#146).
+
+Left out on purpose, each for its reason; none is waiting:
+
+- **Day separators inside the list.** The header over the list already
+  says the day of the row at the top and follows the scroll; a row that
+  is no copy would take a place in a list of nine.
+- **"+12 lines" on a row.** The list is 290 points wide and the row's
+  right side says when; the preview beside it says the size.
+- **A text seen large (⌘Y).** A text copy shows whole in the preview
+  (docs/clipboard-long-copies.md).
+- **A keyword proposed in Save as Snippet.** A keyword expands as it is
+  typed anywhere: it is the user's to choose, never guessed from a name.
+- **A paste way kept as the row's ↩.** ↩ would then paste something
+  else than what the row shows; the ways stay one ⌘K away.
+- **Ranking.** Newest first, so a wider match never buries the recent
+  copy.
+- **Row pictures kept on disk, a shorter wait before ⌘V.** Speed work
+  with no slowness measured to answer: the budget lines hold
+  (`speed` self-test). To take up with a number that says otherwise.
+
+For the user to decide (advice: no, no, as an offer only): the history
+file encrypted; copies that expire after minutes; finding where a moved
+file went.
+
+Not checked in the real apps: a drop or a paste into an app that reads
+late, cells from Numbers, an object from Keynote or Figma, several
+files dropped on Finder or a mail.
