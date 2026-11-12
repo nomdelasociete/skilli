@@ -34,8 +34,8 @@ Three of the gaps in `docs/clipboard-review.md` (#13, #14, #16):
 4. **Deterministic or AI.** All code. A key is known by a shape that
    names itself (below); nothing is guessed from randomness.
 5. **Wrong.**
-   - A key kept (a shape not in the list, a key inside a longer text):
-     as before this change. ⌘⌫ forgets it.
+   - A key kept (a shape not in the list): as before this change. ⌘⌫
+     forgets it.
    - A copy taken for a key and not kept: the user loses it from the
      history (it is still on the clipboard until the next copy). The
      line says it, and where to turn it off. This is why only shapes
@@ -75,9 +75,38 @@ key's header:
   says its shape's name only.
 - Nothing leaves the Mac.
 
-Not done: a key inside a longer text (a whole `.env`, a `curl` line
-with its header) is kept; nothing expires after minutes; the history's
-file is not encrypted.
+### A key inside a longer copy
+
+`ClipboardSecret.held(in:)`, since 2026-11-12. The moment: a whole
+`.env` copied to another file, a `curl` line with its header copied
+from a terminal or a page of documentation, a sentence in a chat that
+gives a token. Nothing to do, nothing to learn: the copy is not kept,
+and the history opened next says "Not kept: it holds a GitHub token
+(Zed, 14:02). To keep them: Settings → Clipboard → Advanced." Code
+only, the same switch.
+
+- One of the shapes above as a whole word of the text (nothing a key is
+  made of before or after it), or a sign-in header with its value
+  (`Authorization: Bearer …`, `Basic`, `Token`, 20 characters or more
+  with a digit among them: "a sign-in header").
+- Kept, since they only name a key: `ghp_` or `sk_live_` alone in a
+  sentence; a header with a placeholder (`Bearer $TOKEN`, `Bearer
+  YOUR_TOKEN_GOES_HERE`); `sk-` followed by plain lowercase words (a
+  class name, a slug): inside a text `sk-…` counts with a digit and a
+  capital in it, or ending in 32 or more hexadecimal characters
+  (`sk-or-v1-…`).
+- Wrong one way: a page of documentation with an example key, a log
+  with a sign-in token in it are not kept; the line says so, the copy
+  is still on the clipboard, the switch keeps them. Wrong the other
+  way: a value with no shape of its own (`PASSWORD=…`, `SECRET_KEY=…`
+  with random letters) is kept, as nothing tells it from any other
+  setting.
+- One pass over the text for every shape. A copy over 20,000
+  characters is looked through off the main thread (100,000 characters
+  take 4 to 6 ms).
+
+Not done: a value with no shape of its own (`PASSWORD=…`); nothing
+expires after minutes; the history's file is not encrypted.
 
 ## Not kept, and said
 
@@ -97,6 +126,11 @@ file is not encrypted.
 - Unit: each shape, and what must be kept (a SHA-256, a UUID, a
   sentence naming a token, a link, a certificate); the line said; the
   footer with a second key.
+- Unit: a key in a `.env`, a `curl` line, a sentence, at the end of a
+  long file; what only names a key is kept; the time on 100,000
+  characters.
+- Self-test (`previews`): the token among other lines is not kept and
+  said as what the copy holds; a sentence naming `ghp_` is kept.
 - Self-test (`previews`): a copy shaped as a GitHub token is not kept,
   the history opened next says it without the token, not a second
   time; with the setting off it is kept; the invoice's footer says

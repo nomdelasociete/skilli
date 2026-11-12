@@ -302,7 +302,12 @@ Everything you copy, and your screenshots, ready to paste again.
 - Passwords marked secret by password managers are never kept. Nor a
   copy that is a key or a token by its shape (a GitHub, GitLab, Stripe,
   AWS, Slack, Google or npm token, an `sk-` API key, a JWT, a private
-  key), unless Never keep keys and tokens is turned off.
+  key), nor a longer copy that holds one (a `.env`, a `curl` line) or a
+  sign-in header with its value (20 characters or more, a digit among
+  them), unless Never keep keys and tokens is turned off. Inside a
+  longer copy an `sk-` key counts only with a digit and a capital in
+  it, or ending in 32 or more hexadecimal characters: a plainer one is
+  kept there.
 - **Not kept, and said**: a key or token, a text over 5 MB or a picture
   over 40 MB is not kept; the history says so in one line when it opens
   next (what, from which app, when), never what was copied.
