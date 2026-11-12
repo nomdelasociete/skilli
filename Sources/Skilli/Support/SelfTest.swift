@@ -17385,6 +17385,30 @@ final class SelfTest {
         NSPasteboard.general.clearContents()
         guard await openHistory() else { return (problems + ["the history did not open a second time after a copy not kept"], note) }
         if let again = launcher.shownNote { problems.append("a copy not kept was said twice: “\(again.prefix(60))”") }
+        // The same token inside a longer copy (a file of settings): not
+        // kept either, said as what it holds.
+        let settingsFile = "PORT=8080\nGITHUB_TOKEN=\(token)\nDEBUG=1\n"
+        NSPasteboard.general.setString(settingsFile, forType: .string)
+        context.clipboard.keep()
+        if context.clipboard.store?.search("PORT=8080", limit: 5).contains(where: { $0.text == settingsFile }) == true {
+            problems.append("a copy holding a GitHub token among other lines was kept")
+        }
+        guard await openHistory() else { return (problems + ["the history did not open after a copy holding a token"], note) }
+        let saidHeld = launcher.shownNote ?? ""
+        if !saidHeld.hasPrefix("Not kept: it holds a GitHub token") || saidHeld.contains(token) {
+            problems.append("the history opened after a copy holding a token says “\(saidHeld.prefix(80))”")
+        }
+        NSPasteboard.general.clearContents()
+        // A text that only names a token's start is kept.
+        let naming = "A GitHub token starts with ghp_ (skilli-selftest-naming)"
+        NSPasteboard.general.setString(naming, forType: .string)
+        context.clipboard.keep()
+        if let kept = context.clipboard.store?.search("skilli-selftest-naming", limit: 5).first(where: { $0.text == naming }) {
+            context.clipboard.delete(kept)
+        } else {
+            problems.append("a text that only names a token's start was not kept")
+        }
+        NSPasteboard.general.clearContents()
         // Never keep keys and tokens off: kept as any text.
         context.preferences.clipboardSkipSecrets = false
         NSPasteboard.general.setString(token, forType: .string)

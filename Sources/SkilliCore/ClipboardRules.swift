@@ -425,13 +425,47 @@ public enum ClipboardSecret {
         return shapes.first { $0.pattern.firstMatch(in: word, range: range) != nil }?.name
     }
 
+    /// A longer copy that holds such a word among others (a whole `.env`,
+    /// a `curl` line with its header, a sentence giving a token), or a
+    /// sign-in header with its value: what it holds, to say so. Nil for
+    /// anything else, and for a text that only names a key's start.
+    /// One pass over the text for every shape: 100,000 characters with no
+    /// key take 4 ms in a debug build (`ClipboardRulesTests`, 2026-11-12);
+    /// a longer copy is read off the main thread.
+    public static func held(in text: String) -> String? {
+        let all = NSRange(location: 0, length: text.utf16.count)
+        guard all.length >= 20, let match = inside.firstMatch(in: text, range: all), let found = Range(match.range, in: text) else { return nil }
+        // A header's value may itself be a key with a name: said by it.
+        let word = text[found].split(whereSeparator: \.isWhitespace).last.map(String.init) ?? ""
+        let range = NSRange(location: 0, length: word.utf16.count)
+        return shapes.first { $0.pattern.firstMatch(in: word, range: range) != nil }?.name ?? "a sign-in header"
+    }
+
     private struct Shape: Sendable {
         let name: String
         let pattern: NSRegularExpression
+        let source: String
     }
 
+    /// What a key is made of: a shape inside a text starts and ends where
+    /// none of these is.
+    private static let wordCharacters = "A-Za-z0-9_-"
+
+    /// Every shape at once, each a whole word of the text. `sk-` alone
+    /// starts many words that are no key (a class name, a slug): inside
+    /// a text it counts with a digit and a capital in it. A header's
+    /// value counts with a digit in it: "Bearer YOUR_TOKEN_GOES_HERE" is
+    /// kept.
+    private static let inside: NSRegularExpression = {
+        let named = shapes.map { $0.name == "an API key" ? #"sk-(?=[A-Za-z0-9_-]*[0-9])(?=[A-Za-z0-9_-]*[A-Z])[A-Za-z0-9_-]{20,}"# : $0.source }
+        let words = "(?<![.\(wordCharacters)])(?:\(named.joined(separator: "|")))(?![\(wordCharacters)])"
+        return try! NSRegularExpression(pattern: words + "|" + header)
+    }()
+
+    private static let header = #"(?i:Authorization)["']?\s*[:=]\s*["']?(?i:Bearer|Basic|Token)\s+(?=[A-Za-z0-9._~+/=-]*[0-9])[A-Za-z0-9._~+/=-]{20,}"#
+
     private static func shape(_ name: String, _ pattern: String) -> Shape {
-        Shape(name: name, pattern: try! NSRegularExpression(pattern: "^(?:\(pattern))$"))
+        Shape(name: name, pattern: try! NSRegularExpression(pattern: "^(?:\(pattern))$"), source: pattern)
     }
 
     // Built once; NSRegularExpression is immutable and Sendable.
@@ -455,6 +489,8 @@ public struct ClipboardNotKept: Equatable, Sendable {
     public enum Reason: Equatable, Sendable {
         /// A key or a token by its shape (`ClipboardSecret.name`).
         case secret(String)
+        /// A longer text that holds one (`ClipboardSecret.held`).
+        case holdsSecret(String)
         /// A text over `ClipboardPolicy.textLimit` bytes.
         case longText
         /// A picture over `ClipboardPolicy.pictureLimit` bytes.
@@ -481,6 +517,8 @@ public struct ClipboardNotKept: Equatable, Sendable {
         switch reason {
         case .secret(let name):
             return "Not kept: looks like \(name) (\(from)). To keep them: Settings → Clipboard → Advanced."
+        case .holdsSecret(let name):
+            return "Not kept: it holds \(name) (\(from)). To keep them: Settings → Clipboard → Advanced."
         case .longText:
             return "Not kept: a text over \(ClipboardPolicy.textLimit / 1_000_000) MB (\(from))."
         case .bigPicture:

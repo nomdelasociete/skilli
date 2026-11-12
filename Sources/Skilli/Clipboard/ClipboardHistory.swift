@@ -705,6 +705,9 @@ final class ClipboardHistory {
 
     /// A text longer than this is hashed and stored off the main thread.
     static let longText = 100_000
+    /// With keys looked for in it (Never keep keys and tokens, on), a
+    /// text longer than this: under a millisecond on the main thread.
+    static let longTextForKeys = 20_000
 
     /// Reads the clipboard: only the pasteboard's own calls and what is
     /// short. Nil for nothing worth keeping, what a password manager
@@ -730,13 +733,18 @@ final class ClipboardHistory {
             // A key or a token by its shape (a few patterns on one word,
             // a private key's header), then the size, then the copy.
             let make: @Sendable () -> Made? = {
-                if !keepsSecrets, let name = ClipboardSecret.name(of: string) { return .notKept(.secret(name)) }
+                if !keepsSecrets {
+                    if let name = ClipboardSecret.name(of: string) { return .notKept(.secret(name)) }
+                    if let name = ClipboardSecret.held(in: string) { return .notKept(.holdsSecret(name)) }
+                }
                 guard string.utf8.count <= ClipboardPolicy.textLimit else { return .notKept(.longText) }
                 return .item(ClipboardStore.NewItem(kind: .text, text: string, formats: kept, app: app, appName: appName,
                                                     hash: hash("text", Data(string.utf8))))
             }
             // `utf16.count` costs nothing on a string the pasteboard gave.
-            if string.utf16.count > longText { return .later(make) }
+            // Looked through for a key, a shorter one already: 100,000
+            // characters take 4 to 6 ms (`ClipboardSecret.held`).
+            if string.utf16.count > (keepsSecrets ? longText : longTextForKeys) { return .later(make) }
             switch make() {
             case .item(let new): return .item(new)
             case .notKept(let reason): return .notKept(reason)

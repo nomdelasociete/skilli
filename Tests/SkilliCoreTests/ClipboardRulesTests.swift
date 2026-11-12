@@ -160,10 +160,63 @@ final class ClipboardRulesTests: XCTestCase {
         }
     }
 
+    /// A key among other words: a whole `.env`, a `curl` line, a sentence.
+    /// Made here, never real.
+    func testAKeyInsideALongerTextIsFound() {
+        let letters = String(repeating: "aB3dE6gH", count: 8)
+        let github = "ghp_" + letters.prefix(36)
+        XCTAssertEqual(ClipboardSecret.held(in: "set GITHUB_TOKEN to \(github) in the file"), "a GitHub token")
+        XCTAssertEqual(ClipboardSecret.held(in: "PORT=8080\nSTRIPE_KEY=sk_live_\(letters.prefix(24))\nDEBUG=1\n"), "a Stripe key")
+        XCTAssertEqual(ClipboardSecret.held(in: "export OPENAI_API_KEY=\"sk-proj-\(letters)\""), "an API key")
+        XCTAssertEqual(ClipboardSecret.held(in: "aws_access_key_id = AKIAABCDEFGH12345678"), "an AWS access key")
+        XCTAssertEqual(ClipboardSecret.held(in: "curl -H 'Authorization: Bearer \(github)' https://example.com/api"), "a GitHub token")
+        XCTAssertEqual(ClipboardSecret.held(in: "curl -H \"Authorization: Bearer 9f86d081884c7d659a2feaa0c55ad015\" https://example.com"), "a sign-in header")
+        XCTAssertEqual(ClipboardSecret.held(in: "{\"authorization\": \"Basic dXNlcjpwYXNzd29yZDEyMzQ1Ng==\"}"), "a sign-in header")
+        let jwt = "eyJ" + letters.prefix(20) + ".eyJ" + letters.prefix(30) + "." + letters.prefix(43)
+        XCTAssertEqual(ClipboardSecret.held(in: "The cookie was session=\(jwt). Then it expired."), "a sign-in token")
+        // At the end of a long file.
+        let long = String(repeating: "a line of a long file\n", count: 6_000)
+        XCTAssertEqual(ClipboardSecret.held(in: long + "TOKEN=" + github), "a GitHub token")
+    }
+
+    /// What only names a key, or starts like one inside a longer word, is
+    /// kept.
+    func testATextThatOnlyNamesAKeyIsKept() {
+        let letters = String(repeating: "aB3dE6gH", count: 8)
+        for kept in ["A GitHub token starts with ghp_ and a Stripe key with sk_live_.",
+                     "<div class=\"sk-fading-circle-container-wrapper\">",
+                     "the task-list sk-proj-roadmap-for-the-next-quarter is late",
+                     "curl -H \"Authorization: Bearer YOUR_ACCESS_TOKEN_GOES_HERE\" https://example.com",
+                     "curl -H \"Authorization: Bearer $GITHUB_TOKEN\" https://example.com",
+                     "xAKIAABCDEFGH12345678x",
+                     "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08  archive.zip",
+                     "https://example.com/a/very/long/path/risk-" + letters,
+                     "-----BEGIN CERTIFICATE-----\n" + letters + "\n-----END CERTIFICATE-----",
+                     String(repeating: "a line of a long file\n", count: 6_000)] {
+            XCTAssertNil(ClipboardSecret.held(in: kept), String(kept.prefix(60)))
+        }
+    }
+
+    /// One pass for every shape: a long copy with no key in it.
+    func testLookingForAKeyInALongTextIsFast() {
+        let text = String(repeating: "let value = compute(input, with: options) // sk- eyJ gh AKIA\n", count: 1_700)
+        XCTAssertGreaterThan(text.utf16.count, 100_000)
+        var best = Double.infinity
+        for _ in 0..<5 {
+            let start = DispatchTime.now().uptimeNanoseconds
+            XCTAssertNil(ClipboardSecret.held(in: text))
+            best = min(best, Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000)
+        }
+        print("held(in:) on \(text.utf16.count) characters: \(best) ms")
+        XCTAssertLessThan(best, 20)
+    }
+
     func testACopyNotKeptSaysWhatFromWhereAndWhen() {
         let date = Date(timeIntervalSince1970: 1_000)
         let secret = ClipboardNotKept(reason: .secret("a GitHub token"), appName: "Terminal", date: date)
         XCTAssertEqual(secret.line(time: "14:02"), "Not kept: looks like a GitHub token (Terminal, 14:02). To keep them: Settings → Clipboard → Advanced.")
+        XCTAssertEqual(ClipboardNotKept(reason: .holdsSecret("a Stripe key"), appName: "Zed", date: date).line(time: "14:02"),
+                       "Not kept: it holds a Stripe key (Zed, 14:02). To keep them: Settings → Clipboard → Advanced.")
         XCTAssertEqual(ClipboardNotKept(reason: .longText, appName: nil, date: date).line(time: "14:02"), "Not kept: a text over 5 MB (14:02).")
         XCTAssertEqual(ClipboardNotKept(reason: .bigPicture, appName: "Preview", date: date).line(time: "9:41"),
                        "Not kept: a picture over 40 MB (Preview, 9:41).")

@@ -60,8 +60,10 @@ Then (docs/clipboard-secrets-drops-hint.md): #13 a copy that is a key
 or a token by its shape is not kept (Never keep keys and tokens, on);
 #14 a copy not kept (a key, a text over 5 MB, a picture over 40 MB) is
 said in one line when the history opens next; #16 the footer of an image
-whose words were read says Paste Text ⇧↩. Left of #13: a key inside a
-longer text, expiry, the file not encrypted.
+whose words were read says Paste Text ⇧↩. Since: a copy that holds a
+key among other words (a `.env`, a `curl` line) is not kept either.
+Left of #13: a value with no shape of its own, expiry, the file not
+encrypted.
 
 Then (docs/clipboard-long-copies.md): #15 a long copy shows whole in
 the preview, up to 200,000 characters, a word found far down marked and
