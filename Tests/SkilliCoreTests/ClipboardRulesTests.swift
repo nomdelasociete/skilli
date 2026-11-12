@@ -253,6 +253,34 @@ final class ClipboardRulesTests: XCTestCase {
 
     /// Begun on selected copies: those, in the order given, under the
     /// same rules; past the last it says how many; then today's again.
+    func testKeptFormats() throws {
+        // What the app made: kept. The text's other names, a picture of
+        // it, marks and promised files: not.
+        for type in ["public.rtf", "public.html", "com.apple.webarchive", "com.apple.iWork.TSPNativeData", "com.adobe.pdf",
+                     "dyn.ah62d4rv4gu8y", "com.apple.WebKit.custom-pasteboard-data", "org.chromium.source-url"] {
+            XCTAssertTrue(ClipboardFormats.keeps(type), type)
+        }
+        for type in ["public.utf8-plain-text", "public.utf16-external-plain-text", "NSStringPboardType", "public.png", "public.tiff",
+                     "com.apple.is-remote-clipboard", "org.nspasteboard.source", "org.chromium.internal.source-rfh-token",
+                     "com.apple.pasteboard.promised-file-url", "com.apple.NSFilePromiseItemMetaData"] {
+            XCTAssertFalse(ClipboardFormats.keeps(type), type)
+        }
+
+        // Stored in the app's order, read back the same.
+        let formats = [ClipboardFormats.Format(type: "com.example.cells", data: Data([1, 2, 3])),
+                       ClipboardFormats.Format(type: "public.rtf", data: Data("{\\rtf1}".utf8)),
+                       ClipboardFormats.Format(type: "public.html", data: Data("<b>a</b>".utf8))]
+        let stored = try XCTUnwrap(ClipboardFormats.encoded(formats))
+        XCTAssertEqual(ClipboardFormats.decoded(stored), formats)
+        XCTAssertNil(ClipboardFormats.encoded([]))
+        XCTAssertEqual(ClipboardFormats.decoded(Data("not a list".utf8)), [])
+
+        // A copy kept before: three formats by name, no order. RTF first.
+        let before: [String: Data] = ["public.html": Data([1]), "public.rtf": Data([2]), "com.apple.flat-rtfd": Data([3])]
+        let old = try PropertyListSerialization.data(fromPropertyList: before, format: .binary, options: 0)
+        XCTAssertEqual(ClipboardFormats.decoded(old).map(\.type), ["public.rtf", "com.apple.flat-rtfd", "public.html"])
+    }
+
     func testPasteSequenceOnSelectedCopies() {
         var sequence = PasteSequence()
         let history: [Int64] = [40, 30, 20, 10]

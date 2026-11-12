@@ -15855,7 +15855,7 @@ final class SelfTest {
     /// text pastes back with its formats (or plain), OCR finds the words of
     /// an image, old copies are pruned and deleting removes the image file.
     private func clipboardKeepsAndFinds() async {
-        let name = "Clipboard history: keeps, finds without accents and in images (OCR), moves repeats up, skips secrets, pastes formats back, prunes"
+        let name = "Clipboard history: keeps, finds without accents and in images (OCR), moves repeats up, skips secrets, pastes every format back, prunes"
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-clipboard-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         guard let store = try? ClipboardStore(folder: folder) else {
@@ -15895,6 +15895,54 @@ final class SelfTest {
             history.write(meeting, plain: true)
             plainBack = pasteboard.data(forType: .rtf) == nil && pasteboard.string(forType: .string) == meeting.text
         }
+
+        // Cells as a spreadsheet copies them: its own format first, RTF,
+        // the text, a mark of macOS. All but the mark and the text's other
+        // names come back, in that order; ⇧↩ pastes the text alone. Then
+        // a shape: its own format with its picture, back before the PNG.
+        var cellsBack = "not copied"
+        do {
+            let cells = NSPasteboard.PasteboardType("com.example.selftest.cells")
+            let shape = NSPasteboard.PasteboardType("com.example.selftest.shape")
+            let mark = NSPasteboard.PasteboardType("com.apple.is-remote-clipboard")
+            let native = Data((0..<4_096).map { UInt8($0 % 251) })
+            pasteboard.clearContents()
+            let item = NSPasteboardItem()
+            item.setData(native, forType: cells)
+            item.setData(Data("{\\rtf1 Wombat\\tab 12}".utf8), forType: .rtf)
+            item.setString("Wombat\t12", forType: .string)
+            item.setData(Data([1]), forType: mark)
+            pasteboard.writeObjects([item])
+            var said: [String] = []
+            if let kept = history.capture() {
+                history.write(kept, plain: false)
+                let types = pasteboard.pasteboardItems?.first?.types ?? []
+                let whole = types.first == cells && types.contains(.rtf) && !types.contains(mark)
+                    && pasteboard.data(forType: cells) == native && pasteboard.string(forType: .string) == "Wombat\t12"
+                history.write(kept, plain: true)
+                let plain = pasteboard.data(forType: cells) == nil && pasteboard.data(forType: .rtf) == nil
+                    && pasteboard.string(forType: .string) == "Wombat\t12"
+                said.append("cells with their own format \(whole), as text alone \(plain)")
+                try? store.delete(kept.id)
+            }
+            let dot = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 4, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                       isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+            if let png = dot?.representation(using: .png, properties: [:]) {
+                pasteboard.clearContents()
+                let item = NSPasteboardItem()
+                item.setData(native, forType: shape)
+                item.setData(png, forType: .png)
+                pasteboard.writeObjects([item])
+                if let kept = history.capture(), kept.kind == .image {
+                    history.write(kept, plain: false)
+                    let types = pasteboard.pasteboardItems?.first?.types ?? []
+                    said.append("a shape with its picture \(types.first == shape && types.contains(.png) && pasteboard.data(forType: shape) == native)")
+                    try? store.delete(kept.id)
+                }
+            }
+            if !said.isEmpty { cellsBack = said.joined(separator: ", ") }
+        }
+        let formatsBack = cellsBack == "cells with their own format true, as text alone true, a shape with its picture true"
 
         // An image with words, read by Vision.
         let picture = NSImage(size: NSSize(width: 900, height: 220), flipped: false) { rect in
@@ -16084,8 +16132,8 @@ final class SelfTest {
             kinds = missed.isEmpty ? "true" : "missed \(missed)"
         }
 
-        record(name, found && movedUp && secret && excluded && richBack && plainBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true" && pins == "true" && kinds == "true",
-               "links alone, addresses alone, one app's copies, with a word and paged: \(kinds); a pinned copy kept by the pass, first with no words, pinned after forget and restore: \(pins); found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
+        record(name, found && movedUp && secret && excluded && richBack && plainBack && formatsBack && ocrFound && ocrFromData && imageFileGone && pruned && fileRead && paged && inside == "true" && pins == "true" && kinds == "true",
+               "links alone, addresses alone, one app's copies, with a word and paged: \(kinds); a pinned copy kept by the pass, first with no words, pinned after forget and restore: \(pins); found inside words, by a link's piece, the app, without accents: \(inside), slowest key among 3,000 copies \(insideMs.map { String(format: "%.2f ms", $0) } ?? "—"); a picture copied as its file unread when copied, read when asked, its text pasted: \(fileRead); 120 copies in pages of 50, 50, 20: \(paged); a JPEG's text read from its data: \(ocrFromData); found “reunion bud”: \(found); copied again moved up (2 rows, copied twice): \(movedUp); secret skipped: \(secret); 1Password skipped: \(excluded); rich text back: \(richBack), plain: \(plainBack); \(cellsBack); OCR found “facture 2026”: \(ocrFound) in \(ocrMs.map { String(format: "%.0f ms", $0) } ?? "—"); image file deleted: \(imageFileGone); 40-day-old copy pruned by “1 month”: \(pruned)",
                ocrMs)
     }
 
