@@ -366,7 +366,8 @@ final class ClipboardRulesTests: XCTestCase {
         XCTAssertEqual(ClipboardDrag.of(kind: "text", text: ""), .none)
         XCTAssertEqual(ClipboardDrag.of(kind: "image", text: "https://example.com/a.png"), .picture)
         XCTAssertEqual(ClipboardDrag.of(kind: "files", text: "/Users/me/Documents/report.pdf"), .file("/Users/me/Documents/report.pdf"))
-        XCTAssertEqual(ClipboardDrag.of(kind: "files", text: "/Users/me/a.txt\n/Users/me/b.txt"), .none)
+        XCTAssertEqual(ClipboardDrag.of(kind: "files", text: "/Users/me/a.txt\n/Users/me/b.txt"), .files(["/Users/me/a.txt", "/Users/me/b.txt"]))
+        XCTAssertEqual(ClipboardDrag.of(kind: "files", text: "\n"), .none)
         XCTAssertEqual(ClipboardDrag.of(kind: "other", text: "x"), .none)
 
         var calendar = Calendar(identifier: .gregorian)

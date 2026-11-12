@@ -17943,6 +17943,68 @@ final class SelfTest {
                         _ = await waitUntil(timeout: 1) { !launcher.isVisible }
                     }
                 }
+                // A copy of three files, one gone since: the row drops the
+                // two still there. Then two text copies selected: dragged,
+                // they drop as one text, in the order copied.
+                let dragFolder = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-selftest-drag-files", isDirectory: true)
+                try? FileManager.default.createDirectory(at: dragFolder, withIntermediateDirectories: true)
+                defer { try? FileManager.default.removeItem(at: dragFolder) }
+                let dragNames = ["bilby-one.txt", "bilby-gone.txt", "bilby-two.txt"]
+                for name in dragNames where name != "bilby-gone.txt" { try? Data(name.utf8).write(to: dragFolder.appendingPathComponent(name)) }
+                let dragPaths = dragNames.map { dragFolder.appendingPathComponent($0).path }.joined(separator: "\n")
+                _ = try? store.add(.init(kind: .files, text: dragPaths, app: "com.apple.finder", appName: "Finder", hash: "selftest-drag-files"))
+                _ = try? store.add(.init(kind: .text, text: "bandicoot first", app: "com.apple.Notes", appName: "Notes", hash: "selftest-drag-a"),
+                                   at: .now.addingTimeInterval(-20))
+                _ = try? store.add(.init(kind: .text, text: "bandicoot second", app: "com.apple.Notes", appName: "Notes", hash: "selftest-drag-b"),
+                                   at: .now.addingTimeInterval(-10))
+                /// Opens the history on `word`, waits for `rows` rows, runs
+                /// `before`, drags the first row into the test window above
+                /// the launcher, lets go. What the probe took.
+                func dragFirstRow(_ word: String, rows: Int, before: () async -> Void = {}) async -> Bool {
+                    probe.reset()
+                    guard await openHistory() else { return false }
+                    for letter in word { await pressKey(letter) }
+                    guard await waitUntil(timeout: 2, { launcher.shownRowCount == rows }) != nil, let row = launcher.rowScreenFrame(0),
+                          let target = window.contentView.map({ window.convertToScreen($0.convert($0.bounds, to: nil)) }) else { return false }
+                    await before()
+                    let panel = launcher.window.frame
+                    let from = NSPoint(x: row.minX + 120, y: row.midY)
+                    let to = NSPoint(x: target.midX, y: (panel.maxY + target.maxY) / 2)
+                    await mouse(.mouseMoved, from)
+                    await mouse(.leftMouseDown, from)
+                    for step in 1...12 { await mouse(.leftMouseDragged, NSPoint(x: from.x + CGFloat(step) * 4, y: from.y + CGFloat(step) * 2)) }
+                    _ = await waitUntil(timeout: 2) { launcher.isDraggingClip }
+                    for step in 1...20 {
+                        let done = CGFloat(step) / 20
+                        await mouse(.leftMouseDragged, NSPoint(x: from.x + 48 + (to.x - from.x - 48) * done, y: from.y + 24 + (to.y - from.y - 24) * done))
+                    }
+                    _ = await waitUntil(timeout: 2) { probe.entered }
+                    await pause(600)
+                    await mouse(.leftMouseUp, to)
+                    return await waitUntil(timeout: 3) { probe.dropped != nil && !launcher.isVisible } != nil
+                }
+                func closeHistory() async {
+                    for _ in 0..<3 where launcher.isVisible {
+                        await pressKey(nil, code: CGKeyCode(kVK_Escape))
+                        _ = await waitUntil(timeout: 1) { !launcher.isVisible }
+                    }
+                }
+                let filesDropped = await dragFirstRow("bilby", rows: 1)
+                if !filesDropped || probe.droppedFiles != ["bilby-one.txt", "bilby-two.txt"] {
+                    problems.append("a copy of three files, one gone, dragged out: dropped \(filesDropped), files \(probe.droppedFiles), “\(probe.dropped ?? "nothing")”")
+                }
+                await closeHistory()
+                // ⇧↓ twice: the row under the keys, then the next one.
+                let textsDropped = await dragFirstRow("bandicoot", rows: 2) {
+                    await pressKey(nil, code: CGKeyCode(kVK_DownArrow), flags: .maskShift)
+                    await pressKey(nil, code: CGKeyCode(kVK_DownArrow), flags: .maskShift)
+                    _ = await waitUntil(timeout: 1) { launcher.chosenClipCount == 2 }
+                }
+                if !textsDropped || probe.dropped != "bandicoot first\nbandicoot second" {
+                    problems.append("two selected texts dragged out: dropped \(textsDropped), “\(probe.dropped ?? "nothing")”, selected \(launcher.chosenClipCount)")
+                }
+                await closeHistory()
+                for word in ["bilby", "bandicoot"] { for item in store.search(word) { try? store.delete(item.id) } }
             }
             // A word mistyped ("numabt"): nothing as typed, the copy
             // found by the close word, the header saying so, the row
@@ -33464,6 +33526,8 @@ private final class DropProbe: NSView {
     /// The drop was offered (`prepareForDragOperation`).
     private(set) var asked = false
     private(set) var dropped: String?
+    /// The names of the files dropped, in their order.
+    private(set) var droppedFiles: [String] = []
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -33477,7 +33541,7 @@ private final class DropProbe: NSView {
     private(set) var left = false
 
     func reset() {
-        (entered, asked, left, dropped) = (false, false, false, nil)
+        (entered, asked, left, dropped, droppedFiles) = (false, false, false, nil, [])
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
@@ -33499,6 +33563,7 @@ private final class DropProbe: NSView {
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let pasteboard = sender.draggingPasteboard
         dropped = pasteboard.string(forType: .string) ?? pasteboard.string(forType: .fileURL)
+        droppedFiles = ((pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []).map(\.lastPathComponent)
         return dropped != nil
     }
 }

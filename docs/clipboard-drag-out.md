@@ -16,15 +16,23 @@ goes where the cursor is, a drag goes where the pointer says.
    - A text copy drops its text.
    - A picture copy drops a file, "Copied Image 2026-11-12 at 09.41.05
      (1280×720).png".
-   - A copied file drops that file.
+   - A copied file drops that file; a copy of several files, all of
+     them still there.
+   - Several copies selected (⇧↓, ⌘K → Select), one of them dragged:
+     all of them as one, in the order copied, as ↩ pastes them: texts
+     as one text, a line each; files copies as all their files.
    - Dropped: the launcher closes, as after a paste. Let go over
      nothing: the launcher is back as it was.
 3. **Hint or push.** None. Dragging a row is what a pointer tries
    first; nothing is added to the footer or to ⌘K.
 4. **Deterministic or AI.** Code.
 5. **Wrong.** A file moved or deleted since: the row does not drag and
-   one line says it is no longer where it was copied. A place that
-   takes nothing: the launcher comes back, nothing is lost.
+   one line says it is no longer where it was copied; of several files,
+   the ones still there are dropped, the others left out (none there:
+   the row does not drag, one line says so). A selection that makes no
+   single drop (texts with files, a picture): nothing drags, one line
+   says so. A place that takes nothing: the launcher comes back,
+   nothing is lost.
 
 ## How
 
@@ -32,7 +40,10 @@ goes where the cursor is, a drag goes where the pointer says.
   history only, towards other apps and skil.li's own windows (a field
   in Settings).
 - `ClipboardDrag` (SkilliCore) says what a copy gives: its text, its
-  picture, its one file, or nothing (several files copied together).
+  picture, its file or files, or nothing. A selection gives what
+  `ClipboardSelection.paste` makes of it.
+- A row gives the list one thing to drag: of several files the first;
+  the others are put with it as the drag begins (`clipDragMore`).
 - A picture's own file is named by the history: a copy of it under a
   name a person reads is made in the temporary folder as the drag
   begins, in a folder named by the copy's id, and that one is dragged
@@ -61,11 +72,16 @@ goes where the cursor is, a drag goes where the pointer says.
   under where it was: the drag begins, the launcher is off the screen,
   the text is there, the launcher is closed.
 
+- Self-test (`previews`, pointer): a copy of three files, one gone
+  since, drops the two still there; two text copies selected and one
+  dragged drop as one text, the older first.
+
 Not checked: a drop into another app (the self-test's target is a
 window of skil.li's own); a picture or a file dragged for real (their
 rule is unit-tested, their drag is not); the middle of the screen
-(other apps' windows were over it on the test Mac).
+(other apps' windows were over it on the test Mac); several files
+dropped on Finder or a mail (the drag shows one file's picture, the
+drop gives them all in the self-test's own window).
 
-Not done: several files copied together (the row does not drag);
-several rows selected dragged as one; a text dragged with its formats
-(the text alone); a drag from the preview.
+Not done: a text dragged with its formats (the text alone); a drag
+from the preview; of a selection, the files gone are not said.
