@@ -31,6 +31,13 @@ final class RecordingFollowUps {
     var isBeingMade: (URL) -> Bool = { _ in false }
     /// One line in the card: a failure, said once.
     var notify: (String) -> Void = { _ in }
+    var onAutomaticActivityChanged: () -> Void = {}
+
+    var visibleAutomaticRuns: [String] {
+        runningAutomatically.values
+            .filter { $0.recordingTimeoutSeconds != nil }
+            .map(\.title).sorted()
+    }
     /// The mail app with a new message (the recap); the self-test watches.
     var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
     /// The user's own mail addresses (My Card), left out of the recap's.
@@ -60,7 +67,8 @@ final class RecordingFollowUps {
     /// its window says it.
     private(set) var working: [String: String] = [:]
     private var editRuns: [String: Task<Void, Never>] = [:]
-    private var runningAutomatically: Set<String> = []
+    private var runningAutomatically: [String: ScriptCommand] = [:]
+    private var wantsAutomaticResult: Set<String> = []
     private var rerun: [String: String] = [:]
     private var recoveryRuns: [String: Task<Void, Never>] = [:]
     nonisolated static let pendingSkillieFile = ".pending-recording-skillie"
@@ -79,9 +87,12 @@ final class RecordingFollowUps {
     var provider: String { ai?.defaultModel.provider.title ?? WritingProvider.claude.title }
 
     /// What is being done for `folder` now, for a window opening meanwhile.
-    func work(for folder: URL) -> String? { working[Self.key(folder)] }
+    func work(for folder: URL) -> String? {
+        let key = Self.key(folder)
+        return working[key] ?? runningAutomatically[key].map { "Running “\($0.title)”…" }
+    }
 
-    func isRunningSkillie(on folder: URL) -> Bool { runningAutomatically.contains(Self.key(folder)) }
+    func isRunningSkillie(on folder: URL) -> Bool { runningAutomatically[Self.key(folder)] != nil }
 
     func recordingMoved(from folder: URL, to moved: URL) {
         guard Self.key(folder) != Self.key(moved) else { return }
@@ -403,6 +414,12 @@ final class RecordingFollowUps {
 
     /// ⌘K on a recording: the skillie run on it, in the card.
     func run(_ skillie: ScriptCommand, on folder: URL) {
+        let key = Self.key(folder)
+        if let running = runningAutomatically[key], Self.isMarked(running, skillie.path) {
+            wantsAutomaticResult.insert(key)
+            notify("“\(running.title)” is already running on this recording. Its result will appear here.")
+            return
+        }
         runInCard(skillie, folder) { [weak self] run in self?.note(skillie, run, on: folder, automatic: false) }
     }
 
@@ -477,15 +494,18 @@ final class RecordingFollowUps {
 
     private func runAutomatically(_ skillie: ScriptCommand, folder: URL, title: String) {
         let key = Self.key(folder)
-        guard runningAutomatically.insert(key).inserted else {
+        guard runningAutomatically[key] == nil else {
             rerun[key] = skillie.path
             return
         }
+        runningAutomatically[key] = skillie
         let pending = folder.appendingPathComponent(Self.pendingSkillieFile)
         if skillie.recordingTimeoutSeconds != nil {
             try? skillie.path.write(to: pending, atomically: true, encoding: .utf8)
         }
         Log.trace("Recorder: “\(skillie.title)” runs after the transcript of “\(title)”")
+        window(folder)?.showWork(work(for: folder))
+        onAutomaticActivityChanged()
         Task { [weak self] in
             guard let self else { return }
             let run: ScriptLibrary.Run
@@ -494,8 +514,15 @@ final class RecordingFollowUps {
             } catch {
                 run = ScriptLibrary.Run(output: error.localizedDescription, status: -1)
             }
-            self.runningAutomatically.remove(key)
+            self.runningAutomatically[key] = nil
+            let requestedResult = self.wantsAutomaticResult.remove(key) != nil
+            self.onAutomaticActivityChanged()
+            self.window(folder)?.showWork(self.work(for: folder))
             self.note(skillie, run, on: folder, automatic: true)
+            if run.succeeded, requestedResult || skillie.recordingTimeoutSeconds != nil {
+                let line = ScriptCommand.lastLine(run.output)
+                self.notify("“\(skillie.title)” finished." + (line.isEmpty ? "" : "\n" + line))
+            }
             if run.succeeded, let path = try? String(contentsOf: pending, encoding: .utf8), Self.isMarked(skillie, path) {
                 try? FileManager.default.removeItem(at: pending)
             }

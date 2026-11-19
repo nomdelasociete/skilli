@@ -330,6 +330,7 @@ final class SelfTest {
         /// Reminders list, each undo, a reminder's link back; the AI's parts
         /// on the provider set up here (keys, ~5 min).
         case followups
+        case publishfeedback
         /// Only Better transcription (phase 4): its download from a stand-in
         /// server (the model on this Mac's ~/recorder-measure: cancelled,
         /// resumed, a wrong file refused), its row in Settings → Recorder,
@@ -760,6 +761,9 @@ final class SelfTest {
         if scope == .whisper {
             window.center()
             return await finish(after: [whisperChecks])
+        }
+        if scope == .publishfeedback {
+            return await finish(after: [recordingPublishFeedbackChecks])
         }
         if scope == .followups {
             window.center()
@@ -26782,6 +26786,46 @@ final class SelfTest {
     /// the self-test's Recordings folder: the lines, and both tracks of its
     /// length, silent or, `voiced`, with a sound under each word said on
     /// that track (the waveform as a call draws it).
+    private func recordingPublishFeedbackChecks() async {
+        let name = "Recording publication remains visible and a manual request shows the existing automatic run's result"
+        guard let center = context.recorder(),
+              let folder = seedMeeting(center, title: "Publication feedback check", script: Array(Self.launchReview.prefix(1))),
+              let skillie = ScriptCommand.parse("""
+                  #!/bin/sh
+                  # @skilli.title Publish Test Recording
+                  # @skilli.mode compact
+                  # @skilli.forRecordings true
+                  # @skilli.recordingTimeoutSeconds 120
+                  """, path: "/example/publish-test.sh") else {
+            record(name, false, "Could not create the test recording and skillie", nil)
+            return
+        }
+        let followUps = center.followUps
+        let saved = (followUps.skillies, followUps.marked, followUps.runQuietly, followUps.runInCard, followUps.notify)
+        defer { (followUps.skillies, followUps.marked, followUps.runQuietly, followUps.runInCard, followUps.notify) = saved }
+        var notes: [String] = []
+        var manualStarts = 0
+        followUps.skillies = { [skillie] in [skillie] }
+        followUps.marked = { [skillie] in skillie.path }
+        followUps.notify = { notes.append($0) }
+        followUps.runInCard = { _, _, _ in manualStarts += 1 }
+        followUps.runQuietly = { _, _ in
+            try await Task.sleep(for: .milliseconds(400))
+            return ScriptLibrary.Run(output: "https://example.com/meeting", status: 0)
+        }
+        followUps.transcriptDone(folder)
+        let running = center.menuBar.shown?.contains(skillie.title) == true
+            && center.menuBar.menuTitles.contains(where: { $0.contains(skillie.title) })
+            && followUps.work(for: folder)?.contains(skillie.title) == true
+        followUps.run(skillie, on: folder)
+        let alreadyRunning = notes.contains(where: { $0.contains("already running") })
+        let finished = await waitUntil(timeout: 4) { notes.contains(where: { $0.contains("https://example.com/meeting") }) } != nil
+        let ended = center.menuBar.shown == nil && followUps.work(for: folder) == nil
+        let runs = center.recordings.read(folder)?.skillies ?? []
+        record(name, running && alreadyRunning && finished && ended && manualStarts == 0 && runs.count == 1 && runs[0].automatic,
+               "Running shown: \(running), manual explained: \(alreadyRunning), result shown: \(finished), cleared: \(ended), duplicate starts: \(manualStarts)", nil)
+    }
+
     private func seedMeeting(_ center: RecorderCenter, title: String, script: [(at: Double, voice: Voice, words: String)],
                              seconds: Double? = nil, people: [(voice: Voice, name: String, address: String?)] = SelfTest.launchReviewPeople,
                              voiced: Bool = false) -> URL? {
