@@ -41,6 +41,12 @@ as you join.
 
 ## Record a meeting
 
+Click the input name or chevron beside **Microphone** in the Record
+card to choose an input. During a recording, open the red-dot menu and
+choose an input under **Microphone**. Switching keeps the same recording
+running. **System Default** follows the input selected in macOS Sound
+settings. Picking a named device affects only skil.li's recorder.
+
 The recorder takes your microphone and your Mac's sound (the other side
 of the call), as two tracks, and writes them out on your Mac when you
 stop. Nothing leaves your Mac.

@@ -318,6 +318,21 @@ final class MeetingRecorder {
         onChange?()
     }
 
+    /// Change only the recording engine. Its track keeps the same writer
+    /// and clock, just as when the input hardware reconfigures itself.
+    func selectMicrophone(_ uid: String?) async throws {
+        guard phase == .listening || isRecording else { return }
+        defer { onChange?() }
+        try microphone.selectInput(uid)
+        if !sources.microphone {
+            await setSource(.me, on: true)
+        } else if microphone.state == .off || microphone.state == .none || microphone.state == .denied {
+            await microphone.restart()
+        }
+        silent[.me] = nil
+        silence[.me] = nil
+    }
+
     /// The webcam on or off, in the card or the red dot's menu: for the
     /// rest of the recording (off: black in its file from then on).
     func setWebcam(_ on: Bool) async {

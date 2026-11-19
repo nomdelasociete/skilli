@@ -105,6 +105,7 @@ final class RecorderCenter {
         }
         card.onKeepSilent = { [weak self] speaker in self?.recorder.keepSilent(speaker) }
         card.onToggleSource = { [weak self] speaker in self?.toggle(speaker) }
+        card.onPickMicrophone = { [weak self] uid in self?.pickMicrophone(uid) }
         // An unfinished one answered (Save, Later, Discard): the next.
         card.onSave = { [weak self] folder, record in
             self?.recorder.save(unfinished: folder, record: record)
@@ -130,6 +131,7 @@ final class RecorderCenter {
         indicator.onStop = { [weak self] in self?.control(.stop) }
         indicator.onShowFolder = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
         indicator.onToggleSource = { [weak self] speaker in self?.toggle(speaker) }
+        indicator.onPickMicrophone = { [weak self] uid in self?.pickMicrophone(uid) }
         indicator.onPickApp = { [weak self] app in self?.setCallApp(app, picked: true) }
         indicator.calls = { [weak self] in
             guard let self else { return ([], nil) }
@@ -763,6 +765,17 @@ final class RecorderCenter {
         indicator.update()
     }
 
+    private func pickMicrophone(_ uid: String?) {
+        Task {
+            do {
+                let asking = AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined
+                try await card.whileMacOSAsks(asking) { try await recorder.selectMicrophone(uid) }
+            } catch {
+                notify(error.localizedDescription)
+            }
+        }
+    }
+
     /// A source on or off, in the card or the red dot's menu.
     private func toggle(_ speaker: Speaker) {
         let on = speaker == .me ? recorder.sources.microphone : recorder.sources.macSound
@@ -1332,6 +1345,13 @@ final class RecorderCenter {
     }
 
     /// Self-test: the card closed as esc would, without a key.
+    func microphoneMenuForTest(duringRecording: Bool) -> NSMenu? {
+        if !duringRecording { return card.microphoneInputMenu() }
+        let menu = NSMenu()
+        indicator.menuNeedsUpdate(menu)
+        return menu.items.first { $0.title.hasPrefix("Microphone ·") }?.submenu
+    }
+
     func closeCardWithoutKeys() {
         card.closeWithoutKeys()
     }

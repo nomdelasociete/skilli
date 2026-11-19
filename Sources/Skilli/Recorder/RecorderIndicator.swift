@@ -20,6 +20,7 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     var automaticSkillies: () -> [String] = { [] }
     /// A source's item chosen: off or on.
     var onToggleSource: ((Speaker) -> Void)?
+    var onPickMicrophone: ((String?) -> Void)?
     /// The call's app picked (nil: None).
     var onPickApp: ((MicrophoneApp?) -> Void)?
     /// The apps on the microphone now, and the call's app.
@@ -162,8 +163,14 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
             // Each source with its level: a click turns it off or on.
             menu.addItem(.separator())
             for speaker in Speaker.allCases {
-                let item = entry("", #selector(toggleSource(_:)))
-                item.tag = speaker == .me ? 0 : 1
+                let item: NSMenuItem
+                if speaker == .me {
+                    item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+                    item.submenu = microphonePicker.menu(on: recorder.sources.microphone, selected: recorder.microphone.selectedInputUID)
+                } else {
+                    item = entry("", #selector(toggleSource(_:)))
+                    item.tag = 1
+                }
                 sourceItems[speaker] = item
                 menu.addItem(item)
             }
@@ -218,6 +225,14 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
         menuNeedsUpdate(menu)
         return menu.items.filter { !$0.isSeparatorItem }.map(\.title)
     }
+
+    private lazy var microphonePicker = MicrophonePicker(
+        pick: { [weak self] in self?.onPickMicrophone?($0) },
+        turnOff: { [weak self] in
+            guard let self, self.recorder.sources.microphone else { return }
+            self.onToggleSource?(.me)
+        }
+    )
 
     /// The apps the call's submenu offers, in its order.
     private var pickable: [MicrophoneApp] = []
