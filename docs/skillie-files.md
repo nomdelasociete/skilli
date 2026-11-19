@@ -104,10 +104,11 @@ Add); skillies join them.
 downloaded (https only, 256 KB at most, 15 s, ephemeral session), then the
 same sheet, "from example.com". A link alone adds nothing.
 
+The website’s main button, **Open in skil.li**, uses this link with the
+collection’s HTTPS download address. **Download skillie** stays beside it
+as a `.skilli` file download. Both paths show the same review before Add.
+
 ## Phase 2 (not built)
 
-- The website's downloads as `<name>.skilli` and its main button "Add to
-  skil.li" (`skilli://skillies/import?url=…`), download kept beside it.
-  Waits until phase 1 was tried.
 - ⌘K → Share on a skillie: the file as `.skilli`, or its link.
 - Replace shows what changed, line by line.
