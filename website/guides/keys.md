@@ -15,6 +15,11 @@ it sends Escape**, handy in Vim and in any dialog.
 - Settings → Keys → Advanced: turn off *Tap Caps Lock alone to send
   Escape*.
 
+Your direct launcher shortcut also works with the cursor in a password
+field, including **Caps Lock held + Space**. skil.li does not read the
+password's keystrokes. Its other shortcuts and key sequences stay paused
+while macOS Secure Input protects the field.
+
 ## Keys and sequences
 
 A shortcut is one key (✦A) or a sequence (✦K, then G). After the first

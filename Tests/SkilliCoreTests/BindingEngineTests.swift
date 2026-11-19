@@ -29,6 +29,17 @@ final class BindingEngineTests: XCTestCase {
         XCTAssertFalse(engine.isPending)
     }
 
+    func testDirectActionShortcutsExcludeChainsAndOtherActions() throws {
+        var engine = try makeEngine()
+        try engine.bind(Chord.sequence("cmd+space"), label: "Launcher too", to: .launcher)
+        try engine.bind(Chord.sequence("cmd+k space"), label: "Launcher chain", to: .launcher)
+        XCTAssertEqual(engine.singleChords(for: .launcher), try [chord("hyper+space"), chord("cmd+space")])
+        XCTAssertTrue(engine.singleChords(for: .upper).isEmpty)
+        _ = engine.handle(try chord("cmd+k"), at: start)
+        XCTAssertEqual(engine.singleChords(for: .launcher), try [chord("hyper+space"), chord("cmd+space")])
+        XCTAssertEqual(engine.handle(try chord("space"), at: start), .fire(.launcher))
+    }
+
     func testUnboundChordPassesThrough() throws {
         var engine = try makeEngine()
         XCTAssertEqual(engine.handle(try chord("cmd+c"), at: start), .passThrough)
