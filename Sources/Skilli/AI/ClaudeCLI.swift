@@ -148,10 +148,15 @@ final class ChildProcess: @unchecked Sendable {
     /// its output open), killed 3 s later if SIGTERM did not stop them.
     static func run(_ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String] = [:],
                     unset: [String] = [], withErrors: Bool = true, stopsGroup: Bool = false,
-                    timeout: TimeInterval) async throws -> (output: String, status: Int32) {
+                    timeout: TimeInterval, wrapper: [String]? = nil) async throws -> (output: String, status: Int32) {
         let child = ChildProcess()
-        child.process.executableURL = executable
-        child.process.arguments = arguments
+        if let wrapper {
+            child.process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+            child.process.arguments = ["-e"] + wrapper + [executable.path] + arguments
+        } else {
+            child.process.executableURL = executable
+            child.process.arguments = arguments
+        }
         var variables = ClaudeCLI.environment(for: executable).merging(environment) { $1 }
         for key in unset { variables[key] = nil }
         child.process.environment = variables

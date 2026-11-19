@@ -77,7 +77,8 @@ key, Ask, an agent, a link, the menu bar).
 ### The time limit
 
 An automatic recording skillie with an extended limit may run again after
-skil.li restarts if its last run did not succeed. Make repeated runs safe.
+skil.li restarts if its last run did not succeed. Recovery waits for the
+previous process group to exit. Make repeated runs safe.
 
 At the limit, skil.li sends SIGTERM to the skillie **and every process
 still in its process group** (what it started, unless one moved to a group

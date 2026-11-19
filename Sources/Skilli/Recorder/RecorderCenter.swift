@@ -984,7 +984,7 @@ final class RecorderCenter {
         // action of its ⌘K (its answer would find the folder gone).
         let doing: String? = recorder.folder.map(Self.key) == Self.key(folder) ? "it is being recorded"
             : isBeingMade(folder) ? "it is being transcribed"
-            : followUps.isRunningSkillie(on: folder) ? "a recording skillie is running"
+            : (followUps.isRunningSkillie(on: folder) || ScriptLibrary.recordingSkillieProcessIsRunning(in: folder)) ? "a recording skillie is running"
             : followUps.work(for: folder).map { "\($0.replacingOccurrences(of: "…", with: "")) for it" }
         if let doing {
             throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(doing). Rename it once it is done.")

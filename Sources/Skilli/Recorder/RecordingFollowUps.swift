@@ -62,6 +62,7 @@ final class RecordingFollowUps {
     private var editRuns: [String: Task<Void, Never>] = [:]
     private var runningAutomatically: Set<String> = []
     private var rerun: [String: String] = [:]
+    private var recoveryRuns: [String: Task<Void, Never>] = [:]
     nonisolated static let pendingSkillieFile = ".pending-recording-skillie"
 
 
@@ -84,6 +85,10 @@ final class RecordingFollowUps {
 
     func recordingMoved(from folder: URL, to moved: URL) {
         guard Self.key(folder) != Self.key(moved) else { return }
+        if let retry = recoveryRuns.removeValue(forKey: Self.key(folder)) {
+            retry.cancel()
+            resumeSkillie(on: moved)
+        }
         if let edit = editRuns.removeValue(forKey: Self.key(folder)) {
             edit.cancel()
             transcriptEdited(moved)
@@ -450,7 +455,23 @@ final class RecordingFollowUps {
         guard let skillie = automaticSkillie(), !isBeingMade(folder), !isRunningSkillie(on: folder),
               let path = try? String(contentsOf: pending, encoding: .utf8), Self.isMarked(skillie, path),
               let record = recordings.read(folder), record.state == .done else { return false }
-        runAutomatically(skillie, folder: folder, title: record.title)
+        if ScriptLibrary.recordingSkillieProcessIsRunning(in: folder) {
+            let key = Self.key(folder)
+            if recoveryRuns[key] == nil {
+                recoveryRuns[key] = Task { [weak self] in
+                    do {
+                        try await Task.sleep(for: .seconds(15))
+                    } catch {
+                        return
+                    }
+                    guard let self else { return }
+                    self.recoveryRuns[key] = nil
+                    self.resumeSkillie(on: folder)
+                }
+            }
+        } else {
+            runAutomatically(skillie, folder: folder, title: record.title)
+        }
         return true
     }
 
