@@ -25,7 +25,8 @@ an agent.
 - **For recordings**: one whose header says `@skilli.forRecordings true`
   is in a recording's ⌘K and gets that recording's folder. Settings →
   Recorder → *After each transcript* can run one on every new recording
-  (off until you pick one).
+  (off until you pick one). The skillie can also opt to run again after
+  saved transcript edits and use a longer time limit for transfers.
 
 ![Settings → Skillies: the folder, and each skillie with its shortcut](images/settings-skillies.png)
 

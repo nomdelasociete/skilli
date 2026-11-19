@@ -50,6 +50,10 @@ public struct ScriptCommand: Hashable, Sendable {
     /// recording's ⌘K, run with its folder in `SKILLI_RECORDING`; one may
     /// be marked to run after every transcript.
     public var forRecordings = false
+    /// An opt-in limit for runs with a recording. Other runs keep their usual limit.
+    public var recordingTimeoutSeconds: Int? = nil
+    /// The automatic recording skillie also runs after saved transcript edits.
+    public var afterRecordingEdits = false
 
     /// Stable id: its path.
     public var id: String { path }
@@ -114,7 +118,11 @@ public struct ScriptCommand: Hashable, Sendable {
             showsRunning: values["showsRunning"] != "false",
             refreshSeconds: values["refreshTime"].flatMap(seconds),
             directory: values["currentDirectoryPath"],
-            forRecordings: values["forRecordings"] == "true"
+            forRecordings: values["forRecordings"] == "true",
+            recordingTimeoutSeconds: values["recordingTimeoutSeconds"].flatMap(Int.init).flatMap {
+                (120...86_400).contains($0) ? $0 : nil
+            },
+            afterRecordingEdits: values["afterRecordingEdits"] == "true"
         )
     }
 

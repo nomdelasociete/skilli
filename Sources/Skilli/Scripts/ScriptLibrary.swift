@@ -83,6 +83,36 @@ final class ScriptLibrary {
 
     // MARK: - Running
 
+    nonisolated static let recordingProcessFile = ".recording-skillie-process"
+
+    /// Publish the process group before running user code. The file lock
+    /// serializes this check with another launch, including after an app crash.
+    private static let recordingProcessGuard = #"""
+        use strict;
+        use warnings;
+        use Fcntl qw(:flock);
+        my ($path, $program, @args) = @ARGV;
+        $^F = 1024;
+        open(my $lease, "+>>", $path) or die "Cannot open recording skillie process file: $!";
+        flock($lease, LOCK_EX | LOCK_NB) or die "A recording skillie is still running.";
+        seek($lease, 0, 0) or die "Cannot read recording skillie process file: $!";
+        my $previous = <$lease> // "";
+        my $group = getpgrp(0);
+        if ($previous =~ /^(\d+)$/ && $1 > 1 && $1 != $group && kill(0, -$1)) {
+            die "A recording skillie is still running.";
+        }
+        truncate($lease, 0) or die "Cannot update recording skillie process file: $!";
+        syswrite($lease, "$group\n") or die "Cannot save recording skillie process group: $!";
+        exec {$program} $program, @args or die "Cannot start recording skillie: $!";
+        """#
+
+    nonisolated static func recordingSkillieProcessIsRunning(in folder: URL) -> Bool {
+        let file = folder.appendingPathComponent(Self.recordingProcessFile)
+        guard let stored = try? String(contentsOf: file, encoding: .utf8),
+              let group = Int32(stored.trimmingCharacters(in: .whitespacesAndNewlines)), group > 1 else { return false }
+        return kill(-group, 0) == 0 || errno == EPERM
+    }
+
     /// How long a skillie may run (the self-test's are shorter).
     var timeout: TimeInterval = 120
 
@@ -114,8 +144,11 @@ final class ScriptLibrary {
         defer { running[id] = nil }
         var environment = SkillieEnvironment.variables(cli: Bundle.main.executablePath, socket: toolSocket(), run: id)
         if let recording { environment[SkillieEnvironment.recording] = recording.path }
+        let recordingTimeout = recording.flatMap { _ in command.recordingTimeoutSeconds }.map(TimeInterval.init)
+        let processGuard = recordingTimeout.flatMap { _ in recording?.appendingPathComponent(Self.recordingProcessFile) }
         let (output, status) = try await ChildProcess.run(executable, all, directory: directory, environment: environment, stopsGroup: true,
-                                                          timeout: timeout ?? self.timeout)
+                                                          timeout: timeout ?? recordingTimeout ?? self.timeout,
+                                                          wrapper: processGuard.map { [Self.recordingProcessGuard, $0.path] })
         return Run(output: ScriptCommand.plain(output), status: status)
     }
 

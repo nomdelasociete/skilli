@@ -59,6 +59,12 @@ final class RecordingFollowUps {
     /// What is being done for each recording now (its folder's path), as
     /// its window says it.
     private(set) var working: [String: String] = [:]
+    private var editRuns: [String: Task<Void, Never>] = [:]
+    private var runningAutomatically: Set<String> = []
+    private var rerun: [String: String] = [:]
+    private var recoveryRuns: [String: Task<Void, Never>] = [:]
+    nonisolated static let pendingSkillieFile = ".pending-recording-skillie"
+
 
     init(recordings: Recordings, deletes: UndoableDeletes) {
         self.recordings = recordings
@@ -74,6 +80,20 @@ final class RecordingFollowUps {
 
     /// What is being done for `folder` now, for a window opening meanwhile.
     func work(for folder: URL) -> String? { working[Self.key(folder)] }
+
+    func isRunningSkillie(on folder: URL) -> Bool { runningAutomatically.contains(Self.key(folder)) }
+
+    func recordingMoved(from folder: URL, to moved: URL) {
+        guard Self.key(folder) != Self.key(moved) else { return }
+        if let retry = recoveryRuns.removeValue(forKey: Self.key(folder)) {
+            retry.cancel()
+            resumeSkillie(on: moved)
+        }
+        if let edit = editRuns.removeValue(forKey: Self.key(folder)) {
+            edit.cancel()
+            transcriptEdited(moved)
+        }
+    }
 
     /// ⌘K's action on the recording in `folder`: done, or why not in the
     /// card. Its answer, for a tool (the summary, the chapters…).
@@ -391,11 +411,81 @@ final class RecordingFollowUps {
     /// it once, out of sight; the window says it ran, the card only a
     /// failure (docs/meeting-recorder-views.md, "Skillies for recordings").
     func transcriptDone(_ folder: URL) {
-        let path = marked()
-        guard !path.isEmpty, let skillie = recordingSkillies().first(where: { Self.isMarked($0, path) }), Self.runsOnItsOwn(skillie),
-              let record = recordings.read(folder), record.state == .done,
+        guard let skillie = automaticSkillie(), let record = recordings.read(folder), record.state == .done,
               !(record.skillies ?? []).contains(where: { $0.automatic && $0.path == skillie.path }) else { return }
-        Log.trace("Recorder: “\(skillie.title)” runs after the transcript of “\(record.title)”")
+        runAutomatically(skillie, folder: folder, title: record.title)
+    }
+
+    func transcriptEdited(_ folder: URL) {
+        guard automaticSkillie()?.afterRecordingEdits == true else { return }
+        let key = Self.key(folder)
+        editRuns[key]?.cancel()
+        editRuns[key] = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(3))
+            } catch {
+                return
+            }
+            guard let self else { return }
+            self.editRuns[key] = nil
+            guard let skillie = self.automaticSkillie(), skillie.afterRecordingEdits, !self.isBeingMade(folder),
+                  let record = self.recordings.read(folder), record.state == .done else { return }
+            self.runAutomatically(skillie, folder: folder, title: record.title)
+        }
+    }
+
+    private func automaticSkillie() -> ScriptCommand? {
+        let path = marked()
+        return recordingSkillies().first { Self.isMarked($0, path) && Self.runsOnItsOwn($0) }
+    }
+
+    func transcriptReplaced(_ folder: URL) {
+        let key = Self.key(folder)
+        if let queued = rerun.removeValue(forKey: key), let skillie = automaticSkillie(),
+           Self.isMarked(skillie, queued), let record = recordings.read(folder), record.state == .done {
+            runAutomatically(skillie, folder: folder, title: record.title)
+        } else if !resumeSkillie(on: folder) {
+            transcriptEdited(folder)
+        }
+    }
+
+    @discardableResult
+    func resumeSkillie(on folder: URL) -> Bool {
+        let pending = folder.appendingPathComponent(Self.pendingSkillieFile)
+        guard let skillie = automaticSkillie(), !isBeingMade(folder), !isRunningSkillie(on: folder),
+              let path = try? String(contentsOf: pending, encoding: .utf8), Self.isMarked(skillie, path),
+              let record = recordings.read(folder), record.state == .done else { return false }
+        if ScriptLibrary.recordingSkillieProcessIsRunning(in: folder) {
+            let key = Self.key(folder)
+            if recoveryRuns[key] == nil {
+                recoveryRuns[key] = Task { [weak self] in
+                    do {
+                        try await Task.sleep(for: .seconds(15))
+                    } catch {
+                        return
+                    }
+                    guard let self else { return }
+                    self.recoveryRuns[key] = nil
+                    self.resumeSkillie(on: folder)
+                }
+            }
+        } else {
+            runAutomatically(skillie, folder: folder, title: record.title)
+        }
+        return true
+    }
+
+    private func runAutomatically(_ skillie: ScriptCommand, folder: URL, title: String) {
+        let key = Self.key(folder)
+        guard runningAutomatically.insert(key).inserted else {
+            rerun[key] = skillie.path
+            return
+        }
+        let pending = folder.appendingPathComponent(Self.pendingSkillieFile)
+        if skillie.recordingTimeoutSeconds != nil {
+            try? skillie.path.write(to: pending, atomically: true, encoding: .utf8)
+        }
+        Log.trace("Recorder: “\(skillie.title)” runs after the transcript of “\(title)”")
         Task { [weak self] in
             guard let self else { return }
             let run: ScriptLibrary.Run
@@ -404,10 +494,19 @@ final class RecordingFollowUps {
             } catch {
                 run = ScriptLibrary.Run(output: error.localizedDescription, status: -1)
             }
+            self.runningAutomatically.remove(key)
             self.note(skillie, run, on: folder, automatic: true)
+            if run.succeeded, let path = try? String(contentsOf: pending, encoding: .utf8), Self.isMarked(skillie, path) {
+                try? FileManager.default.removeItem(at: pending)
+            }
+            if !self.isBeingMade(folder), let queued = self.rerun.removeValue(forKey: key),
+               let next = self.automaticSkillie(), Self.isMarked(next, queued) {
+                self.runAutomatically(next, folder: folder, title: title)
+                return
+            }
             guard !run.succeeded else { return }
             let line = ScriptCommand.lastLine(run.output)
-            self.notify("“\(skillie.title)” failed after the transcript of “\(record.title)”: "
+            self.notify("“\(skillie.title)” failed after the transcript of “\(title)”: "
                         + (line.isEmpty ? "exit \(run.status)." : line))
         }
     }

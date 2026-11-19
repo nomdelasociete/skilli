@@ -885,7 +885,11 @@ final class RecorderCenter {
     private func finished(_ folder: URL) {
         NotificationCenter.default.post(name: Recordings.changed, object: nil)
         // A first transcript: the skillie marked runs on it (phase 5).
-        if madeAgain.remove(Self.key(folder)) == nil { followUps.transcriptDone(folder) }
+        if madeAgain.remove(Self.key(folder)) == nil {
+            followUps.transcriptDone(folder)
+        } else {
+            followUps.transcriptReplaced(folder)
+        }
         if madeQuietly.remove(Self.key(folder)) != nil {
             if let window = windows[Self.key(folder)], let record = recordings.read(folder) {
                 window.show(record, transcript: recordings.transcript(folder))
@@ -980,6 +984,7 @@ final class RecorderCenter {
         // action of its ⌘K (its answer would find the folder gone).
         let doing: String? = recorder.folder.map(Self.key) == Self.key(folder) ? "it is being recorded"
             : isBeingMade(folder) ? "it is being transcribed"
+            : (followUps.isRunningSkillie(on: folder) || ScriptLibrary.recordingSkillieProcessIsRunning(in: folder)) ? "a recording skillie is running"
             : followUps.work(for: folder).map { "\($0.replacingOccurrences(of: "…", with: "")) for it" }
         if let doing {
             throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(doing). Rename it once it is done.")
@@ -1010,6 +1015,7 @@ final class RecorderCenter {
                 throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(error.localizedDescription)")
             }
         }
+        followUps.recordingMoved(from: folder, to: moved)
         Log.trace("Recorder: renamed “\(title)” (\(moved.lastPathComponent))")
         NotificationCenter.default.post(name: Recordings.changed, object: nil)
         // Its window stays, on the folder it is in now (the sound playing
@@ -1096,7 +1102,10 @@ final class RecorderCenter {
         window.onDeleteLine = { [weak self] words, undo in
             self?.deletes.transcriptLine(words, undo: undo)
         }
-        window.onEdited = { _ in NotificationCenter.default.post(name: Recordings.changed, object: nil) }
+        window.onEdited = { [weak self] folder in
+            NotificationCenter.default.post(name: Recordings.changed, object: nil)
+            self?.followUps.transcriptEdited(folder)
+        }
         window.onImport = { [weak self] files in self?.importFiles(files) }
         window.engines = {
             [(.macOS, nil), (.whisper, BetterTranscription.isReady() ? nil : "Better transcription isn't downloaded: Settings → Recorder offers it.")]
@@ -1226,7 +1235,8 @@ final class RecorderCenter {
         var toTranscribe: [(URL, MeetingRecord)] = []
         /// Transcribe Again asked and not made as skil.li quit.
         var toMakeAgain: [(URL, MeetingRecord)] = []
-        var isEmpty: Bool { unfinished.isEmpty && toTranscribe.isEmpty && toMakeAgain.isEmpty }
+        var pendingSkillies: [URL] = []
+        var isEmpty: Bool { unfinished.isEmpty && toTranscribe.isEmpty && toMakeAgain.isEmpty && pendingSkillies.isEmpty }
     }
 
     /// At launch, a few seconds in: what `root` holds that was left,
@@ -1237,7 +1247,8 @@ final class RecorderCenter {
             let recordings = Recordings(root: root)
             return Left(unfinished: recordings.unfinished().map { ($0.folder, MeetingRecorder.measured($0.folder, record: $0.record)) },
                         toTranscribe: recordings.stopped().map { ($0.folder, $0.record) },
-                        toMakeAgain: recordings.madeAgainLeft().map { ($0.folder, $0.record) })
+                        toMakeAgain: recordings.madeAgainLeft().map { ($0.folder, $0.record) },
+                        pendingSkillies: recordings.pendingSkillies())
         }.value
     }
 
@@ -1260,6 +1271,7 @@ final class RecorderCenter {
             madeAgain.insert(Self.key(folder))
             recorder.transcribe(folder, record: record, again: true, engine: TranscriptEngine(stored: asked.engine) ?? .macOS)
         }
+        for folder in left.pendingSkillies { followUps.resumeSkillie(on: folder) }
         guard !left.unfinished.isEmpty else { return }
         unfinished = left.unfinished
         offerNext()

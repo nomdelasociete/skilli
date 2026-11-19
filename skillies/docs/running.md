@@ -36,7 +36,7 @@ key, Ask, an agent, a link, the menu bar).
 | Standard input | Empty (`/dev/null`): a script that reads stdin gets end of file at once. |
 | Output | Standard output and standard error together, as one text. Terminal colour codes are taken out. |
 | Environment | skil.li's own environment, with the changes below. |
-| Time limit | **120 seconds**; **10 seconds** for an inline line read by itself (launcher row, menu bar). |
+| Time limit | **120 seconds** by default (recording skillies can declare a longer limit); **10 seconds** for an inline line read by itself (launcher row, menu bar). |
 | Exit status | 0: success. Anything else: the card shows it as a failure. |
 
 ### Environment
@@ -76,6 +76,10 @@ key, Ask, an agent, a link, the menu bar).
 
 ### The time limit
 
+An automatic recording skillie with an extended limit may run again after
+skil.li restarts if its last run did not succeed. Recovery waits for the
+previous process group to exit. Make repeated runs safe.
+
 At the limit, skil.li sends SIGTERM to the skillie **and every process
 still in its process group** (what it started, unless one moved to a group
 of its own, as `setsid` does), then SIGKILL three seconds later. A
@@ -86,7 +90,7 @@ Background processes stay in that group:
 
 - One that keeps the output open (`long-job &` without redirecting its
   output) keeps the run going until the limit: the card waits for it.
-- At the limit (120 s after the start, even when the script itself has
+- At the run’s time limit (even when the script itself has
   ended), whatever is still in the group is stopped, `nohup` or not.
 
 To start something that must outlive the skillie, hand it to macOS: `open`
