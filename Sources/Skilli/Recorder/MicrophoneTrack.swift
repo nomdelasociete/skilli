@@ -1,9 +1,11 @@
+import AudioToolbox
 import AVFoundation
+import CoreAudio
 import Foundation
 import Synchronization
 
-/// The microphone, the user's side: macOS's default input through
-/// `AVAudioEngine`. A change of the audio setup (a device plugged, the
+/// The microphone, the user's side: a chosen Core Audio input, or the
+/// system default through `AVAudioEngine`. A change of the audio setup (a device plugged, the
 /// default input chosen again, a rate changed) stops an engine and nothing
 /// starts it again (Measured: it stopped after 62 s): a new engine is
 /// started at once, its next buffer placed by the host clock, so the track
@@ -27,6 +29,10 @@ final class MicrophoneTrack {
     let inbox: AudioInbox
     private(set) var state: State = .off
     private(set) var restarts = 0
+    private(set) var selectedInputUID: String?
+    private var hasTap = false
+    private var deviceCapture: (id: AudioObjectID, proc: AudioDeviceIOProcID)?
+    private var deviceListener: AudioObjectPropertyListenerBlock?
     private var engine: AVAudioEngine?
     private var observer: NSObjectProtocol?
     /// Whether the engine started last gives buffers, checked 2 s after;
@@ -37,6 +43,7 @@ final class MicrophoneTrack {
     #if SKILLI_SELFTEST
     /// Self-test: a file plays as the microphone (the test Mac has none),
     /// through the same engine and tap, from `playStandIn`.
+    var activeInputID: UInt32? { deviceCapture?.id ?? engine?.inputNode.auAudioUnit.deviceID }
     var standIn: URL?
     private var player: AVAudioPlayerNode?
     #endif
@@ -66,7 +73,7 @@ final class MicrophoneTrack {
             state = .denied
             return
         }
-        guard AVCaptureDevice.default(for: .audio) != nil else {
+        guard selectedInputUID != nil || AVCaptureDevice.default(for: .audio) != nil else {
             state = .none
             return
         }
@@ -86,9 +93,21 @@ final class MicrophoneTrack {
     private func dropEngine() {
         expecting?.cancel()
         expecting = nil
+        if let capture = deviceCapture {
+            deviceCapture = nil
+            if let listener = deviceListener {
+                for var property in Self.inputProperties {
+                    AudioObjectRemovePropertyListenerBlock(capture.id, &property, .main, listener)
+                }
+            }
+            deviceListener = nil
+            AudioDeviceStop(capture.id, capture.proc)
+            AudioDeviceDestroyIOProcID(capture.id, capture.proc)
+        }
         if let observer { NotificationCenter.default.removeObserver(observer) }
         observer = nil
-        if let engine { removeTap(from: engine) }
+        if let engine, hasTap { removeTap(from: engine) }
+        hasTap = false
         #if SKILLI_SELFTEST
         // The stand-in's player belongs to that engine.
         player?.stop()
@@ -100,21 +119,46 @@ final class MicrophoneTrack {
 
     /// A new engine on the default input as it is now. `again`: after one
     /// before it (its failure logged so, the state kept).
+    private var usesStandIn: Bool {
+        #if SKILLI_SELFTEST
+        return standIn != nil
+        #else
+        return false
+        #endif
+    }
+
     private func startEngine(again: Bool = false) {
+        let started = HostClock.now
+        if let uid = selectedInputUID, !usesStandIn {
+            do {
+                try startDevice(uid)
+            } catch {
+                state = .none
+                Log.actions.error("Recorder: could not start selected microphone (\(error.localizedDescription, privacy: .public))")
+            }
+            expectBuffers(since: started)
+            return
+        }
         let engine = AVAudioEngine()
         self.engine = engine
-        // Heard before it starts: a change while it starts starts another.
-        observer = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.startAgain() }
-        }
-        let started = HostClock.now
         do {
             try install(on: engine)
+            hasTap = true
+            // Device selection can itself change the configuration. Observe
+            // changes only after the input and tap have been configured.
+            observer = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] notification in
+                guard let changed = notification.object as? AVAudioEngine else { return }
+                let identity = ObjectIdentifier(changed)
+                MainActor.assumeIsolated {
+                    guard let self, let engine = self.engine, ObjectIdentifier(engine) == identity else { return }
+                    self.startAgain()
+                }
+            }
             engine.prepare()
             try engine.start()
         } catch {
             Log.actions.error("Recorder: the microphone did not start\(again ? " again" : "") (\(error.localizedDescription, privacy: .public))")
-            if !again { state = .none }
+            state = .none
             expectBuffers(since: started)
             return
         }
@@ -132,7 +176,7 @@ final class MicrophoneTrack {
         #endif
         expecting = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled, let self, self.engine != nil else { return }
+            guard !Task.isCancelled, let self, self.engine != nil || self.deviceCapture != nil else { return }
             if let last = self.inbox.times.buffer, last >= started {
                 self.startsGivingNothing = 0
                 return
@@ -141,6 +185,59 @@ final class MicrophoneTrack {
             guard self.startsGivingNothing <= 3 else { return }
             Log.actions.error("Recorder: the microphone gave nothing 2 s after it started: a new engine (\(self.startsGivingNothing))")
             self.startAgain()
+        }
+    }
+
+    // A named device has its own Core Audio stream. Routing the default
+    // AVAudioEngine to a different device can trigger a configuration
+    // notification every time it starts.
+    private func startDevice(_ uid: String) throws {
+        guard let device = AudioDevices.devices(output: false).first(where: { $0.uid == uid }) else {
+            throw AudioDevices.Failure(message: "That microphone is no longer connected.")
+        }
+        var address = Self.inputProperties[0]
+        var rate = Float64(0)
+        var size = UInt32(MemoryLayout<Float64>.size)
+        let queried = AudioObjectGetPropertyData(device.id, &address, 0, nil, &size, &rate)
+        guard queried == noErr, rate > 0 else {
+            throw AudioDevices.Failure(message: "Could not read the microphone's sample rate.")
+        }
+        var proc: AudioDeviceIOProcID?
+        let added = AudioDeviceCreateIOProcIDWithBlock(&proc, device.id, nil, Self.deviceInput(inbox, rate: rate))
+        guard added == noErr, let proc else {
+            throw AudioDevices.Failure(message: "Could not open the microphone (\(added)).")
+        }
+        let started = AudioDeviceStart(device.id, proc)
+        guard started == noErr else {
+            AudioDeviceDestroyIOProcID(device.id, proc)
+            throw AudioDevices.Failure(message: "Could not start the microphone (\(started)).")
+        }
+        deviceCapture = (device.id, proc)
+        state = .on(device.name)
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            MainActor.assumeIsolated {
+                guard let self, self.deviceCapture?.id == device.id else { return }
+                self.startAgain()
+            }
+        }
+        deviceListener = listener
+        for var property in Self.inputProperties {
+            AudioObjectAddPropertyListenerBlock(device.id, &property, .main, listener)
+        }
+    }
+
+    private static let inputProperties = [kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyDeviceIsAlive].map {
+        AudioObjectPropertyAddress(mSelector: $0, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    }
+
+    private nonisolated static func deviceInput(_ inbox: AudioInbox, rate: Double) -> AudioDeviceIOBlock {
+        { _, input, timestamp, _, _ in
+            let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
+            let channels = buffers.reduce(0) { $0 + Int($1.mNumberChannels) }
+            let stamp = timestamp.pointee
+            let host = stamp.mFlags.contains(.hostTimeValid) ? stamp.mHostTime : mach_absolute_time()
+            let sample = stamp.mFlags.contains(.sampleTimeValid) ? stamp.mSampleTime : HostClock.seconds(host) * rate
+            inbox.put(input, channels: channels, sampleTime: sample, hostTime: host, rate: rate)
         }
     }
 
@@ -161,15 +258,22 @@ final class MicrophoneTrack {
         }
         #endif
         let input = engine.inputNode
-        input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0), block: Self.tap(inbox))
+        let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            throw AudioDevices.Failure(message: "The microphone has no active input channels.")
+        }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tap(inbox))
     }
 
-    /// The default input's name, as the card shows it (the self-test's
+    /// The selected input's name, as the card shows it (the self-test's
     /// stand-in: a common one, never the test Mac's own devices).
     private var deviceName: String {
         #if SKILLI_SELFTEST
         if standIn != nil { return "MacBook Pro Microphone" }
         #endif
+        if let uid = selectedInputUID, let device = AudioDevices.devices(output: false).first(where: { $0.uid == uid }) {
+            return device.name
+        }
         return AVCaptureDevice.default(for: .audio)?.localizedName ?? "Microphone"
     }
 
@@ -188,7 +292,11 @@ final class MicrophoneTrack {
     /// The audio setup changed: the engine stopped; a new one on what the
     /// setup is now.
     private func startAgain() {
-        guard engine != nil else { return }
+        guard engine != nil || deviceCapture != nil else { return }
+        rebuildInput()
+    }
+
+    private func rebuildInput() {
         restarts += 1
         inbox.markRestart()
         dropEngine()
@@ -199,11 +307,32 @@ final class MicrophoneTrack {
         Log.trace("Recorder: the microphone started again (\(restarts))")
     }
 
+    /// Route this engine alone. If a new input cannot start, restore the
+    /// previous choice and leave the recording's writer running.
+    func selectInput(_ uid: String?) throws {
+        if let uid, !AudioDevices.devices(output: false).contains(where: { $0.uid == uid }) {
+            throw AudioDevices.Failure(message: "That microphone is no longer connected.")
+        }
+        guard uid != selectedInputUID else { return }
+        let previous = selectedInputUID
+        selectedInputUID = uid
+        guard engine != nil || deviceCapture != nil else { return }
+        startsGivingNothing = 0
+        rebuildInput()
+        if case .on = state { return }
+        selectedInputUID = previous
+        rebuildInput()
+        if case .on = state {
+            throw AudioDevices.Failure(message: "Could not switch microphones. The previous input was restored.")
+        }
+        throw AudioDevices.Failure(message: "Could not start either microphone. Choose an available input.")
+    }
+
     /// Start Again (the card): a new engine, or the microphone started when
     /// none runs.
     func restart() async {
         startsGivingNothing = 0
-        if engine != nil {
+        if engine != nil || deviceCapture != nil {
             startAgain()
         } else {
             inbox.markRestart()

@@ -304,6 +304,7 @@ final class SelfTest {
         /// script, the tracks in step across a pause, a recording never
         /// stopped (another skil.li killed), links and tools (keys, sound).
         case recorder
+        case microphone
         /// Only the recorder's moment (phase 2): the five cases, Record ⌘R
         /// on the meeting card, the launcher's row and the menu bar, never
         /// while the card is not the user's; a browser call's microphone
@@ -740,6 +741,10 @@ final class SelfTest {
         if scope == .undo {
             window.center()
             return await finish(after: [undoChecks])
+        }
+        if scope == .microphone {
+            window.center()
+            return await finish(after: [microphonePickerChecks])
         }
         if scope == .recorder {
             window.center()
@@ -28489,6 +28494,86 @@ final class SelfTest {
         record(name, passed,
                "engines \(engines), Better transcription's languages \(whisperLanguages); macOS as picked \(byMacOS); Welsh listed \(welsh); removed \(removed) (card “\(card)”), ⌘Z back \(back)",
                nil)
+    }
+
+    private func microphonePickerChecks() async {
+        let name = "Recorder microphone menus select an input before and during recording without changing the system default"
+        guard let center = context.recorder(), let system = AudioDevices.current(output: false) else {
+            record(name, false, "No system input available to test against", nil)
+            return
+        }
+        let alternateUID = "li.skil.selftest.microphone-\(getpid())"
+        let description: [String: Any] = [
+            kAudioAggregateDeviceUIDKey: alternateUID,
+            kAudioAggregateDeviceNameKey: "skil.li test microphone",
+            kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: system.uid]]
+        ]
+        var alternate = AudioObjectID(kAudioObjectUnknown)
+        let status = AudioHardwareCreateAggregateDevice(description as CFDictionary, &alternate)
+        guard status == noErr else {
+            record(name, false, "Could not create a distinct microphone endpoint (\(status))", nil)
+            return
+        }
+        defer { AudioHardwareDestroyAggregateDevice(alternate) }
+        let titled = "Microphone switch check"
+        let preferences = context.preferences
+        let savedSources = (preferences.recorderConsentShown, preferences.recorderMicrophone, preferences.recorderMacSound,
+                            preferences.recorderWebcam, preferences.recorderScreen)
+        (preferences.recorderConsentShown, preferences.recorderMicrophone, preferences.recorderMacSound,
+         preferences.recorderWebcam, preferences.recorderScreen) = (true, true, false, false, false)
+        defer {
+            (preferences.recorderConsentShown, preferences.recorderMicrophone, preferences.recorderMacSound,
+             preferences.recorderWebcam, preferences.recorderScreen) = savedSources
+            center.closeCardWithoutKeys()
+        }
+        guard await waitUntil(timeout: 5, { AudioDevices.devices(output: false).contains { $0.uid == alternateUID } }) != nil,
+              await focusTestWindow() else {
+            record(name, false, "The alternate input did not appear", nil)
+            return
+        }
+        center.showCard(title: titled)
+        let recorder = center.recorder
+        guard await waitUntil(timeout: 6, { center.isCardVisible && recorder.microphone.activeInputID != nil }) != nil,
+              let before = center.microphoneMenuForTest(duringRecording: false),
+              let item = before.items.first(where: { ($0.representedObject as? String) == alternateUID }),
+              let action = item.action else {
+            record(name, false, "The Record card did not offer the alternate input", nil)
+            return
+        }
+        NSApp.sendAction(action, to: item.target, from: item)
+        let pickedBefore = await waitUntil(timeout: 6) {
+            recorder.microphone.selectedInputUID == alternateUID && recorder.microphone.activeInputID == alternate
+        } != nil
+        do {
+            try recorder.begin(title: titled, language: "en-US")
+        } catch {
+            record(name, false, "Starting the recording failed: \(error.localizedDescription)", nil)
+            return
+        }
+        guard let folder = recorder.folder else {
+            record(name, false, "The recording had no folder", nil)
+            return
+        }
+        let began = HostClock.now
+        let firstBuffer = await waitUntil(timeout: 5) { (recorder.microphone.inbox.times.buffer ?? 0) > began } != nil
+        await pause(900)
+        let beforeSwitch = HostClock.now
+        if let live = center.microphoneMenuForTest(duringRecording: true),
+           let item = live.items.first(where: { ($0.representedObject as? String) == system.uid }),
+           let action = item.action {
+            NSApp.sendAction(action, to: item.target, from: item)
+        }
+        let pickedDuring = await waitUntil(timeout: 6) {
+            recorder.microphone.selectedInputUID == system.uid && recorder.microphone.activeInputID == system.id &&
+            (recorder.microphone.inbox.times.buffer ?? 0) > beforeSwitch
+        } != nil
+        await pause(900)
+        let sameRecording = recorder.isRecording && recorder.folder == folder
+        let unchangedDefault = AudioDevices.current(output: false)?.uid == system.uid
+        await recorder.stop()
+        let saved = center.recordings.read(folder)?.seconds ?? 0
+        let passed = pickedBefore && firstBuffer && pickedDuring && sameRecording && unchangedDefault && saved > 1.5
+        record(name, passed, "Alternate selected before: \(pickedBefore), buffers: \(firstBuffer), switched live with buffers: \(pickedDuring), same folder: \(sameRecording), default unchanged: \(unchangedDefault), recorded seconds: \(saved)", nil)
     }
 
     private func recorderChecks() async {

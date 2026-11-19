@@ -3,6 +3,42 @@ import AVFoundation
 import Carbon.HIToolbox
 import SkilliCore
 
+@MainActor
+final class MicrophonePicker: NSObject {
+    private let pick: (String?) -> Void
+    private let turnOff: () -> Void
+
+    init(pick: @escaping (String?) -> Void, turnOff: @escaping () -> Void) {
+        self.pick = pick
+        self.turnOff = turnOff
+    }
+
+    func menu(on: Bool, selected: String?) -> NSMenu {
+        let menu = NSMenu()
+        let system = NSMenuItem(title: "System Default", action: #selector(choose(_:)), keyEquivalent: "")
+        system.target = self
+        system.state = on && selected == nil ? .on : .off
+        menu.addItem(system)
+        for input in AudioDevices.devices(output: false) {
+            let item = NSMenuItem(title: input.name, action: #selector(choose(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = input.uid
+            item.state = on && selected == input.uid ? .on : .off
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        let off = NSMenuItem(title: "Off", action: #selector(disable), keyEquivalent: "")
+        off.target = self
+        off.state = on ? .off : .on
+        menu.addItem(off)
+        return menu
+    }
+
+    @objc private func choose(_ item: NSMenuItem) { pick(item.representedObject as? String) }
+
+    @objc private func disable() { turnOff() }
+}
+
 /// The Record card (docs/meeting-recorder-views.md): the recording's name,
 /// the two sources with their meters live, the language, and ↩. Nothing is
 /// recorded before ↩. While a meeting is on, the card is that meeting's
@@ -44,6 +80,7 @@ final class RecordCard {
     var onResume: (() -> Void)?
     /// A source's row clicked: on or off.
     var onToggleSource: ((Speaker) -> Void)?
+    var onPickMicrophone: ((String?) -> Void)?
     var onSave: ((URL, MeetingRecord) -> Void)?
     var onLater: ((URL, MeetingRecord) -> Void)?
     var onDiscard: ((URL, MeetingRecord) -> Void)?
@@ -81,6 +118,11 @@ final class RecordCard {
         view.onTogglePicture = { [weak self] source in
             guard self?.content == .record else { return }
             self?.onTogglePicture?(source)
+        }
+        view.onMicrophoneMenu = { [weak self] row in
+            guard let self else { return }
+            let menu = self.microphoneInputMenu()
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: row.bounds.height + 2), in: row)
         }
         view.onScreenMenu = { [weak self] row in self?.showWindows(under: row) }
         view.onLanguage = { [weak self] id in self?.picked(language: id) }
@@ -239,17 +281,26 @@ final class RecordCard {
 
     /// macOS asks a question (the camera, Screen Recording, Automation):
     /// the card steps down while it does, so the question is not under it.
-    func whileMacOSAsks<T>(_ asking: Bool, _ work: () async -> T) async -> T {
+    func whileMacOSAsks<T>(_ asking: Bool, _ work: () async throws -> T) async rethrows -> T {
         if asking { stepDown() }
-        let done = await work()
-        // The card's level back whatever it shows now (shown again later
-        // too); the keys only to a Record card, the others never take them.
-        if asking { stepUp(takingKeys: content == .record) }
-        return done
+        defer { if asking { stepUp(takingKeys: content == .record) } }
+        return try await work()
     }
 
     /// The meeting the card records now (nil: no card for a recording).
     var meetingReading: MeetingMoment.Reading? { content == .record ? meeting?.reading : nil }
+
+    func microphoneInputMenu() -> NSMenu {
+        microphonePicker.menu(on: recorder.sources.microphone, selected: recorder.microphone.selectedInputUID)
+    }
+
+    private lazy var microphonePicker = MicrophonePicker(
+        pick: { [weak self] in self?.onPickMicrophone?($0) },
+        turnOff: { [weak self] in
+            guard let self, self.recorder.sources.microphone else { return }
+            self.onToggleSource?(.me)
+        }
+    )
 
     /// The screen's ⌃⌄: the meeting's window first, the whole screen,
     /// the other windows; the one recorded checked.
@@ -510,6 +561,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     var onToggleSource: ((Speaker) -> Void)?
     var onTogglePicture: ((PictureSource) -> Void)?
     /// The screen's ⌃⌄, under its row.
+    var onMicrophoneMenu: ((NSView) -> Void)?
     var onScreenMenu: ((NSView) -> Void)?
 
     private let dot = DotView()
@@ -593,6 +645,14 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         clock.alignment = .right
         clock.isHidden = true
         microphoneRow.onClick = { [weak self] in self?.onToggleSource?(.me) }
+        microphoneRow.onMenu = { [weak self] in
+            guard let self else { return }
+            self.onMicrophoneMenu?(self.microphoneRow)
+        }
+        microphoneRow.setAccessibilityElement(true)
+        microphoneRow.setAccessibilityRole(.popUpButton)
+        microphoneRow.setAccessibilityLabel("Microphone input")
+
         macRow.onClick = { [weak self] in self?.onToggleSource?(.them) }
         webcamRow.onClick = { [weak self] in self?.onTogglePicture?(.webcam) }
         screenRow.onClick = { [weak self] in self?.onTogglePicture?(.screen) }
@@ -657,7 +717,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
             row.isHidden = false
             row.clickable = true
         }
-        microphoneRow.setState("Starting…", level: nil)
+        microphoneRow.setState("Starting…", level: nil, menu: true)
         macRow.setState("Starting…", level: nil)
         webcamRow.setState("Off", level: nil)
         screenRow.setState("Off", level: nil)
@@ -815,19 +875,19 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         switch state {
         case nil:
             microphoneOn = false
-            microphoneRow.setState("Off", level: nil)
+            microphoneRow.setState("Off", level: nil, menu: true)
         case .on(let device)?:
             microphoneOn = true
-            microphoneRow.setState(device, level: level)
+            microphoneRow.setState(device, level: level, menu: true)
         case .denied?:
             microphoneOn = false
-            microphoneRow.setState("Not allowed · ⌘↩ opens Privacy", level: nil, warns: true)
+            microphoneRow.setState("Not allowed · ⌘↩ opens Privacy", level: nil, warns: true, menu: true)
         case .some(.none):
             microphoneOn = false
-            microphoneRow.setState("No microphone", level: nil)
+            microphoneRow.setState("No microphone", level: nil, menu: true)
         case .off?:
             microphoneOn = false
-            microphoneRow.setState("Starting…", level: nil)
+            microphoneRow.setState("Starting…", level: nil, menu: true)
         }
         if case .denied? = state { soundMissing = .microphone } else if soundMissing == .microphone { soundMissing = nil }
         updateMissing()
@@ -1183,6 +1243,14 @@ private final class SourceRow: NSView {
     /// The card does not activate skil.li: a row's first click acts.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { clickable }
 
+    override func accessibilityPerformPress() -> Bool {
+        if let onMenu, menuShown {
+            onMenu()
+            return true
+        }
+        return super.accessibilityPerformPress()
+    }
+
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         #if SKILLI_SELFTEST
@@ -1202,6 +1270,7 @@ private final class SourceRow: NSView {
     func setState(_ text: String, level: Double?, warns: Bool = false, picture pixels: CVPixelBuffer? = nil, mirrored: Bool = false,
                   menu: Bool = false) {
         if device.stringValue != text { device.stringValue = text }
+        if isAccessibilityElement() { setAccessibilityValue(text) }
         device.textColor = warns ? .systemOrange : .secondaryLabelColor
         meter.isHidden = level == nil
         if let level { meter.level = level }

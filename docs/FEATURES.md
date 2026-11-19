@@ -541,6 +541,10 @@ Your meetings recorded on this Mac, both sides, then written out.
   Mac. Also
   `skilli://record` and the Meeting Recorder tools (`record_meeting`,
   `stop_recording`…).
+- **Microphone input**: pick a device in the Record card or in the
+  recording's menu bar menu. The microphone track continues in the same
+  recording. The choice applies to the recorder, and System Default
+  follows macOS Sound settings.
 - **The webcam and the screen**, off until you turn them on (a click in
   the card, the red dot's menu, or on by default in Settings): the
   webcam, and the meeting's window (in a browser, the window holding its
