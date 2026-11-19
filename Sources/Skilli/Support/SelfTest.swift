@@ -164,6 +164,8 @@ final class SelfTest {
         case projects
         /// Only Clean Keyboard (turns the keys off a few seconds; keys).
         case keyboard
+        /// Launcher activation over another process's real password field.
+        case secureinput
         /// Only skillies (scratch folder; keys).
         case scripts
         /// Only the browser history checks (scratch histories; keys).
@@ -609,13 +611,20 @@ final class SelfTest {
             window.center()
             return await finish(after: [askRunsScripts, scriptCommandsRun, skillieFilesAdded, agentCreatesSkillie])
         }
+        if scope == .secureinput {
+            window.center()
+            return await finish(after: [launcherFromPasswordField])
+        }
         if scope == .keyboard {
             window.center()
             return await finish(after: [
                 cleanKeyboardBlocksKeys,
                 showDesktopMovesWindowsAside,
                 unboundHyperPassesThrough,
-                hyperReleasedAfterSecureInput
+                hyperReleasedAfterSecureInput,
+                launcherHotkeyAndSearch,
+                launcherHotkeyToggles,
+                launcherFromPasswordField
             ])
         }
         if scope == .projects {
@@ -1001,6 +1010,7 @@ final class SelfTest {
             tapSendsEscape,
             unboundHyperPassesThrough,
             hyperReleasedAfterSecureInput,
+            launcherFromPasswordField,
             sequenceCancelSwallowsKey,
             sequenceTimesOut,
             launcherHotkeyAndSearch,
@@ -1249,6 +1259,111 @@ final class SelfTest {
         let hyper: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
         let again = await waitUntil(timeout: 1) { self.recorder.events.contains { $0.characters == "j" && $0.flags.isSuperset(of: hyper) } }
         record(name, plain != nil && again != nil, "j plain after Secure Input: \(plain != nil); Hyper works again: \(again != nil) (\(recorder.summary))", nil)
+    }
+
+    /// A different process owns a real NSSecureTextField: the session tap
+    /// must receive no password keys, but both ways of opening still work.
+    private func launcherFromPasswordField() async {
+        let name = "Password field: Hyper and an ordinary shortcut open the launcher without reading password keys"
+        guard await focusRecorder(), let executable = Bundle.main.executableURL else { return }
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent("skilli-password-\(UUID().uuidString).json")
+        let child = Process()
+        child.executableURL = executable
+        child.arguments = ["secureinputchild", output.path]
+        child.standardOutput = FileHandle.nullDevice
+        child.standardError = FileHandle.nullDevice
+        let router = context.router
+        let original = router.onTypedKey
+        var seen = 0
+        router.onTypedKey = { event in seen += 1; return original?(event) ?? false }
+        defer {
+            router.onTypedKey = original
+            router.replaceEngine(context.shortcuts.makeEngine())
+            context.launcher.hide()
+            if child.isRunning { child.terminate() }
+            try? FileManager.default.removeItem(at: output)
+        }
+        func state() -> [String: Any] {
+            guard let data = try? Data(contentsOf: output),
+                  let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+            return value
+        }
+        func focusPassword() async -> Bool {
+            guard await waitUntil(timeout: 5, { state()["secure"] != nil }) != nil else { return false }
+            guard let app = NSRunningApplication(processIdentifier: child.processIdentifier) else { return false }
+            _ = await waitUntil(timeout: 3) { app.isFinishedLaunching }
+            return await waitUntil(timeout: 3) {
+                Self.makeFrontmost(pid: child.processIdentifier)
+                return NSWorkspace.shared.frontmostApplication?.processIdentifier == child.processIdentifier && state()["secure"] as? Bool == true
+            } != nil
+        }
+        func safeToType() -> Bool {
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == child.processIdentifier else {
+                aborted = true
+                return false
+            }
+            return true
+        }
+        do { try child.run() } catch { return record(name, false, "password helper did not start", nil) }
+        guard await focusPassword() else {
+            return record(name, false, "password field did not gain Secure Input; running: \(child.isRunning); state: \(state()); front: \(NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0); child: \(child.processIdentifier)", nil)
+        }
+        await pause(300)
+        seen = 0
+        guard safeToType() else { return }
+        await pressKey("q")
+        await pause(100)
+        let protected = seen == 0 && state()["count"] as? Int == 1
+        guard safeToType() else { return }
+        // Hardware F-keys (including Caps Lock remapped by hidutil) carry
+        // the function flag. Carbon does not recognize an F19 without it.
+        postKey(Self.ownTriggerKeyCode, down: true, flags: .maskSecondaryFn)
+        await pause(60)
+        postKey(CGKeyCode(kVK_Space), down: true)
+        await pause(20)
+        postKey(Self.ownTriggerKeyCode, down: false, flags: .maskSecondaryFn)
+        let hyperOpened = await waitUntil(timeout: 2) { self.context.launcher.isVisible } != nil
+        var typed = false
+        var repeatSwallowed = false
+        if hyperOpened, await waitUntil(timeout: 1, { NSApp.isActive && NSApp.keyWindow != nil }) != nil {
+            let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            guard front == child.processIdentifier || front == getpid() else { aborted = true; return }
+            // After the Carbon fallback is removed, a held Space must not
+            // start repeating into the search field through the tap.
+            await pause(250)
+            let before = context.launcher.query
+            let repeated = CGEvent(keyboardEventSource: CGEventSource(stateID: .hidSystemState),
+                                   virtualKey: CGKeyCode(kVK_Space), keyDown: true)
+            repeated?.flags = []
+            repeated?.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+            repeated?.post(tap: .cghidEventTap)
+            await pause(100)
+            repeatSwallowed = context.launcher.query == before
+            postKey(CGKeyCode(kVK_Space), down: false)
+            await pressKey("j")
+            typed = await waitUntil(timeout: 1) { self.context.launcher.query == "j" } != nil
+        } else {
+            postKey(CGKeyCode(kVK_Space), down: false)
+        }
+        context.launcher.hide()
+        let returned = await waitUntil(timeout: 2) {
+            NSWorkspace.shared.frontmostApplication?.processIdentifier == child.processIdentifier
+        } != nil
+        guard await focusPassword() else { return record(name, false, "password field did not regain focus", nil) }
+        await pause(300)
+        guard safeToType() else { return }
+        await pressKey(nil, code: CGKeyCode(kVK_Space))
+        await pause(150)
+        let released = !context.launcher.isVisible && state()["count"] as? Int == 2
+        var engine = BindingEngine<SkilliAction>()
+        try? engine.bind([Chord(.named(.space), [.command, .control, .option])], label: "Open Launcher", to: .toggleLauncher)
+        router.replaceEngine(engine)
+        await pause(300)
+        guard safeToType() else { return }
+        await pressHolding([.maskCommand, .maskControl, .maskAlternate], keys: [CGKeyCode(kVK_Space)])
+        let ordinaryOpened = await waitUntil(timeout: 2) { self.context.launcher.isVisible } != nil
+        record(name, protected && hyperOpened && typed && repeatSwallowed && returned && released && ordinaryOpened,
+               "password keys hidden: \(protected); Hyper opened: \(hyperOpened); typing reached launcher: \(typed); repeat swallowed: \(repeatSwallowed); focus returned: \(returned); release restored plain Space: \(released); ordinary shortcut opened: \(ordinaryOpened)", nil)
     }
 
     private func sequenceCancelSwallowsKey() async {

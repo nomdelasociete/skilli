@@ -86,6 +86,9 @@ change.
 
 - **Hyper Key**: Caps Lock held is ✦ (⌘⌃⌥⇧); tapped alone it sends
   Escape. Works alongside Raycast's own Hyper Key.
+- **Open from password fields**: the launcher's direct shortcut works
+  during Secure Input, including ✦Space with skil.li's Caps Lock mapping.
+  Password typing stays private; other shortcuts and sequences stay paused.
 - **Shortcuts**: one key (✦A) or a chain (✦K then U), several per
   command; a panel shows what comes next in a chain (✦K, ✦W).
 - **No shared keys**: a shortcut is refused when macOS, the launcher or

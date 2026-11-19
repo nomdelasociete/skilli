@@ -21,6 +21,33 @@ final class KeyRouter {
     private lazy var tap = EventTap { [unowned self] type, event in
         self.handle(type, event)
     }
+    private lazy var secureHotKeys = SecureInputHotKeys(
+        layout: layout, triggers: triggerKeyCodes,
+        hyperIsHeld: { [weak self] in self?.hyper.isHeld ?? false },
+        onHyper: { [weak self] held in
+            guard let self else { return }
+            if held {
+                self.hyper.triggerDown(at: .now)
+                self.watchSecureInput()
+            } else {
+                // Password keys are hidden: a trigger release cannot be
+                // interpreted as an unused tap and must never send Escape.
+                self.hyper.release()
+                self.stopWatchingSecureInput()
+            }
+            self.onHyperChange?(held, false)
+        },
+        onLauncher: { [weak self] code in
+            guard let self else { return }
+            // The hotkey may be unregistered as the password field loses
+            // focus. Keep swallowing its repeats and release in the tap.
+            self.swallowedKeyCodes.insert(code)
+            self.hyper.noteKeyWhileHeld()
+            self.engine.cancel()
+            self.endSequence()
+            self.onAction(.toggleLauncher, .now)
+        }
+    )
 
     init(
         engine: BindingEngine<SkilliAction>,
@@ -37,11 +64,17 @@ final class KeyRouter {
     }
 
     func start() -> Bool {
-        tap.start()
+        guard tap.start() else { return false }
+        secureHotKeys.replaceChords(engine.singleChords(for: .toggleLauncher))
+        secureHotKeys.start()
+        return true
     }
 
     /// The key tap removed (Accessibility gone): nothing swallowed after.
     func stop() {
+        secureHotKeys.stop()
+        stopWatchingSecureInput()
+        hyper.release()
         tap.stop()
         swallowedKeyCodes.removeAll()
     }
@@ -84,7 +117,10 @@ final class KeyRouter {
     /// (Hyper applied) instead of the bindings, so existing shortcuts — ours
     /// or other apps' global hotkeys — can be typed and re-recorded.
     var isRecording = false {
-        didSet { if isRecording { engine.cancel(); endSequence() } }
+        didSet {
+            secureHotKeys.isRecording = isRecording
+            if isRecording { engine.cancel(); endSequence() }
+        }
     }
     var recordHandler: ((CGEvent) -> Bool)?
 
@@ -92,6 +128,7 @@ final class KeyRouter {
     func replaceEngine(_ engine: BindingEngine<SkilliAction>) {
         self.engine = engine
         endSequence()
+        secureHotKeys.replaceChords(engine.singleChords(for: .toggleLauncher))
     }
 
     /// Hands a key event to the launcher; returns `false` when it is hidden.

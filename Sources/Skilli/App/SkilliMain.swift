@@ -21,6 +21,9 @@ enum SkilliMain {
             exit(status)
         }
         #if SKILLI_SELFTEST
+        if let status = SecureInputChild.runIfRequested(ProcessInfo.processInfo.arguments) {
+            exit(status)
+        }
         // `Skilli recorderprobe …`: the meeting recorder's measurements.
         if let status = RecorderProbe.runIfRequested(ProcessInfo.processInfo.arguments) {
             exit(status)

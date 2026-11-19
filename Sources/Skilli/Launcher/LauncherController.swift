@@ -11,6 +11,10 @@ import SkilliCore
 /// so showing never triggers an Auto Layout pass.
 @MainActor
 final class LauncherController: NSObject {
+    /// A password field keeps Secure Input while its app remains active,
+    /// even after our nonactivating panel becomes key. Only in that case
+    /// activate skil.li, then return to this app when the launcher closes.
+    private var secureInputSource: NSRunningApplication?
     private enum Layout {
         static let width: CGFloat = 700
         static let searchHeight: CGFloat = 60
@@ -954,6 +958,11 @@ final class LauncherController: NSObject {
         // Before the panel takes the focus: afterwards Accessibility would
         // point at the search field, not at the user's selection.
         let focused = onSICommand == nil ? nil : SelectionService.focusedElementNow()
+        if IsSecureEventInputEnabled() {
+            let source = NSWorkspace.shared.frontmostApplication
+            secureInputSource = source?.processIdentifier == getpid() ? nil : source
+            NSApp.activate()
+        }
         let orderStart = ContinuousClock.now
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(searchField)
@@ -1066,6 +1075,14 @@ final class LauncherController: NSObject {
         hideRowNumbers()
         commandMonitors.forEach(NSEvent.removeMonitor)
         commandMonitors = []
+        if let source = secureInputSource {
+            secureInputSource = nil
+            // A click into another app already chose where focus goes.
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid(), !source.isTerminated {
+                NSApp.yieldActivation(to: source)
+                source.activate(options: [])
+            }
+        }
     }
 
     // MARK: - Starts again empty

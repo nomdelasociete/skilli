@@ -52,6 +52,13 @@ public struct BindingEngine<Action: Hashable & Sendable>: Sendable {
 
     public var isPending: Bool { !pending.isEmpty }
 
+    /// Direct bindings for an action, in declaration order. A chain ending
+    /// in the action does not make its first chord a direct shortcut.
+    public func singleChords(for action: Action) -> [Chord] {
+        root.children.sorted { $0.value.order < $1.value.order }
+            .compactMap { $0.value.action == action ? $0.key : nil }
+    }
+
     /// Binds `sequence` as `Chord.chain` reads it: modifiers of its first
     /// chord on the later ones do not count.
     public mutating func bind(_ sequence: [Chord], label: String, to action: Action) throws {

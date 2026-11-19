@@ -2613,10 +2613,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// While Secure Input is on, no app's shortcuts work (the system keeps
-    /// keys from every event tap): say so, and which app turned it on.
+    /// Secure Input pauses the tap's remapping; the launcher's registered
+    /// hotkeys still work. Say which app turned it on when macOS tells us.
     static func secureInputStatus() -> String? {
-        secureInputHolder().map { "Shortcuts paused: Secure Input is on" + ($0.isEmpty ? "" : " in \($0)") }
+        secureInputHolder().map { "Key remapping paused: Secure Input is on" + ($0.isEmpty ? "" : " in \($0)") }
     }
 
     /// The app holding Secure Input ("" when macOS does not say); nil while
