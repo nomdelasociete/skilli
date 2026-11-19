@@ -22,6 +22,7 @@ final class SlideReader: @unchecked Sendable {
     private var lastSample = -Double.infinity
     private var reading: Task<Void, Never>?
     private var finished = false
+    private var closing: (end: Double, result: CheckedContinuation<[SlideLog.Slide], Never>)?
     /// The last picture given, sampled again while no other comes.
     private var latest: Picture?
     private var timer: DispatchSourceTimer?
@@ -58,28 +59,39 @@ final class SlideReader: @unchecked Sendable {
         queue.async { self.timeline.resume(at: time) }
     }
 
-    /// Stopped at host time `stop`: the reading under way finished, then
-    /// the slides as kept (the window's own lines out), written.
-    func finish(at stop: Double) async -> [SlideLog.Slide] {
-        let (task, end) = await withCheckedContinuation { (done: CheckedContinuation<(Task<Void, Never>?, Double), Never>) in
+    /// Give the current recognition pass until the media deadline. The
+    /// slides already read are enough to finish the recording at that point.
+    func finish(at stop: Double, closeBy deadline: DispatchTime) async -> [SlideLog.Slide] {
+        await withCheckedContinuation { result in
             queue.async {
                 let end = self.timeline.finish(at: stop)
                 self.timer?.cancel()
                 self.timer = nil
                 self.latest = nil
-                done.resume(returning: (self.reading, end))
+                guard !self.finished else {
+                    result.resume(returning: self.log.kept().filter { $0.start <= end })
+                    return
+                }
+                self.closing = (end, result)
+                if self.reading == nil {
+                    self.completeFinish()
+                } else {
+                    self.queue.asyncAfter(deadline: deadline) { self.completeFinish() }
+                }
             }
         }
-        await task?.value
-        return await withCheckedContinuation { (done: CheckedContinuation<[SlideLog.Slide], Never>) in
-            queue.async {
-                self.finished = true
-                let kept = self.log.kept().filter { $0.start <= end }
-                self.write(kept)
-                Log.trace("Recorder: \(kept.count) slides read in \(self.readings) readings (\(String(format: "%.1f", self.readingSeconds)) s)")
-                done.resume(returning: kept)
-            }
-        }
+    }
+
+    private func completeFinish() {
+        guard let closing else { return }
+        self.closing = nil
+        finished = true
+        reading?.cancel()
+        reading = nil
+        let kept = log.kept().filter { $0.start <= closing.end }
+        write(kept)
+        Log.trace("Recorder: \(kept.count) slides read in \(readings) readings (\(String(format: "%.1f", readingSeconds)) s)")
+        closing.result.resume(returning: kept)
     }
 
     /// skil.li quits: the slides as kept now, a reading under way left out.
@@ -91,9 +103,15 @@ final class SlideReader: @unchecked Sendable {
             timer?.cancel()
             timer = nil
             latest = nil
-            finished = true
             let kept = log.kept().filter { $0.start <= end }
-            write(kept)
+            if closing != nil {
+                completeFinish()
+            } else {
+                finished = true
+                reading?.cancel()
+                reading = nil
+                write(kept)
+            }
             return kept.count
         }
     }
@@ -109,7 +127,7 @@ final class SlideReader: @unchecked Sendable {
     }
 
     private func sample(_ picture: Picture) {
-        guard !finished, CVPixelBufferGetWidth(picture.pixels) >= smallest else { return }
+        guard !finished, closing == nil, CVPixelBufferGetWidth(picture.pixels) >= smallest else { return }
         latest = picture
         guard picture.time - lastSample >= SlideSchedule.sampleEvery - 0.01, timeline.records(picture.time) else { return }
         lastSample = picture.time
@@ -119,7 +137,7 @@ final class SlideReader: @unchecked Sendable {
         let pixels = picture.pixels
         let began = ContinuousClock.now
         nonisolated(unsafe) let buffer = pixels
-        // Held until it is read (a second at most): `finish` waits for it.
+        // Hold the buffer while Vision reads it. Stop can finish before Vision returns.
         reading = Task.detached(priority: .utility) {
             let lines = await Self.lines(in: buffer)
             self.queue.async { self.read(lines, start: start, grid: grid, at: time, took: ContinuousClock.now - began) }
@@ -127,12 +145,17 @@ final class SlideReader: @unchecked Sendable {
     }
 
     private func read(_ lines: [String], start: Double, grid: [UInt8], at time: Double, took: Duration) {
+        guard !finished else { return }
         readings += 1
         readingSeconds += took.milliseconds / 1000
-        let slide = finished ? nil : log.read(lines, at: start)
+        let slide = log.read(lines, at: start)
         schedule.read(grid, at: time, foundNew: slide != nil)
         reading = nil
-        if slide != nil, !finished { write(log.kept()) }
+        if closing != nil {
+            completeFinish()
+        } else if slide != nil {
+            write(log.kept())
+        }
     }
 
     private func write(_ slides: [SlideLog.Slide]) {

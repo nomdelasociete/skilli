@@ -202,7 +202,7 @@ final class RecorderPictures {
         let none: (seconds: Double, complete: Bool) = (0, true)
         async let webcamClosed = webcamWriter?.finish(at: stop, closeBy: closeBy) ?? none
         async let screenClosed = screenWriter?.finish(at: stop, closeBy: closeBy) ?? none
-        let kept = await slides?.finish(at: stop) ?? []
+        let kept = await slides?.finish(at: stop, closeBy: closeBy) ?? []
         let (webcamFile, screenFile) = await (webcamClosed, screenClosed)
         if let folder, kept.isEmpty { try? FileManager.default.removeItem(at: folder.appendingPathComponent(Self.slidesFile)) }
         pauses = []
