@@ -2,6 +2,8 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from urllib.parse import parse_qs, urlparse
+from html.parser import HTMLParser
 
 spec = importlib.util.spec_from_file_location('site_build', Path(__file__).parents[1] / 'build.py')
 build = importlib.util.module_from_spec(spec)
@@ -9,6 +11,25 @@ spec.loader.exec_module(build)
 
 
 class CatalogTests(unittest.TestCase):
+    def test_open_in_skilli_imports_the_download_over_https(self):
+        target = self.root / 'out'
+        entries = build.catalog(self.source)
+        build.render(entries, build.ROOT / 'website/skillies/index.template.html', target)
+        links = []
+
+        class Links(HTMLParser):
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if tag == 'a' and attrs.get('class') == 'open-skillie':
+                    links.append(attrs['href'])
+
+        Links().feed((target / 'index.html').read_text())
+        self.assertEqual(len(links), len(entries))
+        for link, entry in zip(links, entries):
+            parsed = urlparse(link)
+            self.assertEqual((parsed.scheme, parsed.netloc, parsed.path), ('skilli', 'skillies', '/import'))
+            self.assertEqual(parse_qs(parsed.query), {'url': ['https://skil.li/skillies/' + entry['download']]})
+
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory()
         self.addCleanup(self.scratch.cleanup)

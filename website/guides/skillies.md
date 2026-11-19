@@ -11,7 +11,8 @@ lists it in the launcher like any command, so it runs from a key, Ask or
 an agent.
 
 - **Add one**: browse the [collection](https://skil.li/skillies/) and
-  download one, then double-click the `.skilli` file. Settings →
+  click **Open in skil.li** on its card. Or download the `.skilli` file
+  and double-click it. Settings →
   Skillies shows it whole (where it came from, every line) before you
   add it with ↩. Nothing runs when it is added.
 - **Write one**: put a script in the skillies folder,

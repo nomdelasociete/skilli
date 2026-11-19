@@ -179,7 +179,10 @@ app subscription to the catalog: installation means downloading a skillie as a
 `.skilli` file (the script itself, renamed) and double-clicking it, which shows
 it whole in skil.li before Add (docs/skillie-files.md); placing it in the local
 Skillies folder by hand still works. SI command import links are a different
-format and must not be presented as script installation.
+format and must not be presented as script installation. Each collection card’s
+primary **Open in skil.li** link uses `skilli://skillies/import?url=…` with
+the file’s production HTTPS address; the app shows it for review before Add.
+Keep **Download skillie** beside it for downloading the file.
 
 ### Everything else
 

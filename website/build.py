@@ -10,6 +10,7 @@ import re
 import shutil
 import struct
 import sys
+from urllib.parse import quote
 
 # The renderer beside this file, also when the build is loaded by the tests.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -141,10 +142,11 @@ def render(entries, template, target):
             named = flags[flags.index('-l') + 1] if '-l' in flags[:-1] else 'AppleScript'
             language = 'JavaScript for Automation' if named == 'JavaScript' else named
         search = esc(' '.join((item['title'], item['description'], item['package'])).lower())
+        import_link = 'skilli://skillies/import?url=' + quote('https://skil.li/skillies/' + item['download'], safe='')
         cards.append(f'''<article class="skillie-entry" id="{slug}" data-category="{item['category']}" data-search="{search}">
 <div class="skillie-meta">{esc(item['package'])} <span>{esc(language)} · MIT</span></div>
 <h2>{esc(item['title'])}</h2><p>{esc(item['description'])}</p><p class="skillie-args">{esc(args)}</p>
-<div class="skillie-actions"><a class="download-skillie" href="{item['download']}" download="{slug}.skilli">Download skillie ↓</a><button data-share="{slug}" type="button">Copy link ↗</button></div>
+<div class="skillie-actions"><a class="open-skillie" href="{esc(import_link)}">Open in skil.li ↗</a><a class="download-skillie" href="{item['download']}" download="{slug}.skilli">Download skillie ↓</a></div>
 <details><summary>Read the code</summary><pre><code>{esc(item['code'])}</code></pre></details></article>''')
     categories = sorted(set(item['category'] for item in entries))
     filters = ''.join(f'<button data-filter="{c}" aria-pressed="false">{esc(c.replace("-", " ").title())}</button>' for c in categories)
