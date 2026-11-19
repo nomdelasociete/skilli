@@ -17,6 +17,7 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     var onResume: (() -> Void)?
     var onStop: (() -> Void)?
     var onShowFolder: ((URL) -> Void)?
+    var automaticSkillies: () -> [String] = { [] }
     /// A source's item chosen: off or on.
     var onToggleSource: ((Speaker) -> Void)?
     /// The call's app picked (nil: None).
@@ -59,7 +60,8 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
     /// Shown, changed or gone as the recorder is now.
     func update() {
         let live = recorder.isRecording || recorder.phase == .stopping
-        guard live || recorder.transcribing != nil || (holding && item != nil) else {
+        let timed = live || recorder.transcribing != nil || (holding && item != nil)
+        guard timed || !automaticSkillies().isEmpty else {
             ticker?.invalidate()
             ticker = nil
             if let item { NSStatusBar.system.removeStatusItem(item) }
@@ -74,7 +76,10 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
             item.button?.imagePosition = .imageOnly
             self.item = item
         }
-        if ticker == nil {
+        if !timed {
+            ticker?.invalidate()
+            ticker = nil
+        } else if ticker == nil {
             let ticker = Timer(timeInterval: 1.0 / 8, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.tick() }
             }
@@ -122,6 +127,12 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
             }
             button.setAccessibilityLabel("Transcribing “\(transcribing.title)”, \(said)")
             button.toolTip = "Transcribing “\(transcribing.title)”"
+        } else {
+            let skillies = automaticSkillies()
+            said = skillies.count == 1 ? "\(skillies[0])…" : "\(skillies.count) recording skillies…"
+            button.image = Self.progress(nil, text: said)
+            button.setAccessibilityLabel(said + " " + skillies.joined(separator: ", "))
+            button.toolTip = skillies.joined(separator: ", ")
         }
     }
 
@@ -191,6 +202,13 @@ final class RecorderIndicator: NSObject, NSMenuDelegate {
             menu.addItem(title)
             menu.addItem(.separator())
             menu.addItem(entry("Show in Finder", #selector(showFolder)))
+        }
+        let skillies = automaticSkillies()
+        if !skillies.isEmpty, menu.numberOfItems > 0 { menu.addItem(.separator()) }
+        for title in skillies {
+            let item = NSMenuItem(title: "Running “\(title)”…", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
         }
     }
 

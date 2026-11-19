@@ -49,6 +49,7 @@ final class RecorderCenter {
         followUps.reshow = { [weak self] folder in self?.reshow(folder) }
         followUps.isBeingMade = { [weak self] folder in self?.recorder.makesAgain(folder) ?? false }
         followUps.notify = { [weak self] line in self?.notify(line) }
+        followUps.onAutomaticActivityChanged = { [weak self] in self?.indicator.update() }
         return followUps
     }()
 
@@ -123,6 +124,7 @@ final class RecorderCenter {
     }()
     private lazy var indicator: RecorderIndicator = {
         let indicator = RecorderIndicator(recorder: recorder)
+        indicator.automaticSkillies = { [weak self] in self?.followUps.visibleAutomaticRuns ?? [] }
         indicator.onPause = { [weak self] in self?.control(.pause) }
         indicator.onResume = { [weak self] in self?.control(.resume) }
         indicator.onStop = { [weak self] in self?.control(.stop) }
@@ -840,7 +842,8 @@ final class RecorderCenter {
             }
             return "Not recording. Transcribing “\(transcribing.title)”: \(progress).\nFolder: \(transcribing.folder.path)"
         }
-        return "Not recording."
+        let running = followUps.visibleAutomaticRuns
+        return running.isEmpty ? "Not recording." : "Running recording skillies: " + running.joined(separator: ", ")
     }
 
     func showFolder() {
