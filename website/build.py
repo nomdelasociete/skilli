@@ -145,6 +145,7 @@ def render(entries, template, target):
 <div class="skillie-meta">{esc(item['package'])} <span>{esc(language)} · MIT</span></div>
 <h2>{esc(item['title'])}</h2><p>{esc(item['description'])}</p><p class="skillie-args">{esc(args)}</p>
 <div class="skillie-actions"><a class="download-skillie" href="{item['download']}" download="{slug}.skilli">Download skillie ↓</a><button data-share="{slug}" type="button">Copy link ↗</button></div>
+<p class="share-status" role="status"></p><input class="share-link" aria-label="Share link for {esc(item['title'])}" readonly hidden>
 <details><summary>Read the code</summary><pre><code>{esc(item['code'])}</code></pre></details></article>''')
     categories = sorted(set(item['category'] for item in entries))
     filters = ''.join(f'<button data-filter="{c}" aria-pressed="false">{esc(c.replace("-", " ").title())}</button>' for c in categories)

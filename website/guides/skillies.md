@@ -18,6 +18,9 @@ an agent.
   `~/Library/Application Support/skil.li/skillies` (Settings → Skillies →
   Show in Finder), or ask an agent to write one for you. The header is
   described in the [Skillies docs](../../skillies/docs/README.md).
+- **Share one from the collection**: click **Copy link** on its card.
+  The button says **Copied** when ready. If your browser refuses clipboard
+  access, a selected link appears in the card for you to copy.
 - **Give it a key**: click **Record Shortcut** on its row in Settings →
   Skillies.
 - **In the menu bar**: a skillie can keep its last line there, refreshed
