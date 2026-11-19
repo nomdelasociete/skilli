@@ -833,6 +833,9 @@ final class RecorderCenter {
             return "\(state) “\(recorder.title)” · \(MeetingTranscript.clock(recorder.elapsed))"
                 + (recorder.folder.map { "\nFolder: \($0.path)" } ?? "")
         }
+        if recorder.phase == .stopping {
+            return "Stopping “\(recorder.title)” and finishing its files."
+        }
         if let transcribing = recorder.transcribing {
             let progress: String = switch transcribing.step {
             case .downloading(let language): "downloading the \(language) speech model"
