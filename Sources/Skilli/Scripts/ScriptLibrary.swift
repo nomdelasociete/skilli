@@ -114,8 +114,9 @@ final class ScriptLibrary {
         defer { running[id] = nil }
         var environment = SkillieEnvironment.variables(cli: Bundle.main.executablePath, socket: toolSocket(), run: id)
         if let recording { environment[SkillieEnvironment.recording] = recording.path }
+        let recordingTimeout = recording.flatMap { _ in command.recordingTimeoutSeconds }.map(TimeInterval.init)
         let (output, status) = try await ChildProcess.run(executable, all, directory: directory, environment: environment, stopsGroup: true,
-                                                          timeout: timeout ?? self.timeout)
+                                                          timeout: timeout ?? recordingTimeout ?? self.timeout)
         return Run(output: ScriptCommand.plain(output), status: status)
     }
 

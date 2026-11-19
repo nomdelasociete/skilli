@@ -589,7 +589,9 @@ Your meetings recorded on this Mac, both sides, then written out.
   the launcher: the answer in the card. Your **skillies for recordings**
   (`@skilli.forRecordings true`) run on it from ⌘K, getting its folder;
   one can run after each transcript (Settings → Recorder, off until you
-  pick it). Agents: `list_recordings`, and `get_transcript`, asked each
+  pick it). A recording skillie can opt to run again after saved transcript
+  edits and use a longer time limit for work such as uploading a recording.
+  Agents: `list_recordings`, and `get_transcript`, asked each
   time.
 - **Import Recording** (`import`): a sound or video file (a voice memo,
   a call app's own recording) made a recording, transcribed on this Mac,

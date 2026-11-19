@@ -87,6 +87,13 @@ final class Recordings: Sendable {
             .sorted { $0.record.started < $1.record.started }
     }
 
+    /// Automatic skillies with an extended limit that were interrupted.
+    func pendingSkillies() -> [URL] {
+        let manager = FileManager.default
+        let folders = (try? manager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        return folders.filter { manager.fileExists(atPath: $0.appendingPathComponent(RecordingFollowUps.pendingSkillieFile).path) }
+    }
+
     /// A title given later renames its folder by the same rules (its date
     /// kept); the folder it is in now.
     func rename(_ folder: URL, to title: String, started: Date) throws -> URL {
