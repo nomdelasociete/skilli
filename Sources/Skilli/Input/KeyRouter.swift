@@ -179,6 +179,7 @@ final class KeyRouter {
         let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
 
         if triggerKeyCodes.contains(keyCode) {
+            if !IsSecureEventInputEnabled(), secureHotKeys.triggerReturnedToTap() { hyper.release() }
             seenTriggers.insert(keyCode)
             if !isRepeat {
                 hyper.triggerDown(at: now)
@@ -272,6 +273,7 @@ final class KeyRouter {
 
     private func keyUp(_ keyCode: CGKeyCode, _ event: CGEvent, _ now: ContinuousClock.Instant) -> EventTap.Verdict {
         if triggerKeyCodes.contains(keyCode) {
+            if !IsSecureEventInputEnabled(), secureHotKeys.triggerReturnedToTap() { hyper.release() }
             stopWatchingSecureInput()
             let tapped = hyper.triggerUp(at: now)
             onHyperChange?(false, tapped)

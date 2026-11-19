@@ -79,6 +79,15 @@ final class SecureInputHotKeys {
         refresh()
     }
 
+    /// The tap has received a new trigger event after Secure Input ended.
+    /// Its press now belongs to the tap, not the fallback's earlier hold.
+    func triggerReturnedToTap() -> Bool {
+        let earlierHold = held
+        held = false
+        refresh()
+        return earlierHold
+    }
+
     private func clear() {
         for value in registrations.values { UnregisterEventHotKey(value.reference) }
         registrations.removeAll()

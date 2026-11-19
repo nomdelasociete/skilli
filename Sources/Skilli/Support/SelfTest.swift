@@ -1297,11 +1297,27 @@ final class SelfTest {
                 return NSWorkspace.shared.frontmostApplication?.processIdentifier == child.processIdentifier && state()["secure"] as? Bool == true
             } != nil
         }
-        func safeToType() -> Bool {
-            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == child.processIdentifier else {
+        func safeToType(allowLauncher: Bool = false) -> Bool {
+            let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            guard front == child.processIdentifier || allowLauncher && front == getpid() else {
                 aborted = true
+                record(name, false, "focus left the test apps before a key; aborting", nil)
                 return false
             }
+            return true
+        }
+        func postSafe(_ code: CGKeyCode, down: Bool, flags: CGEventFlags = [], allowLauncher: Bool = false) -> Bool {
+            guard safeToType(allowLauncher: allowLauncher) else { return false }
+            postKey(code, down: down, flags: flags)
+            return true
+        }
+        func pressSafe(_ character: Character? = nil, code: CGKeyCode? = nil,
+                       flags: CGEventFlags = [], allowLauncher: Bool = false) async -> Bool {
+            guard let code = code ?? character.flatMap(self.keyCode) else { return false }
+            guard postSafe(code, down: true, flags: flags, allowLauncher: allowLauncher) else { return false }
+            await pause(12)
+            guard postSafe(code, down: false, flags: flags, allowLauncher: allowLauncher) else { return false }
+            await pause(12)
             return true
         }
         do { try child.run() } catch { return record(name, false, "password helper did not start", nil) }
@@ -1311,23 +1327,22 @@ final class SelfTest {
         await pause(300)
         seen = 0
         guard safeToType() else { return }
-        await pressKey("q")
+        guard await pressSafe("q") else { return }
         await pause(100)
         let protected = seen == 0 && state()["count"] as? Int == 1
         guard safeToType() else { return }
         // Hardware F-keys (including Caps Lock remapped by hidutil) carry
         // the function flag. Carbon does not recognize an F19 without it.
-        postKey(Self.ownTriggerKeyCode, down: true, flags: .maskSecondaryFn)
+        guard postSafe(Self.ownTriggerKeyCode, down: true, flags: .maskSecondaryFn) else { return }
         await pause(60)
-        postKey(CGKeyCode(kVK_Space), down: true)
+        guard postSafe(CGKeyCode(kVK_Space), down: true) else { return }
         await pause(20)
-        postKey(Self.ownTriggerKeyCode, down: false, flags: .maskSecondaryFn)
+        guard postSafe(Self.ownTriggerKeyCode, down: false, flags: .maskSecondaryFn, allowLauncher: true) else { return }
         let hyperOpened = await waitUntil(timeout: 2) { self.context.launcher.isVisible } != nil
         var typed = false
         var repeatSwallowed = false
         if hyperOpened, await waitUntil(timeout: 1, { NSApp.isActive && NSApp.keyWindow != nil }) != nil {
-            let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
-            guard front == child.processIdentifier || front == getpid() else { aborted = true; return }
+            guard safeToType(allowLauncher: true) else { return }
             // After the Carbon fallback is removed, a held Space must not
             // start repeating into the search field through the tap.
             await pause(250)
@@ -1336,14 +1351,15 @@ final class SelfTest {
                                    virtualKey: CGKeyCode(kVK_Space), keyDown: true)
             repeated?.flags = []
             repeated?.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+            guard safeToType(allowLauncher: true) else { return }
             repeated?.post(tap: .cghidEventTap)
             await pause(100)
             repeatSwallowed = context.launcher.query == before
-            postKey(CGKeyCode(kVK_Space), down: false)
-            await pressKey("j")
+            guard postSafe(CGKeyCode(kVK_Space), down: false, allowLauncher: true) else { return }
+            guard await pressSafe("j", allowLauncher: true) else { return }
             typed = await waitUntil(timeout: 1) { self.context.launcher.query == "j" } != nil
         } else {
-            postKey(CGKeyCode(kVK_Space), down: false)
+            guard postSafe(CGKeyCode(kVK_Space), down: false, allowLauncher: true) else { return }
         }
         context.launcher.hide()
         let returned = await waitUntil(timeout: 2) {
@@ -1352,7 +1368,7 @@ final class SelfTest {
         guard await focusPassword() else { return record(name, false, "password field did not regain focus", nil) }
         await pause(300)
         guard safeToType() else { return }
-        await pressKey(nil, code: CGKeyCode(kVK_Space))
+        guard await pressSafe(code: CGKeyCode(kVK_Space)) else { return }
         await pause(150)
         let released = !context.launcher.isVisible && state()["count"] as? Int == 2
         var engine = BindingEngine<SkilliAction>()
@@ -1360,10 +1376,56 @@ final class SelfTest {
         router.replaceEngine(engine)
         await pause(300)
         guard safeToType() else { return }
-        await pressHolding([.maskCommand, .maskControl, .maskAlternate], keys: [CGKeyCode(kVK_Space)])
+        let modifiers: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate]
+        let held = Self.modifierKeys.filter { modifiers.contains($0.flag) }
+        var flags: CGEventFlags = []
+        for modifier in held {
+            flags.insert(modifier.flag)
+            guard postSafe(modifier.code, down: true, flags: flags) else { return }
+            await pause(10)
+        }
+        guard await pressSafe(code: CGKeyCode(kVK_Space), flags: flags, allowLauncher: true) else { return }
+        for modifier in held.reversed() {
+            flags.remove(modifier.flag)
+            guard postSafe(modifier.code, down: false, flags: flags, allowLauncher: true) else { return }
+            await pause(10)
+        }
         let ordinaryOpened = await waitUntil(timeout: 2) { self.context.launcher.isVisible } != nil
         record(name, protected && hyperOpened && typed && repeatSwallowed && returned && released && ordinaryOpened,
                "password keys hidden: \(protected); Hyper opened: \(hyperOpened); typing reached launcher: \(typed); repeat swallowed: \(repeatSwallowed); focus returned: \(returned); release restored plain Space: \(released); ordinary shortcut opened: \(ordinaryOpened)", nil)
+        if ordinaryOpened {
+            context.launcher.toggle(into: .menus, triggeredAt: .now)
+            record("Password field: Search Menu Items keeps the original app",
+                   context.launcher.menuSourceProcessIdentifier == child.processIdentifier,
+                   "menu source is the password app: \(context.launcher.menuSourceProcessIdentifier == child.processIdentifier)", nil)
+            context.launcher.hide()
+        }
+        for fromRow in [true, false] {
+            guard await focusPassword() else { return record(name, false, "password helper did not regain focus for Settings", nil) }
+            context.launcher.show(triggeredAt: .now)
+            guard await waitUntil(timeout: 2, { NSApp.isActive && self.context.launcher.isVisible }) != nil else {
+                return record(name, false, "launcher did not open for Settings", nil)
+            }
+            if fromRow {
+                guard await pressSafe("a", flags: .maskCommand, allowLauncher: true) else { return }
+                for character in "settings" {
+                    guard await pressSafe(character, allowLauncher: true) else { return }
+                }
+                guard await waitUntil(timeout: 2, { self.context.launcher.topResultName == "skil.li Settings" }) != nil else {
+                    return record(name, false, "Settings row not found", nil)
+                }
+                guard await pressSafe(code: CGKeyCode(kVK_Return), allowLauncher: true) else { return }
+            } else {
+                guard await pressSafe(",", flags: .maskCommand, allowLauncher: true) else { return }
+            }
+            _ = await waitUntil(timeout: 2) { self.context.settings.isVisible && self.context.settings.isKey }
+            await pause(200)
+            let keptFocus = context.settings.isKey && NSApp.isActive && !context.launcher.isVisible
+            record("Password field: Settings keeps focus from \(fromRow ? "its row" : "Command-Comma")",
+                   keptFocus, "Settings stayed key: \(keptFocus)", nil)
+            await closeSettings()
+        }
+
     }
 
     private func sequenceCancelSwallowsKey() async {

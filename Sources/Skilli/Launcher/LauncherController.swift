@@ -195,6 +195,7 @@ final class LauncherController: NSObject {
     /// Search Menu Items: the app in front as the mode opened, its enabled
     /// items once read (nil while reading), prepared for every key.
     private var menuApp: NSRunningApplication?
+    var menuSourceProcessIdentifier: pid_t? { menuApp?.processIdentifier }
     private var menuItems: [MenuReader.Item] = []
     private var menuCandidates: [MenuSearch.Candidate]?
     private var menuTask: Task<Void, Never>?
@@ -1056,6 +1057,15 @@ final class LauncherController: NSObject {
     }
 
     func hide() {
+        hide(restoringSecureInputFocus: true)
+    }
+
+    private func hide(restoringSecureInputFocus: Bool) {
+        // Clear before orderOut: resign-key notifications can reenter hide.
+        // A window taking focus owns that transition; an explicit close
+        // (Escape, the launcher shortcut) returns to the password app.
+        let source = restoringSecureInputFocus ? secureInputSource : nil
+        secureInputSource = nil
         closeLook()
         let wasVisible = panel.isVisible
         if wasVisible { keep() }
@@ -1075,8 +1085,7 @@ final class LauncherController: NSObject {
         hideRowNumbers()
         commandMonitors.forEach(NSEvent.removeMonitor)
         commandMonitors = []
-        if let source = secureInputSource {
-            secureInputSource = nil
+        if let source {
             // A click into another app already chose where focus goes.
             if NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid(), !source.isTerminated {
                 NSApp.yieldActivation(to: source)
@@ -3073,9 +3082,9 @@ final class LauncherController: NSObject {
             searchField.placeholderString = "A window's title or app"
             windowList = openWindows?() ?? []
         case .menus:
-            // The panel never activates skil.li: the app in front is still
-            // the one the user was in.
-            let app = NSWorkspace.shared.frontmostApplication
+            // Secure Input may have required activating skil.li. Menus
+            // still belong to the app the launcher opened over.
+            let app = shownApp?.running ?? NSWorkspace.shared.frontmostApplication
             menuApp = app
             menuItems = []
             menuCandidates = nil
@@ -5739,7 +5748,7 @@ extension LauncherController: NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) {
         // Off the screen while a copy is dragged out of it: not closed.
         if isDraggingClip { return }
-        hide()
+        hide(restoringSecureInputFocus: false)
     }
 }
 
