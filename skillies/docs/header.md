@@ -53,8 +53,8 @@ changes; SkillieDocsTests checks every key it reads has its row here. -->
 | `refreshTime` | no | `10s`, `5m`, `1h`, `1d` | Inline only: how old its line may get before it is read again. 10 seconds at least. Without it: 10 s in the launcher, 1 min in the menu bar. |
 | `currentDirectoryPath` | no | a path, `~` allowed | The folder it runs in. Default: the script's own folder. |
 | `forRecordings` | no | `true` / `false` (default) | `true`: a skillie for recordings. A recording's ⌘K lists it (when it needs no argument), and runs it with the recording's folder in `SKILLI_RECORDING` ([running.md](running.md#environment)); Settings → Recorder → After each transcript can mark one to run on every recording once its transcript is made (never one with `needsConfirmation`: nobody is there to answer). Run elsewhere, `SKILLI_RECORDING` is not set. |
-| `recordingTimeoutSeconds` | no | Whole seconds from 120 to 86400. Overrides the process limit when the skillie is run on a recording. |
-| `afterRecordingEdits` | no | `true` also runs the skillie after saved transcript edits when selected under After each transcript. |
+| `recordingTimeoutSeconds` | no | whole seconds from 120 to 86400 | Overrides the process limit when the skillie is run on a recording. |
+| `afterRecordingEdits` | no | `true` / `false` (default) | `true` also runs the skillie after saved transcript edits when selected under After each transcript. |
 
 ## Modes
 

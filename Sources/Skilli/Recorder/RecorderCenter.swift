@@ -888,7 +888,7 @@ final class RecorderCenter {
         if madeAgain.remove(Self.key(folder)) == nil {
             followUps.transcriptDone(folder)
         } else {
-            followUps.transcriptEdited(folder)
+            followUps.transcriptReplaced(folder)
         }
         if madeQuietly.remove(Self.key(folder)) != nil {
             if let window = windows[Self.key(folder)], let record = recordings.read(folder) {
@@ -984,6 +984,7 @@ final class RecorderCenter {
         // action of its ⌘K (its answer would find the folder gone).
         let doing: String? = recorder.folder.map(Self.key) == Self.key(folder) ? "it is being recorded"
             : isBeingMade(folder) ? "it is being transcribed"
+            : followUps.isRunningSkillie(on: folder) ? "a recording skillie is running"
             : followUps.work(for: folder).map { "\($0.replacingOccurrences(of: "…", with: "")) for it" }
         if let doing {
             throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(doing). Rename it once it is done.")
@@ -1014,6 +1015,7 @@ final class RecorderCenter {
                 throw RecordingFollowUps.Failure(message: "“\(before)” was not renamed: \(error.localizedDescription)")
             }
         }
+        followUps.recordingMoved(from: folder, to: moved)
         Log.trace("Recorder: renamed “\(title)” (\(moved.lastPathComponent))")
         NotificationCenter.default.post(name: Recordings.changed, object: nil)
         // Its window stays, on the folder it is in now (the sound playing
