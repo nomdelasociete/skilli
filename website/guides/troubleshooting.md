@@ -49,7 +49,8 @@ Settings → Privacy & Security, under Calendars, Reminders or Contacts.
 
 **skil.li is in the menu bar but answers nothing.**
 It starts again by itself within a minute (not while a meeting records:
-the recording goes on). What held it is written to
+the recording goes on; and once in ten minutes: held again sooner, it
+starts again ten minutes after the last time). What held it is written to
 `~/Library/Logs/skil.li/`: attach the latest `hang` file to your report.
 To end it yourself, run `pkill -x Skilli` in Terminal: macOS's Force Quit
 window does not list menu bar apps.

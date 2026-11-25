@@ -361,6 +361,8 @@ file="$(hangs | grep -vxFf <(echo "$before") | tail -1)"
 [[ -n "$file" ]] || fail "no stacks written to $logs"
 grep -q "com.apple.main-thread" "$logs/$file" || fail "$file has no main thread"
 grep -q "holdMainForSelfTest" "$logs/$file" || fail "$file does not name what held the main thread"
+# Counted, on disk before that process ended: not twice within ten minutes.
+defaults read "$BUNDLE_ID" watchdogRelaunchedAt >/dev/null 2>&1 || fail "the relaunch was not counted (watchdogRelaunchedAt)"
 # The one started again answers: neither ended nor captured a minute on.
 sleep 60
 kill -0 "$second" 2>/dev/null || fail "the skil.li started again ended too"

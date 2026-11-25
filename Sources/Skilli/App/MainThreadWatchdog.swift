@@ -107,18 +107,29 @@ final class MainThreadWatchdog: Sendable {
 
     /// The watcher that opens skil.li once this process is gone, then gone:
     /// nothing asked of the main thread, which does not answer.
+    ///
+    /// Decided and done with the recording's state held: a main thread that
+    /// comes back meanwhile and starts a meeting waits there for it
+    /// (`isRecording`), and skil.li is gone before that meeting records.
     private func relaunch() {
         guard !Self.isDebugged else { return }
-        UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: Self.relaunchedKey)
-        do {
-            try Relaunch.leaveWatcher()
-        } catch {
-            // Left as it is: no skil.li at all would be worse.
-            Log.actions.error("Main thread still held: not relaunched, no watcher (\(error.localizedDescription, privacy: .public))")
-            return
+        recording.withLock { recording in
+            guard !recording else { return }
+            do {
+                try Relaunch.leaveWatcher()
+            } catch {
+                // Left as it is, no skil.li at all would be worse; tried
+                // again at the next tick (no relaunch counted).
+                Log.actions.error("Main thread still held: not relaunched, no watcher (\(error.localizedDescription, privacy: .public))")
+                return
+            }
+            // Counted once skil.li does start again, and on disk before
+            // this process ends.
+            UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: Self.relaunchedKey)
+            UserDefaults.standard.synchronize()
+            Log.actions.error("Main thread still held: skil.li starts again")
+            _exit(EXIT_FAILURE)
         }
-        Log.actions.error("Main thread still held: skil.li starts again")
-        _exit(EXIT_FAILURE)
     }
 
     #if SKILLI_SELFTEST
