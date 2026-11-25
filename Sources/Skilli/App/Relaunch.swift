@@ -41,16 +41,22 @@ enum Relaunch {
     /// Leaves the watcher that opens this app again once this process ends.
     @MainActor
     static func afterExit() {
-        guard let binary = Bundle.main.executableURL else { return }
-        let watcher = Process()
-        watcher.executableURL = binary
-        watcher.arguments = ["relaunch", String(getpid()), Bundle.main.bundlePath]
         do {
-            try watcher.run()
+            try leaveWatcher()
             Log.actions.notice("Quit by System Settings: skil.li reopens once it has quit")
         } catch {
             Log.actions.notice("Quit by System Settings: no watcher (\(error.localizedDescription, privacy: .public))")
         }
+    }
+
+    /// The watcher started, from any thread (`MainThreadWatchdog`'s, while
+    /// the main one is held).
+    static func leaveWatcher() throws {
+        guard let binary = Bundle.main.executableURL else { throw CocoaError(.fileNoSuchFile) }
+        let watcher = Process()
+        watcher.executableURL = binary
+        watcher.arguments = ["relaunch", String(getpid()), Bundle.main.bundlePath]
+        try watcher.run()
     }
 
     private static func executable(of pid: pid_t) -> String? {

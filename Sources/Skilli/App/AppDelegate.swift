@@ -744,6 +744,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenu.install()
         routeTerminationSignal()
+        // The benchmark and the self-tests hold the main thread on purpose.
+        if mode == .normal { MainThreadWatchdog.shared.start() }
         #if SKILLI_SELFTEST
         // The self-test's own Better transcription, the Mac's left alone.
         if case .selftest = mode {

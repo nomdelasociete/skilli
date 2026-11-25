@@ -47,6 +47,13 @@ Turn on CleanShot X → Settings → Advanced → *Allow URL scheme API*.
 macOS asked once and the answer was no. Turn skil.li on in System
 Settings → Privacy & Security, under Calendars, Reminders or Contacts.
 
+**skil.li is in the menu bar but answers nothing.**
+It starts again by itself within a minute (not while a meeting records:
+the recording goes on). What held it is written to
+`~/Library/Logs/skil.li/`: attach the latest `hang` file to your report.
+To end it yourself, run `pkill -x Skilli` in Terminal: macOS's Force Quit
+window does not list menu bar apps.
+
 **I deleted something by mistake.**
 Press ⌘Z within 10 seconds: a copy, a snippet, a command, a reminder, a
 file moved to the Trash comes back.

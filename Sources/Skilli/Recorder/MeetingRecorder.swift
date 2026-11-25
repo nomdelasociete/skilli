@@ -52,6 +52,9 @@ final class MeetingRecorder {
     private(set) var phase: Phase = .idle {
         didSet {
             guard phase != oldValue else { return }
+            // A main thread held while it records is not relaunched: the
+            // files are written off it.
+            MainThreadWatchdog.shared.isRecording = isRecording || phase == .stopping
             onChange?()
             // The meeting's files closed: the transcripts that waited for it.
             if phase == .idle { startTranscribing() }
