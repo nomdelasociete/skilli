@@ -97,7 +97,7 @@ final class MainThreadWatchdog: Sendable {
             written = FileManager.default.fileExists(atPath: file.path)
         }
         Log.actions.error("""
-            Main thread held for \(Int(HangWatch.held), privacy: .public) s\(recording ? " (a meeting records: not relaunched)" : ""): \
+            Main thread held for \(Int(HangWatch.held), privacy: .public) s\(recording ? " (a meeting records: not relaunched)" : "", privacy: .public): \
             \(written ? "stacks in Logs/skil.li/\(file.lastPathComponent)" : "its stacks could not be written", privacy: .public)
             """)
         let files = ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [])
@@ -120,6 +120,15 @@ final class MainThreadWatchdog: Sendable {
         Log.actions.error("Main thread still held: skil.li starts again")
         _exit(EXIT_FAILURE)
     }
+
+    #if SKILLI_SELFTEST
+    /// `remote-watchdog`: never returns; its name is looked for in the
+    /// stacks written.
+    @inline(never)
+    static func holdMainForSelfTest() -> Never {
+        while true { Thread.sleep(forTimeInterval: 3600) }
+    }
+    #endif
 
     private static var isDebugged: Bool {
         var info = kinfo_proc()

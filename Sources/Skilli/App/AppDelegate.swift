@@ -747,6 +747,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The benchmark and the self-tests hold the main thread on purpose.
         if mode == .normal { MainThreadWatchdog.shared.start() }
         #if SKILLI_SELFTEST
+        // `--hold-main` (`remote-watchdog`): ten seconds in, the main
+        // thread held for good, as a hang holds it.
+        if mode == .normal, ProcessInfo.processInfo.arguments.contains("--hold-main") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { MainThreadWatchdog.holdMainForSelfTest() }
+        }
         // The self-test's own Better transcription, the Mac's left alone.
         if case .selftest = mode {
             BetterTranscription.testFolder = recordingsFolder.deletingLastPathComponent().appendingPathComponent(BackupPlan.modelsFolder, isDirectory: true)

@@ -50,6 +50,7 @@ scheme, menu search, contacts). macOS only.
 ./script/build_and_run.sh remote ai   # same self-tests on the Mac mini (SSH host `skilli-mini`): this Mac stays free
 ./script/build_and_run.sh remote models # writers only: Codex's and the OpenAI key's models, a real ChatGPT and OpenAI answer, the Model menus
 ./script/build_and_run.sh remote-app  # copy and open skil.li there, to grant its permissions once
+./script/build_and_run.sh remote-watchdog # there: skil.li opened with its main thread held 10 s in; its stacks written, ended, started again
 ./script/build_and_run.sh selftest clipboard # no keys: store, search, OCR (safe while the Mac is in use)
 ./script/build_and_run.sh run         # build + open
 ./script/build_and_run.sh restart     # quit gracefully, rebuild, reopen
