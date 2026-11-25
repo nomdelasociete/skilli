@@ -52,6 +52,9 @@ final class MeetingRecorder {
     private(set) var phase: Phase = .idle {
         didSet {
             guard phase != oldValue else { return }
+            // A main thread held while it records is not relaunched: the
+            // files are written off it.
+            MainThreadWatchdog.shared.isRecording = isRecording || phase == .stopping
             onChange?()
             // The meeting's files closed: the transcripts that waited for it.
             if phase == .idle { startTranscribing() }
@@ -399,6 +402,11 @@ final class MeetingRecorder {
     func begin(_ starting: Start) throws {
         guard !quitting else { throw Failure(message: "skil.li is quitting.") }
         guard phase == .listening else { throw Failure(message: phase == .idle ? "The Record card is not open." : "A recording is on already.") }
+        // Said before a first file is made (the writers write from their
+        // start): the watchdog's relaunch never cuts a meeting that began.
+        // Not begun after all: as the phase says.
+        MainThreadWatchdog.shared.isRecording = true
+        defer { MainThreadWatchdog.shared.isRecording = isRecording || phase == .stopping }
         let started = Date.now
         let typed = starting.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let named = typed.isEmpty ? RecordingFolder.defaultTitle(at: started) : typed

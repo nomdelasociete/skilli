@@ -306,6 +306,73 @@ case "$MODE" in
     rsync -a --delete "$(app_bundle "$CONFIGURATION")" "$host:skilli-selftest/"
     ssh "$host" "caffeinate -u -t 1; /usr/bin/open ~/skilli-selftest/$PROCESS_NAME.app"
     ;;
+  remote-watchdog)
+    # The main-thread watchdog in the real app, on the other Mac (take its
+    # lock first): skil.li opened as its user opens it, with `--hold-main`
+    # (self-test builds only: its main thread held for good 10 s in). Then
+    # checked there: the stacks written name what held it, that process
+    # ended, skil.li started again and stays.
+    host="${SKILLI_REMOTE:-skilli-mini}"
+    check_remote "$host"
+    build_selftest_app "$CONFIGURATION"
+    was_running=0
+    ssh "$host" "pgrep -x $PROCESS_NAME" >/dev/null && was_running=1
+    ssh "$host" "pkill -TERM -x $PROCESS_NAME; mkdir -p ~/skilli-selftest; true"
+    rsync -a --delete "$(app_bundle "$CONFIGURATION")" "$host:skilli-selftest/"
+    status=0
+    ssh "$host" "PROCESS_NAME=$PROCESS_NAME BUNDLE_ID=$BUNDLE_ID bash -s" <<'REMOTE' || status=$?
+set -u
+logs="$HOME/Library/Logs/skil.li"
+fail() {
+  echo "FAILED: $1"
+  pkill -KILL -x "$PROCESS_NAME"
+  exit 1
+}
+hangs() { ls "$logs" 2>/dev/null | grep '^hang ' || true; }
+for _ in $(seq 1 50); do pgrep -x "$PROCESS_NAME" >/dev/null || break; sleep 0.1; done
+pkill -KILL -x "$PROCESS_NAME"
+# A relaunch earlier within ten minutes would hold this one.
+defaults delete "$BUNDLE_ID" watchdogRelaunchedAt >/dev/null 2>&1
+before="$(hangs)"
+caffeinate -u -t 1
+started=$SECONDS
+/usr/bin/open -n "$HOME/skilli-selftest/$PROCESS_NAME.app" --args --hold-main
+first=""
+for _ in $(seq 1 100); do
+  first="$(pgrep -x "$PROCESS_NAME" | head -1)"
+  [[ -n "$first" ]] && break
+  sleep 0.1
+done
+[[ -n "$first" ]] || fail "skil.li did not start"
+# Held 10 s in, seen 30 s on, sampled, ended at the next tick: about a minute.
+for _ in $(seq 1 150); do kill -0 "$first" 2>/dev/null || break; sleep 1; done
+kill -0 "$first" 2>/dev/null && fail "the same process after 150 s: held, not started again"
+ended=$((SECONDS - started))
+second=""
+for _ in $(seq 1 30); do
+  for pid in $(pgrep -x "$PROCESS_NAME"); do
+    [[ "$(ps -o args= -p "$pid")" == *" relaunch "* ]] || second="$pid"
+  done
+  [[ -n "$second" ]] && break
+  sleep 1
+done
+[[ -n "$second" ]] || fail "ended after $ended s, not started again"
+file="$(hangs | grep -vxFf <(echo "$before") | tail -1)"
+[[ -n "$file" ]] || fail "no stacks written to $logs"
+grep -q "com.apple.main-thread" "$logs/$file" || fail "$file has no main thread"
+grep -q "holdMainForSelfTest" "$logs/$file" || fail "$file does not name what held the main thread"
+# Counted, on disk before that process ended: not twice within ten minutes.
+defaults read "$BUNDLE_ID" watchdogRelaunchedAt >/dev/null 2>&1 || fail "the relaunch was not counted (watchdogRelaunchedAt)"
+# The one started again answers: neither ended nor captured a minute on.
+sleep 60
+kill -0 "$second" 2>/dev/null || fail "the skil.li started again ended too"
+[[ "$(hangs | wc -l)" -eq "$(( $(echo -n "$before" | grep -c '^hang ') + 1 ))" ]] || fail "the skil.li started again was captured too"
+echo "ok: held, stacks in $file ($(wc -l < "$logs/$file" | tr -d ' ') lines), ended after $ended s, started again (pid $first, then $second)"
+REMOTE
+    # skil.li was not open there: not left open.
+    [[ "$was_running" == 1 ]] || ssh "$host" "pkill -TERM -x $PROCESS_NAME; true"
+    exit "$status"
+    ;;
   benchmark)
     # Release build, no event tap, no key remapping: measures the launcher
     # hot paths and prints a JSON report. It shows the launcher again and
@@ -353,7 +420,7 @@ case "$MODE" in
     pgrep -x "$PROCESS_NAME" >/dev/null && echo "skil.li is running."
     ;;
   *)
-    echo "usage: $0 [run|build|restart|daily|test|benchmark|remote-benchmark|selftest|remote|remote-app|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [run|build|restart|daily|test|benchmark|remote-benchmark|selftest|remote|remote-app|remote-watchdog|--logs|--telemetry|--verify]" >&2
     exit 2
     ;;
 esac

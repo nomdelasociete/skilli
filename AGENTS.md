@@ -50,6 +50,7 @@ scheme, menu search, contacts). macOS only.
 ./script/build_and_run.sh remote ai   # same self-tests on the Mac mini (SSH host `skilli-mini`): this Mac stays free
 ./script/build_and_run.sh remote models # writers only: Codex's and the OpenAI key's models, a real ChatGPT and OpenAI answer, the Model menus
 ./script/build_and_run.sh remote-app  # copy and open skil.li there, to grant its permissions once
+./script/build_and_run.sh remote-watchdog # there: skil.li opened with its main thread held 10 s in; its stacks written, ended, started again
 ./script/build_and_run.sh selftest clipboard # no keys: store, search, OCR (safe while the Mac is in use)
 ./script/build_and_run.sh run         # build + open
 ./script/build_and_run.sh restart     # quit gracefully, rebuild, reopen
@@ -377,6 +378,7 @@ SkilliCore (framework + SwiftPM library, no AppKit)
 | `Sources/Skilli/Actions/DefaultBindings.swift` | Built-in bindings (until user config) |
 | `Sources/Skilli/Support/Benchmark.swift` | `--benchmark` report |
 | `Sources/Skilli/Support/SelfTest.swift` | `--selftest` end-to-end driver |
+| `Sources/Skilli/App/MainThreadWatchdog.swift`, `Sources/SkilliCore/HangWatch.swift` | The main thread held (skil.li in the menu bar, answering nothing): asked from its own queue every 5 s on the main run loop; unanswered for 30 s awake, `/usr/bin/sample` writes every thread's stack to `~/Library/Logs/skil.li/hang <time>.txt` (the ten latest kept), then the `Relaunch` watcher and `_exit`. Not while a meeting records, not twice in ten minutes, not under a debugger; `LaunchMode.normal` only. A hang reported: read that file first (skil.li's frames are offsets: `atos` with the release's dSYM) |
 | `Sources/Skilli/App/UndoableDeletes.swift` | Every delete of the user's data: at once, Undo ⌘Z for 10 s in the card (`offerUndo`) |
 | `Sources/Skilli/Recorder/*` | The meeting recorder: `MeetingRecorder` (the two tracks, pause, stop, sources on or off), `MacSoundTap` + `MicrophoneTrack` + `TrackWriter` (sources and files), `MeetingTranscriber`, `RecordCard`, `RecorderIndicator` (menu bar), `RecordingWindow`, `RecorderCenter` (what the rest of the app calls; the moment, the call's end), `RecordingLibrary` + `RecordingIndex` (the list, the words said and the text read on screen); phase 3: `RecorderPictures` (the webcam and the screen together), `WebcamTrack`, `ScreenTrack` + `ScreenWindows`, `PictureTrackWriter`, `SlideReader`, `MeetingTabSelect`; phase 4: `TranscriberHelper` (runs `skil.li Transcriber`), `RecordingImport`, `TranscribeAgainPanel`; phase 5: `RecordingFollowUps` (the summary, chapters, action items, the recap mail) |
 | `Sources/Transcriber/*` | `skil.li Transcriber`, the recorder's helper beside the app's executable (`Contents/MacOS`): the models' work for a transcript (SpeakerKit's voices, whisper's words), started for it, gone after; never linked by the app |

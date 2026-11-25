@@ -188,6 +188,8 @@
 		71C5EEDE564D84387080C6CD /* AudioRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC5768CCE5C617E4426FDFEE /* AudioRoute.swift */; };
 		7293E1D8BA1D7506D5C20968 /* PictureTrackWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B089D94BFED8D8872EFE597C /* PictureTrackWriter.swift */; };
 		7378BD43E32A60BE48D0B173 /* WindowCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DF1716C0B1E382754467A1F /* WindowCapture.swift */; };
+		7400112E6C09F3155C883B07 /* MainThreadWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DEDEA0062E54ED519A1BEEC /* MainThreadWatchdog.swift */; };
+		742C4AA83210E079A752D39F /* HangWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D39685D10A77D22E20FF11F /* HangWatch.swift */; };
 		7758910C1694E8E46FDC0114 /* UsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE36CBB35C8CF9DC9EE3CBFD /* UsageStore.swift */; };
 		77CBBAC0433210F020230515 /* RelayCredentialVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3C07BACC5E5AC60BA67B55B /* RelayCredentialVault.swift */; };
 		78DCC13782FCBB0FED17F4D3 /* SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107A0B51CA2C5E76D2F16B57 /* SettingsViews.swift */; };
@@ -508,6 +510,7 @@
 		2B3602772EAD3276A197932D /* JevImages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JevImages.swift; sourceTree = "<group>"; };
 		2C2318642465DC00FF0DA4A5 /* GitHubNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubNotifications.swift; sourceTree = "<group>"; };
 		2C9BEE68B3DD7260D2FCFAD0 /* Relaunch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Relaunch.swift; sourceTree = "<group>"; };
+		2DEDEA0062E54ED519A1BEEC /* MainThreadWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainThreadWatchdog.swift; sourceTree = "<group>"; };
 		3027F193AE5CFB05FC78E33C /* LauncherActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherActions.swift; sourceTree = "<group>"; };
 		3083C8B3776FFFAA767674C1 /* AudioDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDevices.swift; sourceTree = "<group>"; };
 		308BE5263E86D706ACAF96DE /* UndoDelete.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoDelete.swift; sourceTree = "<group>"; };
@@ -530,6 +533,7 @@
 		3AE5D893083C944024E48AD3 /* ResultViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultViews.swift; sourceTree = "<group>"; };
 		3C2C45D756E6D828ED4D1D65 /* AskPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskPane.swift; sourceTree = "<group>"; };
 		3D274216F9D378157786C7C8 /* MacAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAction.swift; sourceTree = "<group>"; };
+		3D39685D10A77D22E20FF11F /* HangWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HangWatch.swift; sourceTree = "<group>"; };
 		3DA0BC6066120EAD8ED27716 /* RecorderCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecorderCenter.swift; sourceTree = "<group>"; };
 		4031772D2EB9446D47D9D7EE /* ClipboardLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardLinks.swift; sourceTree = "<group>"; };
 		40C94BFE76B1EEEBFFD1BC60 /* ClaudeAPIEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeAPIEngine.swift; sourceTree = "<group>"; };
@@ -919,6 +923,7 @@
 				4E2E708A3831FF5D35F7E422 /* GitHubServerInbox.swift */,
 				609DFCBCCACE44ECE73C7594 /* GitHubWorkflowRun.swift */,
 				85222576F80105D3893F2D45 /* Handoff.swift */,
+				3D39685D10A77D22E20FF11F /* HangWatch.swift */,
 				F066C8F59CD75C6A215E724C /* Health.swift */,
 				9A93305ED67627FE38C474B1 /* HeldKeys.swift */,
 				525E82EB8EF05ED0519C7498 /* HistoryVisit.swift */,
@@ -1434,6 +1439,7 @@
 				7A8576F6AC9549D35180ED0D /* DockPresence.swift */,
 				A03FCCCF37A8AD8117EFD3C6 /* LinkRunner.swift */,
 				681B1DF90B710853EBD7142C /* MainMenu.swift */,
+				2DEDEA0062E54ED519A1BEEC /* MainThreadWatchdog.swift */,
 				2C9BEE68B3DD7260D2FCFAD0 /* Relaunch.swift */,
 				21F444F214E3E03561B85FAF /* SkilliMain.swift */,
 				F185AE050F39DA5E59EF3774 /* SoftwareUpdate.swift */,
@@ -1709,6 +1715,7 @@
 				098DA881E3AB36E897810310 /* GitHubServerInbox.swift in Sources */,
 				08177AC4717CCE9E608B6A1B /* GitHubWorkflowRun.swift in Sources */,
 				C546920AB16EDB49D0CBB270 /* Handoff.swift in Sources */,
+				742C4AA83210E079A752D39F /* HangWatch.swift in Sources */,
 				E7858DD3BA597D8B32E9B822 /* Health.swift in Sources */,
 				B3731BEB0FCAF73CA24C3D08 /* HeldKeys.swift in Sources */,
 				6491E278431C90438EF5EE62 /* HistoryVisit.swift in Sources */,
@@ -1922,6 +1929,7 @@
 				2CC053B173C6CFC25D4DB7D1 /* MacAction.swift in Sources */,
 				B4F86F04FED36A2EF9F2053B /* MailSelection.swift in Sources */,
 				304BCBA09F647F17DC3F0211 /* MainMenu.swift in Sources */,
+				7400112E6C09F3155C883B07 /* MainThreadWatchdog.swift in Sources */,
 				51FF8154A44B3AC270D55635 /* MeetingCard.swift in Sources */,
 				7A3B47F0B05294A4D4663C06 /* MeetingCheck.swift in Sources */,
 				F5474342F8C8683F38271543 /* MeetingRecorder.swift in Sources */,

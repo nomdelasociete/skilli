@@ -142,6 +142,10 @@ where.
   Each pane ends with its own line of it.
 - skil.li reopens itself when System Settings quits it to apply a
   permission.
+- skil.li that stops answering (in the menu bar, no key, no click)
+  starts again by itself: after 30 s, what held it is written to
+  `~/Library/Logs/skil.li/`, then it reopens. Never while a meeting
+  records, never twice within ten minutes.
 
 Settings: Permissions · Apps skil.li Sends Commands To · What Leaves
 This Mac.
