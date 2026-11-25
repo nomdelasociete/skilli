@@ -31,12 +31,13 @@ final class MainThreadWatchdog: Sendable {
     private let queue = DispatchQueue(label: "com.nomdelasociete.Skilli.watchdog", qos: .userInitiated)
     /// Read and written on `queue` only.
     private let state = OSAllocatedUnfairLock(uncheckedState: State())
-    private let recording = OSAllocatedUnfairLock(initialState: false)
+    private let gate = RecordingGate()
 
-    /// A meeting is being recorded (said by `MeetingRecorder`).
+    /// A meeting is being recorded: said by `MeetingRecorder` before its
+    /// first file is made, until its files are closed.
     var isRecording: Bool {
-        get { recording.withLock { $0 } }
-        set { recording.withLock { $0 = newValue } }
+        get { gate.isRecording }
+        set { gate.isRecording = newValue }
     }
 
     func start() {
@@ -108,13 +109,12 @@ final class MainThreadWatchdog: Sendable {
     /// The watcher that opens skil.li once this process is gone, then gone:
     /// nothing asked of the main thread, which does not answer.
     ///
-    /// Decided and done with the recording's state held: a main thread that
-    /// comes back meanwhile and starts a meeting waits there for it
-    /// (`isRecording`), and skil.li is gone before that meeting records.
+    /// Decided and done with the recording's state held (`RecordingGate`):
+    /// a main thread that comes back meanwhile and starts a meeting waits
+    /// there, before its first file, and skil.li is gone before it records.
     private func relaunch() {
         guard !Self.isDebugged else { return }
-        recording.withLock { recording in
-            guard !recording else { return }
+        gate.unlessRecording {
             do {
                 try Relaunch.leaveWatcher()
             } catch {

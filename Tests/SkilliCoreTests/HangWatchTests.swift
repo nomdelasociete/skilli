@@ -1,4 +1,5 @@
 @testable import SkilliCore
+import os
 import XCTest
 
 final class HangWatchTests: XCTestCase {
@@ -45,5 +46,35 @@ final class HangWatchTests: XCTestCase {
         _ = other.tick(now: 0, recording: false, sinceRelaunch: -5)
         _ = other.tick(now: 30, recording: false, sinceRelaunch: -5)
         XCTAssertEqual(other.tick(now: 35, recording: false, sinceRelaunch: -5), .relaunch, "a clock set back does not hold it")
+    }
+
+    func testAMeetingStartingWaitsForARelaunchUnderWay() {
+        let gate = RecordingGate()
+        let inside = DispatchSemaphore(value: 0)
+        let order = OSAllocatedUnfairLock(initialState: [String]())
+        let relaunch = Thread {
+            gate.unlessRecording {
+                inside.signal()
+                // The watcher started, the process about to end.
+                Thread.sleep(forTimeInterval: 0.2)
+                order.withLock { $0.append("relaunch done") }
+            }
+        }
+        relaunch.start()
+        inside.wait()
+        // The main thread back, a meeting beginning: before its first file.
+        gate.isRecording = true
+        order.withLock { $0.append("meeting begins") }
+        XCTAssertEqual(order.withLock { $0 }, ["relaunch done", "meeting begins"])
+    }
+
+    func testNoRelaunchOnceAMeetingBegan() {
+        let gate = RecordingGate()
+        gate.isRecording = true
+        XCTAssertFalse(gate.unlessRecording { XCTFail("a meeting records") })
+        gate.isRecording = false
+        let ran = OSAllocatedUnfairLock(initialState: false)
+        XCTAssertTrue(gate.unlessRecording { ran.withLock { $0 = true } })
+        XCTAssertTrue(ran.withLock { $0 })
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// What the main-thread watchdog does at each of its ticks
 /// (`MainThreadWatchdog`, in the app): the main run loop is asked to answer;
@@ -58,5 +59,31 @@ public struct HangWatch: Sendable, Equatable {
         if recording { return .wait }
         if let sinceRelaunch, sinceRelaunch >= 0, sinceRelaunch < Self.relaunchSpacing { return .wait }
         return .relaunch
+    }
+}
+
+/// Whether a meeting records, as the watchdog reads it from its own queue,
+/// and the relaunch itself, one after the other and never both: said
+/// recording before a first file is made, a meeting waits for a relaunch
+/// under way (which ends the process) and a relaunch finds the meeting.
+public final class RecordingGate: Sendable {
+    private let recording = OSAllocatedUnfairLock(initialState: false)
+
+    public init() {}
+
+    public var isRecording: Bool {
+        get { recording.withLock { $0 } }
+        set { recording.withLock { $0 = newValue } }
+    }
+
+    /// Runs `body` with the state held, unless a meeting records.
+    /// `isRecording` set meanwhile waits for `body` to end.
+    @discardableResult
+    public func unlessRecording(_ body: @Sendable () -> Void) -> Bool {
+        recording.withLock { recording in
+            guard !recording else { return false }
+            body()
+            return true
+        }
     }
 }
