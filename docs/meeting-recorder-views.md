@@ -916,9 +916,9 @@ transcription download, its engine, and the echo drop measured with it.
 
 - At Stop, after the words: the track that holds several people goes
   through SpeakerKit (Argmax's, MIT; pyannote community-1 on Core ML),
-  the number of voices found by itself. In a call, the Mac's sound; in
-  person, the microphone (the room); an import's one track. The
-  microphone in a call is the user: never split.
+  the number of voices found by itself. This applies to the Mac's sound,
+  a shared microphone, and an import's one track. A hybrid call can
+  split voices on both tracks. A personal microphone keeps one speaker.
 - Each word goes to the voice heard at its time (the voice's stretch
   that holds the word's middle; none: the nearest within a second; else
   the voice of the words around it). A phrase is cut where the voice
