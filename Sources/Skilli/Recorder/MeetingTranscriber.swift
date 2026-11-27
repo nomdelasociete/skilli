@@ -177,6 +177,7 @@ enum MeetingTranscriber {
         let (kept, dropped) = MeetingTranscript.droppingEcho(mine, heard: theirs.flatMap { $0 })
         var voiced: [(Voice, [TranscriptWord])] = []
         var found: [Voice] = []
+        var separatedMicrophone = false
         for (speaker, phrases) in [(Speaker.me, kept), (.them, theirs)] where !phrases.isEmpty {
             guard let index = splits.firstIndex(of: speaker) else {
                 voiced += phrases.map { (.me, $0) }
@@ -189,6 +190,7 @@ enum MeetingTranscriber {
             }
             let track = folder.appendingPathComponent(speaker.file)
             let stretches = await voices(of: track, progress: progress)
+            if speaker == .me { separatedMicrophone = stretches?.isEmpty == false }
             let (told, voices) = MeetingVoices.split(phrases, stretches: stretches ?? []) {
                 speaker == .me ? .single($0) : .them($0)
             }
@@ -207,9 +209,17 @@ enum MeetingTranscriber {
         done.speakers = MeetingVoices.keepingGiven(record.speakers, fresh: names.merging([Voice.me.rawValue: Speaker.me.title]) { a, _ in a })
         if record.splitsMicrophone, record.imported == nil {
             done.speakers[Voice.me.rawValue] = "Room"
-            if found.filter({ $0.track == .me }) == [.single(1)], record.speakers[Voice.single(2).rawValue] != nil {
-                // A newly merged cluster cannot keep the name of just its first voice.
-                done.speakers[Voice.single(1).rawValue] = Voice.single(1).title
+            let first = Voice.single(1)
+            if found.filter({ $0.track == .me }) == [first] {
+                if record.speakers[Voice.single(2).rawValue] != nil {
+                    // A newly merged cluster cannot keep the name of just its first voice.
+                    done.speakers[first.rawValue] = first.title
+                } else if separatedMicrophone, record.kind == .inPerson, unused.contains(.them),
+                          record.speakers[first.rawValue] == nil, let name = record.speakers[Voice.me.rawValue],
+                          !MeetingVoices.isStandard(name) {
+                    // Older in-person recordings stored a lone speaker's name on the room lane.
+                    done.speakers[first.rawValue] = name
+                }
             }
         }
         if !record.splitsMicrophone, done.speakers[Voice.me.rawValue] == "Room" {

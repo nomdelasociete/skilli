@@ -174,16 +174,20 @@ final class SlideReader: @unchecked Sendable {
         request.automaticallyDetectsLanguage = true
         request.usesLanguageCorrection = true
         guard let observations = try? await request.perform(on: pixels) else { return [] }
-        return observations
-            .sorted(by: { a, b in
-                let aRow = Int((a.boundingBox.cgRect.midY * 100).rounded())
-                let bRow = Int((b.boundingBox.cgRect.midY * 100).rounded())
-                return aRow != bRow ? aRow > bRow : a.boundingBox.cgRect.minX < b.boundingBox.cgRect.minX
-            })
-            .compactMap { observation in
-                guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.5 else { return nil }
-                return candidate.string
+        let recognized: [(rect: CGRect, text: String)] = observations.compactMap { observation in
+            guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.5 else { return nil }
+            return (observation.boundingBox.cgRect, candidate.string)
+        }
+        // Anchor a row at its highest observation, then read across it.
+        var rows: [[(rect: CGRect, text: String)]] = []
+        for observation in recognized.sorted(by: { $0.rect.midY > $1.rect.midY }) {
+            if let anchor = rows.last?.first, anchor.rect.midY - observation.rect.midY <= 0.01 {
+                rows[rows.count - 1].append(observation)
+            } else {
+                rows.append([observation])
             }
+        }
+        return rows.flatMap { row in row.sorted(by: { $0.rect.minX < $1.rect.minX }).map(\.text) }
     }
 
     /// The picture's brightness on `SlideSchedule`'s grid: each cell the

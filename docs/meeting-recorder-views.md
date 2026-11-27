@@ -432,9 +432,8 @@ Then a card offers Stop, once for each of these:
 
 - **The about line** adds the attendees: "Wed 22 Oct 2026, 14:00 · 32
   min · English · with Paul, Anna and 2 others".
-- **In person** (the Mac's sound never on): one lane and one speaker,
-  "Room" (the microphone holds everyone; phase 4 tells their voices
-  apart). A call keeps Me and Them.
+- **In person** (the Mac's sound never on): one waveform labeled "Room".
+  The transcript labels the voices separately. A call keeps both waveforms.
 
 ## Finding recordings in the launcher
 
@@ -926,8 +925,9 @@ transcription download, its engine, and the echo drop measured with it.
   changes; the lines are then made as before.
 - **Names until the user gives one**: in a call, Me, then Them when one
   voice is found, else Them 1, Them 2… in the order they first speak; in
-  person and in an import, Speaker 1, Speaker 2…; one voice alone in
-  person stays Room.
+  person and in an import, Speaker 1, Speaker 2… even when only one voice
+  is found. An older in-person recording's custom name for its lone voice
+  is carried over when separation finds one voice again.
 - The colors: Me in the accent color; every other voice in the
   secondary color (the names tell them apart).
 - Progress: the menu bar's ring and "Transcribing… 40 %" count the
