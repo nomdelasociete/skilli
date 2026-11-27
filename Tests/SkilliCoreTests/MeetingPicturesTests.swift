@@ -301,6 +301,12 @@ final class SlideLogTests: XCTestCase {
         XCTAssertEqual(log.read(["•", "|", "A", "OK", "12:04", "28", "Revenue up 12 %"], at: 0)?.lines, ["OK", "Revenue up 12 %"])
     }
 
+    func testMeetingControlsAreDroppedEvenInOneReading() {
+        var log = SlideLog()
+        XCTAssertEqual(log.read(["Leave call", "Present now", "Revenue up 12 %"], at: 0)?.lines,
+                       ["Revenue up 12 %"])
+    }
+
     func testSlidesRoundTripAsJSON() throws {
         let slides = [SlideLog.Slide(start: 75.4, lines: ["Q3 review", "Revenue up 12 %"])]
         XCTAssertEqual(try SlideLog.decode(SlideLog.encoded(slides)), slides)

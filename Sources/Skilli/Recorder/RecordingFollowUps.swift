@@ -31,6 +31,7 @@ final class RecordingFollowUps {
     var isBeingMade: (URL) -> Bool = { _ in false }
     /// One line in the card: a failure, said once.
     var notify: (String) -> Void = { _ in }
+    var onAutomaticFinished: (URL) -> Void = { _ in }
     var onAutomaticActivityChanged: () -> Void = {}
 
     var visibleAutomaticRuns: [String] {
@@ -339,7 +340,7 @@ final class RecordingFollowUps {
         let answer = try await write(MeetingFollowUp.actionItemsRequest(text(of: record, transcript, in: folder), language: transcript.language,
                                                                         date: day),
                                      with: writer, in: folder, doing: "Reading the action items")
-        let own = [record.speakers[Voice.me.rawValue], await ownName()].compactMap { $0 }.filter { $0 != Voice.me.title }
+        let own = [record.speakers[Voice.me.rawValue], await ownName()].compactMap { $0 }.filter { !MeetingVoices.isStandard($0) }
         guard let items = MeetingFollowUp.actionItems(from: answer, ownNames: own) else {
             throw Failure(message: "\(writer.choice.provider.title)'s answer held no list.")
         }
@@ -531,6 +532,7 @@ final class RecordingFollowUps {
                 self.runAutomatically(next, folder: folder, title: title)
                 return
             }
+            self.onAutomaticFinished(folder)
             guard !run.succeeded else { return }
             let line = ScriptCommand.lastLine(run.output)
             self.notify("“\(skillie.title)” failed after the transcript of “\(title)”: "

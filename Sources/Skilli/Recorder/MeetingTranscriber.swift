@@ -167,30 +167,35 @@ enum MeetingTranscriber {
             unused.contains(speaker) ? 0 : (try? AVAudioFile(forReading: url)).map { Double($0.length) / $0.processingFormat.sampleRate } ?? 0
         }
         let total = max(1, lengths.reduce(0, +))
-        let split = splitTrack(record)
-        let share = split == nil ? 1 : 1 - voicesShare
+        let splits = Speaker.allCases.filter { speaker in
+            !unused.contains(speaker) && (speaker == .them || record.splitsMicrophone)
+        }
+        let share = splits.isEmpty ? 1 : 1 - voicesShare
         step(.transcribing(0))
         let mine = unused.contains(.me) ? [] : try await words(me) { done in step(.transcribing(share * done * lengths[0] / total)) }
         let theirs = unused.contains(.them) ? [] : try await words(them) { done in step(.transcribing(share * (lengths[0] + done * lengths[1]) / total)) }
         let (kept, dropped) = MeetingTranscript.droppingEcho(mine, heard: theirs.flatMap { $0 })
-        var voiced = kept.map { (Voice.me, $0) } + theirs.map { (Voice.them, $0) }
-        var names = MeetingVoices.names(of: [.me, .them])
-        if let split {
-            let phrases = split == .me ? kept : theirs
-            let id: (Int) -> Voice = split == .me ? { Voice.single($0) } : { Voice.them($0) }
-            let track = folder.appendingPathComponent(split.file)
-            let wordsDone: Double = share
-            let progress: @Sendable (Double) -> Void = { done in step(.transcribing(wordsDone + (1 - wordsDone) * done)) }
-            let stretches = await voices(of: track, progress: progress)
-            var (told, found) = MeetingVoices.split(phrases, stretches: stretches ?? [], id: id)
-            // In person, one voice alone stays the room's (Me's lane, "Room").
-            if split == .me, found.count == 1, record.imported == nil {
-                told = told.map { (Voice.me, $0.1) }
-                found = [.me]
+        var voiced: [(Voice, [TranscriptWord])] = []
+        var found: [Voice] = []
+        for (speaker, phrases) in [(Speaker.me, kept), (.them, theirs)] where !phrases.isEmpty {
+            guard let index = splits.firstIndex(of: speaker) else {
+                voiced += phrases.map { (.me, $0) }
+                found.append(.me)
+                continue
             }
-            voiced = (split == .me ? [] : kept.map { (Voice.me, $0) }) + told
-            names = MeetingVoices.names(of: found)
+            let count = Double(splits.count)
+            let progress: @Sendable (Double) -> Void = { done in
+                step(.transcribing(share + (1 - share) * (Double(index) + done) / count))
+            }
+            let track = folder.appendingPathComponent(speaker.file)
+            let stretches = await voices(of: track, progress: progress)
+            let (told, voices) = MeetingVoices.split(phrases, stretches: stretches ?? []) {
+                speaker == .me ? .single($0) : .them($0)
+            }
+            voiced += told
+            found += voices
         }
+        let names = MeetingVoices.names(of: found)
         let lines = MeetingTranscript.lines(voiced)
         var done = record
         done.state = .done
@@ -200,6 +205,16 @@ enum MeetingTranscriber {
         done.recorder = nil
         done.edited = nil
         done.speakers = MeetingVoices.keepingGiven(record.speakers, fresh: names.merging([Voice.me.rawValue: Speaker.me.title]) { a, _ in a })
+        if record.splitsMicrophone, record.imported == nil {
+            done.speakers[Voice.me.rawValue] = "Room"
+            if found.filter({ $0.track == .me }) == [.single(1)], record.speakers[Voice.single(2).rawValue] != nil {
+                // A newly merged cluster cannot keep the name of just its first voice.
+                done.speakers[Voice.single(1).rawValue] = Voice.single(1).title
+            }
+        }
+        if !record.splitsMicrophone, done.speakers[Voice.me.rawValue] == "Room" {
+            done.speakers[Voice.me.rawValue] = Speaker.me.title
+        }
         let file = MeetingTranscript.File(language: record.language, engine: engine.rawValue, lines: lines)
         try replaceTranscript(in: folder, json: file.encoded(), markdown: Data(markdown(done, lines: lines).utf8))
         Log.trace("Recorder: transcript of “\(record.title)” (\(engine.rawValue)): \(lines.count) lines, \(dropped) words heard again left out")
@@ -226,15 +241,6 @@ enum MeetingTranscriber {
                 try FileManager.default.moveItem(at: file.staged, to: file.final)
             }
         }
-    }
-
-    /// The track whose voices are told apart: in a call, the Mac's sound
-    /// (the microphone is the user); in person and in an import, the one
-    /// track. Nil when neither is used.
-    static func splitTrack(_ record: MeetingRecord) -> Speaker? {
-        let unused = Set(record.unused ?? [])
-        if unused.contains(.them) { return unused.contains(.me) ? nil : .me }
-        return .them
     }
 
     /// A track's voices (SpeakerKit, in `skil.li Transcriber`); nil when

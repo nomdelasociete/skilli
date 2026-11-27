@@ -1104,11 +1104,14 @@ final class RecordingWindowController: NSObject, NSWindowDelegate {
         againPanel?.close()
         let panel = TranscribeAgainPanel(language: made?.language ?? record.language,
                                          engine: TranscriptEngine(stored: made?.engine ?? record.engine) ?? .macOS,
-                                         engines: engines(), edited: record.edited == true, languages: languages)
-        panel.onTranscribe = { [weak self] language, engine in
+                                         engines: engines(), edited: record.edited == true,
+                                         sharedMicrophone: record.splitsMicrophone,
+                                         hasMicrophone: record.unused?.contains(.me) != true, languages: languages)
+        panel.onTranscribe = { [weak self] language, engine, sharedMicrophone in
             guard let self, self.working == nil, !self.making else { return }
             var record = self.record
             record.language = language
+            record.sharedMicrophone = sharedMicrophone
             self.againPanel = nil
             self.onTranscribeAgain?(self.folder, record, engine)
         }

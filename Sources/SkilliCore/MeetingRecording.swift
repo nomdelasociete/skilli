@@ -175,6 +175,11 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
     /// The meeting's case (docs/meeting-recorder-views.md, "The five
     /// cases"); nil before phase 2.
     public var kind: MeetingMoment.Kind?
+    /// Whether the microphone is shared. Older recordings infer this from the meeting kind and tracks.
+    public var sharedMicrophone: Bool?
+    public var splitsMicrophone: Bool {
+        sharedMicrophone ?? (kind == .inPerson || imported != nil || unused?.contains(.them) == true)
+    }
     /// The calendar's event it records, when one was on.
     public var event: EventLink?
     /// The call's app, by name, as last picked.
@@ -212,7 +217,10 @@ public struct MeetingRecord: Codable, Equatable, Sendable {
         /// A `TranscriptEngine`'s stored name.
         public var engine: String
 
-        public init(language: String, engine: String) {
+        public var sharedMicrophone: Bool?
+
+        public init(language: String, engine: String, sharedMicrophone: Bool? = nil) {
+            self.sharedMicrophone = sharedMicrophone
             self.language = language
             self.engine = engine
         }

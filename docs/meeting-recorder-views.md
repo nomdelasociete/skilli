@@ -361,6 +361,9 @@ starting within 10 minutes, the card is that meeting's:
 - **The sources**: each row a click away from on or off ("Off" in the
   secondary color, no meter). The case sets them (in person: the Mac's
   sound off); Settings → Recorder sets them when nothing does.
+- **Multiple people on this microphone**: split local voices even when the
+  Mac’s sound is also on. The Record card and Transcribe Again offer this
+  choice. In-person meetings start with it selected.
 - **In person**: one note line, "In person: set the Mac in the middle
   of the table."
 - **The button**: "Record and Join ↩" for a call not joined yet.

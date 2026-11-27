@@ -386,6 +386,10 @@ public struct SlideLog: Sendable {
     /// A line read again within this many readings is not new (one reading
     /// may miss a line another reads).
     public static let memory = 3
+    private static let meetingControls: Set<String> = [
+        "leavecall", "turnonmicrophone", "turnoffmicrophone", "turnoncamera", "turnoffcamera",
+        "presentnow", "stoppresenting", "moreoptions", "meetingdetails",
+    ]
     /// Lines in this share of the readings, the first and the last among
     /// them, are the window's own, not a slide's.
     public static let everywhere = 0.9
@@ -411,7 +415,9 @@ public struct SlideLog: Sendable {
             let key = Self.folded(text)
             // Text has words: a number alone (a call's clock, a counter)
             // is not a slide's.
-            guard text.unicodeScalars.filter(CharacterSet.letters.contains).count >= 2, folded.insert(key).inserted else { continue }
+            guard !Self.meetingControls.contains(key),
+                  text.unicodeScalars.filter(CharacterSet.letters.contains).count >= 2,
+                  folded.insert(key).inserted else { continue }
             if !shown.contains(key) { fresh.append(text) }
         }
         readings += 1
