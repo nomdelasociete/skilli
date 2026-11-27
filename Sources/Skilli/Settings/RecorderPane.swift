@@ -204,6 +204,11 @@ struct RecorderPane: View {
             }
             .disabled(skillies.isEmpty && marked.isEmpty)
             .settingAnchor("recorderAfterTranscript")
+            Picker("Open recording window", selection: $preferences.recorderWaitForSkillie) {
+                Text("When the transcript is ready").tag(false)
+                Text("After the skillie finishes").tag(true)
+            }
+            .settingAnchor("recorderWaitForSkillie")
         } footer: {
             if let title {
                 Text("“\(title)” gets every recording from now on: its folder, with the sound, the pictures and the words. What it does with them is its own script's.")

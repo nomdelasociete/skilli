@@ -361,6 +361,9 @@ starting within 10 minutes, the card is that meeting's:
 - **The sources**: each row a click away from on or off ("Off" in the
   secondary color, no meter). The case sets them (in person: the Mac's
   sound off); Settings → Recorder sets them when nothing does.
+- **Multiple people on this microphone**: split local voices even when the
+  Mac’s sound is also on. The Record card and Transcribe Again offer this
+  choice. In-person meetings start with it selected.
 - **In person**: one note line, "In person: set the Mac in the middle
   of the table."
 - **The button**: "Record and Join ↩" for a call not joined yet.
@@ -429,9 +432,8 @@ Then a card offers Stop, once for each of these:
 
 - **The about line** adds the attendees: "Wed 22 Oct 2026, 14:00 · 32
   min · English · with Paul, Anna and 2 others".
-- **In person** (the Mac's sound never on): one lane and one speaker,
-  "Room" (the microphone holds everyone; phase 4 tells their voices
-  apart). A call keeps Me and Them.
+- **In person** (the Mac's sound never on): one waveform labeled "Room".
+  The transcript labels the voices separately. A call keeps both waveforms.
 
 ## Finding recordings in the launcher
 
@@ -914,17 +916,18 @@ transcription download, its engine, and the echo drop measured with it.
 
 - At Stop, after the words: the track that holds several people goes
   through SpeakerKit (Argmax's, MIT; pyannote community-1 on Core ML),
-  the number of voices found by itself. In a call, the Mac's sound; in
-  person, the microphone (the room); an import's one track. The
-  microphone in a call is the user: never split.
+  the number of voices found by itself. This applies to the Mac's sound,
+  a shared microphone, and an import's one track. A hybrid call can
+  split voices on both tracks. A personal microphone keeps one speaker.
 - Each word goes to the voice heard at its time (the voice's stretch
   that holds the word's middle; none: the nearest within a second; else
   the voice of the words around it). A phrase is cut where the voice
   changes; the lines are then made as before.
 - **Names until the user gives one**: in a call, Me, then Them when one
   voice is found, else Them 1, Them 2… in the order they first speak; in
-  person and in an import, Speaker 1, Speaker 2…; one voice alone in
-  person stays Room.
+  person and in an import, Speaker 1, Speaker 2… even when only one voice
+  is found. An older in-person recording's custom name for its lone voice
+  is carried over when separation finds one voice again.
 - The colors: Me in the accent color; every other voice in the
   secondary color (the names tell them apart).
 - Progress: the menu bar's ring and "Transcribing… 40 %" count the

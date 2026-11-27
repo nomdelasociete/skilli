@@ -408,8 +408,8 @@ On this Mac, at Stop, with progress in the menu bar.
   `DictationTranscriber` is not a choice of engine (more errors
   everywhere, little gain on names); its one use is the language fallback
   below, for a language `SpeechTranscriber` does not have.
-- **Who spoke**: the microphone is the user; the Mac's sound is the others.
-  Several voices on the other side, and an imported file (one track), are
+- **Who spoke**: a personal microphone belongs to the user. The Mac's sound,
+  a shared microphone, and an imported file can each hold several voices,
   told apart by SpeakerKit (MIT, pyannote on Core ML, 11 MB), the number
   of speakers found by itself (measured: the fewest errors, the fastest).
   Its mistake is an extra speaker with a few lines, which the user merges
@@ -705,6 +705,13 @@ times as many names right. `DictationTranscriber` is worse than
 `SpeechTranscriber` on everything but names, and gains little there.
 
 ### Telling voices apart
+
+**Multiple people on this microphone** runs SpeakerKit on the microphone’s
+own track, including when the Mac’s sound is also recorded. An in-person
+calendar meeting defaults to separation on the room microphone. In
+**Transcribe Again…** the same choice also repairs a recording made with the
+wrong mode. Room speakers get separate IDs on the microphone track and a
+generic label until named, even when only one voice is detected.
 
 On the Mac's sound (several people on one track) and on the one-track
 import (`mix`). Diarization error rate: missed speech, false alarms and

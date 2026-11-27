@@ -1135,6 +1135,7 @@ final class SettingTools {
                                                 })
         // Read only: marking a skillie to get every recording is the user's
         // (`paneOnly`).
+        bindings["recorderWaitForSkillie"] = Binding(get: { [unowned self] in .bool(self.preferences.recorderWaitForSkillie) })
         bindings["recorderAfterTranscript"] = Binding(get: { [unowned self] in .text(self.preferences.recorderAfterTranscript) })
 
         // Reminders

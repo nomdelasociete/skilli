@@ -658,3 +658,24 @@ final class SilentTrackTests: XCTestCase {
         XCTAssertEqual(SilentTrack.menuLine(.zeros, device: nil), "only silence")
     }
 }
+
+final class SharedMicrophoneTests: XCTestCase {
+    func testARecordingWithBothTracksCanExplicitlySplitTheMicrophone() throws {
+        var record = MeetingRecord(title: "Team sync", started: .now, language: "en-US", recorder: nil)
+        XCTAssertFalse(record.splitsMicrophone)
+        record.sharedMicrophone = true
+        let saved = try JSONEncoder().encode(record)
+        XCTAssertTrue(try JSONDecoder().decode(MeetingRecord.self, from: saved).splitsMicrophone)
+    }
+
+    func testOlderInPersonAndMicrophoneOnlyRecordingsStillSplit() {
+        var record = MeetingRecord(title: "Team sync", started: .now, language: "en-US", recorder: nil)
+        record.unused = [.them]
+        XCTAssertTrue(record.splitsMicrophone)
+        record.kind = .inPerson
+        record.unused = nil
+        XCTAssertTrue(record.splitsMicrophone)
+        record.sharedMicrophone = false
+        XCTAssertFalse(record.splitsMicrophone)
+    }
+}

@@ -130,6 +130,7 @@ final class Preferences {
         static let recorderBetterHintShown = "Preferences.recorderBetterHintShown"
         static let recorderFolderPath = "Preferences.recorderFolderPath"
         static let recorderRetention = "Preferences.recorderRetention"
+        static let recorderWaitForSkillie = "Preferences.recorderWaitForSkillie"
         static let recorderAfterTranscript = "Preferences.recorderAfterTranscript"
         static let clipboardHistory = "Preferences.clipboardHistory"
         static let clipboardRetention = "Preferences.clipboardRetention"
@@ -347,6 +348,9 @@ final class Preferences {
     @ObservationIgnored var onRecorderRetentionChange: (() -> Void)?
     /// The skillie for recordings marked to run after every transcript (its
     /// path); empty: none, the default (Settings → Recorder, the user's only).
+    var recorderWaitForSkillie: Bool {
+        didSet { save(recorderWaitForSkillie, Key.recorderWaitForSkillie) }
+    }
     var recorderAfterTranscript: String {
         didSet { save(recorderAfterTranscript, Key.recorderAfterTranscript) }
     }
@@ -745,6 +749,7 @@ final class Preferences {
         recorderBetterHintShown = defaults.bool(forKey: Key.recorderBetterHintShown)
         recorderFolderPath = defaults.string(forKey: Key.recorderFolderPath) ?? ""
         recorderRetention = RecordingRetention(rawValue: defaults.string(forKey: Key.recorderRetention) ?? "never")
+        recorderWaitForSkillie = defaults.bool(forKey: Key.recorderWaitForSkillie)
         recorderAfterTranscript = defaults.string(forKey: Key.recorderAfterTranscript) ?? ""
         clipboardHistory = defaults.object(forKey: Key.clipboardHistory) as? Bool ?? true
         clipboardRetention = defaults.string(forKey: Key.clipboardRetention).map(ClipboardRetention.init(rawValue:)) ?? .month

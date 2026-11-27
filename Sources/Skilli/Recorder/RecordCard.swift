@@ -67,7 +67,7 @@ final class RecordCard {
     }
 
     /// ↩: the name and the language picked, the meeting it is for.
-    var onRecord: ((_ title: String, _ language: String, _ meeting: Meeting?) -> Void)?
+    var onRecord: ((_ title: String, _ language: String, _ meeting: Meeting?, _ sharedMicrophone: Bool) -> Void)?
     /// esc, or closed: nothing recorded.
     var onCancel: (() -> Void)?
     /// Stop ↩ as the call ended (⌘↩ after a sleep); Keep Recording esc.
@@ -353,9 +353,9 @@ final class RecordCard {
         switch content {
         case .record:
             guard view.canRecord else { return }
-            let (name, meeting) = (view.name, meeting)
+            let (name, meeting, sharedMicrophone) = (view.name, meeting, view.sharedMicrophone)
             dismiss()
-            onRecord?(name, language, meeting)
+            onRecord?(name, language, meeting, sharedMicrophone)
         case .unfinished(let folder, let record):
             dismiss()
             onSave?(folder, record)
@@ -572,6 +572,8 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
     private let nameField = NSTextField(string: "")
     private let detail = NSTextField(labelWithString: "")
     private let microphoneRow = SourceRow(symbol: "mic.fill", title: "Microphone")
+    private let sharedMic = NSButton(checkboxWithTitle: "Multiple people on this microphone", target: nil, action: nil)
+    var sharedMicrophone: Bool { sharedMic.state == .on }
     private let macRow = SourceRow(symbol: "speaker.wave.2.fill", title: "The Mac's sound")
     private let webcamRow = SourceRow(symbol: "video.fill", title: "Webcam")
     private let screenRow = SourceRow(symbol: "macwindow", title: "Screen")
@@ -660,13 +662,14 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
             guard let self else { return }
             self.onScreenMenu?(self.screenRow)
         }
+        sharedMic.toolTip = "Tell voices sharing the microphone apart in the transcript."
         languageMenu.onPick = { [weak self] index in self?.languagePicked(index) }
         hairline.wantsLayer = true
         button.target = self
         button.action = #selector(primaryPressed)
         consent.symbol = "info.circle"
         consent.text = "The others in the call must agree to be recorded: in many countries, France included, recording a private conversation without consent is an offense."
-        for subview in [dot, eyebrow, clock, languageMenu, nameField, detail, microphoneRow, macRow, webcamRow, screenRow, note, consent, hairline, leftHints,
+        for subview in [dot, eyebrow, clock, languageMenu, nameField, detail, microphoneRow, sharedMic, macRow, webcamRow, screenRow, note, consent, hairline, leftHints,
                         button] as [NSView] {
             addSubview(subview)
         }
@@ -725,6 +728,7 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
         missingAutomation = false
         pictureMissing = nil
         consent.isHidden = !shown
+        sharedMic.state = inPerson ? .on : .off
         inPersonNote = inPerson ? "In person: set the Mac in the middle of the table." : nil
         updateNote()
         button.title = joins ? "Record and Join" : "Record"
@@ -1065,10 +1069,13 @@ final class RecordCardView: NSView, NSTextFieldDelegate {
             y += isRecordCard ? 22 : height + 8
         }
 
+        sharedMic.isHidden = !isRecordCard
         if !microphoneRow.isHidden {
             y += 6
             microphoneRow.frame = NSRect(x: inset, y: y, width: inner, height: SourceRow.height)
             y += SourceRow.height + 4
+            sharedMic.frame = NSRect(x: inset + 4, y: y, width: inner - 4, height: 22)
+            y += 26
             macRow.frame = NSRect(x: inset, y: y, width: inner, height: SourceRow.height)
             y += SourceRow.height + 4
             webcamRow.frame = NSRect(x: inset, y: y, width: inner, height: SourceRow.height)

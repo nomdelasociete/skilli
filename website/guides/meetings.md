@@ -49,13 +49,24 @@ settings. Picking a named device affects only skil.li's recorder.
 
 The recorder takes your microphone and your Mac's sound (the other side
 of the call), as two tracks, and writes them out on your Mac when you
-stop. Nothing leaves your Mac.
+stop. Recording and transcription happen on your Mac.
 
 **Start it** with **⌘R** where the meeting already shows: its card, its
 row in the launcher, or its menu in the menu bar once you are in the
 call. Or type `rec` in the launcher (`rec Weekly sync` to name it). It
 never starts by itself, and the first time it reminds you that the
 others must agree to be recorded.
+
+When several people share one microphone, check **Multiple people on this
+microphone** in the Record card. In-person meetings detected from the calendar
+start with this on. It also works with the Mac’s sound on for remote
+participants. The transcript labels room voices **Speaker 1**, **Speaker 2**,
+and so on. Click a speaker’s name to identify them.
+
+To repair an existing recording, open **⌘K → Transcribe Again…** and choose
+the same checkbox. Review the speakers before sharing. If your publishing
+skillie syncs transcript edits, it updates the same meeting. You can also
+run it again from ⌘K.
 
 **While it records**, a red dot in the menu bar shows the time and both
 sides' sound. Its menu pauses, resumes, stops, or turns a source off.
@@ -125,4 +136,5 @@ covers the languages of macOS's dictation (Dutch, Polish, Swedish…).
   language, engine, where recordings are kept and when they are deleted.
   *After each transcript* is off until you pick a skillie there: it then
   gets every recording from now on, once its transcript is written (⌘Z
-  takes it back).
+  takes it back). **Open recording window** chooses whether the window opens
+  when the transcript is ready or after the skillie finishes.

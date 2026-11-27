@@ -133,7 +133,8 @@ final class SlideReader: @unchecked Sendable {
         lastSample = picture.time
         let grid = Self.grid(picture.pixels)
         let time = timeline.fileTime(of: picture.time)
-        guard let start = schedule.sample(grid, at: time), reading == nil else { return }
+        let start = schedule.sample(grid, at: time)
+        guard reading == nil, let start else { return }
         let pixels = picture.pixels
         let began = ContinuousClock.now
         nonisolated(unsafe) let buffer = pixels
@@ -173,13 +174,20 @@ final class SlideReader: @unchecked Sendable {
         request.automaticallyDetectsLanguage = true
         request.usesLanguageCorrection = true
         guard let observations = try? await request.perform(on: pixels) else { return [] }
-        return observations
-            .sorted { a, b in
-                // Top first (Vision's origin is at the bottom), then left.
-                abs(a.boundingBox.origin.y - b.boundingBox.origin.y) > 0.01 ? a.boundingBox.origin.y > b.boundingBox.origin.y
-                    : a.boundingBox.origin.x < b.boundingBox.origin.x
+        let recognized: [(rect: CGRect, text: String)] = observations.compactMap { observation in
+            guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.5 else { return nil }
+            return (observation.boundingBox.cgRect, candidate.string)
+        }
+        // Anchor a row at its highest observation, then read across it.
+        var rows: [[(rect: CGRect, text: String)]] = []
+        for observation in recognized.sorted(by: { $0.rect.midY > $1.rect.midY }) {
+            if let anchor = rows.last?.first, anchor.rect.midY - observation.rect.midY <= 0.01 {
+                rows[rows.count - 1].append(observation)
+            } else {
+                rows.append([observation])
             }
-            .compactMap { $0.topCandidates(1).first?.string }
+        }
+        return rows.flatMap { row in row.sorted(by: { $0.rect.minX < $1.rect.minX }).map(\.text) }
     }
 
     /// The picture's brightness on `SlideSchedule`'s grid: each cell the

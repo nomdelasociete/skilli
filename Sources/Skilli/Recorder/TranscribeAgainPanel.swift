@@ -19,7 +19,7 @@ final class TranscribeAgainPanel: NSObject, NSPopoverDelegate {
     /// The engine's languages are read (none: it has none here).
     private var loaded = false
     private var loading: Task<Void, Never>?
-    var onTranscribe: ((String, TranscriptEngine) -> Void)?
+    var onTranscribe: ((String, TranscriptEngine, Bool) -> Void)?
     var onClose: (() -> Void)?
     /// One of the window's actions running (a link's or a tool's, begun
     /// while the panel is open): Transcribe dims and says why, the
@@ -28,7 +28,7 @@ final class TranscribeAgainPanel: NSObject, NSPopoverDelegate {
         didSet { if busy != oldValue { updateNote() } }
     }
 
-    init(language: String, engine: TranscriptEngine, engines: [(engine: TranscriptEngine, unusable: String?)], edited: Bool,
+    init(language: String, engine: TranscriptEngine, engines: [(engine: TranscriptEngine, unusable: String?)], edited: Bool, sharedMicrophone: Bool, hasMicrophone: Bool,
          languages: @escaping (TranscriptEngine) async -> [(id: String, name: String)]) {
         self.language = language
         self.engine = engines.contains { $0.engine == engine } ? engine : engines.first?.engine ?? .macOS
@@ -51,6 +51,8 @@ final class TranscribeAgainPanel: NSObject, NSPopoverDelegate {
         content.languageMenu.target = self
         content.languageMenu.action = #selector(languagePicked)
         content.edited = edited
+        content.sharedMic.state = sharedMicrophone ? .on : .off
+        content.sharedMic.isHidden = !hasMicrophone
         content.cancel.target = self
         content.cancel.action = #selector(cancelPressed)
         content.transcribe.target = self
@@ -152,9 +154,9 @@ final class TranscribeAgainPanel: NSObject, NSPopoverDelegate {
 
     @objc private func transcribePressed() {
         guard content.transcribe.isEnabled else { return }
-        let (language, engine) = (language, engine)
+        let (language, engine, sharedMicrophone) = (language, engine, content.sharedMic.state == .on)
         close()
-        onTranscribe?(language, engine)
+        onTranscribe?(language, engine, sharedMicrophone)
     }
 
     func popoverDidClose(_ notification: Notification) {
@@ -171,6 +173,7 @@ private final class TranscribeAgainView: NSView {
     private let engineLabel = NSTextField(labelWithString: "Engine")
     let languageMenu = NSPopUpButton(frame: .zero, pullsDown: false)
     let engineMenu = NSPopUpButton(frame: .zero, pullsDown: false)
+    let sharedMic = NSButton(checkboxWithTitle: "Multiple people on this microphone", target: nil, action: nil)
     let note = NSTextField(wrappingLabelWithString: "")
     let cancel = NSButton(title: "Cancel", target: nil, action: nil)
     let transcribe = NSButton(title: "Transcribe", target: nil, action: nil)
@@ -197,7 +200,7 @@ private final class TranscribeAgainView: NSView {
         cancel.keyEquivalent = "\u{1b}"
         transcribe.bezelStyle = .push
         transcribe.keyEquivalent = "\r"
-        for subview in [title, languageLabel, languageMenu, engineLabel, engineMenu, note, cancel, transcribe] as [NSView] {
+        for subview in [title, languageLabel, languageMenu, engineLabel, engineMenu, sharedMic, note, cancel, transcribe] as [NSView] {
             addSubview(subview)
         }
     }
@@ -209,6 +212,7 @@ private final class TranscribeAgainView: NSView {
     var preferredHeight: CGFloat {
         let inner = Self.width - 32
         var height: CGFloat = 14 + 28 + 60 + 4 + 32 + 14
+        if !sharedMic.isHidden { height += 28 }
         if let text = noteText {
             height += ceil((text as NSString).boundingRect(with: NSSize(width: inner, height: .greatestFiniteMagnitude),
                                                            options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: note.font!]).height) + 12
@@ -232,6 +236,10 @@ private final class TranscribeAgainView: NSView {
             menu.sizeToFit()
             menu.frame = NSRect(x: inset + 74, y: y - 1, width: inner - 74, height: menu.frame.height)
             y += 30
+        }
+        if !sharedMic.isHidden {
+            sharedMic.frame = NSRect(x: inset, y: y, width: inner, height: 22)
+            y += 28
         }
         note.isHidden = noteText == nil
         if let text = noteText {

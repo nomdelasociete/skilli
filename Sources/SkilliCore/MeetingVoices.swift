@@ -226,7 +226,7 @@ public enum MeetingVoices {
                   !given.contains(where: { sameName($0.name, candidate) }), !fresh.contains(where: { sameName($0, candidate) }) else { return }
             fresh.append(candidate)
         }
-        if voice == .me, let ownName { add(ownName) }
+        if (voice == .me || !speakers.contains(.me)), let ownName { add(ownName) }
         attendees.forEach(add)
         return (fresh, given)
     }

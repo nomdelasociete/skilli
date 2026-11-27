@@ -349,6 +349,9 @@ public enum SettingsTable {
         setting("recorder", "recorderAfterTranscript", "After each transcript", .choiceOnThisMac, access: .paneOnly(Why.recordings),
                 note: "A skillie for recordings (@skilli.forRecordings) that gets each recording's folder once its transcript is made, by its path; empty: none (the default)."),
 
+        setting("recorder", "recorderWaitForSkillie", "Open recording window", .toggle, access: .paneOnly(Why.recordings),
+                note: "Wait for the automatic skillie to finish before opening the recording window. If no skillie runs, the window opens when the transcript is ready."),
+
         // Reminders
         setting("reminders", "remindersDefaultList", "Said reminders go to", .choiceOnThisMac),
         setting("reminders", "remindersMenuBar", "Today's reminders in the menu bar",

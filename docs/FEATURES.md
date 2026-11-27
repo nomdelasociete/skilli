@@ -548,6 +548,10 @@ Your meetings recorded on this Mac, both sides, then written out.
   Mac. Also
   `skilli://record` and the Meeting Recorder tools (`record_meeting`,
   `stop_recording`…).
+- **Shared microphone**: turn on **Multiple people on this microphone** in
+  the Record card or **Transcribe Again…**. It separates the room’s voices
+  on this Mac, including in hybrid calls with a separate Mac sound track.
+  Name each voice or reassign a line in the recording window.
 - **Microphone input**: pick a device in the Record card or in the
   recording's menu bar menu. The microphone track continues in the same
   recording. The choice applies to the recorder, and System Default
@@ -600,7 +604,8 @@ Your meetings recorded on this Mac, both sides, then written out.
   the launcher: the answer in the card. Your **skillies for recordings**
   (`@skilli.forRecordings true`) run on it from ⌘K, getting its folder;
   one can run after each transcript (Settings → Recorder, off until you
-  pick it). A recording skillie can opt to run again after saved transcript
+  pick it). **Open recording window** chooses whether the window opens at
+  transcript completion or after the automatic skillie finishes. A recording skillie can opt to run again after saved transcript
   edits and use a longer time limit for work such as uploading a recording.
   Agents: `list_recordings`, and `get_transcript`, asked each
   time.

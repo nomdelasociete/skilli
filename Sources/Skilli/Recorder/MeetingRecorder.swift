@@ -35,6 +35,7 @@ final class MeetingRecorder {
         /// The call's app, by name.
         var app: String?
         var place: String?
+        var sharedMicrophone: Bool?
         /// The screen's window, when the screen is on (the meeting's).
         var screen: ScreenTarget?
     }
@@ -67,7 +68,7 @@ final class MeetingRecorder {
     /// quits meanwhile.
     private var transcribingBefore: MeetingRecord?
     /// And what it was asked with, made at the next launch then.
-    private var transcribingAgain: (language: String, engine: TranscriptEngine)?
+    private var transcribingAgain: MeetingRecord.MadeAgain?
     /// The phase or a transcript changed: the menu bar, the launcher's row.
     var onChange: (() -> Void)?
     /// A transcript is done (or waits for a language): its window opens.
@@ -413,6 +414,7 @@ final class MeetingRecorder {
         let folder = try recordings.makeFolder(title: named, started: started)
         var record = MeetingRecord(title: named, started: started, language: starting.language, recorder: Recordings.ownProcess)
         record.kind = starting.kind
+        record.sharedMicrophone = starting.sharedMicrophone
         record.event = starting.event
         record.attendees = starting.attendees
         record.addresses = starting.addresses.isEmpty ? nil : starting.addresses
@@ -657,7 +659,7 @@ final class MeetingRecorder {
         if let transcribing {
             if let before = transcribingBefore {
                 try? recordings.write(before.keepingRuns(of: recordings.read(transcribing.folder)), to: transcribing.folder)
-                if let asked = transcribingAgain { leaveAgain(transcribing.folder, asked.language, asked.engine) }
+                if let asked = transcribingAgain { leaveAgain(transcribing.folder, asked) }
             } else {
                 left.insert(transcribing.folder, at: 0)
             }
@@ -666,15 +668,16 @@ final class MeetingRecorder {
             if let record = recordings.read(folder) { leave(folder, record: record) }
         }
         for job in again {
-            leaveAgain(job.0, job.1.language, job.engine ?? TranscriptEngine(stored: job.1.engine) ?? .macOS)
+            let engine = job.engine ?? TranscriptEngine(stored: job.1.engine) ?? .macOS
+            leaveAgain(job.0, .init(language: job.1.language, engine: engine.rawValue, sharedMicrophone: job.1.sharedMicrophone))
         }
     }
 
     /// A Transcribe Again kept for the next launch: its transcript as it
     /// is, what was asked noted (`madeAgain`).
-    private func leaveAgain(_ folder: URL, _ language: String, _ engine: TranscriptEngine) {
+    private func leaveAgain(_ folder: URL, _ request: MeetingRecord.MadeAgain) {
         guard var record = recordings.read(folder) else { return }
-        record.madeAgain = MeetingRecord.MadeAgain(language: language, engine: engine.rawValue)
+        record.madeAgain = request
         try? recordings.write(record, to: folder)
         Log.trace("Recorder: “\(record.title)” left to be transcribed again at the next launch")
     }
@@ -748,7 +751,9 @@ final class MeetingRecorder {
                 return before
             } : nil
             transcribingBefore = before?.state == .done ? before : nil
-            transcribingAgain = again ? (record.language, engine ?? TranscriptEngine(stored: record.engine) ?? .macOS) : nil
+            let requestedEngine = engine ?? TranscriptEngine(stored: record.engine) ?? .macOS
+            transcribingAgain = again ? .init(language: record.language, engine: requestedEngine.rawValue,
+                                               sharedMicrophone: record.sharedMicrophone) : nil
             let setup = await transcriptSetup()
             // Quit meanwhile: closeForQuit left it as it should be.
             if quitting {
@@ -764,6 +769,7 @@ final class MeetingRecorder {
             var working = record.keepingRuns(of: recordings.read(folder))
             if again, var now = recordings.read(folder) {
                 now.language = record.language
+                now.sharedMicrophone = record.sharedMicrophone
                 // Made now: not again at the next launch, whatever comes of it.
                 now.madeAgain = nil
                 working = now

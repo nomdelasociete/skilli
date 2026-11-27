@@ -50,6 +50,10 @@ final class RecorderCenter {
         followUps.isBeingMade = { [weak self] folder in self?.recorder.makesAgain(folder) ?? false }
         followUps.notify = { [weak self] line in self?.notify(line) }
         followUps.onAutomaticActivityChanged = { [weak self] in self?.indicator.update() }
+        followUps.onAutomaticFinished = { [weak self] folder in
+            guard let self, self.openAfterSkillie.remove(Self.key(folder)) != nil else { return }
+            if self.windows[Self.key(folder)] == nil { self.open(folder) }
+        }
         return followUps
     }()
 
@@ -94,7 +98,8 @@ final class RecorderCenter {
     }
     private lazy var card: RecordCard = {
         let card = RecordCard(recorder: recorder)
-        card.onRecord = { [weak self] title, language, meeting in self?.begin(title: title, language: language, meeting: meeting) }
+        card.onRecord = { [weak self] title, language, meeting, sharedMicrophone in
+            self?.begin(title: title, language: language, meeting: meeting, sharedMicrophone: sharedMicrophone) }
         card.onCancel = { [weak self] in self?.cancelled() }
         card.onStop = { [weak self] in self?.control(.stop) }
         card.onResume = { [weak self] in self?.control(.resume) }
@@ -208,6 +213,7 @@ final class RecorderCenter {
     /// Transcripts made again (Transcribe Again): the skillie marked does
     /// not run on them again.
     private var madeAgain: Set<String> = []
+    private var openAfterSkillie: Set<String> = []
     /// When the Mac went to sleep, the recording on paused for it; nil when
     /// it did not pause one (none on, or already paused by the user).
     private(set) var pausedForSleep: Date?
@@ -802,10 +808,12 @@ final class RecorderCenter {
         }
     }
 
-    private func begin(title: String, language: String, meeting: RecordCard.Meeting?) {
+    private func begin(title: String, language: String, meeting: RecordCard.Meeting?, sharedMicrophone: Bool) {
         do {
             let reading = meeting?.reading ?? MeetingMoment.Reading(kind: .nothing, event: nil, app: nil, sources: recorder.sources, title: nil)
-            try recorder.begin(Self.start(reading, title: title, language: language, sources: recorder.sources))
+            var start = Self.start(reading, title: title, language: language, sources: recorder.sources)
+            start.sharedMicrophone = sharedMicrophone
+            try recorder.begin(start)
             // Recording from ↩: the tab then (a browser slow to answer
             // never delays the start).
             bringMeetingTabForward()
@@ -904,23 +912,27 @@ final class RecorderCenter {
     private func finished(_ folder: URL) {
         NotificationCenter.default.post(name: Recordings.changed, object: nil)
         // A first transcript: the skillie marked runs on it (phase 5).
-        if madeAgain.remove(Self.key(folder)) == nil {
+        let key = Self.key(folder)
+        let first = madeAgain.remove(key) == nil
+        if first {
             followUps.transcriptDone(folder)
         } else {
             followUps.transcriptReplaced(folder)
         }
-        if madeQuietly.remove(Self.key(folder)) != nil {
-            if let window = windows[Self.key(folder)], let record = recordings.read(folder) {
-                window.show(record, transcript: recordings.transcript(folder))
-            }
-            return
+        if madeQuietly.remove(key) != nil {
+            reshow(folder)
+        } else if first, preferences.recorderWaitForSkillie, followUps.isRunningSkillie(on: folder) {
+            if windows[key] == nil { openAfterSkillie.insert(key) }
+            reshow(folder)
+        } else {
+            open(folder)
         }
-        open(folder)
     }
 
     /// A recording's window, opened (or brought forward and shown afresh);
     /// `at` seconds in, playing from the line said then.
     func open(_ folder: URL, at: Double? = nil) {
+        openAfterSkillie.remove(Self.key(folder))
         guard let record = recordings.read(folder) else { return }
         let window: RecordingWindowController
         if let open = windows[Self.key(folder)] {
@@ -1286,6 +1298,7 @@ final class RecorderCenter {
             guard let asked = record.madeAgain else { continue }
             var record = record
             record.language = asked.language
+            record.sharedMicrophone = asked.sharedMicrophone ?? record.sharedMicrophone
             madeQuietly.insert(Self.key(folder))
             madeAgain.insert(Self.key(folder))
             recorder.transcribe(folder, record: record, again: true, engine: TranscriptEngine(stored: asked.engine) ?? .macOS)
